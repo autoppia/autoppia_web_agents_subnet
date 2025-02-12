@@ -1,4 +1,4 @@
 [submodule "autoppia_iwa"]
-	path = autoppia_iwa
-	url = https://github.com/autoppia/autoppia_iwa.git
-	branch = main
+    path = autoppia_iwa
+    url = https://github.com/autoppia/autoppia_iwa.git
+    branch = main
