@@ -96,8 +96,11 @@ For additional configuration options and advanced setup, refer to the detailed d
 Deploy the demo web projects by running:
 
 ```bash
-chmod +x autoppia_iwa_module/modules/webs_demo/setup.sh
-./autoppia_iwa_module/modules/webs_demo/setup.sh
+CURRENT_DIR=$(pwd)
+cd autoppia_iwa_module/modules/webs_demo
+chmod +x setup.sh
+./setup.sh
+cd "$CURRENT_DIR"
 ```
 
 This script will:
