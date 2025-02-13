@@ -26,11 +26,16 @@ sudo apt install -y sudo || handle_error "Failed to install sudo"
 
 # Install Python 3.11 and essential dependencies
 echo -e "\e[34m[INFO]\e[0m Installing Python 3.11 and dependencies..."
-sudo apt-get install -y software-properties-common
-sudo add-apt-repository ppa:deadsnakes/ppa -y
-sudo apt-get update
-sudo apt-get install -y python3.11 python3.11-venv python3.11-dev
-
+sudo apt-get install -y \
+  python3.11 python3.11-venv python3.11-dev build-essential cmake wget sqlite \
+  libnss3 libnss3-dev libasound2 libatk1.0-0 libatk-bridge2.0-0 \
+  libcups2 libx11-xcb1 libxcomposite1 libxcursor1 libxdamage1 \
+  libxrandr2 libgbm1 libpango-1.0-0 libatk-bridge2.0-0 libgtk-3-0 \
+  libvpx-dev libevent-dev libopus0 libgstreamer1.0-0 unzip \
+  libgstreamer-plugins-base1.0-0 libgstreamer-plugins-good1.0-0 \
+  libgstreamer-plugins-bad1.0-0 libwebp-dev libharfbuzz-dev \
+  libsecret-1-dev libhyphen0 libflite1 libgles2-mesa libx264-dev \
+  gnupg curl || handle_error "Failed to install Python 3.11 and dependencies"
 
 # ------------------------------------------------------------------
 # Step 2: Install MongoDB (Optional - for web analysis caching)
@@ -104,21 +109,39 @@ success_msg "Python dependencies installed successfully."
 # ------------------------------------------------------------------
 # Step 10: Install autoppia_iwa Package
 echo -e "\e[34m[INFO]\e[0m Installing autoppia_iwa package..."
-if cd autoppia_iwa_module && uv pip install -e . && cd ..; then
-    success_msg "autoppia_iwa_module package installed successfully."
+if cd autoppia_iwa && uv pip install -e . && cd ..; then
+    success_msg "autoppia_iwa package installed successfully."
 else
-    handle_error "Failed to install autoppia_iwa_module package"
+    handle_error "Failed to install autoppia_iwa package"
 fi
+# Step 7: Install Google Chrome and ChromeDriver if not installed
+echo "Checking for Chrome and ChromeDriver installation..."
+if [ ! -f /opt/chrome/chrome-linux64/chrome ]; then
+  echo "Installing Google Chrome and ChromeDriver..."
+
+  # Download and install Chrome and ChromeDriver
+  curl -SL https://storage.googleapis.com/chrome-for-testing-public/127.0.6533.72/linux64/chromedriver-linux64.zip > /tmp/chromedriver.zip || handle_error "Downloading ChromeDriver"
+  curl -SL https://storage.googleapis.com/chrome-for-testing-public/127.0.6533.72/linux64/chrome-linux64.zip > /tmp/chrome.zip || handle_error "Downloading Chrome"
+  unzip /tmp/chrome.zip -d /opt/chrome || handle_error "Unzipping Chrome"
+  unzip /tmp/chromedriver.zip -d /opt/chromedriver || handle_error "Unzipping ChromeDriver"
+  rm /tmp/chrome.zip /tmp/chromedriver.zip || handle_error "Cleaning up temporary files"
+
+  # Set execute permissions for Chrome and ChromeDriver
+  sudo chmod +x /opt/chrome/chrome-linux64/chrome || handle_error "Setting execute permission for Chrome"
+  sudo chmod +x /opt/chromedriver/chromedriver-linux64/chromedriver || handle_error "Setting execute permission for ChromeDriver"
+fi
+
+# Step 8: Verify Chrome and ChromeDriver Installation
+echo "Verifying Chrome installation..."
+/opt/chrome/chrome-linux64/chrome --version || handle_error "Verifying Chrome installation"
+
+echo "Verifying ChromeDriver installation..."
+/opt/chromedriver/chromedriver-linux64/chromedriver --version || handle_error "Verifying ChromeDriver installation"
 
 # ------------------------------------------------------------------
 # Step 11: Install Bittensor
 echo -e "\e[34m[INFO]\e[0m Installing Bittensor..."
-
-git clone https://github.com/opentensor/bittensor.git
-cd bittensor
-pip install .
-cd ..
-rm -r  bittensor
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/opentensor/bittensor/v8.4.5/scripts/install.sh)" || handle_error "Failed to install Bittensor"
 success_msg "Bittensor installed successfully."
 
 echo -e "\e[32m[COMPLETE]\e[0m Setup completed successfully!"
