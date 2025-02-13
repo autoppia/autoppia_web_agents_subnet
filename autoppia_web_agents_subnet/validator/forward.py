@@ -19,9 +19,8 @@ import asyncio
 import random
 from copy import deepcopy
 
-
+TIMEOUT = 10
 FORWARD_SLEEP_SECONDS = 5
-
 
 async def forward(self) -> None:
     bt.logging.info("Starting forward step.")
@@ -44,49 +43,66 @@ async def forward(self) -> None:
     if not tasks_generated:
         bt.logging.warning("No tasks generated, skipping forward step.")
         return
-    bt.logging.debug(f"Generated {len(tasks_generated)} tasks.")
+    bt.logging.info(f"Generated {len(tasks_generated)} tasks for {web_url}")
 
     # 4) Task Cleaning for miner
     task = tasks_generated[0]
     miner_task = _clean_miner_task(task=task)
     bt.logging.debug("Cleaned task for miner.")
 
-    # 5) Get random UIDs. For now we assume all miners will get same task
+    # 5) Get random UIDs
     miner_uids = get_random_uids(self, k=self.config.neuron.sample_size)
-    bt.logging.debug(f"Selected miner UIDs: {miner_uids}")
+    bt.logging.info(f"Miner UIDs chosen: {miner_uids}")
 
-    # 6) Build the synapse and send query
+    # 6) Build the synapse and send query with a timeout
     synapse_request = TaskSynapse(task=miner_task, actions=[])
-    bt.logging.info(f"Sending synapse request to {len(miner_uids)} miners.")
+    bt.logging.info(f"Sending TaskSynapse to {len(miner_uids)} miners.")
 
     try:
-        responses: List[TaskSynapse] = await self.dendrite(
-            axons=[self.metagraph.axons[uid] for uid in miner_uids],
-            synapse=synapse_request,
-            deserialize=True,
+        responses: List[TaskSynapse] = await asyncio.wait_for(
+            self.dendrite(
+                axons=[self.metagraph.axons[uid] for uid in miner_uids],
+                synapse=synapse_request,
+                deserialize=True,
+            ),
+            timeout=TIMEOUT,
         )
     except Exception as e:
         bt.logging.error(f"Error while querying dendrite: {e}")
         return
 
-    bt.logging.info(f"Received {len(responses)} responses from dendrite.")
+    bt.logging.info(f"Received {len(responses)} responses.")
 
-    # 7) Save original task into synapses to have all attributes and to avoid miner modifying task
+    # 7) Construct task solutions and track execution times
     task_solutions = []
+    execution_times = []
     for miner_uid, response in zip(miner_uids, responses):
+        if response and getattr(response, 'actions', None):
+            bt.logging.debug(f"Miner {miner_uid} actions: {response.actions}")
         task_solution = _get_task_solution_from_synapse(
             task=task,
             synapse=response,
             web_agent_id=miner_uid,
         )
         task_solutions.append(task_solution)
-    bt.logging.debug("Constructed task solutions from synapse responses.")
+        process_time = getattr(response.dendrite, 'process_time', TIMEOUT) if response else TIMEOUT
+        execution_times.append(process_time)
 
-    rewards: np.ndarray = get_rewards(self, task_solutions=task_solutions, web_url=web_url)
-    bt.logging.info(f"Computed rewards: {rewards}")
+    # 8) Compute rewards
+    rewards: np.ndarray = get_rewards(
+        self,
+        task_solutions=task_solutions,
+        web_url=web_url,
+        execution_times=execution_times
+    )
 
+    # Log each miner’s final reward
+    for uid, ex_time, rw in zip(miner_uids, execution_times, rewards):
+        bt.logging.info(f"Miner {uid}: time={ex_time:.2f}s, reward={rw:.3f}")
+
+    # 9) Update scores
     self.update_scores(rewards, miner_uids)
-    bt.logging.info("Updated scores for miners.")
+    bt.logging.info("Scores updated for miners.")
 
     await asyncio.sleep(FORWARD_SLEEP_SECONDS)
     bt.logging.info("SUCCESS: Forward step completed successfully.")
@@ -100,13 +116,13 @@ def _get_task_solution_from_synapse(
     return TaskSolution(task=task, actions=synapse.actions, web_agent_id=web_agent_id)
 
 
-def _get_random_demo_web_project(projects: list[WebProject]) -> WebProject:
+def _get_random_demo_web_project(projects: List[WebProject]) -> WebProject:
     if not projects:
         raise Exception("No projects available.")
     return random.choice(projects)
 
 
-def _generate_tasks_for_url(demo_web_project: WebProject) -> list[Task]:
+def _generate_tasks_for_url(demo_web_project: WebProject) -> List[Task]:
     config = TaskGenerationConfig(
         web_project=demo_web_project,
         save_task_in_db=True,
