@@ -107,7 +107,7 @@ def _get_random_demo_web_project(projects: list[WebProject]) -> WebProject:
 
 def _generate_tasks_for_url(demo_web_project: WebProject) -> list[Task]:
     config = TaskGenerationConfig(
-        save_task_to_db=True,
+        save_task_in_db=True,
         save_web_analysis=False,
         enable_crawl=True,
         number_of_prompts_per_task=1,
