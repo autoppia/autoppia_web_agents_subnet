@@ -1,3 +1,5 @@
+![Project Logo](https://app.autoppia.com/assets/images/logo/icon256.png)
+
 <div align="center">
 
 # **Web Agents Subnet (Bittensor Sn36)**
