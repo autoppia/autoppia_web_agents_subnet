@@ -46,7 +46,7 @@ git submodule update --init --recursive --remote
 ### 1. Deploy LLM Generation Endpoint
 Set up the local LLM generation endpoint:
 ```bash
-chmod +x autoppia_iwa/modules/llm_local/setup.sh
+chmod +x autoppia_iwa_module/modules/llm_local/setup.sh
 ./autoppia_iwa/modules/llm_local/setup.sh
 
 source llm_env/bin/activate
