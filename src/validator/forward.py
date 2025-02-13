@@ -4,20 +4,20 @@ from typing import List
 import asyncio
 from src.validator.reward import get_rewards
 from src.utils.uids import get_random_uids
-from autoppia_iwa.autoppia_iwa.src.data_generation.application.tasks_generation_pipeline import (
+from autoppia_iwa.src.data_generation.application.tasks_generation_pipeline import (
     TaskGenerationPipeline,
 )
 import random
 from copy import deepcopy
-from autoppia_iwa.autoppia_iwa.src.data_generation.domain.classes import (
+from autoppia_iwa.src.data_generation.domain.classes import (
     Task,
     TaskGenerationConfig,
     TasksGenerationOutput,
 )
-from autoppia_iwa.autoppia_iwa.src.web_agents.classes import TaskSolution
+from autoppia_iwa.src.web_agents.classes import TaskSolution
 from src.protocol import TaskSynapse
-from autoppia_iwa.autoppia_iwa.src.data_generation.domain.classes import WebProject
-from autoppia_iwa.autoppia_iwa.src.backend_demo_web.config import get_demo_webs_projects
+from autoppia_iwa.src.data_generation.domain.classes import WebProject
+from autoppia_iwa.src.backend_demo_web.config import get_demo_webs_projects
 
 FORWARD_SLEEP_SECONDS = 5
 

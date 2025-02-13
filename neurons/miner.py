@@ -22,7 +22,7 @@ from web_agents.default_web_agent import DefaultWebAgent
 import bittensor as bt
 import time
 import typing
-from autoppia_iwa.autoppia_iwa.src.execution.actions.base import BaseAction
+from autoppia_iwa.src.execution.actions.base import BaseAction
 from typing import List
 
 

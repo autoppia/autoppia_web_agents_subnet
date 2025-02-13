@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.base.validator import BaseValidatorNeuron
 from src.validator import forward
 
-from autoppia_iwa.autoppia_iwa.src.bootstrap import AppBootstrap
+from autoppia_iwa.src.bootstrap import AppBootstrap
 
 
 class Validator(BaseValidatorNeuron):
