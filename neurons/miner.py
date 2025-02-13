@@ -56,9 +56,16 @@ class Miner(BaseMinerNeuron):
         The 'forward' function is a placeholder and should be overridden with logic that is appropriate for
         the miner's intended operation. This method demonstrates a basic transformation of input data.
         """
-        bt.logging.info("Request Received from validator: {synapse.}")
+        start_time = time()
+        validator_hotkey = getattr(synapse.dendrite, 'hotkey', None)
+
+        bt.logging.info(f"Request Received from validator: {validator_hotkey}")
+
         actions: List[BaseAction] = self.agent.solve_task(task=synapse.task).actions
+        bt.logging.info(f"Task Solved. Actions: {actions}")
+
         synapse.actions = actions
+        bt.logging.success(f"Request completed successfully in {time.time() - start_time}s")
 
         return synapse
 
