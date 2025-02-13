@@ -83,8 +83,8 @@ python3 autoppia_iwa_module/modules/llm_local/tests/test.py
 
 This script will:
 
-- Verify CUDA 12.1 installation
-- Exit with an error if CUDA 12.1 is not found
+- Verify CUDA 11.5+ installation
+- Exit with an error if CUDA 11.5+ is not found
 - Launch a PM2 process that provides an API endpoint for LLM model interactions
 
 Currently, we are using the **qwen2.5-coder-14b-instruct-q4_k_m** model, but we will be updating to better performing models in the near future.
