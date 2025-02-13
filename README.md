@@ -31,11 +31,11 @@ We use a combination of **metaprogramming**, **Gen AI**, and other techniques to
 * Having general domain knowledge proves essential when operating on specific URLs, allowing agents to understand broader context and patterns
 
 ### 3. Task Generation
-This is the key to why tasks can be generated synthetically:
-* Orchestrates LLMs, knowledge files and dynamic web content to automatically create realistic web tasks
-* Generates diverse scenarios reflecting real-world situations
-* Incorporates random data (e.g., random products in an ecommerce site) to enhance realism
-* Leverages use cases characterized by low variety in form but high combinations
+We generate tasks synthetically for given web environments by:
+* Orchestrating LLMs, knowledge files and dynamic web content to automatically create realistic web tasks
+* Generating diverse scenarios reflecting real-world situations
+* Incorporating random data (e.g., random products in an ecommerce site) to enhance realism
+* Leveraging use cases characterized by low variety in type but high in possible combinations. 
 
 > **Note:** Websites are designed around a limited number of core task types, but each task can occur in countless variations due to diverse details and combinations possible. For example, purchasing can involve various product choices, prices, or order details.
 
