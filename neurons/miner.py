@@ -16,8 +16,8 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-from src.base.miner import BaseMinerNeuron
-from src.protocol import TaskSynapse, Dummy
+from autoppia_web_agents_subnet.base.miner import BaseMinerNeuron
+from autoppia_web_agents_subnet.protocol import TaskSynapse, Dummy
 from web_agents.default_web_agent import DefaultWebAgent
 import bittensor as bt
 import time

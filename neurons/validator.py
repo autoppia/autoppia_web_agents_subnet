@@ -25,8 +25,8 @@ import bittensor as bt
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.base.validator import BaseValidatorNeuron
-from src.validator import forward
+from autoppia_web_agents_subnet.base.validator import BaseValidatorNeuron
+from autoppia_web_agents_subnet.validator import forward
 
 from autoppia_iwa.src.bootstrap import AppBootstrap
 
