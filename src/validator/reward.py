@@ -1,12 +1,12 @@
 import numpy as np
 from typing import List
 import bittensor as bt
-from autoppia_iwa.autoppia_iwa.src.evaluation.evaluator.evaluator import (
+from autoppia_iwa.src.evaluation.evaluator.evaluator import (
     ConcurrentEvaluator,
     EvaluatorConfig,
 )
-from autoppia_iwa.autoppia_iwa.src.web_agents.classes import TaskSolution
-from autoppia_iwa.autoppia_iwa.src.evaluation.classes import EvaluationResult
+from autoppia_iwa.src.web_agents.classes import TaskSolution
+from autoppia_iwa.src.evaluation.classes import EvaluationResult
 
 
 def get_rewards(

@@ -1,8 +1,8 @@
 from typing import List
 
 import bittensor as bt
-from autoppia_iwa.autoppia_iwa.src.data_generation.domain.classes import Task
-from autoppia_iwa.autoppia_iwa.src.execution.actions.base import BaseAction
+from autoppia_iwa.src.data_generation.domain.classes import Task
+from autoppia_iwa.src.execution.actions.base import BaseAction
 
 
 class TaskSynapse(bt.Synapse):
