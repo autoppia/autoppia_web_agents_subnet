@@ -18,12 +18,12 @@
 
 from autoppia_web_agents_subnet.base.miner import BaseMinerNeuron
 from autoppia_web_agents_subnet.protocol import TaskSynapse, Dummy
-from web_agents.default_web_agent import DefaultWebAgent
 import bittensor as bt
 import time
 import typing
-from autoppia_iwa.src.execution.actions.base import BaseAction
 from typing import List
+from autoppia_iwa.src.execution.actions.base import BaseAction
+from autoppia_iwa.src.web_agents.random.agent import RandomClickerWebAgent
 
 
 class Miner(BaseMinerNeuron):
@@ -37,7 +37,7 @@ class Miner(BaseMinerNeuron):
 
     def __init__(self, config=None):
         super(Miner, self).__init__(config=config)
-        self.agent = DefaultWebAgent()
+        self.agent = RandomClickerWebAgent()
 
     async def forward(self, synapse: TaskSynapse) -> TaskSynapse:
         """
