@@ -16,7 +16,6 @@ import numpy as np
 import bittensor as bt
 from typing import List
 import asyncio
-
 import random
 from copy import deepcopy
 
