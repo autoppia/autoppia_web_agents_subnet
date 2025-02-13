@@ -17,13 +17,14 @@
 # DEALINGS IN THE SOFTWARE.
 
 from autoppia_web_agents_subnet.base.miner import BaseMinerNeuron
-from autoppia_web_agents_subnet.protocol import TaskSynapse, Dummy
+from autoppia_web_agents_subnet.protocol import TaskSynapse
 import bittensor as bt
 import time
 import typing
 from typing import List
 from autoppia_iwa.src.execution.actions.base import BaseAction
 from autoppia_iwa.src.web_agents.random.agent import RandomClickerWebAgent
+from autoppia_iwa.src.bootstrap import AppBootstrap
 
 
 class Miner(BaseMinerNeuron):
@@ -55,6 +56,7 @@ class Miner(BaseMinerNeuron):
         The 'forward' function is a placeholder and should be overridden with logic that is appropriate for
         the miner's intended operation. This method demonstrates a basic transformation of input data.
         """
+        bt.logging.info("Request Received from validator: {synapse.}")
         actions: List[BaseAction] = self.agent.solve_task(task=synapse.task).actions
         synapse.actions = actions
 
@@ -162,6 +164,10 @@ class Miner(BaseMinerNeuron):
 
 
 if __name__ == "__main__":
+    # This is Miner Entrypoint
+    # Initializing Dependency Injection In IWA
+    app = AppBootstrap()
+
     with Miner() as miner:
         while True:
             bt.logging.info(f"Miner running... {time.time()}")

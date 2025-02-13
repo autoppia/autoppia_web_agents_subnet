@@ -59,9 +59,9 @@ class Validator(BaseValidatorNeuron):
 
 
 if __name__ == "__main__":
-
-    # Initializing Dependency Injection for Autoppia IWA to work correctly
-    app = AppBootstrap()
+    # This is Miner Entrypoint
+    # Initializing Dependency Injection In IWA
+    app = AppBostrap()
 
     with Validator() as validator:
         while True:
