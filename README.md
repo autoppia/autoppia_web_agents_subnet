@@ -14,7 +14,7 @@
 
 Current state-of-the-art benchmarks for web operation are quite limited and can be easily gamed by memorization and training on the dataset. **IWA** solves these limitations by using **generative AI** and **synthetic data** to create a continuous stream of **novel and dynamic web challenges**. This approach ensures agents face realistic tasks that demand ongoing adaptation, reasoning, and generalization.
 
-Our goal is to make **IWA** the default benchmark for web agents and establish **Subnet 36 web agents** as the world's premier web operators. By rewarding miners who develop high-performing agents, **IWA** ensures scalability, continuous improvement, and robust evaluations without static datasets or human bottlenecks.
+Our goal is to make **IWA** the default benchmark for web agents and establish **Subnet 36 web agents** as the world's best web operators. By rewarding miners who develop high-performing agents, **IWA** ensures scalability, continuous improvement, and robust evaluations without static datasets or human bottlenecks.
 
 ## 🌐 IWA Benchmark
 IWA is a scalable & dynamic benchmark designed to evaluate autonomous web agents in environments that mirror the infinite complexity of the real web.
