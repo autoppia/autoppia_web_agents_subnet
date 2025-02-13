@@ -26,16 +26,11 @@ sudo apt install -y sudo || handle_error "Failed to install sudo"
 
 # Install Python 3.11 and essential dependencies
 echo -e "\e[34m[INFO]\e[0m Installing Python 3.11 and dependencies..."
-sudo apt-get install -y \
-  python3.11 python3.11-venv python3.11-dev build-essential cmake wget sqlite \
-  libnss3 libnss3-dev libasound2 libatk1.0-0 libatk-bridge2.0-0 \
-  libcups2 libx11-xcb1 libxcomposite1 libxcursor1 libxdamage1 \
-  libxrandr2 libgbm1 libpango-1.0-0 libatk-bridge2.0-0 libgtk-3-0 \
-  libvpx-dev libevent-dev libopus0 libgstreamer1.0-0 unzip \
-  libgstreamer-plugins-base1.0-0 libgstreamer-plugins-good1.0-0 \
-  libgstreamer-plugins-bad1.0-0 libwebp-dev libharfbuzz-dev \
-  libsecret-1-dev libhyphen0 libflite1 libgles2-mesa libx264-dev \
-  gnupg curl || handle_error "Failed to install Python 3.11 and dependencies"
+sudo apt-get install -y software-properties-common
+sudo add-apt-repository ppa:deadsnakes/ppa -y
+sudo apt-get update
+sudo apt-get install -y python3.11 python3.11-venv python3.11-dev
+
 
 # ------------------------------------------------------------------
 # Step 2: Install MongoDB (Optional - for web analysis caching)
