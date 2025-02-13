@@ -117,7 +117,7 @@ def _generate_tasks_for_url(demo_web_project: WebProject) -> list[Task]:
         save_web_analysis=False,
         enable_crawl=True,
         number_of_prompts_per_task=1,
-        demo_web_project=demo_web_project,
+        web_project=demo_web_project,
     )
     pipeline = TaskGenerationPipeline(config)
     output: TasksGenerationOutput = pipeline.generate()
