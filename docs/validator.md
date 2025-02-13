@@ -63,7 +63,7 @@ Before proceeding with any installation steps, verify your CUDA version:
 nvcc --version
 ```
 
-⚠️ **CRITICAL**: The output should show version 12.1. If you have a different version or CUDA is not installed, please install CUDA 12.1 before continuing.
+⚠️ **CRITICAL**: The output should show a version of CUDA, we've tested on 11.5
 
 Set up the local LLM generation endpoint:
 
