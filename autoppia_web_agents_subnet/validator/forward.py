@@ -21,6 +21,9 @@ from copy import deepcopy
 
 TIMEOUT = 10
 FORWARD_SLEEP_SECONDS = 5
+TIME_WEIGHT = 0.2
+MIN_SCORE_FOR_CORRECT_FORMAT = 0.1
+
 
 async def forward(self) -> None:
     bt.logging.info("Starting forward step.")
@@ -93,7 +96,9 @@ async def forward(self) -> None:
         self,
         task_solutions=task_solutions,
         web_url=web_url,
-        execution_times=execution_times
+        execution_times=execution_times,
+        time_weight=TIME_WEIGHT,  # Example parameter usage
+        min_correct_format_score=MIN_SCORE_FOR_CORRECT_FORMAT  # Example parameter usage
     )
 
     # Log each miner’s final reward
@@ -111,7 +116,7 @@ async def forward(self) -> None:
 def _get_task_solution_from_synapse(
     task: Task, synapse: TaskSynapse, web_agent_id: str
 ) -> TaskSolution:
-    if not synapse:
+    if not synapse or not hasattr(synapse, 'actions') or not isinstance(synapse.actions, list):
         return TaskSolution(task=task, actions=[], web_agent_id=web_agent_id)
     return TaskSolution(task=task, actions=synapse.actions, web_agent_id=web_agent_id)
 
