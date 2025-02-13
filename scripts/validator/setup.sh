@@ -132,15 +132,23 @@ success_msg "pip and setuptools upgraded successfully."
 # ------------------------------------------------------------------
 # Step 10: Install Python Dependencies and Playwright
 echo -e "\e[34m[INFO]\e[0m Installing Python dependencies and Playwright..."
+
 if ! uv pip install -r requirements.txt; then
     handle_error "Failed to install Python dependencies"
 fi
 
-# Install and setup Playwright
+# Ensure Playwright is installed
+if ! python3.11 -m pip show playwright > /dev/null 2>&1; then
+    echo -e "\e[34m[INFO]\e[0m Installing Playwright..."
+    python3.11 -m pip install playwright || handle_error "Failed to install Playwright"
+fi
+
+# Install Playwright dependencies
 python3.11 -m playwright install || handle_error "Failed to install Playwright"
 playwright install-deps || handle_error "Failed to install Playwright dependencies"
 
 success_msg "Python dependencies and Playwright installed successfully."
+
 
 # ------------------------------------------------------------------
 # Step 11: Install autoppia_iwa Package
