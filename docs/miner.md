@@ -1,4 +1,4 @@
-# Web Agents Subnet: *Miner Guide*
+# Web Agents Subnet: _Miner Guide_
 
 This guide explains how to set up and run your miner for Subnet 36 Web Agents.
 
@@ -9,6 +9,7 @@ This guide explains how to set up and run your miner for Subnet 36 Web Agents.
 The **basic miner code** can run on virtually any system with Python support, including **CPU-only machines**. However, **competitive mining** in this subnet typically requires more robust hardware depending on your Web Agent implementation.
 
 Your actual hardware requirements will be determined by:
+
 - The **complexity** of your Web Agent solution
 - Whether you're using **LLMs** for task understanding
 - The type of **web automation** you're implementing
@@ -23,6 +24,7 @@ While you can start with **minimal hardware**, successful miners typically inves
 ### 1. Clone the Repository
 
 First, clone the repository and navigate to the project directory:
+
 ```bash
 git clone https://github.com/autoppia/autoppia_web_agents_subnet
 cd autoppia_web_agents_subnet
@@ -31,6 +33,7 @@ cd autoppia_web_agents_subnet
 ### 2. Initialize and Update Submodules
 
 Initialize and update the Autoppia IWA submodule:
+
 ```bash
 git submodule update --init --recursive --remote
 ```
@@ -38,12 +41,14 @@ git submodule update --init --recursive --remote
 ### 3. Run the Setup Script
 
 Make the setup script executable and run it:
+
 ```bash
 chmod +x scripts/miner/setup.sh
 ./scripts/miner/setup.sh
 ```
 
 This script will:
+
 - Install system dependencies
 - Set up Python 3.11 environment
 - Install and configure PM2
@@ -54,6 +59,7 @@ This script will:
 ### 4. Start the Miner with PM2
 
 Use PM2 to run the miner with your configuration:
+
 ```bash
 pm2 start neurons/miner.py \
   --name "subnet_36_miner" \
@@ -68,6 +74,7 @@ pm2 start neurons/miner.py \
 ```
 
 #### Common Configuration Options
+
 - `--name`: PM2 process name (can be any name you choose)
 - `--netuid`: Network UID (36 for this subnet)
 - `--wallet.name`: Your coldkey name
@@ -75,6 +82,63 @@ pm2 start neurons/miner.py \
 - `--axon.port`: Port for miner communication (default: 8091)
 - `--logging.debug`: Enable debug logging
 - `--subtensor.network`: Network to connect to (e.g., finney, local)
+
+---
+
+## Optional Components
+
+### 1. Deploy LLM Generation Endpoint
+
+Before proceeding with any installation steps, verify your CUDA version:
+
+```bash
+nvcc --version
+```
+
+⚠️ **CRITICAL**: The output should show version 12.1. If you have a different version or CUDA is not installed, please install CUDA 12.1 before continuing.
+
+Set up the local LLM generation endpoint:
+
+```bash
+chmod +x autoppia_iwa_module/modules/llm_local/setup.sh
+./autoppia_iwa_module/modules/llm_local/setup.sh
+
+source llm_env/bin/activate
+pm2 start autoppia_iwa_module/modules/llm_local/run_local_llm.py --name llm_local -- --port 6000
+```
+
+To verify that the LLM service is running correctly, you can run the test script:
+
+```bash
+python3 autoppia_iwa_module/modules/llm_local/tests/test.py
+```
+
+This script will:
+
+- Verify CUDA 12.1 installation
+- Exit with an error if CUDA 12.1 is not found
+- Launch a PM2 process that provides an API endpoint for LLM model interactions
+
+Currently, we are using the **qwen2.5-coder-14b-instruct-q4_k_m** model, but we will be updating to better performing models in the near future.
+
+For additional configuration options and advanced setup, refer to the detailed documentation in `modules/llm_local/setup.md`.
+
+### 2. Deploy Demo Web Projects
+
+Deploy the demo web projects by running:
+
+```bash
+chmod +x autoppia_iwa_module/modules/webs_demo/setup.sh
+./autoppia_iwa_module/modules/webs_demo/setup.sh
+```
+
+This script will:
+
+- Install **Docker** and **Docker Compose** if not already installed
+- Deploy **multiple Docker containers**, each running a different demo web project
+- Set up the necessary networking and configurations
+
+These components are suggestions that may help with development and testing but are not required for mining.
 
 ---
 
@@ -87,6 +151,7 @@ A Web Agent is an application that receives web tasks and returns a list of acti
 ### Available Actions
 
 Web Agents can perform various actions defined in the `ACTION_CLASS_MAP`. These include:
+
 - `click`: Performs a mouse click at specified coordinates
 - `type`: Types text into form fields
 - `hover`: Moves mouse over an element
@@ -127,12 +192,14 @@ class RandomClickerWebAgent(IWebAgent):
 ```
 
 While this RandomClicker doesn't meaningfully solve tasks, it serves as a useful example of:
+
 - The basic Web Agent interface
 - How to receive and process tasks
 - How to generate and return actions
 - The expected structure of a Web Agent implementation
 
 To be competitive in this subnet, miners need to develop sophisticated Web Agents that can:
+
 - Understand complex web tasks
 - Generate appropriate sequences of actions
 - Navigate and interact with web interfaces effectively
@@ -154,36 +221,8 @@ The reward function is designed to incentivize the development of efficient, rel
 
 ---
 
-## Optional Components
-
-### Demo Web Projects
-
-If you want to experiment with demo web projects, you can deploy them using:
-```bash
-chmod +x autoppia_iwa/modules/webs_demo/setup.sh
-./autoppia_iwa/modules/webs_demo/setup.sh
-```
-
-This will:
-- Install Docker and Docker Compose
-- Deploy sample web projects in containers
-- Provide a testing environment for your Web Agent
-
-### Local LLM Endpoint
-
-For local LLM capabilities, you can set up a local endpoint:
-```bash
-chmod +x autoppia_iwa/modules/llm_local/setup.sh
-./autoppia_iwa/modules/llm_local/setup.sh
-```
-
-**Note:** This requires CUDA 12.1.1. For detailed configuration options and requirements, check `autoppia_iwa/modules/llm_local/setup.md`.
-
-These components are suggestions that may help with development and testing but are not required for mining.
-
----
-
 ## Support
 
 For additional help:
+
 - Contact **@Daryxx**, **@Riiveer**, or **@Miguelik** on Discord channel if there is any problem
