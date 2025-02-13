@@ -49,9 +49,10 @@ Set up the local LLM generation endpoint:
 chmod +x autoppia_iwa/modules/llm_local/setup.sh
 ./autoppia_iwa/modules/llm_local/setup.sh
 
-pm2 start run_local_llm.py --name llm_local --interpreter python3.10 -- --port $PORT
+source llm_env/bin/activate
+pm2 start autoppia_iwa/modules/llm_local/run_local_llm.py --name llm_local --interpreter python3.10 -- --port 6000
 ```
-This script will launch a PM2 process that provides an API endpoint for LLM model interactions. 
+This script will launch a PM2 process that provides an API endpoint for LLM model interactions. Currently, we are using the qwen2.5-coder-14b-instruct-q4_k_m model, but we will be updating to better performing models in the near future.
 
 **Note:** This requires CUDA 12.1.1. For detailed configuration options and requirements, please check `autoppia_iwa/modules/llm_local/setup.md`.
 
