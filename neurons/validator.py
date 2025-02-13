@@ -61,7 +61,7 @@ class Validator(BaseValidatorNeuron):
 if __name__ == "__main__":
     # This is Miner Entrypoint
     # Initializing Dependency Injection In IWA
-    app = AppBostrap()
+    app = AppBootstrap()
 
     with Validator() as validator:
         while True:
