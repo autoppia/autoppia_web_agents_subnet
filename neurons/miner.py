@@ -39,6 +39,8 @@ class Miner(BaseMinerNeuron):
         super(Miner, self).__init__(config=config)
         self.agent = RandomClickerWebAgent()
 
+        self.load_state()
+
     async def forward(self, synapse: TaskSynapse) -> TaskSynapse:
         """
         Processes the incoming 'Dummy' synapse by performing a predefined operation on the input data.

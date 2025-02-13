@@ -36,11 +36,6 @@ class BaseMinerNeuron(BaseNeuron):
 
     neuron_type: str = "MinerNeuron"
 
-    @classmethod
-    def add_args(cls, parser: argparse.ArgumentParser):
-        super().add_args(parser)
-        add_miner_args(cls, parser)
-
     def __init__(self, config=None):
         super().__init__(config=config)
 
@@ -194,3 +189,8 @@ class BaseMinerNeuron(BaseNeuron):
 
         # Sync the metagraph.
         self.metagraph.sync(subtensor=self.subtensor)
+
+    @classmethod
+    def add_args(cls, parser: argparse.ArgumentParser):
+        super().add_args(parser)
+        add_miner_args(cls, parser)
