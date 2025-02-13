@@ -3,7 +3,7 @@
 # **Web Agents Subnet (Bittensor Sn36)**
 ### [🌐 Autoppia Website](https://autoppia.com/infinite-web-arena-subnet)  
 ### [⛏️ Mining Docs](https://github.com/autoppia/autoppia_web_agents_subnet-deprecated-/blob/main/docs/miner.md)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[🧑‍🏫 Validating Docs](docs/validator.md)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[🔗 IWA](https://github.com/autoppia/autoppia_iwa)
-### [💬 Discord](https://autoppia.com/infinite-web-arena-subnet)  
+### [💬 Discord](https://discordapp.com/channels/799672011265015819/1339356060787408996)  
 </div>
 
 
