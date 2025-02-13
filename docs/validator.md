@@ -78,7 +78,7 @@ pm2 start autoppia_iwa_module/modules/llm_local/run_local_llm.py --name llm_loca
 To verify that the LLM service is running correctly, you can run the test script:
 
 ```bash
-python3 autoppia_iwa_module/modules/llm_local/tests/test.py
+python3 autoppia_iwa_module/modules/llm_local/test/test.py
 ```
 
 This script will:
