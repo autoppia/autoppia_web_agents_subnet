@@ -104,10 +104,10 @@ success_msg "Python dependencies installed successfully."
 # ------------------------------------------------------------------
 # Step 10: Install autoppia_iwa Package
 echo -e "\e[34m[INFO]\e[0m Installing autoppia_iwa package..."
-if cd autoppia_iwa && uv pip install -e . && cd ..; then
-    success_msg "autoppia_iwa package installed successfully."
+if cd autoppia_iwa_module && uv pip install -e . && cd ..; then
+    success_msg "autoppia_iwa_module package installed successfully."
 else
-    handle_error "Failed to install autoppia_iwa package"
+    handle_error "Failed to install autoppia_iwa_module package"
 fi
 
 # ------------------------------------------------------------------
