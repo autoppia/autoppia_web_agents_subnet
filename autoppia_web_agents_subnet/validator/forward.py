@@ -9,9 +9,9 @@ from autoppia_iwa.src.data_generation.domain.classes import (
 from autoppia_iwa.src.data_generation.application.tasks_generation_pipeline import (
     TaskGenerationPipeline,
 )
-from src.validator.reward import get_rewards
-from src.utils.uids import get_random_uids
-from src.protocol import TaskSynapse
+from autoppia_web_agents_subnet.validator.reward import get_rewards
+from autoppia_web_agents_subnet.utils.uids import get_random_uids
+from autoppia_web_agents_subnet.protocol import TaskSynapse
 import numpy as np
 import bittensor as bt
 from typing import List

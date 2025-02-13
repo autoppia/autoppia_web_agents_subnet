@@ -28,12 +28,12 @@ import bittensor as bt
 from typing import List, Union
 from traceback import print_exception
 
-from src.base.neuron import BaseNeuron
-from src.base.utils.weight_utils import (
+from autoppia_web_agents_subnet.base.neuron import BaseNeuron
+from autoppia_web_agents_subnet.base.utils.weight_utils import (
     process_weights_for_netuid,
     convert_weights_and_uids_for_emit,
 )
-from src.utils.config import add_validator_args
+from autoppia_web_agents_subnet.utils.config import add_validator_args
 
 
 class BaseValidatorNeuron(BaseNeuron):

@@ -23,8 +23,8 @@ import traceback
 
 import bittensor as bt
 
-from src.base.neuron import BaseNeuron
-from src.utils.config import add_miner_args
+from autoppia_web_agents_subnet.base.neuron import BaseNeuron
+from autoppia_web_agents_subnet.utils.config import add_miner_args
 
 from typing import Union
 
