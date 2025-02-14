@@ -25,6 +25,7 @@ TIME_WEIGHT = 0.2
 MIN_SCORE_FOR_CORRECT_FORMAT = 0.1
 
 
+
 async def forward(self) -> None:
     bt.logging.info("Starting forward step.")
 
@@ -80,7 +81,7 @@ async def forward(self) -> None:
     task_solutions = []
     execution_times = []
     for miner_uid, response in zip(miner_uids, responses):
-        if response and getattr(response, 'actions', None):
+        if response and getattr(response, "actions", None):
             bt.logging.debug(f"Miner {miner_uid} actions: {response.actions}")
         task_solution = _get_task_solution_from_synapse(
             task=task,
@@ -88,7 +89,9 @@ async def forward(self) -> None:
             web_agent_id=miner_uid,
         )
         task_solutions.append(task_solution)
-        process_time = getattr(response.dendrite, 'process_time', TIMEOUT) if response else TIMEOUT
+        process_time = (
+            getattr(response.dendrite, "process_time", TIMEOUT) if response else TIMEOUT
+        )
         execution_times.append(process_time)
 
     # 8) Compute rewards
@@ -97,8 +100,11 @@ async def forward(self) -> None:
         task_solutions=task_solutions,
         web_url=web_url,
         execution_times=execution_times,
+<<<<<<< HEAD
         time_weight=TIME_WEIGHT,  # Example parameter usage
         min_correct_format_score=MIN_SCORE_FOR_CORRECT_FORMAT  # Example parameter usage
+=======
+>>>>>>> 6504b910cf9ce9deade2c8e8b498dcaecbbc387b
     )
 
     # Log each miner’s final reward
@@ -131,9 +137,9 @@ def _generate_tasks_for_url(demo_web_project: WebProject) -> List[Task]:
     config = TaskGenerationConfig(
         web_project=demo_web_project,
         save_task_in_db=True,
-        save_web_analysis_in_db=False,
+        save_web_analysis_in_db=True,
         enable_crawl=True,
-        number_of_prompts_per_task=1
+        number_of_prompts_per_task=1,
     )
     pipeline = TaskGenerationPipeline(config)
     output: TasksGenerationOutput = pipeline.generate()

@@ -1,4 +1,4 @@
-# Web Agents Subnet: *Validator Guide*
+# Web Agents Subnet: Validator Guide
 
 This guide explains how to set up and run your validator for Subnet 36.
 
@@ -6,18 +6,26 @@ This guide explains how to set up and run your validator for Subnet 36.
 
 This subnet requires **Docker**. For optimal performance, we strongly recommend using a bare metal GPU, as virtualized environments may lead to performance issues.
 
+## Component Deployment
+
 You can deploy the components on separate instances:
-- **LLM**: GPU (check System Requirements) - Requires CUDA 12.1  
+
+- **LLM**: Two options available:
+  - **Option A:** Use OpenAI API (No GPU required, API key needed)
+  - **Option B:** Use our Local LLM (Requires GPU with CUDA 12.1)
 - **Demo-Webs**: CPU only (deployed via Docker)
 - **Validator.py**: CPU only
 
 Detailed configuration instructions for each component are provided in the following sections.
 
-**Validator Information**
+## Validator Information
 
-If you wish to ChildKey (CHK) our validator, please note our hotkey ss58 address on subnet 36 is: **5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j**
+If you wish to ChildKey (CHK) our validator, please note our hotkey ss58 address on subnet 36 is:
+```
+5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j
+```
+
 ---
-
 ## System Requirements
 
 - **Hardware:**
@@ -31,7 +39,7 @@ If you wish to ChildKey (CHK) our validator, please note our hotkey ss58 address
 - **Storage:**
   - Minimum 1TB disk space recommended
 - **Operating System:**
-  - Ubuntu 20.04 LTS or newer
+  - Ubuntu 22.04.5 LTS (Jammy Jellyfish)
 
 ---
 
@@ -58,17 +66,47 @@ git submodule update --init --recursive --remote
 
 ## Installation Steps
 
-### 1. Deploy LLM Generation Endpoint
+### 1. Configure LLM Provider
 
-Before proceeding with any installation steps, verify your CUDA version:
+First, copy the environment template and configure your LLM provider:
+
+```bash
+cp .env.example .env
+```
+
+You have two options for the LLM provider:
+
+#### Option A: Use OpenAI API (No GPU Required)
+
+If you prefer to use OpenAI's API, edit your `.env` file with:
+
+```bash
+LLM_PROVIDER="openai"
+OPENAI_API_KEY="your-api-key-here"
+```
+
+With this configuration, you can skip the local LLM setup and proceed to step 2.
+
+#### Option B: Deploy Local LLM (GPU Required)
+
+If you want to use our local LLM solution:
+
+1. Edit your `.env` file:
+
+```bash
+LLM_PROVIDER="local"
+LLM_ENDPOINT="http://localhost:6000/generate"
+```
+
+2. Verify your CUDA version:
 
 ```bash
 nvcc --version
 ```
 
-⚠️ **CRITICAL**: The output should show version 12.1. If you have a different version or CUDA is not installed, please install CUDA 12.1 before continuing.
+⚠️ **CRITICAL**: The output should show a version of CUDA, we've tested on 12.1
 
-Set up the local LLM generation endpoint:
+3. Set up the local LLM generation endpoint:
 
 ```bash
 chmod +x autoppia_iwa_module/modules/llm_local/setup.sh
@@ -78,29 +116,30 @@ source llm_env/bin/activate
 pm2 start autoppia_iwa_module/modules/llm_local/run_local_llm.py --name llm_local -- --port 6000
 ```
 
-To verify that the LLM service is running correctly, you can run the test script:
+4. Verify the LLM service:
 
 ```bash
-python3 autoppia_iwa_module/modules/llm_local/tests/test.py
+python3 autoppia_iwa_module/modules/llm_local/test/test.py
 ```
 
-This script will:
+The local setup uses the **qwen2.5-coder-14b-instruct-q4_k_m** model and requires:
 
-- Verify CUDA 12.1 installation
-- Exit with an error if CUDA 12.1 is not found
-- Launch a PM2 process that provides an API endpoint for LLM model interactions
+- CUDA 12.1+ installation
+- GPU with sufficient memory (see System Requirements)
+- PM2 process running on port 6000
 
-Currently, we are using the **qwen2.5-coder-14b-instruct-q4_k_m** model, but we will be updating to better performing models in the near future.
-
-For additional configuration options and advanced setup, refer to the detailed documentation in `modules/llm_local/setup.md`.
+For additional configuration options and advanced setup of the local LLM, refer to the detailed documentation in `modules/llm_local/setup.md`.
 
 ### 2. Deploy Demo Web Projects
 
 Deploy the demo web projects by running:
 
 ```bash
-chmod +x autoppia_iwa_module/modules/webs_demo/setup.sh
-./autoppia_iwa_module/modules/webs_demo/setup.sh
+CURRENT_DIR=$(pwd)
+cd autoppia_iwa_module/modules/webs_demo
+chmod +x setup.sh
+./setup.sh
+cd "$CURRENT_DIR"
 ```
 
 This script will:
@@ -109,15 +148,9 @@ This script will:
 - Deploy **multiple Docker containers**, each running a different demo web project
 - Set up the necessary networking and configurations
 
-### 3. Configure Environment
+### 3. Configure Demo Webs Endpoint
 
-Copy .env template:
-
-```bash
-cp .env.example .env
-```
-
-Edit the `.env` file to configure your environment:
+Edit the `.env` file to configure your environment with the following parameters:
 
 ```bash
 # Default endpoints - modify these according to your setup
@@ -132,7 +165,7 @@ DEMO_WEBS_STARTING_PORT=8000
   - Default: `http://localhost:6000`
   - You can modify this if running the LLM on a different server
   - Example remote setup: `http://your-llm-server_ip:port`
-  - _Note: The server hosting the LLM must have CUDA 12.1 installed_
+  - _Note: The server hosting the LLM must have CUDA 12.1+ installed_
 - **`DEMO_WEBS_ENDPOINT`**: The endpoint where your demo web projects are deployed
   - Default: `http://localhost`
   - You can modify this if running the demo webs on a different server
@@ -175,7 +208,7 @@ pm2 start neurons/validator.py \
   --subtensor.network finney \
   --wallet.name your_coldkey \
   --wallet.hotkey your_hotkey \
-  --logging.debug \
+  --logging.debug
 ```
 
 #### Common Configuration Options
@@ -194,5 +227,3 @@ pm2 start neurons/validator.py \
 For additional help:
 
 - Contact **@Daryxx**, **@Riiveer**, or **@Miguelik** on Discord if you encounter any issues
-
----
