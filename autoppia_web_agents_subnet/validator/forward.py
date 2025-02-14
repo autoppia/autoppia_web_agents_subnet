@@ -70,7 +70,7 @@ async def forward(self) -> None:
         responses: List[TaskSynapse] = await _dendrite_with_retries(
             dendrite=self.dendrite,
             axons=miner_axons,
-            synapse=TaskSynapse(message="Hello", actions=[], task=Task(prompt="example", url="url_example")),
+            synapse=TaskSynapse(prompt=miner_task.prompt, url=miner_task.url, actions=[]),
             deserialize=True,
             timeout=TIMEOUT,
         )
