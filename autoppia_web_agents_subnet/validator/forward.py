@@ -99,7 +99,7 @@ async def forward(self) -> None:
             process_time = (
                 getattr(response.dendrite, "process_time", TIMEOUT) if response else TIMEOUT
             )
-            execution_times.append(process_time)
+            execution_times.append(process_time if process_time else 0)
 
         # 8) Compute rewards
         rewards: np.ndarray = await get_rewards(
