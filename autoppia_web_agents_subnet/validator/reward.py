@@ -14,7 +14,6 @@ def normalize_execution_times(times: List[Optional[float]]) -> List[float]:
     if not times:
         return []
 
-    # Replace None with the worst-case scenario (higher than max)
     valid_times = [t for t in times if t is not None]
 
     if not valid_times:
@@ -26,8 +25,7 @@ def normalize_execution_times(times: List[Optional[float]]) -> List[float]:
     if max_time == min_time:
         return [1.0 if t is not None else 0.0 for t in times]
 
-    # Normalize valid times and assign 0.0 for None values
-    normalized = [(max_time - t) / (max_time - min_time) if t is not None else 0.0 for t in times]
+    normalized = [(t - max_time) / (min_time - max_time) if t is not None else 0.0 for t in times]
 
     bt.logging.debug(f"Execution times: {times}, normalized times: {normalized}")
     return normalized
