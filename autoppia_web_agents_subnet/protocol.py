@@ -24,11 +24,11 @@ class TaskSynapse(bt.Synapse):
     #     title="task",
     #     description="The task to be solved",
     # )
-    # actions: List[BaseAction] = Field(
-    #     ...,
-    #     title="actions",
-    #     description="The actions that solve the task",
-    # )
+    actions: List[BaseAction] = Field(
+        ...,
+        title="actions",
+        description="The actions that solve the task",
+    )
 
     def deserialize(self) -> float:
         """
