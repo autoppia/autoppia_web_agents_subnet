@@ -65,6 +65,11 @@ async def forward(self) -> None:
         synapse_request = TaskSynapse(task=miner_task, actions=[])
         bt.logging.info(f"Sending TaskSynapse to {len(miner_uids)} miners.")
 
+        dumped = synapse_request.model_dump()
+
+        # Rebuild the model from the dumped data
+        reconstructed = TaskSynapse(**dumped)
+
         miner_axons = [self.metagraph.axons[uid] for uid in miner_uids]
         responses: List[TaskSynapse] = await _dendrite_with_retries(
             dendrite=self.dendrite,
