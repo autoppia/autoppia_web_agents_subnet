@@ -96,6 +96,7 @@ We want to reward miners for their **performance and speed**. It's essential tha
 
 **Autoppia Web Operator** is a **fully permissionless web operator**, leveraging **Bittensor’s Subnet 36** and **Autonomous Web Agents** to transform business automation. Instead of rigid, pre-built software solutions, this tool provides a **customizable and adaptive** automation layer that evolves with **specific business needs**.
 
+
 Unlike traditional **SaaS, ERP, and CRM** systems, Autoppia Web Operator operates in an **open and incentivized** manner allowing businesses to define **highly tailored automation workflows** while benefiting from a **competitive network of miners** improving automation intelligence in real-time.
 
 ## 🌐 How it Works
