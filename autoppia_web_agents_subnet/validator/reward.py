@@ -91,6 +91,7 @@ async def _evaluate_all_task_solutions(
         results: List[EvaluationResult] = await evaluator.evaluate_all_tasks(
             task_solutions=task_solutions
         )
+        bt.logging.info(f"Evaluation Results: {results}")
         return [get_score_from_evaluation_result(r) for r in results]
     except Exception as exc:
         bt.logging.error(f"Error evaluating task solutions: {exc}")
