@@ -59,7 +59,7 @@ class Miner(BaseMinerNeuron):
         """
 
         try:
-            start_time = time()
+            start_time = time.time()
             validator_hotkey = getattr(synapse.dendrite, 'hotkey', None)
 
             bt.logging.info(f"Request Received from validator: {validator_hotkey}")
