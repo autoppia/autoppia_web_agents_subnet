@@ -65,7 +65,7 @@ async def forward(self) -> None:
         synapse_request = TaskSynapse(task=miner_task, actions=[])
         bt.logging.info(f"Sending TaskSynapse to {len(miner_uids)} miners.")
 
-        dumped = synapse_request.model_dump()
+        dumped = synapse_request.deserialize()
 
         # Rebuild the model from the dumped data
         reconstructed = TaskSynapse(**dumped)
