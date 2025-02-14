@@ -18,12 +18,8 @@ class TaskSynapse(bt.Synapse):
     """
 
     version: str = ""
-    message:str = "Hello"
-    task:Task = Field(
-        ...,
-        title="task",
-        description="The task to be solved",
-    )
+    prompt:str
+    url:str
     actions: List[BaseAction] = Field(
         ...,
         title="actions",
