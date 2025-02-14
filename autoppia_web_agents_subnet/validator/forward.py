@@ -61,6 +61,8 @@ async def forward(self) -> None:
         miner_uids = get_random_uids(self, k=self.config.neuron.sample_size)
         bt.logging.info(f"Miner UIDs chosen: {miner_uids}")
 
+        bt.logging.warning(f"Miner task: {miner_task}")
+        
         # 6) Build the synapse and send query with a timeout
         synapse_request = TaskSynapse(task=miner_task, actions=[])
         bt.logging.info(f"Sending TaskSynapse to {len(miner_uids)} miners.")
