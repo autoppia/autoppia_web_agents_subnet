@@ -18,8 +18,8 @@ class TaskSynapse(bt.Synapse):
     """
 
     version: str = ""
-    prompt:str
-    url:str
+    prompt:str = ""
+    url:str = ""
     actions: List[BaseAction] = Field(
         ...,
         title="actions",
