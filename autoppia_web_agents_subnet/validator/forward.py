@@ -69,6 +69,8 @@ async def forward(self) -> None:
 
         # Rebuild the model from the dumped data
         reconstructed = TaskSynapse(**dumped)
+        print(reconstructed)
+        input()
 
         miner_axons = [self.metagraph.axons[uid] for uid in miner_uids]
         responses: List[TaskSynapse] = await _dendrite_with_retries(
