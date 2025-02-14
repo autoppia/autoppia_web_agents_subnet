@@ -79,8 +79,9 @@ async def forward(self) -> None:
         # 7) Construct task solutions and track execution times
         task_solutions = []
         execution_times = []
-        for miner_uid, response in zip(miner_uids, responses):
 
+        for miner_uid, response in zip(miner_uids, responses):
+            task_solution = None
             if response and getattr(response, "actions", None):
                 bt.logging.debug(f"Miner {miner_uid} actions: {response.actions}")
             try:
