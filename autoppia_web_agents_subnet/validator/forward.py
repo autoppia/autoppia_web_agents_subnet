@@ -88,11 +88,11 @@ async def forward(self) -> None:
                 task_solution = _get_task_solution_from_synapse(
                     task=task,
                     synapse=response,
-                    web_agent_id=miner_uid,
+                    web_agent_id=str(miner_uid),
                 )
             except Exception as e:
                 bt.logging.error(f"Error in Miner Response Format: {e}")
-                task_solution = TaskSolution(task=task, actions=[], web_agent_id=miner_uid)
+                task_solution = TaskSolution(task=task, actions=[], web_agent_id=str(miner_uid))
 
             task_solutions.append(task_solution)
 
