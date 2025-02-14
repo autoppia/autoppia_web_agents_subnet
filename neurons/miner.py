@@ -25,6 +25,7 @@ from typing import List
 from autoppia_iwa.src.execution.actions.base import BaseAction
 from autoppia_iwa.src.web_agents.random.agent import RandomClickerWebAgent
 from autoppia_iwa.src.bootstrap import AppBootstrap
+from autoppia_iwa.src.data_generation.domain.classes import Task
 
 
 class Miner(BaseMinerNeuron):
@@ -57,22 +58,21 @@ class Miner(BaseMinerNeuron):
         the miner's intended operation. This method demonstrates a basic transformation of input data.
         """
 
-        bt.logging.warning(synapse)
+        try:
+            start_time = time()
+            validator_hotkey = getattr(synapse.dendrite, 'hotkey', None)
 
-        # try:
-        #     start_time = time()
-        #     validator_hotkey = getattr(synapse.dendrite, 'hotkey', None)
+            bt.logging.info(f"Request Received from validator: {validator_hotkey}")
 
-        #     bt.logging.info(f"Request Received from validator: {validator_hotkey}")
+            task = Task(prompt=synapse.prompt, url=synapse.url)
+            actions: List[BaseAction] = self.agent.solve_task(task=task).actions
+            bt.logging.info(f"Task Solved. Actions: {actions}")
 
-        #     actions: List[BaseAction] = self.agent.solve_task(task=synapse.task).actions
-        #     bt.logging.info(f"Task Solved. Actions: {actions}")
+            synapse.actions = actions
+            bt.logging.success(f"Request completed successfully in {time.time() - start_time}s")
 
-        #     synapse.actions = actions
-        #     bt.logging.success(f"Request completed successfully in {time.time() - start_time}s")
-
-        # except Exception as e:
-        #     bt.logging.error(f"An Error ocurred on miner forward : {e}")
+        except Exception as e:
+            bt.logging.error(f"An Error ocurred on miner forward : {e}")
 
         return synapse
 
