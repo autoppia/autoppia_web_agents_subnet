@@ -7,18 +7,28 @@ from autoppia_iwa.src.evaluation.evaluator.evaluator import (
 )
 from autoppia_iwa.src.web_agents.classes import TaskSolution
 from autoppia_iwa.src.evaluation.classes import EvaluationResult
+from typing import List, Optional
 
 
-def normalize_execution_times(times: List[float]) -> List[float]:
+def normalize_execution_times(times: List[Optional[float]]) -> List[float]:
     if not times:
         return []
-    bt.logging.info(f"Miners Times: {times}")
-    min_time = min(times)
-    max_time = max(times)
+
+    # Replace None with the worst-case scenario (higher than max)
+    valid_times = [t for t in times if t is not None]
+
+    if not valid_times:
+        return [0.0] * len(times)
+
+    min_time = min(valid_times)
+    max_time = max(valid_times)
+
     if max_time == min_time:
-        return [1.0 for _ in times]
-    # Lower execution times are better, so invert appropriately
-    normalized = [(max_time - t) / (max_time - min_time) for t in times]
+        return [1.0 if t is not None else 0.0 for t in times]
+
+    # Normalize valid times and assign 0.0 for None values
+    normalized = [(max_time - t) / (max_time - min_time) if t is not None else 0.0 for t in times]
+
     bt.logging.debug(f"Execution times: {times}, normalized times: {normalized}")
     return normalized
 
