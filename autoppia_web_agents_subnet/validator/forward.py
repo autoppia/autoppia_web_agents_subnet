@@ -102,7 +102,7 @@ async def forward(self) -> None:
             execution_times.append(process_time)
 
         # 8) Compute rewards
-        rewards: np.ndarray = get_rewards(
+        rewards: np.ndarray = await get_rewards(
             self,
             task_solutions=task_solutions,
             web_url=web_url,
