@@ -104,7 +104,7 @@ LLM_ENDPOINT="http://localhost:6000/generate"
 nvcc --version
 ```
 
-⚠️ **CRITICAL**: The output should show a version of CUDA, we've tested on 12.6
+⚠️ **CRITICAL**: The output should show a version of CUDA, the code is prepared to install automatically for CUDA 12.6 (as shown by nvcc --version)
 
 3. Set up the local LLM generation endpoint:
 
@@ -124,7 +124,7 @@ python3 autoppia_iwa_module/modules/llm_local/test/test.py
 
 The local setup uses the **deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B** model and requires:
 
-- CUDA 12.1+ installation
+- CUDA 12.6 installation
 - GPU with sufficient memory (see System Requirements)
 - PM2 process running on port 6000
 
