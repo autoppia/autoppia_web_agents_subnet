@@ -23,7 +23,7 @@ def normalize_execution_times(times: List[float]) -> List[float]:
     return normalized
 
 
-def get_rewards(
+async def get_rewards(
     self,
     task_solutions: List[TaskSolution],
     web_url: str,
@@ -45,7 +45,7 @@ def get_rewards(
     evaluator_config = EvaluatorConfig(current_url=web_url)
     evaluator = ConcurrentEvaluator(evaluator_config)
 
-    evaluation_scores: List[float] = _evaluate_all_task_solutions(
+    evaluation_scores: List[float] = await _evaluate_all_task_solutions(
         evaluator=evaluator,
         task_solutions=task_solutions
     )
@@ -73,12 +73,12 @@ def get_rewards(
     return np.array(final_rewards)
 
 
-def _evaluate_all_task_solutions(
+async def _evaluate_all_task_solutions(
     evaluator: ConcurrentEvaluator,
     task_solutions: List[TaskSolution]
 ) -> List[float]:
     try:
-        results: List[EvaluationResult] = evaluator.evaluate_all_tasks(
+        results: List[EvaluationResult] = await evaluator.evaluate_all_tasks(
             task_solutions=task_solutions
         )
         return [get_score_from_evaluation_result(r) for r in results]
