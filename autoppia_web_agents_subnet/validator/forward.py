@@ -42,9 +42,9 @@ async def forward(self) -> None:
     bt.logging.info(f"Selected demo web project with URL: {web_url}")
 
     # 3) Create a pipeline and generate tasks
-    bt.logging.warning(f"Generating task for : {demo_web_project.ur}...")
+    bt.logging.warning(f"Generating task for : {demo_web_project.name}...")
     tasks_generated:List[Task] = _generate_tasks_for_url(demo_web_project=demo_web_project)
-    
+
     if not tasks_generated:
         bt.logging.warning("No tasks generated, skipping forward step.")
         return
