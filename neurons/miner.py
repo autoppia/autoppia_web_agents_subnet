@@ -57,20 +57,22 @@ class Miner(BaseMinerNeuron):
         the miner's intended operation. This method demonstrates a basic transformation of input data.
         """
 
-        try:
-            start_time = time()
-            validator_hotkey = getattr(synapse.dendrite, 'hotkey', None)
+        bt.logging.warning(synapse.message)
 
-            bt.logging.info(f"Request Received from validator: {validator_hotkey}")
+        # try:
+        #     start_time = time()
+        #     validator_hotkey = getattr(synapse.dendrite, 'hotkey', None)
 
-            actions: List[BaseAction] = self.agent.solve_task(task=synapse.task).actions
-            bt.logging.info(f"Task Solved. Actions: {actions}")
+        #     bt.logging.info(f"Request Received from validator: {validator_hotkey}")
 
-            synapse.actions = actions
-            bt.logging.success(f"Request completed successfully in {time.time() - start_time}s")
+        #     actions: List[BaseAction] = self.agent.solve_task(task=synapse.task).actions
+        #     bt.logging.info(f"Task Solved. Actions: {actions}")
 
-        except Exception as e:
-            bt.logging.error(f"An Error ocurred on miner forward : {e}")
+        #     synapse.actions = actions
+        #     bt.logging.success(f"Request completed successfully in {time.time() - start_time}s")
+
+        # except Exception as e:
+        #     bt.logging.error(f"An Error ocurred on miner forward : {e}")
 
         return synapse
 
