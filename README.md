@@ -92,26 +92,25 @@ We want to reward miners for their **performance and speed**. It's essential tha
    - Runs task-associated tests on snapshots
    - Generates final score based on test results
 
-## 🚀 **Argonaut** - A Permissionless Web Operator Powered by Bittensor
+## 🚀 **Autoppia Web Operator** - A Permissionless Web Operator Powered by Bittensor
 
-**Argonaut** is a **fully permissionless web operator**, leveraging **Bittensor’s Subnet 36** and **Autonomous Web Agents** to transform business automation. Instead of rigid, pre-built software solutions, Argonaut provides a **customizable and adaptive** automation layer that evolves with **specific business needs**.
+**Autoppia Web Operator** is a **fully permissionless web operator**, leveraging **Bittensor’s Subnet 36** and **Autonomous Web Agents** to transform business automation. Instead of rigid, pre-built software solutions, this tool provides a **customizable and adaptive** automation layer that evolves with **specific business needs**.
 
-Unlike traditional **SaaS, ERP, and CRM** systems, Argonaut operates in an **open and decentralized** manner—allowing businesses to define **highly tailored automation workflows** while benefiting from a **competitive network of miners** improving automation intelligence in real-time.
+Unlike traditional **SaaS, ERP, and CRM** systems, Autoppia Web Operator operates in an **open and incentivized** manner allowing businesses to define **highly tailored automation workflows** while benefiting from a **competitive network of miners** improving automation intelligence in real-time.
 
-## 🌐 How Argonaut Works
-Argonaut is **not a single AI agent**—it's an **ecosystem** of **autonomous web agents** developed by **Bittensor miners** on **Subnet 36**. These agents are rigorously tested and optimized through our **Infinite Web Arena (IWA)** benchmark, ensuring businesses always have access to the most advanced web automation capabilities.
+## 🌐 How it Works
+Autoppia Web Operator is **not a single AI agent**—it's an **ecosystem** of **autonomous web agents** developed by **Bittensor miners** on **Subnet 36**. These agents are rigorously tested and optimized through our **Infinite Web Arena (IWA)** benchmark, ensuring businesses always have access to the most advanced web automation capabilities.
 
-### What Makes Argonaut Unique?
-Instead of relying on **pre-programmed scripts** or **static AI models**, Argonaut enables **businesses to define their own automation requirements** while leveraging a **competitive, decentralized network** to execute and refine them.
+Instead of relying on **pre-programmed scripts** or **static AI models**, Autoppia Web Operator enables **businesses to define their own automation requirements** while leveraging a **competitive, decentralized network** to execute and refine them.
 
 - **Customizable Solutions** – Tailor automation to **specific business operations**, instead of relying on generic SaaS tools.
 - **Scalability** – Leverage a **growing network of decentralized miners** to improve performance over time.
 - **Adaptability** – Agents dynamically adjust to new workflows, **handling real-world web environments**.
 - **Permissionless Deployment** – Open participation, **no vendor lock-in**, and **continuous improvements from miner competition**.
 
-## 🔄 The Future of Business Operations with Argonaut
+## 🔄 The Future of Business
 
-Argonaut goal is revolutionizing how every industry leverages web-based software by automating the low-value, routine tasks that bog down operations. In a world where businesses rely on the web for nearly all functions, the ability to automate web operations becomes essential for efficiency and growth.
+Our goal is revolutionizing how every industry leverages web-based software by automating the low-value, routine tasks that bog down operations. In a world where businesses rely on the web for nearly all functions, the ability to automate web operations becomes essential for efficiency and growth.
 
 ### Universal Web-Based Automation
 - **Cross-industry innovation**: All sectors—from finance to retail—can harness automation to streamline routine web tasks.
@@ -123,7 +122,7 @@ Argonaut goal is revolutionizing how every industry leverages web-based software
 - **Cost-effective integration**: Seamlessly incorporate automated processes into existing web infrastructures.
 - **Smart data management**: Leverage AI-driven capabilities for document processing and data synchronization, enhancing decision-making and operational consistency.
 
-With Argonaut, the future of business operations is defined by the power of web automation—transforming everyday workflows into efficient, scalable, and intelligent processes.
+With Autoppia Web Operator, the future of business operations is defined by the power of web automation—transforming everyday workflows into efficient, scalable, and intelligent processes.
 
 
 ## 📜 License

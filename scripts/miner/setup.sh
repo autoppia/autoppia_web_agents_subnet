@@ -190,7 +190,7 @@ install_autoppia_iwa_module() {
 # ---------------------------------------------------------
 install_bittensor() {
   echo -e "\e[34m[INFO]\e[0m Installing Bittensor..."
-  git clone git clone https://github.com/opentensor/bittensor.git && cd bittensor && pip install . && pip install bittensor==9.0.0 && cd .. && rm -rf bittensor
+  git clone https://github.com/opentensor/bittensor.git && cd bittensor && pip install . && pip install bittensor==9.0.0 && cd .. && rm -rf bittensor
   success_msg "Bittensor installed successfully."
 }
 
@@ -198,7 +198,7 @@ install_bittensor() {
 # Main Execution Flow
 # ---------------------------------------------------------
 main() {
-  install_system_dependencies
+  install_system_dependencies # For Playwrite/Chromium etc
   install_python311
   install_pm2
   install_uv
