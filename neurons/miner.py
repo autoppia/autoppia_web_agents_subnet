@@ -65,7 +65,7 @@ class Miner(BaseMinerNeuron):
             bt.logging.info(f"Request Received from validator: {validator_hotkey}")
 
             task = Task(prompt=synapse.prompt, url=synapse.url)
-            actions: List[BaseAction] = self.agent.solve_task(task=task).actions
+            actions: List[BaseAction] = await self.agent.solve_task(task=task).actions
             bt.logging.info(f"Task Solved. Actions: {actions}")
 
             synapse.actions = actions
