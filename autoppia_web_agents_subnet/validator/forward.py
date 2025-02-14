@@ -42,7 +42,7 @@ async def forward(self) -> None:
     bt.logging.info(f"Selected demo web project with URL: {web_url}")
 
     # 3) Create a pipeline and generate tasks
-    bt.logging.warning(f"Generating task for : {demo_web_project.name}...")
+    bt.logging.warning(f"Generating tasks for Web Project: '{demo_web_project.name}' ...")
     tasks_generated:List[Task] = _generate_tasks_for_url(demo_web_project=demo_web_project)
 
     if not tasks_generated:
@@ -65,18 +65,14 @@ async def forward(self) -> None:
         synapse_request = TaskSynapse(task=miner_task, actions=[])
         bt.logging.info(f"Sending TaskSynapse to {len(miner_uids)} miners.")
 
-        try:
-            responses: List[TaskSynapse] = await asyncio.wait_for(
-                self.dendrite(
-                    axons=[self.metagraph.axons[uid] for uid in miner_uids],
-                    synapse=synapse_request,
-                    deserialize=True,
-                ),
-                timeout=TIMEOUT,
-            )
-        except Exception as e:
-            bt.logging.error(f"Error while querying dendrite: {e}")
-            return
+        miner_axons = [self.metagraph.axons[uid] for uid in miner_uids]
+        responses: List[TaskSynapse] = await _dendrite_with_retries(
+            dendrite=self.dendrite,
+            axons=miner_axons,
+            synapse=synapse_request,
+            deserialize=True,
+            timeout=TIMEOUT,
+        )
 
         bt.logging.info(f"Received {len(responses)} responses.")
 
@@ -117,6 +113,43 @@ async def forward(self) -> None:
 
         await asyncio.sleep(FORWARD_SLEEP_SECONDS)
         bt.logging.info("SUCCESS: Forward step completed successfully.")
+
+
+async def _dendrite_with_retries(dendrite: bt.dendrite, axons: list, synapse: TaskSynapse, deserialize: bool, timeout: float, cnt_attempts=3) -> List[TaskSynapse]:
+    res: List[TaskSynapse | None] = [None] * len(axons)
+    idx = list(range(len(axons)))
+    axons = axons.copy()
+    for attempt in range(cnt_attempts):
+        responses: List[TaskSynapse] = await dendrite(
+            axons=axons,
+            synapse=synapse,
+            deserialize=deserialize,
+            timeout=timeout
+        )
+
+        new_idx = []
+        new_axons = []
+        for i, synapse in enumerate(responses):
+            if synapse.dendrite.status_code is not None and int(synapse.dendrite.status_code) == 422:
+                if attempt == cnt_attempts - 1:
+                    res[idx[i]] = synapse
+                    bt.logging.info("Wasn't able to get answers from axon {} after 3 attempts".format(axons[i]))
+                else:
+                    new_idx.append(idx[i])
+                    new_axons.append(axons[i])
+            else:
+                res[idx[i]] = synapse
+
+        if len(new_idx):
+            bt.logging.info('Found {} synapses with broken pipe, retrying them'.format(len(new_idx)))
+        else:
+            break
+
+        idx = new_idx
+        axons = new_axons
+
+    assert all([el is not None for el in res])
+    return res
 
 
 def _get_task_solution_from_synapse(
