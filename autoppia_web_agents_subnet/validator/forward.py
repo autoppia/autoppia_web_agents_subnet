@@ -43,77 +43,80 @@ async def forward(self) -> None:
 
     # 3) Create a pipeline and generate tasks
     bt.logging.warning(f"Generating task for : {demo_web_project.ur}...")
-    tasks_generated = _generate_tasks_for_url(demo_web_project=demo_web_project)
+    tasks_generated:List[Task] = _generate_tasks_for_url(demo_web_project=demo_web_project)
+    
     if not tasks_generated:
         bt.logging.warning("No tasks generated, skipping forward step.")
         return
     bt.logging.info(f"Generated {len(tasks_generated)} tasks for {web_url}")
 
-    # 4) Task Cleaning for miner
-    task = tasks_generated[0]
-    miner_task = _clean_miner_task(task=task)
-    bt.logging.debug("Cleaned task for miner.")
+    for index, task in enumerate(tasks_generated):
+        bt.logging.debug(f"Task #{index}: {task.prompt}")
 
-    # 5) Get random UIDs
-    miner_uids = get_random_uids(self, k=self.config.neuron.sample_size)
-    bt.logging.info(f"Miner UIDs chosen: {miner_uids}")
+        # 4) Task Cleaning for miner
+        miner_task = _clean_miner_task(task=task)
+        bt.logging.debug("Cleaned task for miner.")
 
-    # 6) Build the synapse and send query with a timeout
-    synapse_request = TaskSynapse(task=miner_task, actions=[])
-    bt.logging.info(f"Sending TaskSynapse to {len(miner_uids)} miners.")
+        # 5) Get random UIDs
+        miner_uids = get_random_uids(self, k=self.config.neuron.sample_size)
+        bt.logging.info(f"Miner UIDs chosen: {miner_uids}")
 
-    try:
-        responses: List[TaskSynapse] = await asyncio.wait_for(
-            self.dendrite(
-                axons=[self.metagraph.axons[uid] for uid in miner_uids],
-                synapse=synapse_request,
-                deserialize=True,
-            ),
-            timeout=TIMEOUT,
+        # 6) Build the synapse and send query with a timeout
+        synapse_request = TaskSynapse(task=miner_task, actions=[])
+        bt.logging.info(f"Sending TaskSynapse to {len(miner_uids)} miners.")
+
+        try:
+            responses: List[TaskSynapse] = await asyncio.wait_for(
+                self.dendrite(
+                    axons=[self.metagraph.axons[uid] for uid in miner_uids],
+                    synapse=synapse_request,
+                    deserialize=True,
+                ),
+                timeout=TIMEOUT,
+            )
+        except Exception as e:
+            bt.logging.error(f"Error while querying dendrite: {e}")
+            return
+
+        bt.logging.info(f"Received {len(responses)} responses.")
+
+        # 7) Construct task solutions and track execution times
+        task_solutions = []
+        execution_times = []
+        for miner_uid, response in zip(miner_uids, responses):
+            if response and getattr(response, "actions", None):
+                bt.logging.debug(f"Miner {miner_uid} actions: {response.actions}")
+            task_solution = _get_task_solution_from_synapse(
+                task=task,
+                synapse=response,
+                web_agent_id=miner_uid,
+            )
+            task_solutions.append(task_solution)
+            process_time = (
+                getattr(response.dendrite, "process_time", TIMEOUT) if response else TIMEOUT
+            )
+            execution_times.append(process_time)
+
+        # 8) Compute rewards
+        rewards: np.ndarray = get_rewards(
+            self,
+            task_solutions=task_solutions,
+            web_url=web_url,
+            execution_times=execution_times,
+            time_weight=TIME_WEIGHT,  # Example parameter usage
+            min_correct_format_score=MIN_SCORE_FOR_CORRECT_FORMAT  # Example parameter usage
         )
-    except Exception as e:
-        bt.logging.error(f"Error while querying dendrite: {e}")
-        return
 
-    bt.logging.info(f"Received {len(responses)} responses.")
+        # Log each miner’s final reward
+        for uid, ex_time, rw in zip(miner_uids, execution_times, rewards):
+            bt.logging.info(f"Miner {uid}: time={ex_time:.2f}s, reward={rw:.3f}")
 
-    # 7) Construct task solutions and track execution times
-    task_solutions = []
-    execution_times = []
-    for miner_uid, response in zip(miner_uids, responses):
-        if response and getattr(response, "actions", None):
-            bt.logging.debug(f"Miner {miner_uid} actions: {response.actions}")
-        task_solution = _get_task_solution_from_synapse(
-            task=task,
-            synapse=response,
-            web_agent_id=miner_uid,
-        )
-        task_solutions.append(task_solution)
-        process_time = (
-            getattr(response.dendrite, "process_time", TIMEOUT) if response else TIMEOUT
-        )
-        execution_times.append(process_time)
+        # 9) Update scores
+        self.update_scores(rewards, miner_uids)
+        bt.logging.info("Scores updated for miners.")
 
-    # 8) Compute rewards
-    rewards: np.ndarray = get_rewards(
-        self,
-        task_solutions=task_solutions,
-        web_url=web_url,
-        execution_times=execution_times,
-        time_weight=TIME_WEIGHT,  # Example parameter usage
-        min_correct_format_score=MIN_SCORE_FOR_CORRECT_FORMAT  # Example parameter usage
-    )
-
-    # Log each miner’s final reward
-    for uid, ex_time, rw in zip(miner_uids, execution_times, rewards):
-        bt.logging.info(f"Miner {uid}: time={ex_time:.2f}s, reward={rw:.3f}")
-
-    # 9) Update scores
-    self.update_scores(rewards, miner_uids)
-    bt.logging.info("Scores updated for miners.")
-
-    await asyncio.sleep(FORWARD_SLEEP_SECONDS)
-    bt.logging.info("SUCCESS: Forward step completed successfully.")
+        await asyncio.sleep(FORWARD_SLEEP_SECONDS)
+        bt.logging.info("SUCCESS: Forward step completed successfully.")
 
 
 def _get_task_solution_from_synapse(
