@@ -25,7 +25,6 @@ TIME_WEIGHT = 0.2
 MIN_SCORE_FOR_CORRECT_FORMAT = 0.1
 
 
-
 async def forward(self) -> None:
     bt.logging.info("Starting forward step.")
 
@@ -43,6 +42,7 @@ async def forward(self) -> None:
     bt.logging.info(f"Selected demo web project with URL: {web_url}")
 
     # 3) Create a pipeline and generate tasks
+    bt.logging.warning(f"Generating task for : {demo_web_project.ur}...")
     tasks_generated = _generate_tasks_for_url(demo_web_project=demo_web_project)
     if not tasks_generated:
         bt.logging.warning("No tasks generated, skipping forward step.")
@@ -100,11 +100,8 @@ async def forward(self) -> None:
         task_solutions=task_solutions,
         web_url=web_url,
         execution_times=execution_times,
-<<<<<<< HEAD
         time_weight=TIME_WEIGHT,  # Example parameter usage
         min_correct_format_score=MIN_SCORE_FOR_CORRECT_FORMAT  # Example parameter usage
-=======
->>>>>>> 6504b910cf9ce9deade2c8e8b498dcaecbbc387b
     )
 
     # Log each miner’s final reward
