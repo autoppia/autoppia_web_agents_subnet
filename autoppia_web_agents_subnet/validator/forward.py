@@ -112,8 +112,7 @@ async def forward(self) -> None:
         )
 
         # Log each miner’s final reward
-        for uid, ex_time, rw in zip(miner_uids, execution_times, rewards):
-            bt.logging.info(f"Miner {uid}: time={ex_time:.2f}s, reward={rw:.3f}")
+        bt.logging.info(f"Miners Final Rewards: {rewards}")
 
         # 9) Update scores
         self.update_scores(rewards, miner_uids)
