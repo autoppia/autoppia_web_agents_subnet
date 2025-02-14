@@ -1,18 +1,21 @@
-# Web Agents Subnet: _Validator Guide_
+# Web Agents Subnet: *Validator Guide*
 
 This guide explains how to set up and run your validator for Subnet 36.
 
 **⚠️ IMPORTANT ⚠️**
+
 This subnet requires **Docker**. For optimal performance, we strongly recommend using a bare metal GPU, as virtualized environments may lead to performance issues.
 
 You can deploy the components on separate instances:
-
-- **LLM**: GPU (check System Requirements) - Requires CUDA 12.1
+- **LLM**: GPU (check System Requirements) - Requires CUDA 12.1  
 - **Demo-Webs**: CPU only (deployed via Docker)
 - **Validator.py**: CPU only
 
 Detailed configuration instructions for each component are provided in the following sections.
 
+**Validator Information**
+
+If you wish to ChildKey (CHK) our validator, please note our hotkey ss58 address on subnet 36 is: **5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j**
 ---
 
 ## System Requirements
