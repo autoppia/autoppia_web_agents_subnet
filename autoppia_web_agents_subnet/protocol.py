@@ -1,12 +1,12 @@
 from typing import List
 import bittensor as bt
+from pydantic import Field
 from autoppia_iwa.src.data_generation.domain.classes import Task
 from autoppia_iwa.src.execution.actions.base import BaseAction
-from pydantic import Field
 
 
 class TaskSynapse(bt.Synapse):
-    """
+    """ 
     A protocol representation which uses bt.Synapse as its base.
     This protocol helps in handling request and response communication between
     the miner and the validator.
