@@ -101,6 +101,8 @@ async def forward(self) -> None:
             )
             execution_times.append(process_time)
 
+        bt.logging.info(f"Miners Task Solutions: {task_solution}")
+        
         # 8) Compute rewards
         rewards: np.ndarray = await get_rewards(
             self,
