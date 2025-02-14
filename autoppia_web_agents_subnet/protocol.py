@@ -19,11 +19,11 @@ class TaskSynapse(bt.Synapse):
 
     version: str = ""
     message:str = "Hello"
-    # task:Task = Field(
-    #     ...,
-    #     title="task",
-    #     description="The task to be solved",
-    # )
+    task:Task = Field(
+        ...,
+        title="task",
+        description="The task to be solved",
+    )
     actions: List[BaseAction] = Field(
         ...,
         title="actions",
