@@ -12,6 +12,7 @@ from autoppia_iwa.src.evaluation.classes import EvaluationResult
 def normalize_execution_times(times: List[float]) -> List[float]:
     if not times:
         return []
+    bt.logging.info(f"Miners Times: {times}")
     min_time = min(times)
     max_time = max(times)
     if max_time == min_time:
