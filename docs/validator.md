@@ -104,7 +104,7 @@ LLM_ENDPOINT="http://localhost:6000/generate"
 nvcc --version
 ```
 
-⚠️ **CRITICAL**: The output should show a version of CUDA, we've tested on 12.1
+⚠️ **CRITICAL**: The output should show a version of CUDA, we've tested on 12.6
 
 3. Set up the local LLM generation endpoint:
 
@@ -122,7 +122,7 @@ pm2 start autoppia_iwa_module/modules/llm_local/run_local_llm.py --name llm_loca
 python3 autoppia_iwa_module/modules/llm_local/test/test.py
 ```
 
-The local setup uses the **qwen2.5-coder-14b-instruct-q4_k_m** model and requires:
+The local setup uses the **deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B** model and requires:
 
 - CUDA 12.1+ installation
 - GPU with sufficient memory (see System Requirements)
