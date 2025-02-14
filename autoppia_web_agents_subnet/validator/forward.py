@@ -64,14 +64,13 @@ async def forward(self) -> None:
         bt.logging.warning(f"Miner task: {miner_task}")
 
         # 6) Build the synapse and send query with a timeout
-        synapse_request = TaskSynapse(task=miner_task, actions=[])
         bt.logging.info(f"Sending TaskSynapse to {len(miner_uids)} miners.")
 
         miner_axons = [self.metagraph.axons[uid] for uid in miner_uids]
         responses: List[TaskSynapse] = await _dendrite_with_retries(
             dendrite=self.dendrite,
             axons=miner_axons,
-            synapse=TaskSynapse(message="Hello", actions=[], task=miner_task),
+            synapse=TaskSynapse(message="Hello", actions=[], task=Task(prompt="example", url="url_example")),
             deserialize=True,
             timeout=TIMEOUT,
         )
