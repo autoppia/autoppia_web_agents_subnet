@@ -69,7 +69,7 @@ async def forward(self) -> None:
         responses: List[TaskSynapse] = await _dendrite_with_retries(
             dendrite=self.dendrite,
             axons=miner_axons,
-            synapse=TaskSynapse(message="Hello", actions=miner_task.actions),
+            synapse=TaskSynapse(message="Hello", actions=[]),
             deserialize=True,
             timeout=TIMEOUT,
         )
@@ -188,7 +188,7 @@ def _generate_tasks_for_url(demo_web_project: WebProject) -> List[Task]:
 
 def _clean_miner_task(task: Task) -> Task:
     task_copy = deepcopy(task)
-    task_copy.tests = []
+    task_copy.tests = None
     task_copy.milestones = None
     task_copy.web_analysis = None
     return task_copy
