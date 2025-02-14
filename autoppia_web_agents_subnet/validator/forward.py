@@ -55,13 +55,11 @@ async def forward(self) -> None:
 
         # 4) Task Cleaning for miner
         miner_task = _clean_miner_task(task=task)
-        bt.logging.debug("Cleaned task for miner.")
+        bt.logging.info(f"Miner task: {miner_task}")
 
         # 5) Get random UIDs
         miner_uids = get_random_uids(self, k=self.config.neuron.sample_size)
         bt.logging.info(f"Miner UIDs chosen: {miner_uids}")
-
-        bt.logging.warning(f"Miner task: {miner_task}")
 
         # 6) Build the synapse and send query with a timeout
         bt.logging.info(f"Sending TaskSynapse to {len(miner_uids)} miners.")
