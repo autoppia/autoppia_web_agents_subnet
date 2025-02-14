@@ -91,9 +91,9 @@ async def forward(self) -> None:
                 )
             except Exception as e:
                 bt.logging.error(f"Error in Miner Response Format: {e}")
-                task_solution = TaskSolution(task=task, actions=[], web_agent_id=miner_uid,)
-            finally:
-                task_solutions.append(task_solution)
+                task_solution = TaskSolution(task=task, actions=[], web_agent_id=miner_uid)
+
+            task_solutions.append(task_solution)
 
             process_time = (
                 getattr(response.dendrite, "process_time", TIMEOUT) if response else TIMEOUT
