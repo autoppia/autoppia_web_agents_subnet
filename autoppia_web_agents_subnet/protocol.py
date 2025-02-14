@@ -2,6 +2,7 @@ from typing import List
 import bittensor as bt
 from autoppia_iwa.src.data_generation.domain.classes import Task
 from autoppia_iwa.src.execution.actions.base import BaseAction
+from pydantic import Field
 
 
 class TaskSynapse(bt.Synapse):
@@ -17,8 +18,16 @@ class TaskSynapse(bt.Synapse):
     """
 
     version: str = ""
-    task: Task
-    actions: List[BaseAction]
+    task:Task = Field(
+        ...,
+        title="task",
+        description="The task to be solved",
+    )
+    actions: List[BaseAction] = Field(
+        ...,
+        title="actions",
+        description="The actions that solve the task",
+    )
 
     def deserialize(self) -> float:
         """
@@ -26,8 +35,6 @@ class TaskSynapse(bt.Synapse):
         the miner in the form of self.text, deserializes it and returns it
         as the output of the dendrite.query() call.
 
-        Returns:
-        - List[float]: The deserialized response, which in this case is the list of preidictions.
         """
         return self
 
