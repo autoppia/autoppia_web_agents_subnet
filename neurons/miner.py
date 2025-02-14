@@ -57,7 +57,7 @@ class Miner(BaseMinerNeuron):
         the miner's intended operation. This method demonstrates a basic transformation of input data.
         """
 
-        bt.logging.warning(synapse.message)
+        bt.logging.warning(synapse)
 
         # try:
         #     start_time = time()
