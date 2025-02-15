@@ -69,6 +69,8 @@ chmod +x scripts/miner/no_sudo_setup.sh
 Use PM2 to run the miner with your configuration:
 
 ```bash
+source miner_env/bin/activate
+
 pm2 start neurons/miner.py \
   --name "subnet_36_miner" \
   --interpreter python3.11 \
