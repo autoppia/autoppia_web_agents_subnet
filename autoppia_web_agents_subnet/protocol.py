@@ -23,10 +23,10 @@ class TaskSynapse(bt.Synapse):
 
     def deserialize(self) -> "TaskSynapse":
         """
-        Deserialize output, reconstructing actions from raw data while preserving their specific types and parameters
+        Deserialize output, preserving all action data and types
         """
         if hasattr(self, "actions") and self.actions:
-            bt.logging.debug(f"Starting deserialization of actions: {self.actions}")
+            bt.logging.info(f"Starting deserialization of actions: {self.actions}")
             deserialized_actions = []
 
             for action in self.actions:
@@ -35,32 +35,27 @@ class TaskSynapse(bt.Synapse):
                     action_data = (
                         action if isinstance(action, dict) else action.model_dump()
                     )
-                    bt.logging.debug(f"Processing action data: {action_data}")
+                    bt.logging.info(f"Processing action data: {action_data}")
 
-                    # Get action type and its parameters
+                    # Get action type and create instance
                     action_type = action_data.get("type")
-                    action_params = {
-                        k: v for k, v in action_data.items() if k != "type"
-                    }
-
-                    # Look up the appropriate action class
                     action_class = ACTION_CLASS_MAP.get(action_type, BaseAction)
-                    bt.logging.debug(
+                    bt.logging.info(
                         f"Found action class {action_class.__name__} for type {action_type}"
                     )
 
-                    # Create new instance with all original parameters
-                    deserialized_action = action_class(**action_params)
+                    # Create instance with complete original data
+                    deserialized_action = action_class(**action_data)
                     deserialized_actions.append(deserialized_action)
-                    bt.logging.debug(
+                    bt.logging.info(
                         f"Successfully deserialized action: {deserialized_action}"
                     )
 
                 except Exception as e:
                     bt.logging.error(f"Failed to deserialize action {action}: {str(e)}")
-                    deserialized_actions.append(BaseAction())
+                    continue
 
-            bt.logging.debug(
+            bt.logging.info(
                 f"Completed deserialization. Final actions: {deserialized_actions}"
             )
             self.actions = deserialized_actions
