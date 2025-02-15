@@ -22,7 +22,7 @@ VENV_DIR="validator_env"  # Virtual environment directory
 echo -e "\e[34m[INFO]\e[0m Installing system dependencies..."
 apt update -y || handle_error "Failed to update package list"
 apt upgrade -y || handle_error "Failed to upgrade packages"
-apt install -y software-properties-common || handle_error "Failed to install and software-properties-common"
+apt install -y software-properties-common || handle_error "Failed to install software-properties-common"
 
 # Add Python 3.11 repository
 echo -e "\e[34m[INFO]\e[0m Adding Python 3.11 repository..."
@@ -54,8 +54,20 @@ echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gp
 
 apt-get update || handle_error "Failed to update package list after adding MongoDB repo"
 apt-get install -y mongodb-org || handle_error "Failed to install MongoDB"
-systemctl start mongod || handle_error "Failed to start MongoDB"
-systemctl enable mongod || handle_error "Failed to enable MongoDB"
+
+# Ensure the MongoDB data directory exists
+mkdir -p /var/lib/mongodb
+chown -R mongodb:mongodb /var/lib/mongodb 2>/dev/null || true
+
+# Start MongoDB - if systemd is available use systemctl, otherwise start manually
+if command -v systemctl &> /dev/null && [ -d /run/systemd/system ]; then
+    systemctl start mongod || handle_error "Failed to start MongoDB via systemctl"
+    systemctl enable mongod || handle_error "Failed to enable MongoDB via systemctl"
+else
+    echo -e "\e[34m[INFO]\e[0m Starting MongoDB manually..."
+    # Adjust the logpath and dbpath as needed
+    mongod --fork --logpath /var/log/mongod.log --dbpath /var/lib/mongodb || handle_error "Failed to start MongoDB manually"
+fi
 
 # Create .env file with MongoDB URL if it doesn't exist
 if [ ! -f .env ]; then
@@ -149,7 +161,6 @@ playwright install-deps || handle_error "Failed to install Playwright dependenci
 
 success_msg "Python dependencies and Playwright installed successfully."
 
-
 # ------------------------------------------------------------------
 # Step 11: Install autoppia_iwa Package
 echo -e "\e[34m[INFO]\e[0m Installing autoppia_iwa package..."
@@ -171,7 +182,7 @@ echo -e "\e[34m[INFO]\e[0m Verifying installations..."
 echo "Chrome version:"
 /opt/chrome/chrome-linux64/chrome --version || echo "Chrome not found"
 echo "ChromeDriver version:"
-/opt/chromedriver/chromedriver-linux64/chromedriver --version || echo "ChromeDriver not found"
+/opt/chrome/chrome-linux64/chrome --version || echo "ChromeDriver not found"
 echo "MongoDB version:"
 mongod --version || echo "MongoDB not found"
 

@@ -56,6 +56,14 @@ This script will:
 - Install required Python packages including the autoppia_iwa package
 - Set up Bittensor and other dependencies
 
+If you are on runpod or other dockerized env:
+
+```bash
+chmod +x scripts/miner/no_sudo_setup.sh
+./scripts/miner/no_sudo_setup.sh
+```
+
+
 ### 4. Start the Miner with PM2
 
 Use PM2 to run the miner with your configuration:
