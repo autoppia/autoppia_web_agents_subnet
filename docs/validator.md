@@ -2,11 +2,6 @@
 
 This guide explains how to set up and run your validator for Subnet 36.
 
-If you want to ChildKey (CHK) our Validator, please note our hotkey ss58 address on subnet 36 is:
-```
-btcli stake child set --netuid 36 --children 5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j --prop 1 --wallet.name coldkey --wallet.hotkey hotkey
-```
-
 **⚠️ IMPORTANT ⚠️**
 
 This subnet requires **Docker**. For optimal performance, we strongly recommend using a bare metal GPU, as virtualized environments may lead to performance issues.
@@ -17,26 +12,32 @@ You can deploy the components on separate instances:
 
 - **LLM**: Two options available:
   - **Option A:** Use OpenAI API (No GPU required, API key needed)
-  - **Option B:** Use our Local LLM (Requires GPU with CUDA 12.1)
+  - **Option B:** Use our Local LLM (Requires GPU with CUDA 12.6)
 - **Demo-Webs**: CPU only (deployed via Docker)
 - **Validator.py**: CPU only
 
 Detailed configuration instructions for each component are provided in the following sections.
 
+## Validator Information
+
+If you wish to ChildKey (CHK) our validator, please note our hotkey ss58 address on subnet 36 is:
+```
+5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j
+```
+
 ---
 ## System Requirements
 
 - **Hardware:**
-  <!-- - **CPU:** Minimum 12 cores recommended -->
-  - **RAM:** Minimum 32GB RAM required for the local llm
+  - **CPU:** Minimum 12 cores recommended
+  - **RAM:** Minimum 32GB RAM required
   - **GPU:**
     - Recommended: NVIDIA A40
-    - Others: A6000, 6000Ada, A100, H100
-    - Or no GPU and use OpenAI. 
+    - Optional: Higher memory GPUs like A6000, A100, or H100
   - **CUDA:** (Only required for LLM component)
     - Must be installed on the machine running the LLM service
 - **Storage:**
-  - Minimum 200MBs disk space recommended
+  - Minimum 1TB disk space recommended
 - **Operating System:**
   - Ubuntu 22.04.5 LTS (Jammy Jellyfish)
 
@@ -121,7 +122,7 @@ pm2 start autoppia_iwa_module/modules/llm_local/run_local_llm.py --name llm_loca
 python3 autoppia_iwa_module/modules/llm_local/test/test.py
 ```
 
-The local setup uses the **deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B** model and requires:
+The local setup uses the **Qwen/Qwen2.5-3B-Instruct** model and requires:
 
 - CUDA 12.6 installation
 - GPU with sufficient memory (see System Requirements)
@@ -147,9 +148,9 @@ This script will:
 - Deploy **multiple Docker containers**, each running a different demo web project
 - Set up the necessary networking and configurations
 
-### 3. (Optional) Configure Demo Webs Endpoint
+### 3. Configure Demo Webs Endpoint
 
-If want another port, or has deployed the Demo-Webs on another server => Edit the `.env` file to configure your environment with the following parameters:
+Edit the `.env` file to configure your environment with the following parameters:
 
 ```bash
 # Default endpoints - modify these according to your setup
@@ -164,7 +165,7 @@ DEMO_WEBS_STARTING_PORT=8000
   - Default: `http://localhost:6000`
   - You can modify this if running the LLM on a different server
   - Example remote setup: `http://your-llm-server_ip:port`
-  - _Note: The server hosting the LLM must have CUDA 12.1+ installed_
+  - _Note: The server hosting the LLM must have CUDA 12.6 installed_
 - **`DEMO_WEBS_ENDPOINT`**: The endpoint where your demo web projects are deployed
   - Default: `http://localhost`
   - You can modify this if running the demo webs on a different server
@@ -175,8 +176,6 @@ This configuration allows you to:
 - Run the validator, LLM service, and demo webs on separate machines for better resource management
 
 ### 4. Set Up Validator
-
-This setup has been tested on ubuntu "jammy" distribution. "noble" distribution DOES NOT work. 
 
 Run the setup script:
 
@@ -193,13 +192,6 @@ This script will:
 - Create and activate a virtual environment
 - Install required Python packages including the autoppia_iwa package
 - Set up Bittensor and other dependencies
-
-If you are on runpod or other dockerized env:
-
-```bash
-chmod +x scripts/validator/no_sudo_setup.sh
-./scripts/validator/no_sudo_setup.sh
-```
 
 ### 5. Deploy Validator
 
@@ -218,6 +210,15 @@ pm2 start neurons/validator.py \
   --wallet.hotkey your_hotkey \
   --logging.debug
 ```
+
+#### Common Configuration Options
+
+- `--name`: PM2 process name (can be any name you choose)
+- `--netuid`: Network UID (36 for this subnet)
+- `--wallet.name`: Your coldkey name
+- `--wallet.hotkey`: Your hotkey name
+- `--logging.debug`: Enable debug logging
+- `--subtensor.network`: Network to connect to (e.g., finney, local)
 
 ---
 
