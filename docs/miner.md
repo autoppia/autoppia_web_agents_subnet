@@ -1,4 +1,4 @@
-# Web Agents Subnet: _Miner Guide_
+# Web Agents Subnet: Miner Guide
 
 This guide explains how to set up and run your miner for Subnet 36 Web Agents.
 
