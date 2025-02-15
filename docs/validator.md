@@ -122,7 +122,7 @@ pm2 start autoppia_iwa_module/modules/llm_local/run_local_llm.py --name llm_loca
 python3 autoppia_iwa_module/modules/llm_local/test/test.py
 ```
 
-The local setup uses the **Qwen/Qwen2.5-Coder-14B-Instruct-GGUF** model and requires:
+The local setup uses the **Qwen/Qwen2.5-3B-Instruct** model and requires:
 
 - CUDA 12.6 installation
 - GPU with sufficient memory (see System Requirements)
