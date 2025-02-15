@@ -103,7 +103,7 @@ LLM_ENDPOINT="http://localhost:6000/generate"
 nvcc --version
 ```
 
-⚠️ **CRITICAL**: The output should show a version of CUDA, the code is prepared to install automatically for CUDA 12.6 (as shown by nvcc --version)
+⚠️ **CRITICAL**: The output should show a version of CUDA, the code is prepared to install automatically for CUDA 12.6 (as shown by nvcc --version), if you have another version, change it in setup.sh
 
 3. Set up the local LLM generation endpoint:
 
