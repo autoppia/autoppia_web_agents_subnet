@@ -221,15 +221,6 @@ pm2 start neurons/validator.py \
   --logging.debug
 ```
 
-#### Common Configuration Options
-
-- `--name`: PM2 process name (can be any name you choose)
-- `--netuid`: Network UID (36 for this subnet)
-- `--wallet.name`: Your coldkey name
-- `--wallet.hotkey`: Your hotkey name
-- `--logging.debug`: Enable debug logging
-- `--subtensor.network`: Network to connect to (e.g., finney, local)
-
 ---
 
 ## Support
