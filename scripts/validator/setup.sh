@@ -9,7 +9,7 @@ handle_error() {
 }
 
 success_msg() {
-  echo -e "\e[32m[SUCCESS]\e[0m $1"
+  echo -e "\e[32m[SUCCCESS]\e[0m $1"
 }
 
 install_system_dependencies() {
@@ -86,11 +86,11 @@ install_uv() {
 install_mongodb() {
   echo -e "\e[34m[INFO]\e[0m Installing MongoDB for task caching..."
   UBUNTU_CODENAME=$(lsb_release -cs)
-  # For MongoDB repository, if codename is noble, use jammy.
-  MONGO_CODENAME="$UBUNTU_CODENAME"
-  if [ "$UBUNTU_CODENAME" = "noble" ]; then
-    MONGO_CODENAME="jammy"
-  fi
+  # For MongoDB repo, if not jammy, use jammy to ensure the repo exists.
+  MONGO_CODENAME="jammy"
+  
+  # Remove any old MongoDB repository file
+  sudo rm -f /etc/apt/sources.list.d/mongodb-org-7.0.list
 
   if [ ! -f /usr/share/keyrings/mongodb-server-7.0.gpg ]; then
     curl -fsSL https://pgp.mongodb.com/server-7.0.asc | sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor || handle_error "Failed to import MongoDB GPG key"
