@@ -184,7 +184,7 @@ install_autoppia_iwa_module() {
 
 install_bittensor() {
   echo -e "\e[34m[INFO]\e[0m Installing Bittensor..."
-  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/opentensor/bittensor/v8.4.5/scripts/install.sh)" || handle_error "Failed to install Bittensor"
+  git clone https://github.com/opentensor/bittensor.git && cd bittensor && pip install . && pip install bittensor==9.0.0 && cd .. && rm -rf bittensor
   success_msg "Bittensor installed successfully."
 }
 
