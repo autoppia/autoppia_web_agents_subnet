@@ -193,6 +193,13 @@ This script will:
 - Install required Python packages including the autoppia_iwa package
 - Set up Bittensor and other dependencies
 
+If you are on runpod or other dockerized env:
+
+```bash
+chmod +x scripts/validator/no_sudo_setup.sh
+./scripts/validator/no_sudo_setup.sh
+```
+
 ### 5. Deploy Validator
 
 Activate the virtual environment and start the validator with PM2:
