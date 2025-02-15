@@ -33,7 +33,7 @@ install_system_dependencies() {
       libwebp-dev libharfbuzz-dev libsecret-1-dev libhyphen0 libflite1 libgles2-mesa-dev \
       libx264-dev gnupg curl)
   elif [[ "$UBUNTU_CODENAME" == "noble" ]]; then
-    # Replace libasound2 with libasound2t64 as recommended.
+    # For noble, replace libasound2 with libasound2t64.
     DEP_PACKAGES=(python3.11 python3.11-venv python3.11-dev build-essential cmake wget sqlite3 \
       libnss3 libnss3-dev libasound2t64 libatk1.0-0 libatk-bridge2.0-0 libcups2 libx11-xcb1 \
       libxcomposite1 libxcursor1 libxdamage1 libxrandr2 libgbm1 libpango-1.0-0 libgtk-3-0 \
@@ -62,10 +62,14 @@ install_python311() {
 }
 
 install_pm2() {
-  echo -e "\e[34m[INFO]\e[0m Installing PM2..."
-  sudo apt install -y npm || handle_error "Failed to install npm"
-  sudo npm install -g pm2 || handle_error "Failed to install PM2"
-  pm2 update || handle_error "Failed to update PM2"
+  if command -v pm2 &>/dev/null; then
+    echo -e "\e[32m[INFO]\e[0m PM2 is already installed. Skipping."
+  else
+    echo -e "\e[34m[INFO]\e[0m Installing PM2..."
+    sudo apt install -y npm || handle_error "Failed to install npm"
+    sudo npm install -g pm2 || handle_error "Failed to install PM2"
+    pm2 update || handle_error "Failed to update PM2"
+  fi
 }
 
 install_uv() {
@@ -81,8 +85,21 @@ install_uv() {
 
 install_mongodb() {
   echo -e "\e[34m[INFO]\e[0m Installing MongoDB for task caching..."
-  curl -fsSL https://pgp.mongodb.com/server-7.0.asc | sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor || handle_error "Failed to import MongoDB GPG key"
-  echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu $(lsb_release -cs)/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list || handle_error "Failed to add MongoDB repository"
+  UBUNTU_CODENAME=$(lsb_release -cs)
+  # For MongoDB repository, if codename is noble, use jammy.
+  MONGO_CODENAME="$UBUNTU_CODENAME"
+  if [ "$UBUNTU_CODENAME" = "noble" ]; then
+    MONGO_CODENAME="jammy"
+  fi
+
+  if [ ! -f /usr/share/keyrings/mongodb-server-7.0.gpg ]; then
+    curl -fsSL https://pgp.mongodb.com/server-7.0.asc | sudo gpg -o /usr/share/keyrings/mongodb-server-7.0.gpg --dearmor || handle_error "Failed to import MongoDB GPG key"
+  else
+    echo -e "\e[32m[INFO]\e[0m MongoDB GPG key already exists. Skipping key import."
+  fi
+
+  echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/ubuntu $MONGO_CODENAME/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list || handle_error "Failed to add MongoDB repository"
+
   sudo apt-get update -y || handle_error "Failed to update package list after adding MongoDB repo"
   sudo apt-get install -y mongodb-org || handle_error "Failed to install MongoDB"
   
