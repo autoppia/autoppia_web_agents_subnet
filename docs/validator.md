@@ -177,6 +177,8 @@ This configuration allows you to:
 
 ### 4. Set Up Validator
 
+This setup has been tested on ubuntu "jammy" distribution. "noble" distribution DOES NOT work. 
+
 Run the setup script:
 
 ```bash

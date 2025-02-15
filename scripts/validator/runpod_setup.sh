@@ -57,12 +57,21 @@ if command -v systemctl &> /dev/null && [ -d /run/systemd/system ]; then
     systemctl start mongod || handle_error "Failed to start MongoDB via systemctl"
     systemctl enable mongod || handle_error "Failed to enable MongoDB via systemctl"
 else
-    echo -e "\e[34m[INFO]\e[0m Starting MongoDB manually..."
-    # Ensure log file exists and is writable.
-    touch /var/log/mongod.log || handle_error "Failed to create MongoDB log file"
-    chown mongodb:mongodb /var/log/mongod.log 2>/dev/null || true
-    # Start with additional options.
-    mongod --fork --logpath /var/log/mongod.log --dbpath /var/lib/mongodb --bind_ip 127.0.0.1 || handle_error "Failed to start MongoDB manually"
+    echo -e "\e[34m[INFO]\e[0m Checking if MongoDB is already running..."
+    if pgrep mongod > /dev/null; then
+      echo -e "\e[32m[INFO]\e[0m MongoDB is already running."
+    else
+      echo -e "\e[34m[INFO]\e[0m Starting MongoDB manually..."
+      # Ensure log file exists and is writable.
+      touch /var/log/mongod.log || handle_error "Failed to create MongoDB log file"
+      chown mongodb:mongodb /var/log/mongod.log 2>/dev/null || true
+      # Start mongod with --fork and additional options.
+      mongod --fork --logpath /var/log/mongod.log --dbpath /var/lib/mongodb --bind_ip 127.0.0.1 || {
+         echo -e "\e[31m[ERROR]\e[0m Failed to start MongoDB manually. Log output:"
+         cat /var/log/mongod.log
+         exit 1
+      }
+    fi
 fi
 
 if [ ! -f .env ]; then
@@ -75,8 +84,8 @@ success_msg "MongoDB installed and configured successfully"
 # Step 3: Install Chrome and ChromeDriver
 echo -e "\e[34m[INFO]\e[0m Installing Chrome and ChromeDriver..."
 if [ ! -f /opt/chrome/chrome-linux64/chrome ]; then
-    curl -SL https://storage.googleapis.com/chrome-for-testing-public/127.0.6533.72/linux64/chromedriver-linux64.zip > /tmp/chromedriver.zip || handle_error "Failed downloading ChromeDriver"
-    curl -SL https://storage.googleapis.com/chrome-for-testing-public/127.0.6533.72/linux64/chrome-linux64.zip > /tmp/chrome.zip || handle_error "Failed downloading Chrome"
+    curl -SL https://storage.googleapis.com/chrome-for-testing-public/127.0.6533.72/linux64/chromedriver-linux64.zip -o /tmp/chromedriver.zip || handle_error "Failed downloading ChromeDriver"
+    curl -SL https://storage.googleapis.com/chrome-for-testing-public/127.0.6533.72/linux64/chrome-linux64.zip -o /tmp/chrome.zip || handle_error "Failed downloading Chrome"
     
     mkdir -p /opt/chrome /opt/chromedriver
     unzip /tmp/chrome.zip -d /opt/chrome || handle_error "Failed unzipping Chrome"
