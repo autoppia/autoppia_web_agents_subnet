@@ -1,8 +1,8 @@
-import bittensor as bt
 from pydantic import Field
 from typing import List
 from bittensor import Synapse 
 from autoppia_iwa.src.execution.actions.base import AllActionsUnion
+
 
 class TaskSynapse(Synapse):
     version: str = ""
