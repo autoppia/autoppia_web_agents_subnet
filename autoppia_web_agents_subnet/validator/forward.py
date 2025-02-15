@@ -116,9 +116,10 @@ async def forward(self) -> None:
         # 9) Update scores
         self.update_scores(rewards, miner_uids)
         bt.logging.info("Scores updated for miners.")
-
-        await asyncio.sleep(FORWARD_SLEEP_SECONDS)
         bt.logging.info("SUCCESS: Forward step completed successfully.")
+
+        bt.logging.info(f"Sleeping for {FORWARD_SLEEP_SECONDS}s....")
+        await asyncio.sleep(FORWARD_SLEEP_SECONDS)
 
 
 async def _dendrite_with_retries(dendrite: bt.dendrite, axons: list, synapse: TaskSynapse, deserialize: bool, timeout: float, cnt_attempts=3) -> List[TaskSynapse]:
