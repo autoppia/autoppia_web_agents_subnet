@@ -2,7 +2,7 @@
 
 This guide explains how to set up and run your validator for Subnet 36.
 
-If you wish to ChildKey (CHK) our validator, please note our hotkey ss58 address on subnet 36 is:
+If you want to ChildKey (CHK) our Validator, please note our hotkey ss58 address on subnet 36 is:
 ```
 5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j
 ```
