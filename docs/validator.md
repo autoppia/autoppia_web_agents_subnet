@@ -2,11 +2,6 @@
 
 This guide explains how to set up and run your validator for Subnet 36.
 
-If you want to ChildKey (CHK) our Validator, please note our hotkey ss58 address on subnet 36 is:
-```
-btcli stake child set --netuid 36 --children 5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j --prop 1 --wallet.name coldkey --wallet.hotkey hotkey
-```
-
 **⚠️ IMPORTANT ⚠️**
 
 This subnet requires **Docker**. For optimal performance, we strongly recommend using a bare metal GPU, as virtualized environments may lead to performance issues.
@@ -23,20 +18,26 @@ You can deploy the components on separate instances:
 
 Detailed configuration instructions for each component are provided in the following sections.
 
+## Validator Information
+
+If you wish to ChildKey (CHK) our validator, please note our hotkey ss58 address on subnet 36 is:
+```
+5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j
+```
+
 ---
 ## System Requirements
 
 - **Hardware:**
-  <!-- - **CPU:** Minimum 12 cores recommended -->
-  - **RAM:** Minimum 32GB RAM required for the local llm
+  - **CPU:** Minimum 12 cores recommended
+  - **RAM:** Minimum 32GB RAM required
   - **GPU:**
     - Recommended: NVIDIA A40
-    - Others: A6000, 6000Ada, A100, H100
-    - Or no GPU and use OpenAI. 
+    - Optional: Higher memory GPUs like A6000, A100, or H100
   - **CUDA:** (Only required for LLM component)
     - Must be installed on the machine running the LLM service
 - **Storage:**
-  - Minimum 200MBs disk space recommended
+  - Minimum 1TB disk space recommended
 - **Operating System:**
   - Ubuntu 22.04.5 LTS (Jammy Jellyfish)
 
@@ -103,7 +104,7 @@ LLM_ENDPOINT="http://localhost:6000/generate"
 nvcc --version
 ```
 
-⚠️ **CRITICAL**: The output should show a version of CUDA, the code is prepared to install automatically for CUDA 12.6 (as shown by nvcc --version), if you have another version, change it in setup.sh
+⚠️ **CRITICAL**: The output should show a version of CUDA, the code is prepared to install automatically for CUDA 12.6 (as shown by nvcc --version)
 
 3. Set up the local LLM generation endpoint:
 
@@ -147,9 +148,9 @@ This script will:
 - Deploy **multiple Docker containers**, each running a different demo web project
 - Set up the necessary networking and configurations
 
-### 3. (Optional) Configure Demo Webs Endpoint
+### 3. Configure Demo Webs Endpoint
 
-If want another port, or has deployed the Demo-Webs on another server => Edit the `.env` file to configure your environment with the following parameters:
+Edit the `.env` file to configure your environment with the following parameters:
 
 ```bash
 # Default endpoints - modify these according to your setup
@@ -176,8 +177,6 @@ This configuration allows you to:
 
 ### 4. Set Up Validator
 
-This setup has been tested on ubuntu "jammy" distribution. "noble" distribution DOES NOT work. 
-
 Run the setup script:
 
 ```bash
@@ -193,13 +192,6 @@ This script will:
 - Create and activate a virtual environment
 - Install required Python packages including the autoppia_iwa package
 - Set up Bittensor and other dependencies
-
-If you are on runpod or other dockerized env:
-
-```bash
-chmod +x scripts/validator/no_sudo_setup.sh
-./scripts/validator/no_sudo_setup.sh
-```
 
 ### 5. Deploy Validator
 
@@ -218,6 +210,15 @@ pm2 start neurons/validator.py \
   --wallet.hotkey your_hotkey \
   --logging.debug
 ```
+
+#### Common Configuration Options
+
+- `--name`: PM2 process name (can be any name you choose)
+- `--netuid`: Network UID (36 for this subnet)
+- `--wallet.name`: Your coldkey name
+- `--wallet.hotkey`: Your hotkey name
+- `--logging.debug`: Enable debug logging
+- `--subtensor.network`: Network to connect to (e.g., finney, local)
 
 ---
 
