@@ -2,6 +2,10 @@
 
 This guide explains how to set up and run your validator for Subnet 36.
 
+If you wish to ChildKey (CHK) our validator, please note our hotkey ss58 address on subnet 36 is:
+```
+5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j
+
 **⚠️ IMPORTANT ⚠️**
 
 This subnet requires **Docker**. For optimal performance, we strongly recommend using a bare metal GPU, as virtualized environments may lead to performance issues.
@@ -18,12 +22,6 @@ You can deploy the components on separate instances:
 
 Detailed configuration instructions for each component are provided in the following sections.
 
-## Validator Information
-
-If you wish to ChildKey (CHK) our validator, please note our hotkey ss58 address on subnet 36 is:
-```
-5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j
-```
 
 ---
 ## System Requirements
