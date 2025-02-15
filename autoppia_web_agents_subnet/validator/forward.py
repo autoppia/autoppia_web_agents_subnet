@@ -84,6 +84,8 @@ async def forward(self) -> None:
             task_solution = None
             if response and getattr(response, "actions", None):
                 bt.logging.debug(f"Miner {miner_uid} actions: {response.actions}")
+            else:
+                bt.logging.debug(f"Miner {miner_uid} actions: {response}")
             try:
                 task_solution = _get_task_solution_from_synapse(
                     task=task,
