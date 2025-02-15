@@ -20,7 +20,7 @@ import random
 from copy import deepcopy
 
 TIMEOUT = 10
-FORWARD_SLEEP_SECONDS = 5
+FORWARD_SLEEP_SECONDS = 60 * 10  # 10 Minutes
 TIME_WEIGHT = 0.2
 MIN_SCORE_FOR_CORRECT_FORMAT = 0.1
 
