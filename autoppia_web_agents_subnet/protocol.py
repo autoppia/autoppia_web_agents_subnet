@@ -2,7 +2,7 @@ import bittensor as bt
 from pydantic import Field
 from typing import List
 
-from autoppia_iwa.src.execution.actions.actions import AllActionsUnion
+from autoppia_iwa.src.execution.actions.base import AllActionsUnion
 from bittensor import Synapse 
 
 
