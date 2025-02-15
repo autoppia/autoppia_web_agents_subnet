@@ -33,15 +33,16 @@ install_system_dependencies() {
       libwebp-dev libharfbuzz-dev libsecret-1-dev libhyphen0 libflite1 libgles2-mesa-dev \
       libx264-dev gnupg curl)
   elif [[ "$UBUNTU_CODENAME" == "noble" ]]; then
+    # Replace libasound2 with libasound2t64 as recommended.
     DEP_PACKAGES=(python3.11 python3.11-venv python3.11-dev build-essential cmake wget sqlite3 \
-      libnss3 libnss3-dev libasound2 libatk1.0-0 libatk-bridge2.0-0 libcups2 libx11-xcb1 \
+      libnss3 libnss3-dev libasound2t64 libatk1.0-0 libatk-bridge2.0-0 libcups2 libx11-xcb1 \
       libxcomposite1 libxcursor1 libxdamage1 libxrandr2 libgbm1 libpango-1.0-0 libgtk-3-0 \
       libvpx-dev libevent-dev libopus0 libgstreamer1.0-0 unzip \
       libgstreamer-plugins-base1.0-0 libgstreamer-plugins-good1.0-0 libgstreamer-plugins-bad1.0-0 \
       libwebp-dev libharfbuzz-dev libsecret-1-dev libhyphen0 libflite1 libgles2-mesa-dev \
       libx264-dev gnupg curl)
   else
-    # Default dependency list
+    # Default dependency list (adjust as necessary for other Ubuntu versions)
     DEP_PACKAGES=(python3.11 python3.11-venv python3.11-dev build-essential cmake wget sqlite3 \
       libnss3 libnss3-dev libasound2 libatk1.0-0 libatk-bridge2.0-0 libcups2 libx11-xcb1 \
       libxcomposite1 libxcursor1 libxdamage1 libxrandr2 libgbm1 libpango-1.0-0 libgtk-3-0 \
@@ -56,7 +57,6 @@ install_system_dependencies() {
 }
 
 install_python311() {
-  # Python 3.11 should now be available.
   echo -e "\e[34m[INFO]\e[0m Verifying Python 3.11 installation..."
   python3.11 --version || handle_error "Python 3.11 not found"
 }
@@ -86,7 +86,6 @@ install_mongodb() {
   sudo apt-get update -y || handle_error "Failed to update package list after adding MongoDB repo"
   sudo apt-get install -y mongodb-org || handle_error "Failed to install MongoDB"
   
-  # If systemd exists, use systemctl; else, start manually.
   if command -v systemctl &> /dev/null && [ -d /run/systemd/system ]; then
     sudo systemctl start mongod || handle_error "Failed to start MongoDB via systemctl"
     sudo systemctl enable mongod || handle_error "Failed to enable MongoDB via systemctl"
