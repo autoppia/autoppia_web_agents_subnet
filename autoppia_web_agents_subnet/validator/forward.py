@@ -21,6 +21,7 @@ from copy import deepcopy
 
 TIMEOUT = 10
 FORWARD_SLEEP_SECONDS = 60 * 10  # 10 Minutes
+TASK_SLEEP = 60 * 3  # 3 Minutes
 TIME_WEIGHT = 0.2
 MIN_SCORE_FOR_CORRECT_FORMAT = 0.1
 
@@ -115,11 +116,15 @@ async def forward(self) -> None:
 
         # 9) Update scores
         self.update_scores(rewards, miner_uids)
-        bt.logging.info("Scores updated for miners.")
-        bt.logging.info("SUCCESS: Forward step completed successfully.")
+        bt.logging.info("Scores updated for miners")
+        bt.logging.success("Task step completed successfully.")
 
         bt.logging.info(f"Sleeping for {FORWARD_SLEEP_SECONDS}s....")
         await asyncio.sleep(FORWARD_SLEEP_SECONDS)
+
+    bt.logging.success("Forward step completed successfully.")
+    bt.logging.info(f"Sleeping for {FORWARD_SLEEP_SECONDS}s....")
+    await asyncio.sleep(FORWARD_SLEEP_SECONDS)
 
 
 async def _dendrite_with_retries(dendrite: bt.dendrite, axons: list, synapse: TaskSynapse, deserialize: bool, timeout: float, cnt_attempts=3) -> List[TaskSynapse]:
