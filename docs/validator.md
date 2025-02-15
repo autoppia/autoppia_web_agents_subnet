@@ -29,15 +29,15 @@ If you wish to ChildKey (CHK) our validator, please note our hotkey ss58 address
 ## System Requirements
 
 - **Hardware:**
-  - **CPU:** Minimum 12 cores recommended
-  - **RAM:** Minimum 32GB RAM required
+  <!-- - **CPU:** Minimum 12 cores recommended -->
+  - **RAM:** Minimum 32GB RAM required for the local llm
   - **GPU:**
     - Recommended: NVIDIA A40
-    - Optional: Higher memory GPUs like A6000, A100, or H100
+    - Others: A6000, 6000Ada, A100, H100
   - **CUDA:** (Only required for LLM component)
     - Must be installed on the machine running the LLM service
 - **Storage:**
-  - Minimum 1TB disk space recommended
+  - Minimum 200MBs disk space recommended
 - **Operating System:**
   - Ubuntu 22.04.5 LTS (Jammy Jellyfish)
 
@@ -148,9 +148,9 @@ This script will:
 - Deploy **multiple Docker containers**, each running a different demo web project
 - Set up the necessary networking and configurations
 
-### 3. Configure Demo Webs Endpoint
+### 3. (Optional) Configure Demo Webs Endpoint
 
-Edit the `.env` file to configure your environment with the following parameters:
+If want another port, or has deployed the Demo-Webs on another server => Edit the `.env` file to configure your environment with the following parameters:
 
 ```bash
 # Default endpoints - modify these according to your setup
