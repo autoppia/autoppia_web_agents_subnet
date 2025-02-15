@@ -34,6 +34,7 @@ If you wish to ChildKey (CHK) our validator, please note our hotkey ss58 address
   - **GPU:**
     - Recommended: NVIDIA A40
     - Others: A6000, 6000Ada, A100, H100
+    - Or no GPU and use OpenAI. 
   - **CUDA:** (Only required for LLM component)
     - Must be installed on the machine running the LLM service
 - **Storage:**
