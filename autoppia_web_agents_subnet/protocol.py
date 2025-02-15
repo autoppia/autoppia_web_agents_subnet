@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict, Any
 import bittensor as bt
 from pydantic import Field
 from autoppia_iwa.src.execution.actions.base import BaseAction
