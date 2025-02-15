@@ -12,7 +12,7 @@ You can deploy the components on separate instances:
 
 - **LLM**: Two options available:
   - **Option A:** Use OpenAI API (No GPU required, API key needed)
-  - **Option B:** Use our Local LLM (Requires GPU with CUDA 12.1)
+  - **Option B:** Use our Local LLM (Requires GPU with CUDA 12.6)
 - **Demo-Webs**: CPU only (deployed via Docker)
 - **Validator.py**: CPU only
 
@@ -165,7 +165,7 @@ DEMO_WEBS_STARTING_PORT=8000
   - Default: `http://localhost:6000`
   - You can modify this if running the LLM on a different server
   - Example remote setup: `http://your-llm-server_ip:port`
-  - _Note: The server hosting the LLM must have CUDA 12.1+ installed_
+  - _Note: The server hosting the LLM must have CUDA 12.6 installed_
 - **`DEMO_WEBS_ENDPOINT`**: The endpoint where your demo web projects are deployed
   - Default: `http://localhost`
   - You can modify this if running the demo webs on a different server
