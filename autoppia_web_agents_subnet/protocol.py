@@ -23,23 +23,46 @@ class TaskSynapse(bt.Synapse):
 
     def deserialize(self) -> "TaskSynapse":
         """
-        Deserialize output, ensuring actions are properly reconstructed using the ACTION_CLASS_MAP
+        Deserialize output, reconstructing actions from raw data while preserving their specific types and parameters
         """
         if hasattr(self, "actions") and self.actions:
+            bt.logging.debug(f"Starting deserialization of actions: {self.actions}")
             deserialized_actions = []
-            for action in self.actions:
-                if isinstance(action, dict):
-                    # Si es un diccionario, necesitamos reconstruir la acción
-                    action_type = action.get("type")
-                    action_class = ACTION_CLASS_MAP.get(action_type, BaseAction)
-                    deserialized_actions.append(action_class(**action))
-                else:
-                    # Si ya es un objeto action, verificamos su tipo
-                    action_data = action.model_dump()
-                    action_type = action_data.get("type")
-                    action_class = ACTION_CLASS_MAP.get(action_type, BaseAction)
-                    deserialized_actions.append(action_class(**action_data))
 
+            for action in self.actions:
+                try:
+                    # Convert action to dict if it isn't already
+                    action_data = (
+                        action if isinstance(action, dict) else action.model_dump()
+                    )
+                    bt.logging.debug(f"Processing action data: {action_data}")
+
+                    # Get action type and its parameters
+                    action_type = action_data.get("type")
+                    action_params = {
+                        k: v for k, v in action_data.items() if k != "type"
+                    }
+
+                    # Look up the appropriate action class
+                    action_class = ACTION_CLASS_MAP.get(action_type, BaseAction)
+                    bt.logging.debug(
+                        f"Found action class {action_class.__name__} for type {action_type}"
+                    )
+
+                    # Create new instance with all original parameters
+                    deserialized_action = action_class(**action_params)
+                    deserialized_actions.append(deserialized_action)
+                    bt.logging.debug(
+                        f"Successfully deserialized action: {deserialized_action}"
+                    )
+
+                except Exception as e:
+                    bt.logging.error(f"Failed to deserialize action {action}: {str(e)}")
+                    deserialized_actions.append(BaseAction())
+
+            bt.logging.debug(
+                f"Completed deserialization. Final actions: {deserialized_actions}"
+            )
             self.actions = deserialized_actions
 
         return self
