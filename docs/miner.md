@@ -40,6 +40,7 @@ git submodule update --init --recursive --remote
 
 ### 3. Run the Setup Script
 
+This setup has been tested on ubuntu "jammy" and "noble" distributions.
 Make the setup script executable and run it:
 
 ```bash
