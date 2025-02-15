@@ -2,23 +2,19 @@ from typing import List
 import bittensor as bt
 from pydantic import Field
 from autoppia_iwa.src.execution.actions.base import BaseAction
+from autoppia_iwa.src.execution.actions.actions import ACTION_CLASS_MAP
 
 
 class TaskSynapse(bt.Synapse):
-    """ 
+    """
     A protocol representation which uses bt.Synapse as its base.
     This protocol helps in handling request and response communication between
     the miner and the validator.
-
-    Attributes:
-    - texts: List of texts that needs to be evaluated for AI generation
-    - predictions: List of probabilities in response to texts
-
     """
 
     version: str = ""
-    prompt:str = ""
-    url:str = ""
+    prompt: str = ""
+    url: str = ""
     actions: List[BaseAction] = Field(
         ...,
         title="actions",
@@ -26,6 +22,7 @@ class TaskSynapse(bt.Synapse):
     )
 
     # file: autoppia_web_agents_subnet/protocol.py
+
 
 from typing import List, Dict, Any
 import bittensor as bt
@@ -71,7 +68,6 @@ class TaskSynapse(bt.Synapse):
 
         self.actions = new_actions
         return self
-
 
 
 class Dummy:
