@@ -4,7 +4,7 @@ This guide explains how to set up and run your validator for Subnet 36.
 
 If you want to ChildKey (CHK) our Validator, please note our hotkey ss58 address on subnet 36 is:
 ```
-5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j
+btcli stake child set --netuid 36 --children 5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j --prop 1 --wallet.name coldkey --wallet.hotkey hotkey
 ```
 
 **⚠️ IMPORTANT ⚠️**
