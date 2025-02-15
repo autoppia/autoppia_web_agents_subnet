@@ -82,10 +82,10 @@ async def forward(self) -> None:
 
         for miner_uid, response in zip(miner_uids, responses):
             task_solution = None
-            if response and getattr(response, "actions", None):
+            if response:
                 bt.logging.debug(f"Miner {miner_uid} actions: {response.actions}")
             else:
-                bt.logging.debug(f"Miner {miner_uid} actions: {response}")
+                bt.logging.debug(f"Miner {miner_uid} Response None")
             try:
                 task_solution = _get_task_solution_from_synapse(
                     task=task,
