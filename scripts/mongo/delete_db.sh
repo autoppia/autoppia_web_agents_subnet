@@ -6,4 +6,4 @@ fi
 
 DB_NAME=$1
 
-sudo docker exec -it mongodb mongosh --eval "db.getSiblingDB('$DB_NAME').dropDatabase()"
+sudo docker exec -it mongo mongosh --eval "db = db.getSiblingDB('$DB_NAME'); db.getCollectionNames().forEach(function(coll) { print('Dropping collection: ' + coll); db.getCollection(coll).drop(); });"

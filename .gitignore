@@ -8,8 +8,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+validator_env
 validator_env/
 validator_env/*
+miner_env
 miner_env/
 miner_env/*
 ~
