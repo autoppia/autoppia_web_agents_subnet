@@ -14,6 +14,7 @@ miner_env/
 miner_env/*
 ~
 ~/*
+output.png
 
 # C extensions
 *.so
