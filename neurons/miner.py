@@ -71,7 +71,6 @@ class Miner(BaseMinerNeuron):
 
             synapse.actions = actions
 
-            TaskSynapse.model_validate(synapse**)
             bt.logging.success(f"Request completed successfully in {time.time() - start_time}s")
 
         except Exception as e:
