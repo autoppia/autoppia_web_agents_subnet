@@ -69,8 +69,9 @@ class Miner(BaseMinerNeuron):
             actions: List[BaseAction] = task_solution.actions
             bt.logging.info(f"Task Solved. Actions: {actions}")
 
-            bt.logging.warning(TaskSynapse(actions=actions).model_dump())
             synapse.actions = actions
+
+            TaskSynapse.model_validate(synapse**)
             bt.logging.success(f"Request completed successfully in {time.time() - start_time}s")
 
         except Exception as e:
