@@ -44,7 +44,7 @@ async def forward(self) -> None:
 
     # 3) Create a pipeline and generate tasks
     bt.logging.warning(f"Generating tasks for Web Project: '{demo_web_project.name}' ...")
-    tasks_generated:List[Task] = _generate_tasks_for_url(demo_web_project=demo_web_project)
+    tasks_generated:List[Task] = await _generate_tasks_for_url(demo_web_project=demo_web_project)
 
     if not tasks_generated:
         bt.logging.warning("No tasks generated, skipping forward step.")
@@ -180,7 +180,7 @@ def _get_random_demo_web_project(projects: List[WebProject]) -> WebProject:
     return random.choice(projects)
 
 
-def _generate_tasks_for_url(demo_web_project: WebProject) -> List[Task]:
+async def _generate_tasks_for_url(demo_web_project: WebProject) -> List[Task]:
     config = TaskGenerationConfig(
         web_project=demo_web_project,
         save_task_in_db=True,
@@ -189,7 +189,7 @@ def _generate_tasks_for_url(demo_web_project: WebProject) -> List[Task]:
         number_of_prompts_per_task=1,
     )
     pipeline = TaskGenerationPipeline(config)
-    output: TasksGenerationOutput = pipeline.generate()
+    output: TasksGenerationOutput = await pipeline.generate()
     return output.tasks
 
 
