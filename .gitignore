@@ -9,7 +9,11 @@ __pycache__/
 *$py.class
 
 validator_env/
+validator_env/*
 miner_env/
+miner_env/*
+~
+~/*
 
 # C extensions
 *.so
