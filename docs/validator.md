@@ -77,15 +77,7 @@ LLM_PROVIDER="local"
 LLM_ENDPOINT="http://localhost:6000/generate"
 ```
 
-2. Verify CUDA:
-
-```bash
-nvcc --version
-```
-
-⚠️ **CRITICAL**: Should show CUDA 12.6
-
-3. Setup local LLM:
+2. Setup local LLM:
 
 ```bash
 chmod +x autoppia_iwa_module/modules/llm_local/setup.sh
@@ -104,20 +96,23 @@ The local setup uses **deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B** model.
 
 ## Demo Web Projects Setup
 
-This script requires **Docker**. If **Docker** is not installed, the script will attempt to install it automatically.
-
-1. Deploy demo webs:
+This script requires **Docker**. The following commands will install Docker and initialize the demo webs:
 
 ```bash
 CURRENT_DIR=$(pwd)
-cd autoppia_iwa_module/modules/webs_demo
+cd autoppia_iwa_module/modules/webs_demo/scripts
+chmod +x install_docker.sh
+./install_docker.sh
 chmod +x setup.sh
 ./setup.sh
 cd "$CURRENT_DIR"
 ```
 
-2. Configure endpoints (optional):
-   Edit `.env`:
+For detailed information about the demo webs and their configurations, please refer to the demo webs [README.md](./autoppia_iwa_module/modules/webs_demo/README.md).
+
+### Configure endpoints (optional):
+
+Edit `.env`:
 
 ```bash
 LOCAL_MODEL_ENDPOINT=http://localhost:6000
