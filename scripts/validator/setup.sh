@@ -59,10 +59,10 @@ install_current_module() {
   success_msg "Current module installed in editable mode."
 }
 
-install_autoppia_iwa_module() {
+install_autoppia_iwa() {
   echo -e "\e[34m[INFO]\e[0m Installing autoppia_iwa module..."
-  if cd autoppia_iwa_module && pip install -e . && cd ..; then
-    success_msg "autoppia_iwa_module installed successfully."
+  if cd autoppia_iwa && pip install -e . && cd ..; then
+    success_msg "autoppia_iwa installed successfully."
   else
     handle_error "Failed to install autoppia_iwa module"
   fi
@@ -80,7 +80,7 @@ main() {
   upgrade_pip_setuptools
   install_python_requirements
   install_current_module
-  install_autoppia_iwa_module
+  install_autoppia_iwa
   install_bittensor
   success_msg "Setup completed successfully!"
 }

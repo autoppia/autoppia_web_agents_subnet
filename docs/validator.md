@@ -98,16 +98,16 @@ LLM_ENDPOINT="http://localhost:6000/generate"
 2. Setup local LLM:
 
 ```bash
-chmod +x autoppia_iwa_module/modules/llm_local/setup.sh
-./autoppia_iwa_module/modules/llm_local/setup.sh
+chmod +x autoppia_iwa/modules/llm_local/setup.sh
+./autoppia_iwa/modules/llm_local/setup.sh
 source llm_env/bin/activate
-pm2 start autoppia_iwa_module/modules/llm_local/run_local_llm.py --name llm_local -- --port 6000
+pm2 start autoppia_iwa/modules/llm_local/run_local_llm.py --name llm_local -- --port 6000
 ```
 
 **To verify if your LLM is working correctly:**
 
 ```bash
-python3 autoppia_iwa_module/modules/llm_local/test/test.py
+python3 autoppia_iwa/modules/llm_local/test/test.py
 ```
 
 The local setup uses **deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B** model.
@@ -120,7 +120,7 @@ This script requires **Docker**. The following commands will install Docker and 
 
 ```bash
 CURRENT_DIR=$(pwd)
-cd autoppia_iwa_module/modules/webs_demo/scripts
+cd autoppia_iwa/modules/webs_demo/scripts
 chmod +x install_docker.sh
 ./install_docker.sh
 chmod +x setup.sh
@@ -128,7 +128,7 @@ chmod +x setup.sh
 cd "$CURRENT_DIR"
 ```
 
-For detailed information about the demo webs and their configurations, please refer to the demo webs [README.md](./autoppia_iwa_module/modules/webs_demo/README.md).
+For detailed information about the demo webs and their configurations, please refer to the demo webs [README.md](./autoppia_iwa/modules/webs_demo/README.md).
 
 ### Configure endpoints (optional):
 

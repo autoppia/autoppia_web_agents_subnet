@@ -171,15 +171,15 @@ install_python_requirements() {
 }
 
 # ---------------------------------------------------------
-# Section 8: Install autoppia_iwa_module
+# Section 8: Install autoppia_iwa
 # Installs the submodule in editable mode.
 # ---------------------------------------------------------
-install_autoppia_iwa_module() {
-  echo -e "\e[34m[INFO]\e[0m Installing autoppia_iwa_module package..."
-  if cd autoppia_iwa_module && uv pip install -e . && cd ..; then
-    success_msg "autoppia_iwa_module package installed successfully."
+install_autoppia_iwa() {
+  echo -e "\e[34m[INFO]\e[0m Installing autoppia_iwa package..."
+  if cd autoppia_iwa && uv pip install -e . && cd ..; then
+    success_msg "autoppia_iwa package installed successfully."
   else
-    handle_error "Failed to install autoppia_iwa_module package"
+    handle_error "Failed to install autoppia_iwa package"
   fi
   uv pip install -e .
 }
@@ -210,7 +210,7 @@ main() {
   create_and_activate_venv
   upgrade_pip_setuptools
   install_python_requirements
-  install_autoppia_iwa_module
+  install_autoppia_iwa
   install_bittensor
 }
 

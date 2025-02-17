@@ -111,17 +111,17 @@ nvcc --version
 Set up the local LLM generation endpoint:
 
 ```bash
-chmod +x autoppia_iwa_module/modules/llm_local/setup.sh
-./autoppia_iwa_module/modules/llm_local/setup.sh
+chmod +x autoppia_iwa/modules/llm_local/setup.sh
+./autoppia_iwa/modules/llm_local/setup.sh
 
 source llm_env/bin/activate
-pm2 start autoppia_iwa_module/modules/llm_local/run_local_llm.py --name llm_local -- --port 6000
+pm2 start autoppia_iwa/modules/llm_local/run_local_llm.py --name llm_local -- --port 6000
 ```
 
 To verify that the LLM service is running correctly, you can run the test script:
 
 ```bash
-python3 autoppia_iwa_module/modules/llm_local/tests/test.py
+python3 autoppia_iwa/modules/llm_local/tests/test.py
 ```
 
 This script will:
@@ -139,8 +139,8 @@ For additional configuration options and advanced setup, refer to the detailed d
 Deploy the demo web projects by running:
 
 ```bash
-chmod +x autoppia_iwa_module/modules/webs_demo/setup.sh
-./autoppia_iwa_module/modules/webs_demo/setup.sh
+chmod +x autoppia_iwa/modules/webs_demo/setup.sh
+./autoppia_iwa/modules/webs_demo/setup.sh
 ```
 
 This script will:

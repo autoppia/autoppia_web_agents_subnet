@@ -22,10 +22,10 @@ import bittensor as bt
 import time
 import typing
 from typing import List
-from autoppia_iwa_module.src.execution.actions.base import BaseAction
-from autoppia_iwa_module.src.web_agents.random.agent import RandomClickerWebAgent
-from autoppia_iwa_module.src.bootstrap import AppBootstrap
-from autoppia_iwa_module.src.data_generation.domain.classes import Task
+from autoppia_iwa.src.execution.actions.base import BaseAction
+from autoppia_iwa.src.web_agents.random.agent import RandomClickerWebAgent
+from autoppia_iwa.src.bootstrap import AppBootstrap
+from autoppia_iwa.src.data_generation.domain.classes import Task
 
 
 class Miner(BaseMinerNeuron):

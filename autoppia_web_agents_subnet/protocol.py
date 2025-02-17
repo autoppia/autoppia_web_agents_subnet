@@ -1,7 +1,7 @@
 from pydantic import Field
 from typing import List
 from bittensor import Synapse 
-from autoppia_iwa_module.src.execution.actions.actions import AllActionsUnion
+from autoppia_iwa.src.execution.actions.actions import AllActionsUnion
 
 
 class TaskSynapse(Synapse):

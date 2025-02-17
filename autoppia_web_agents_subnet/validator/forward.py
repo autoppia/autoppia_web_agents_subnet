@@ -1,12 +1,12 @@
-from autoppia_iwa_module.src.web_agents.classes import TaskSolution
-from autoppia_iwa_module.src.data_generation.domain.classes import WebProject
-from autoppia_iwa_module.src.backend_demo_web.config import get_demo_webs_projects
-from autoppia_iwa_module.src.data_generation.domain.classes import (
+from autoppia_iwa.src.web_agents.classes import TaskSolution
+from autoppia_iwa.src.data_generation.domain.classes import WebProject
+from autoppia_iwa.src.backend_demo_web.config import get_demo_webs_projects
+from autoppia_iwa.src.data_generation.domain.classes import (
     Task,
     TaskGenerationConfig,
     TasksGenerationOutput,
 )
-from autoppia_iwa_module.src.data_generation.application.tasks_generation_pipeline import (
+from autoppia_iwa.src.data_generation.application.tasks_generation_pipeline import (
     TaskGenerationPipeline,
 )
 from autoppia_web_agents_subnet.validator.reward import get_rewards
