@@ -30,8 +30,8 @@ git submodule update --init --recursive --remote
 2. Install dependencies:
 
 ```bash
-chmod +x scripts/install_dependencies.sh
-./scripts/install_dependencies.sh
+chmod +x scripts/validator/install_dependencies.sh
+./scripts/validator/install_dependencies.sh
 ```
 
 3. Setup environment:
