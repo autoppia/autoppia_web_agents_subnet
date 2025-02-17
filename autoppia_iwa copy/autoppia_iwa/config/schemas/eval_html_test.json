@@ -1,0 +1,25 @@
+{
+  "type": "object",
+  "properties": {
+    "task_completed": {
+      "type": "boolean",
+      "description": "Indicates whether the task was successfully completed based on the HTML comparison."
+    },
+    "reason": {
+      "type": "string",
+      "description": "A brief explanation of why the task was determined to be completed or not."
+    },
+    "changes_detected": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "List of significant changes detected in the HTML before and after the action."
+    }
+  },
+  "required": [
+    "task_completed",
+    "reason",
+    "changes_detected"
+  ]
+}

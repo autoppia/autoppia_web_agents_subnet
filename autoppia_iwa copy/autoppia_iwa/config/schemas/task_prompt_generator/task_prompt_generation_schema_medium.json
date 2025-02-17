@@ -1,0 +1,26 @@
+{
+  "type": "object",
+  "description": "Schema for validating moderately detailed, actionable task prompts.",
+  "properties": {
+    "tasks": {
+      "type": "array",
+      "description": "A list of moderately detailed, actionable task prompts.",
+      "items": {
+        "type": "string",
+        "description": "A clear, detailed task description combining related actions when appropriate.",
+        "examples": [
+          "Click on the 'Register' button, fill out the form, and submit it to create an account.",
+          "Log in using your email and password, then navigate to the dashboard.",
+          "Search for a product using the search bar and add it to your cart."
+        ],
+        "minLength": 20,
+        "maxLength": 300
+      },
+      "uniqueItems": true,
+      "minItems": 2,
+      "maxItems": 10
+    }
+  },
+  "required": ["tasks"],
+  "additionalProperties": false
+}

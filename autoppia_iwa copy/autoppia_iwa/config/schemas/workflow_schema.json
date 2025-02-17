@@ -1,0 +1,35 @@
+{
+  "title": "Task Milestones Schema",
+  "type": "object",
+  "properties": {
+    "milestones": {
+      "type": "array",
+      "description": "A list of milestones representing sub-parts of the main task.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "The milestone ID based on its position in the sequence (starting from 1)."
+          },
+          "name": {
+            "type": "string",
+            "description": "A concise name summarizing the milestone."
+          },
+          "description": {
+            "type": "string",
+            "description": "A detailed explanation of the milestone."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description"
+        ]
+      }
+    }
+  },
+  "required": [
+    "milestones"
+  ]
+}

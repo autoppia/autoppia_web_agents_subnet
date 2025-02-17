@@ -1,0 +1,22 @@
+Summarize the content and functionality of this HTML element:
+${element}
+
+Include the following fields for each element:
+
+- one_phrase_summary: Provide a one-sentence summary of the element.
+- summary: Provide a brief description of the element's purpose and use.
+- categories: Suggest some categories for this section as if it were part of a blog.
+- functionality: Describe all possible functionalities in this section. List potential use cases for this section, including user interactions and typical behaviors.
+- media_files_description: Describe what the images or videos might contain, individually.
+- key_words: Provide a list of key words or phrases relevant to the element, focusing on what a user might search for in this section.
+- relevant_fields: List relevant fields or attributes based on the element type:
+    For form fields, list their attributes (e.g., type, name, placeholder, required).
+    For links, provide the href and target attributes.
+    For images, provide the src and alt attributes.
+- curiosities: Highlight any remarkable aspects that make this section unique and important.
+- accessibility: Highlight any accessibility features or considerations for this section.
+
+Do not add boilerplate or not useful information. Only add quality information that adds value and insights to the understanding of the web.
+If something do not add value set it as null
+ONLY INCLUDE THIS FIELDS AND NOT THE ELEMENT ITSELF
+Please provide the JSON output in the format specified above.

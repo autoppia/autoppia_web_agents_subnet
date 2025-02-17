@@ -1,0 +1,15 @@
+[tool.isort]
+profile = "black"
+line_length = 200
+known_third_party = ["PIL", "aiohttp", "bs4", "dependency_injector", "dotenv", "flask", "flask_cors", "matplotlib", "networkx", "numpy", "openai", "playwright", "pydantic", "pymongo", "pytest", "requests", "selenium", "setuptools", "tiktoken", "transformers", "webdriver_manager"]
+
+[tool.black]
+line-length = 200
+target-version = ["py311"]  # o la tuya
+skip-string-normalization = true  # (opcional)
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "--import-mode=importlib"
+testpaths = ["tests"]

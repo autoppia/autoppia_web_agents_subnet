@@ -1,0 +1,91 @@
+<div id="products" class="page-layout carded fullwidth inner-scroll">
+
+<!-- TOP BACKGROUND -->
+<div class="top-bg accent"></div>
+<!-- / TOP BACKGROUND -->
+
+<!-- CENTER -->
+<div class="center">
+
+    <!-- HEADER -->
+    <div class="header accent" fxLayout="row" fxLayoutAlign="space-between center">
+
+        <!-- APP TITLE -->
+        <div fxLayout="row" fxLayoutAlign="start center">
+
+            <button mat-icon-button class="mr-0 mr-sm-16" [routerLink]="'/apps/list-position'">
+                <mat-icon>arrow_back</mat-icon>
+            </button>
+
+            <div class="product-image mr-8 mr-sm-16" [@animate]="{value:'*',params:{delay:'100ms',scale:'0.2'}}">
+                <img [src]="'assets/images/ecommerce/product-image-placeholder.png'">
+            </div>
+
+            <div fxLayout="column" fxLayoutAlign="start start"
+                    [@animate]="{value:'*',params:{delay:'100ms',x:'-25px'}}">
+                <div class="h2">
+                    New Position
+                </div>
+                <div class="subtitle secondary-text">
+                    <span>Position Detail</span>
+                </div>
+            </div>
+        </div>
+        <!-- / APP TITLE -->
+
+        <!-- ADD BUTTON -->
+        <button mat-raised-button
+                [routerLink]="'/apps/list-position'"
+                class="add-product-button fuse-white mt-24 mt-md-0">
+            <span>LIST POSITION</span>
+        </button>
+        <!-- / ADD BUTTON -->
+
+    </div>
+    <!-- / HEADER -->
+
+    <!-- CONTENT CARD -->
+    <div class="content-card">
+
+        <!-- CONTENT -->
+        <div class="content">
+
+            <form name="formPosition" [formGroup]="formPosition" class="product w-100-p" fxLayout="column" (ngSubmit) = "onClickSubmitPosition(formPosition.value)">
+
+
+                <div class="tab-content p-24" fusePerfectScrollbar>
+                    <mat-form-field appearance="outline" floatLabel="always" class="w-100-p">
+                        <mat-label>Title</mat-label>
+                        <input matInput placeholder="Position Title"
+                                name="title"
+                                formControlName="title"
+                                required>
+                    </mat-form-field>
+                    <mat-form-field appearance="outline" floatLabel="always" class="w-100-p">
+                        <mat-label>Salary</mat-label>
+                        <input matInput placeholder="Position Salary"
+                                name="salary"
+                                formControlName="salary"
+                                required>
+                    </mat-form-field>
+
+                    <div>
+                        <button mat-raised-button color="accent" class="submit-button" aria-label="SUBMIT"
+                                [disabled]="formPosition.invalid">
+                            SUBMIT
+                        </button>
+                    </div>
+                </div>
+
+            </form>
+
+        </div>
+        <!-- / CONTENT -->
+
+    </div>
+    <!-- / CONTENT CARD -->
+
+</div>
+<!-- / CENTER -->
+
+</div>

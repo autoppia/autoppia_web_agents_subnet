@@ -1,0 +1,35 @@
+Our goal is to get a comprehensive understanding of a web page (URL) as a whole.
+
+Context:
+- Objective: The main goal is to understand the entire website's structure, purpose, and key features to facilitate intelligent interactions, such as filling forms, navigating through links, and understanding the content structure.
+- Extraction Process: We have obtained the HTML of the webpage, transformed it into structured Python data classes, and analyzed them using an LLM. Each element's analysis includes key information about the element.
+- Segmentation: Due to the limited context window, the analysis has been divided into several LLM queries. Some element analyses are constructed from their children's summaries.
+Task:
+- You will receive a JSON structure containing the "html_analysis" in a hierarchical way. Your task is to understand and summarize the content and functionality of the URL by interpreting the provided "html_analysis".
+
+Web Analyzed:
+- Domain: ${domain}
+- URL: ${url}
+Elements Analysis:
+- ${html_page_analysis}
+
+Instructions:
+Respond in JSON format including the following information:
+
+- one_phrase_summary: Provide a one-sentence summary of the element.
+- summary: Provide a brief description of the element's purpose and use.
+- categories: Suggest some categories for this section as if it were part of a blog.
+- functionality: Describe all possible functionalities in this section. List potential use cases for this section, including user interactions and typical behaviors.
+- media_files_description: Describe what the main images or videos might contain, individually.
+- key_words: Provide a list of key words or phrases relevant to the web. These should include terms that users might search for to find this section, even if they are not present in the content.
+- curiosities: Highlight any remarkable aspects that make this section unique and important.
+- accessibility: Highlight any accessibility features or considerations for this section.
+- user_experience: Summarize how a user might interact with the website, including navigation paths, form interactions, and key content areas.
+- advertisements: Provide information related to advertisements on the URL.
+- seo_considerations: Mention any elements that might impact the website's search engine optimization (SEO).
+- additional_notes: use this field to provide extra information that you believe is relevant. 
+
+Do not add boilerplate or not usefull information. Only add quality information that adds value and insights to the understanding of the web purpose. 
+Avoid explanations of what is a header or footer etc.
+If something do not add value set it as null. 
+Given the limited response size, be concise and focus on the most important information.

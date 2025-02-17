@@ -1,0 +1,13 @@
+{
+  "type": "object",
+  "properties": {
+    "result": {
+      "type": "boolean",
+      "description": "The result of the evaluation, either true or false"
+    }
+  },
+  "required": [
+    "result"
+  ],
+  "additionalProperties": false
+}
