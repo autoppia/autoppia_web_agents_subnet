@@ -6,7 +6,7 @@ CONFIG_FILE="autoppia_web_agents_subnet/__init__.py"
 VERSION_VARIABLE="__version__"
 
 # Set this to how often (in seconds) you want to check. (1800 = 30 minutes)
-SLEEP_INTERVAL=1800
+SLEEP_INTERVAL=5
 
 get_local_version() {
     grep "$VERSION_VARIABLE" "$CONFIG_FILE" | head -n1 | sed -E 's/.*=[[:space:]]*["'\'']?([^"'\'' ]+)["'\'']?.*/\1/'
