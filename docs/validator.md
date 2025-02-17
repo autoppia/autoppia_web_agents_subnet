@@ -92,7 +92,7 @@ pm2 start autoppia_iwa_module/modules/llm_local/run_local_llm.py --name llm_loca
 python3 autoppia_iwa_module/modules/llm_local/test/test.py
 ```
 
-The local setup uses **deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B** model.
+The local setup uses **Qwen/Qwen2.5-3B-Instruct** model.
 
 ## Demo Web Projects Setup
 
