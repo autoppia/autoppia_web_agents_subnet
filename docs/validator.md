@@ -4,18 +4,25 @@ Validator setup for Subnet 36.
 
 ## Requirements
 
-- Ubuntu 22.04.5 LTS (Jammy)
+- Ubuntu 22.04.5 LTS (Jammy) or 24.04 LTS (Noble)
 - RAM: 32GB minimum
 - GPU: NVIDIA A40/A6000/A100/H100 (or use OpenAI API)
 - Storage: 200MB minimum
+
+**Important Linux Distribution Note**:
+
+- Our **install_dependencies.sh** script currently supports:
+  1. Ubuntu 22.04 LTS (Jammy)
+  2. Ubuntu 24.04 LTS (Noble)
+- If using a different Ubuntu version, you may need to manually adjust the dependencies in the **install_dependencies.sh** script
 
 ## Component Overview
 
 You can deploy components separately:
 
+- **Validator**: CPU only (MongoDB Recommended)
 - **LLM**: OpenAI API or Local LLM
 - **Demo-Webs**: CPU only (Docker required)
-- **Validator**: CPU only
 
 ## Quick Start
 
@@ -27,37 +34,47 @@ cd autoppia_web_agents_subnet
 git submodule update --init --recursive --remote
 ```
 
-2. Install dependencies:
-
-```bash
-chmod +x scripts/validator/install_dependencies.sh
-./scripts/validator/install_dependencies.sh
-```
-
-3. Setup environment:
-
-### Option A: Dockerized Environment (runpod or similar)
-
-```bash
-chmod +x scripts/validator/no_sudo_setup.sh
-./scripts/validator/no_sudo_setup.sh
-```
-
-### Option B: Standard Environment
-
-```bash
-chmod +x scripts/setup.sh
-./scripts/setup.sh
-```
-
-4. Configure LLM:
+2. Copy your configuration data to .env:
 
 ```bash
 cp .env.example .env
 # Edit .env with your configuration
 ```
 
-## LLM Setup Options
+3. Install dependencies:
+
+```bash
+chmod +x scripts/install_dependencies.sh
+./scripts/install_dependencies.sh
+```
+
+4. **(Optional)** Install **MongoDB** for caching web analysis results:
+
+```bash
+chmod +x scripts/validator/install_mongo.sh
+./scripts/validator/install_mongo.sh
+```
+
+The validator will use MongoDB with the following default configuration:
+
+```bash
+MONGODB_URL="mongodb://localhost:27017"
+```
+
+# VALIDATOR SETUP
+
+---
+
+Setup the validator:
+
+```bash
+chmod +x scripts/setup.sh
+./scripts/setup.sh
+```
+
+# LLM SETUP
+
+---
 
 ### Option A: OpenAI API (No GPU Required)
 
@@ -89,21 +106,14 @@ pm2 start autoppia_iwa_module/modules/llm_local/run_local_llm.py --name llm_loca
 **To verify if your LLM is working correctly:**
 
 ```bash
-curl -X POST "http://127.0.0.1:6000/generate" \
-     -H "Content-Type: application/json" \
-     -d '{
-           "input": {
-             "text": "Hello, how are you? Explain me who are you, what model are you and what benefits you have. Answer directly and short",
-             "ctx": 256,
-             "llm_kwargs": {},
-             "chat_completion_kwargs": {}
-           }
-         }'
+python3 autoppia_iwa_module/modules/llm_local/test/test.py
 ```
 
-The local setup uses **Qwen/Qwen2.5-3B-Instruct** model.
+The local setup uses **deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B** model.
 
-## Demo Web Projects Setup
+# DEMO WEBS SETUP
+
+---
 
 This script requires **Docker**. The following commands will install Docker and initialize the demo webs:
 
@@ -132,9 +142,11 @@ DEMO_WEBS_STARTING_PORT=8000
 #### Configuration Options:
 
 - **`LOCAL_MODEL_ENDPOINT`**: The endpoint where your LLM service is running
+
   - Default: `http://localhost:6000`
   - You can modify this if running the LLM on a different server
   - Example remote setup: `http://your-llm-server_ip:port`
+
 - **`DEMO_WEBS_ENDPOINT`**: The endpoint where your demo web projects are deployed
   - Default: `http://localhost`
   - You can modify this if running the demo webs on a different server
