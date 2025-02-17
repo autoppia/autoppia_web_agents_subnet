@@ -5,7 +5,7 @@
 PROCESS_NAME="subnet-36-validator"
 CONFIG_FILE="autoppia_web_agents_subnet/__init__.py"
 VERSION_VARIABLE="__version__"
-SLEEP_INTERVAL=1800  # 30 minutes
+SLEEP_INTERVAL=5  # 30 minutes
 
 get_local_version() {
     grep "$VERSION_VARIABLE" "$CONFIG_FILE" | head -n1 | sed -E 's/.*=[[:space:]]*["'\''"]?([^"'\'' ]+)["'\''"]?.*/\1/'
