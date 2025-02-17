@@ -75,7 +75,7 @@ async def generate_tasks_for_project(demo_project):
     through the TaskGenerationPipeline.
     """
     task_input = TaskGenerationConfig(web_project=demo_project, save_web_analysis_in_db=True, save_task_in_db=False)
-    if use_cache_in_tasks and TASK_EXAMPLES:
+    if not use_cache_in_tasks and TASK_EXAMPLES:
         tasks = TASK_EXAMPLES
     else:
         print("Generating Tasks...")
