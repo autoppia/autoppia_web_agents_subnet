@@ -1,12 +1,12 @@
 import numpy as np
 from typing import List, Optional
 import bittensor as bt
-from autoppia_iwa.src.evaluation.evaluator.evaluator import (
+from autoppia_iwa_module.src.evaluation.evaluator.evaluator import (
     ConcurrentEvaluator,
     EvaluatorConfig,
 )
-from autoppia_iwa.src.web_agents.classes import TaskSolution
-from autoppia_iwa.src.evaluation.classes import EvaluationResult
+from autoppia_iwa_module.src.web_agents.classes import TaskSolution
+from autoppia_iwa_module.src.evaluation.classes import EvaluationResult
 
 
 def normalize_execution_times(times: List[Optional[float]]) -> List[float]:
