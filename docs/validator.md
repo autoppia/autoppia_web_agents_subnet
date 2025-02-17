@@ -69,8 +69,8 @@ MONGODB_URL="mongodb://localhost:27017"
 Setup the validator:
 
 ```bash
-chmod +x scripts/setup.sh
-./scripts/setup.sh
+chmod +x scripts/validator/setup.sh
+./scripts/validator/setup.sh
 ```
 
 # LLM SETUP
