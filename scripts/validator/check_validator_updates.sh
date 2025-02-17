@@ -1,10 +1,12 @@
 #!/bin/bash
 # check_updates.sh - Check for updates and redeploy if a new version is available
 
-PROCESS_NAME="subnet_36_web_agents_validation"
-CONFIG_FILE="src/config.py"
+PROCESS_NAME="subnet-36-validator"
+CONFIG_FILE="autoppia_web_agents_subnet/__init__.py"
 VERSION_VARIABLE="__version__"
-SLEEP_INTERVAL=60 # Check every 30 minutes
+
+# Set this to how often (in seconds) you want to check. (1800 = 30 minutes)
+SLEEP_INTERVAL=1800
 
 get_local_version() {
     grep "$VERSION_VARIABLE" "$CONFIG_FILE" | head -n1 | sed -E 's/.*=[[:space:]]*["'\'']?([^"'\'' ]+)["'\'']?.*/\1/'
@@ -17,6 +19,7 @@ get_remote_version() {
 }
 
 version_greater() {
+    # Returns true if $2 > $1 in semver ordering
     [ "$(printf '%s\n' "$2" "$1" | sort -V | head -n1)" != "$1" ]
 }
 
@@ -30,13 +33,32 @@ while true; do
         if version_greater "$REMOTE_VERSION" "$LOCAL_VERSION"; then
             echo "New version detected: $REMOTE_VERSION (local: $LOCAL_VERSION)"
             echo "Updating validator..."
-
-            pm2 delete "$PROCESS_NAME"
             
             branch=$(git rev-parse --abbrev-ref HEAD)
             if git pull origin "$branch"; then
+                # Pull updates for autoppia_iwa_module as well
+                cd autoppia_iwa_module
+                git pull origin main
+                cd ..
+
+                # Activate the Python environment (adjust if your path differs)
+                source validator_env/bin/activate
+
+                # Reinstall local modules
                 pip install -e .
-                bash deploy.sh
+                pip install -e autoppia_iwa_module
+
+                # Restart (or start) the validator in PM2
+                pm2 restart "$PROCESS_NAME" || pm2 start neurons/validator.py \
+                    --name "$PROCESS_NAME" \
+                    --interpreter python \
+                    -- \
+                    --netuid 36 \
+                    --subtensor.network finney \
+                    --wallet.name your_coldkey \
+                    --wallet.hotkey your_hotkey
+
+                echo "Redeployment completed."
             else
                 echo "git pull failed. Please resolve conflicts manually."
             fi
@@ -45,6 +67,6 @@ while true; do
         fi
     fi
     
-    echo "Checking Version. Local:$LOCAL_VERSION. Remote:$REMOTE_VERSION"
+    echo "Checking again in $SLEEP_INTERVAL seconds. Local:$LOCAL_VERSION, Remote:$REMOTE_VERSION"
     sleep $SLEEP_INTERVAL
 done
