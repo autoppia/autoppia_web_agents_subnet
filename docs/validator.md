@@ -135,7 +135,6 @@ DEMO_WEBS_STARTING_PORT=8000
   - Default: `http://localhost:6000`
   - You can modify this if running the LLM on a different server
   - Example remote setup: `http://your-llm-server_ip:port`
-  - _Note: The server hosting the LLM must have CUDA 12.6 installed_
 - **`DEMO_WEBS_ENDPOINT`**: The endpoint where your demo web projects are deployed
   - Default: `http://localhost`
   - You can modify this if running the demo webs on a different server
@@ -172,6 +171,5 @@ Contact **@Daryxx**, **@Riiveer**, or **@Miguelik** on Discord
 ## Important Notes
 
 - For optimal performance, use bare metal GPU
-- Verify CUDA 12.6 installation for local LLM
 - Demo webs require Docker and Docker Compose
 - All components can be deployed on separate machines
