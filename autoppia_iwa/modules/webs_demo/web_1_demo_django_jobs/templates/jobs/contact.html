@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}
+    Contact Us
+{% endblock %}
+
+{% block content %}
+    <section class="contact-page my-5">
+        <div class="container">
+            <h1 class="my-4 text-center">Contact Us</h1>
+            <div class="row">
+                <div class="col-md-6">
+                    <h3>Send Us a Message</h3>
+                    <div class="card shadow-sm">
+                        <div class="card-body">
+                            <form method="post" action="{% url 'jobs:contact' %}">
+                                {% csrf_token %}
+                                <div class="form-group">
+                                    <label for="name">Your Name</label>
+                                    <input type="text" id="name" name="name" class="form-control"
+                                           placeholder="Enter your name" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="email">Your Email</label>
+                                    <input type="email" id="email" name="email" class="form-control"
+                                           placeholder="Enter your email" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="message">Your Message</label>
+                                    <textarea id="message" name="message" class="form-control" rows="5"
+                                              placeholder="Write your message" required></textarea>
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-block mt-3">Submit</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <h3>Contact Information</h3>
+                    <div class="card shadow-sm">
+                        <div class="card-body">
+                            <p><strong>Email:</strong> support@example.com</p>
+                            <p><strong>Phone:</strong> +123 456 7890</p>
+                            <p><strong>Address:</strong> 123 Job Portal St., City, Country</p>
+                        </div>
+                    </div>
+
+                    <div class="card shadow-sm mt-4">
+                        <div class="card-body p-0">
+                            <h4>Our Location</h4>
+                            <!-- Embed a Google Map -->
+                            <iframe
+                                    src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3151.835434509372!2d144.9537353153168!3d-37.81627974202196!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x6ad642af0f11fd81%3A0xf4c0cbbadeffbce9!2sOnline%20Job%20Portal!5e0!3m2!1sen!2s!4v1614721792680!5m2!1sen!2s"
+                                    width="100%"
+                                    height="300"
+                                    style="border:0;"
+                                    allowfullscreen=""
+                                    loading="lazy">
+                            </iframe>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+{% endblock %}

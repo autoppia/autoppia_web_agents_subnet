@@ -1,0 +1,3246 @@
+{
+    "tasks": [
+        {
+            "prompt": "Click on the 'Register' button in the header, then select 'Employee' to navigate to the employee registration page.",
+            "domain": "localhost:8000",
+            "url": "http://localhost:8000/",
+            "tests": [
+                {
+                    "description": "Verify if the backend emitted the specified event",
+                    "test_type": "backend",
+                    "event_name": "registration"
+                },
+                {
+                    "description": "Find keywords in the current HTML content",
+                    "test_type": "frontend",
+                    "keywords": [
+                        "Register",
+                        "Employee",
+                        "Employers",
+                        "Login"
+                    ]
+                },
+                {
+                    "description": "Check if the backend logged a page view event for the specified URL",
+                    "test_type": "backend",
+                    "page_view_url": "/employee/register"
+                }
+            ],
+            "milestones": null,
+            "web_analysis": null,
+            "actions": [
+                {
+                    "selector": null,
+                    "action": {
+                        "type": "navigate",
+                        "value": null,
+                        "url": "http://localhost:8000/",
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "navbar-toggler navbar-toggler-right",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "dropdown-toggle",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "pages",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "hover",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "dropdown-item",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Register",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Employee",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                }
+            ]
+        },
+        {
+            "prompt": "Click on the 'Login' button in the header to access the login page for the job portal system.",
+            "domain": "localhost:8000",
+            "url": "http://localhost:8000/",
+            "tests": [
+                {
+                    "description": "Check if the backend logged a page view event for the specified URL",
+                    "test_type": "backend",
+                    "page_view_url": "/login"
+                }
+            ],
+            "milestones": null,
+            "web_analysis": null,
+            "actions": [
+                {
+                    "selector": null,
+                    "action": {
+                        "type": "navigate",
+                        "value": null,
+                        "url": "http://localhost:8000/",
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "header",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "hover",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "href",
+                        "value": "/login",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                }
+            ]
+        },
+        {
+            "prompt": "Click the 'Apply for this job' button to submit an application for the Software Tester internship.",
+            "domain": "localhost:8000",
+            "url": "http://localhost:8000/",
+            "tests": [
+                {
+                    "description": "Verify if the backend emitted the specified event",
+                    "test_type": "backend",
+                    "event_name": "job_application"
+                },
+                {
+                    "description": "Find keywords in the current HTML content",
+                    "test_type": "frontend",
+                    "keywords": [
+                        "Thank you",
+                        "Application Successful",
+                        "Applied for the position"
+                    ]
+                },
+                {
+                    "description": "Check if the backend logged a page view event for the specified URL",
+                    "test_type": "backend",
+                    "page_view_url": "/job/6"
+                }
+            ],
+            "milestones": null,
+            "web_analysis": null,
+            "actions": [
+                {
+                    "selector": null,
+                    "action": {
+                        "type": "navigate",
+                        "value": null,
+                        "url": "http://localhost:8000/",
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Software Tester",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "hover",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Software Tester",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "href",
+                        "value": "/jobs/1",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "btn btn-outline-light-primary job-main-form__button",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                }
+            ]
+        },
+        {
+            "prompt": "Hover over the 'Register' link in the header and click 'Employers' to navigate to the employer registration page.",
+            "domain": "localhost:8000",
+            "url": "http://localhost:8000/",
+            "tests": [
+                {
+                    "description": "Verify if the backend emitted the specified event",
+                    "test_type": "backend",
+                    "event_name": "job_application"
+                },
+                {
+                    "description": "Find keywords in the current HTML content",
+                    "test_type": "frontend",
+                    "keywords": [
+                        "Employers",
+                        "Register",
+                        "Employer registration page"
+                    ]
+                },
+                {
+                    "description": "Check if the backend logged a page view event for the specified URL",
+                    "test_type": "backend",
+                    "page_view_url": "/employer/register"
+                }
+            ],
+            "milestones": null,
+            "web_analysis": null,
+            "actions": [
+                {
+                    "selector": null,
+                    "action": {
+                        "type": "navigate",
+                        "value": null,
+                        "url": "http://localhost:8000/",
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "navbarSupportedContent",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "pages",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "hover",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Employers",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                }
+            ]
+        },
+        {
+            "prompt": "Fill out the contact form by entering your name, email, and message, then submit the form to send your message to the job portal.",
+            "domain": "localhost:8000",
+            "url": "http://localhost:8000/",
+            "tests": [
+                {
+                    "description": "Find keywords in the current HTML content",
+                    "test_type": "frontend",
+                    "keywords": [
+                        "Home",
+                        "About Us",
+                        "Contact",
+                        "Register",
+                        "Employee",
+                        "Employers",
+                        "Login",
+                        "Navigation",
+                        "Header",
+                        "Logo",
+                        "job",
+                        "employment",
+                        "work",
+                        "occupation",
+                        "Online Itsourcecode Portal",
+                        "Jobs System 2021"
+                    ]
+                }
+            ],
+            "milestones": null,
+            "web_analysis": null,
+            "actions": [
+                {
+                    "selector": null,
+                    "action": {
+                        "type": "navigate",
+                        "value": null,
+                        "url": "http://localhost:8000/",
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Contact",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "name",
+                        "value": "name",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "name",
+                        "value": "email",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "name",
+                        "value": "message",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "job-main-form",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "job-main-form__button",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                }
+            ]
+        },
+        {
+            "prompt": "Use the navigation menu to explore different sections of the website, such as About Us, Register, or Login, to find more information or to register for an account.",
+            "domain": "localhost:8000",
+            "url": "http://localhost:8000/",
+            "tests": [
+                {
+                    "description": "Find keywords in the current HTML content",
+                    "test_type": "frontend",
+                    "keywords": [
+                        "About Us",
+                        "Register",
+                        "Employee",
+                        "Employers",
+                        "Login"
+                    ]
+                },
+                {
+                    "description": "Check if the backend logged a page view event for the specified URL",
+                    "test_type": "backend",
+                    "page_view_url": "/"
+                }
+            ],
+            "milestones": null,
+            "web_analysis": null,
+            "actions": [
+                {
+                    "selector": null,
+                    "action": {
+                        "type": "navigate",
+                        "value": null,
+                        "url": "http://localhost:8000/",
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "href",
+                        "value": "/about/",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "navbar-toggler",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "dropdown-toggle",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "href",
+                        "value": "/employee/register",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "navbar-toggler navbar-toggler-right",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "href",
+                        "value": "/login",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                }
+            ]
+        },
+        {
+            "prompt": "Navigate to the 'About Us' section by clicking on the 'About Us' link in the header menu.",
+            "domain": "localhost:8000",
+            "url": "http://localhost:8000/",
+            "tests": [
+                {
+                    "description": "Check if the backend logged a page view event for the specified URL",
+                    "test_type": "backend",
+                    "page_view_url": "/about/"
+                },
+                {
+                    "description": "Find keywords in the current HTML content",
+                    "test_type": "frontend",
+                    "keywords": [
+                        "About Us",
+                        "Jobs",
+                        "Employment",
+                        "Online Itsourcecode Portal"
+                    ]
+                }
+            ],
+            "milestones": null,
+            "web_analysis": null,
+            "actions": [
+                {
+                    "selector": null,
+                    "action": {
+                        "type": "navigate",
+                        "value": null,
+                        "url": "http://localhost:8000/",
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "navbar-brand",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "nav-link",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                }
+            ]
+        },
+        {
+            "prompt": "Apply for the Software Engineer internship by clicking the 'Apply for this job' button on the job listing page.",
+            "domain": "localhost:8000",
+            "url": "http://localhost:8000/",
+            "tests": [
+                {
+                    "description": "Verify if the backend emitted the specified event",
+                    "test_type": "backend",
+                    "event_name": "job_application"
+                },
+                {
+                    "description": "Find keywords in the current HTML content",
+                    "test_type": "frontend",
+                    "keywords": [
+                        "Thank you",
+                        "Application Submitted",
+                        "Success"
+                    ]
+                }
+            ],
+            "milestones": null,
+            "web_analysis": null,
+            "actions": [
+                {
+                    "selector": null,
+                    "action": {
+                        "type": "navigate",
+                        "value": null,
+                        "url": "http://localhost:8000/",
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "profession",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "location",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "job-main-form__button",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "xpathSelector",
+                        "attribute": null,
+                        "value": "//a[contains(text(), 'Software Engineer') and ancestor::div[contains(@class, 'featured')]]",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Software Engineer",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "xpathSelector",
+                        "attribute": null,
+                        "value": "//button[contains(text(), 'Apply for this job')]",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                }
+            ]
+        },
+        {
+            "prompt": "Apply for the Product Manager internship by clicking the 'Apply for this job' button in the job listing section.",
+            "domain": "localhost:8000",
+            "url": "http://localhost:8000/",
+            "tests": [
+                {
+                    "description": "Verify if the backend emitted the specified event",
+                    "test_type": "backend",
+                    "event_name": "job_application"
+                },
+                {
+                    "description": "Find keywords in the current HTML content",
+                    "test_type": "frontend",
+                    "keywords": [
+                        "Application Successful",
+                        "Thank you for applying",
+                        "We have received your application"
+                    ]
+                }
+            ],
+            "milestones": null,
+            "web_analysis": null,
+            "actions": [
+                {
+                    "selector": null,
+                    "action": {
+                        "type": "navigate",
+                        "value": null,
+                        "url": "http://localhost:8000/",
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "job-main-form",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "profession",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "location",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "job-main-form__button",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "xpathSelector",
+                        "attribute": null,
+                        "value": "//h5[contains(text(), 'Product Manager')]",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "href",
+                        "value": "/jobs/4",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Apply for this job",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                }
+            ]
+        },
+        {
+            "prompt": "Register as an employee or employer by navigating to the 'Register' dropdown in the header and selecting the appropriate option.",
+            "domain": "localhost:8000",
+            "url": "http://localhost:8000/",
+            "tests": [
+                {
+                    "description": "Verify if the backend emitted the specified event",
+                    "test_type": "backend",
+                    "event_name": "registration"
+                },
+                {
+                    "description": "Find keywords in the current HTML content",
+                    "test_type": "frontend",
+                    "keywords": [
+                        "Thank you",
+                        "Registration Successful",
+                        "Welcome Aboard"
+                    ]
+                }
+            ],
+            "milestones": null,
+            "web_analysis": null,
+            "actions": [
+                {
+                    "selector": null,
+                    "action": {
+                        "type": "navigate",
+                        "value": null,
+                        "url": "http://localhost:8000/",
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Register",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Register",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "hover",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Employee",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                }
+            ]
+        },
+        {
+            "prompt": "Click the 'Register' link in the header and select 'Employee' from the dropdown menu to register as an employee.",
+            "domain": "localhost:8000",
+            "url": "http://localhost:8000/",
+            "tests": [
+                {
+                    "description": "Verify if the backend emitted the specified event",
+                    "test_type": "backend",
+                    "event_name": "registration"
+                },
+                {
+                    "description": "Find keywords in the current HTML content",
+                    "test_type": "frontend",
+                    "keywords": [
+                        "Register",
+                        "Employee",
+                        "Employers",
+                        "Thank you",
+                        "Registration Successful"
+                    ]
+                },
+                {
+                    "description": "Check if the backend logged a page view event for the specified URL",
+                    "test_type": "backend",
+                    "page_view_url": "/employee/register"
+                }
+            ],
+            "milestones": null,
+            "web_analysis": null,
+            "actions": [
+                {
+                    "selector": null,
+                    "action": {
+                        "type": "navigate",
+                        "value": null,
+                        "url": "http://localhost:8000/",
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "navbar-brand",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "dropdown-item",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "navbarSupportedContent",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Register",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "hover",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Employee",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                }
+            ]
+        },
+        {
+            "prompt": "Fill in the 'Profession' and 'Location' fields in the job search form, then click the submit button to search for jobs matching your criteria.",
+            "domain": "localhost:8000",
+            "url": "http://localhost:8000/",
+            "tests": [
+                {
+                    "description": "Verify if the backend emitted the specified event",
+                    "test_type": "backend",
+                    "event_name": "search"
+                },
+                {
+                    "description": "Find keywords in the current HTML content",
+                    "test_type": "frontend",
+                    "keywords": [
+                        "Results",
+                        "Jobs Found",
+                        "Search Completed"
+                    ]
+                },
+                {
+                    "description": "Check if the backend logged a page view event for the specified URL",
+                    "test_type": "backend",
+                    "page_view_url": "/search"
+                }
+            ],
+            "milestones": null,
+            "web_analysis": null,
+            "actions": [
+                {
+                    "selector": null,
+                    "action": {
+                        "type": "navigate",
+                        "value": null,
+                        "url": "http://localhost:8000/",
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "profession",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "location",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Position",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Location",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Search",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                }
+            ]
+        },
+        {
+            "prompt": "Click on the 'Register' dropdown in the header and select 'Employee' to register as an employee on the platform.",
+            "domain": "localhost:8000",
+            "url": "http://localhost:8000/",
+            "tests": [
+                {
+                    "description": "Verify if the backend emitted the specified event",
+                    "test_type": "backend",
+                    "event_name": "registration"
+                },
+                {
+                    "description": "Find keywords in the current HTML content",
+                    "test_type": "frontend",
+                    "keywords": [
+                        "Thank you",
+                        "Registration Successful",
+                        "Welcome Aboard"
+                    ]
+                },
+                {
+                    "description": "Check if the backend logged a page view event for the specified URL",
+                    "test_type": "backend",
+                    "page_view_url": "/employee/register"
+                }
+            ],
+            "milestones": null,
+            "web_analysis": null,
+            "actions": [
+                {
+                    "selector": null,
+                    "action": {
+                        "type": "navigate",
+                        "value": null,
+                        "url": "http://localhost:8000/",
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "pages",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "navbar-toggler navbar-toggler-right",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Register",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Employee",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                }
+            ]
+        },
+        {
+            "prompt": "Fill out the application form by clicking the 'Apply for this job' button to apply for the Software Engineer internship.",
+            "domain": "localhost:8000",
+            "url": "http://localhost:8000/",
+            "tests": [
+                {
+                    "description": "Verify if the backend emitted the specified event",
+                    "test_type": "backend",
+                    "event_name": "job_application"
+                },
+                {
+                    "description": "Find keywords in the current HTML content",
+                    "test_type": "frontend",
+                    "keywords": [
+                        "Thank you",
+                        "Application Successful",
+                        "Submitted"
+                    ]
+                },
+                {
+                    "description": "Check if the backend logged a page view event for the specified URL",
+                    "test_type": "backend",
+                    "page_view_url": "/apply-for-job"
+                }
+            ],
+            "milestones": null,
+            "web_analysis": null,
+            "actions": [
+                {
+                    "selector": null,
+                    "action": {
+                        "type": "navigate",
+                        "value": null,
+                        "url": "http://localhost:8000/",
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Software Engineer Internship",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "job-main-form",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "profession",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "location",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "job-main-form__button",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "profession",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "location",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "job-main-form__button",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                }
+            ]
+        },
+        {
+            "prompt": "Click on the 'Register' dropdown in the header, then select 'Employee' to navigate to the employee registration page.",
+            "domain": "localhost:8000",
+            "url": "http://localhost:8000/",
+            "tests": [
+                {
+                    "description": "Verify if the backend emitted the specified event",
+                    "test_type": "backend",
+                    "event_name": "registration"
+                },
+                {
+                    "description": "Find keywords in the current HTML content",
+                    "test_type": "frontend",
+                    "keywords": [
+                        "Employee",
+                        "Employers",
+                        "Register",
+                        "Login"
+                    ]
+                },
+                {
+                    "description": "Check if the backend logged a page view event for the specified URL",
+                    "test_type": "backend",
+                    "page_view_url": "/employee/register"
+                }
+            ],
+            "milestones": null,
+            "web_analysis": null,
+            "actions": [
+                {
+                    "selector": null,
+                    "action": {
+                        "type": "navigate",
+                        "value": null,
+                        "url": "http://localhost:8000/",
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "register-dropdown",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Register",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "hover",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "dropdown-menu",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "href",
+                        "value": "/employee/register",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "href",
+                        "value": "/employer/register",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "navbar-toggler",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "pages",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "href",
+                        "value": "/employee/register",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                }
+            ]
+        },
+        {
+            "prompt": "Fill out the registration form by entering your first name, last name, email, and creating a password. Select your gender and ensure the password-based authentication option is checked before clicking the 'Register' button to submit your information.",
+            "domain": "localhost:8000",
+            "url": "http://localhost:8000/",
+            "tests": [
+                {
+                    "description": "Find keywords in the current HTML content",
+                    "test_type": "frontend",
+                    "keywords": [
+                        "Home",
+                        "About Us",
+                        "Contact",
+                        "Register",
+                        "Employee",
+                        "Employers",
+                        "Login",
+                        "Navigation",
+                        "Header",
+                        "Logo",
+                        "job",
+                        "employment",
+                        "work",
+                        "occupation",
+                        "Online Itsourcecode Portal",
+                        "Jobs System 2021"
+                    ]
+                }
+            ],
+            "milestones": null,
+            "web_analysis": null,
+            "actions": [
+                {
+                    "selector": null,
+                    "action": {
+                        "type": "navigate",
+                        "value": null,
+                        "url": "http://localhost:8000/",
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "job-main-form",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "profession",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "location",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "type",
+                        "value": "submit",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "navbar-brand",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Register",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "href",
+                        "value": "/employee/register",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "name",
+                        "value": "lastName",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "job-main-form",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "profession",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "location",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "job-main-form__button",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Register",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Employer",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "password",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "genderDropdown",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "option",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Login",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Username",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Password",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Log In",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "job-main-form",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "profession",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "location",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "job-main-form__button",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                }
+            ]
+        },
+        {
+            "prompt": "Click on the 'Apply for this job' button to submit an application for the UX Designer internship at Creative Minds.",
+            "domain": "localhost:8000",
+            "url": "http://localhost:8000/",
+            "tests": [
+                {
+                    "description": "Find keywords in the current HTML content",
+                    "test_type": "frontend",
+                    "keywords": [
+                        "Apply for this job"
+                    ]
+                }
+            ],
+            "milestones": null,
+            "web_analysis": null,
+            "actions": [
+                {
+                    "selector": null,
+                    "action": {
+                        "type": "navigate",
+                        "value": null,
+                        "url": "http://localhost:8000/",
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "xpathSelector",
+                        "attribute": null,
+                        "value": "//section[@class='bg-success']//h5[text()='UX Designer']",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Apply for this job",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                }
+            ]
+        },
+        {
+            "prompt": "Hover over the 'Register' option in the navigation header, then click on 'Employers' to register as an employer on the website.",
+            "domain": "localhost:8000",
+            "url": "http://localhost:8000/",
+            "tests": [
+                {
+                    "description": "Verify if the backend emitted the specified event",
+                    "test_type": "backend",
+                    "event_name": "job_application"
+                },
+                {
+                    "description": "Find keywords in the current HTML content",
+                    "test_type": "frontend",
+                    "keywords": [
+                        "Employer",
+                        "Register",
+                        "Job Application",
+                        "Welcome"
+                    ]
+                },
+                {
+                    "description": "Check if the backend logged a page view event for the specified URL",
+                    "test_type": "backend",
+                    "page_view_url": "/employer/register"
+                }
+            ],
+            "milestones": null,
+            "web_analysis": null,
+            "actions": [
+                {
+                    "selector": null,
+                    "action": {
+                        "type": "navigate",
+                        "value": null,
+                        "url": "http://localhost:8000/",
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "navbar-brand",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "hover",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "href",
+                        "value": "#",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                }
+            ]
+        },
+        {
+            "prompt": "Click on the 'Register' dropdown in the navigation menu and select 'Employee' to start the employee registration process.",
+            "domain": "localhost:8000",
+            "url": "http://localhost:8000/",
+            "tests": [
+                {
+                    "description": "Verify if the backend emitted the specified event",
+                    "test_type": "backend",
+                    "event_name": "registration"
+                },
+                {
+                    "description": "Find keywords in the current HTML content",
+                    "test_type": "frontend",
+                    "keywords": [
+                        "Welcome",
+                        "Registration Successful",
+                        "Thank you"
+                    ]
+                },
+                {
+                    "description": "Check if the backend logged a page view event for the specified URL",
+                    "test_type": "backend",
+                    "page_view_url": "/employee/register"
+                }
+            ],
+            "milestones": null,
+            "web_analysis": null,
+            "actions": [
+                {
+                    "selector": null,
+                    "action": {
+                        "type": "navigate",
+                        "value": null,
+                        "url": "http://localhost:8000/",
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "navbarSupportedContent",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "pages",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Register",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Employee",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                }
+            ]
+        },
+        {
+            "prompt": "Fill out the job search form by entering a position in the 'Position' field and a location in the 'Location' field, then click the search button to find relevant job listings.",
+            "domain": "localhost:8000",
+            "url": "http://localhost:8000/",
+            "tests": [
+                {
+                    "description": "Verify if the backend emitted the specified event",
+                    "test_type": "backend",
+                    "event_name": "search"
+                },
+                {
+                    "description": "Find keywords in the current HTML content",
+                    "test_type": "frontend",
+                    "keywords": [
+                        "Results",
+                        "Jobs Found",
+                        "Search Completed"
+                    ]
+                },
+                {
+                    "description": "Check if the backend logged a page view event for the specified URL",
+                    "test_type": "backend",
+                    "page_view_url": "/search"
+                }
+            ],
+            "milestones": null,
+            "web_analysis": null,
+            "actions": [
+                {
+                    "selector": null,
+                    "action": {
+                        "type": "navigate",
+                        "value": null,
+                        "url": "http://localhost:8000/",
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "profession",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "location",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "job-main-form",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                }
+            ]
+        },
+        {
+            "prompt": "Apply for the Data Scientist internship at DataTech by clicking the 'Apply for this job' button on the job details page.",
+            "domain": "localhost:8000",
+            "url": "http://localhost:8000/",
+            "tests": [
+                {
+                    "description": "Find keywords in the current HTML content",
+                    "test_type": "frontend",
+                    "keywords": [
+                        "Apply for this job"
+                    ]
+                }
+            ],
+            "milestones": null,
+            "web_analysis": null,
+            "actions": [
+                {
+                    "selector": null,
+                    "action": {
+                        "type": "navigate",
+                        "value": null,
+                        "url": "http://localhost:8000/",
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "job-main-form__button",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "profession",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "location",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "xpathSelector",
+                        "attribute": null,
+                        "value": "//a[contains(text(), 'Data Scientist')]",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Data Scientist",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Apply for this job",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                }
+            ]
+        },
+        {
+            "prompt": "Register as an employee by selecting 'Employee' from the 'Register' dropdown menu in the header.",
+            "domain": "localhost:8000",
+            "url": "http://localhost:8000/",
+            "tests": [
+                {
+                    "description": "Verify if the backend emitted the specified event",
+                    "test_type": "backend",
+                    "event_name": "registration"
+                },
+                {
+                    "description": "Find keywords in the current HTML content",
+                    "test_type": "frontend",
+                    "keywords": [
+                        "Thank you",
+                        "Registration Successful",
+                        "Welcome Aboard"
+                    ]
+                }
+            ],
+            "milestones": null,
+            "web_analysis": null,
+            "actions": [
+                {
+                    "selector": null,
+                    "action": {
+                        "type": "navigate",
+                        "value": null,
+                        "url": "http://localhost:8000/",
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "navbar-toggler",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "dropdown-toggle",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Register",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "href",
+                        "value": "/employee/register",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                }
+            ]
+        },
+        {
+            "prompt": "Click on the 'Register' link in the header menu and then select 'Employee' to register as an employee.",
+            "domain": "localhost:8000",
+            "url": "http://localhost:8000/",
+            "tests": [
+                {
+                    "description": "Verify if the backend emitted the specified event",
+                    "test_type": "backend",
+                    "event_name": "registration"
+                },
+                {
+                    "description": "Find keywords in the current HTML content",
+                    "test_type": "frontend",
+                    "keywords": [
+                        "Thank you",
+                        "Registration Successful",
+                        "Welcome Aboard"
+                    ]
+                }
+            ],
+            "milestones": null,
+            "web_analysis": null,
+            "actions": [
+                {
+                    "selector": null,
+                    "action": {
+                        "type": "navigate",
+                        "value": null,
+                        "url": "http://localhost:8000/",
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "navbar-toggler",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "dropdown-toggle",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "dropdown-item",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "navbarToggler",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "dropdown-item",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                }
+            ]
+        },
+        {
+            "prompt": "Fill in the email and password fields in the login form and click the 'Log in' button to authenticate.",
+            "domain": "localhost:8000",
+            "url": "http://localhost:8000/",
+            "tests": [],
+            "milestones": null,
+            "web_analysis": null,
+            "actions": [
+                {
+                    "selector": null,
+                    "action": {
+                        "type": "navigate",
+                        "value": null,
+                        "url": "http://localhost:8000/",
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Login",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "name",
+                        "value": "email",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "name",
+                        "value": "password",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Log In",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "href",
+                        "value": "/login",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                }
+            ]
+        },
+        {
+            "prompt": "Fill out the registration form by entering the company name, address, email, and setting a password. Confirm the password and select the password-based authentication option before clicking the 'Register' button.",
+            "domain": "localhost:8000",
+            "url": "http://localhost:8000/",
+            "tests": [],
+            "milestones": null,
+            "web_analysis": null,
+            "actions": [
+                {
+                    "selector": null,
+                    "action": {
+                        "type": "navigate",
+                        "value": null,
+                        "url": "http://localhost:8000/",
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "job-main-form",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "profession",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "navbar-brand",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "navbarDropdown",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "href",
+                        "value": "/employer/register",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "email",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Register",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Employee",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "password",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "navbar-brand",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "dropdown-menu",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "scroll",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "dropdown-item",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "password",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "id",
+                        "value": "confirm-password",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "type",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "href",
+                        "value": "/login",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "tagContainsSelector",
+                        "attribute": null,
+                        "value": "Password-based Authentication",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "navbar-toggler",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "dropdown-menu",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "hover",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "href",
+                        "value": "/employee/register",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                }
+            ]
+        },
+        {
+            "prompt": "Navigate to the 'About Us' and 'Contact' sections of the website by clicking on the corresponding links in the header menu.",
+            "domain": "localhost:8000",
+            "url": "http://localhost:8000/",
+            "tests": [
+                {
+                    "description": "Check if the backend logged a page view event for the specified URL",
+                    "test_type": "backend",
+                    "page_view_url": "/about/"
+                },
+                {
+                    "description": "Check if the backend logged a page view event for the specified URL",
+                    "test_type": "backend",
+                    "page_view_url": "/contact/"
+                }
+            ],
+            "milestones": null,
+            "web_analysis": null,
+            "actions": [
+                {
+                    "selector": null,
+                    "action": {
+                        "type": "navigate",
+                        "value": null,
+                        "url": "http://localhost:8000/",
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "href",
+                        "value": "/about/",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "navbar-brand",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "navbar-toggler",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                },
+                {
+                    "selector": {
+                        "type": "attributeValueSelector",
+                        "attribute": "class",
+                        "value": "nav-item",
+                        "case_sensitive": false
+                    },
+                    "action": {
+                        "type": "click",
+                        "value": null,
+                        "url": null,
+                        "source_selector": null,
+                        "target_selector": null
+                    }
+                }
+            ]
+        }
+    ]
+}

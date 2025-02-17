@@ -1,0 +1,77 @@
+<div id="products" class="page-layout carded fullwidth inner-scroll">
+    <!-- TOP BACKGROUND -->
+    <div class="top-bg accent"></div>
+    <!-- / TOP BACKGROUND -->
+    <!-- CENTER -->
+    <div class="center">
+        <!-- HEADER -->
+        <div class="header accent"
+            fxLayout="column" fxLayoutAlign="center center"
+            fxLayout.gt-sm="row" fxLayoutAlign.gt-sm="space-between center">
+            <!-- APP TITLE -->
+            <div class="logo mb-24 mb-md-0"
+                fxLayout="row" fxLayoutAlign="start center">
+                <mat-icon class="logo-icon s-32 mr-16" [@animate]="{value:'*',params:{delay:'100ms',scale:'0.2'}}">
+                shopping_basket
+                </mat-icon>
+                <span class="logo-text h1" [@animate]="{value:'*',params:{delay:'100ms',x:'-25px'}}">
+                Department
+                </span>
+            </div>
+            <!-- / APP TITLE -->
+            <!-- ADD BUTTON -->
+            <button mat-raised-button
+                [routerLink]="'/apps/department'"
+                class="add-product-button fuse-white mt-24 mt-md-0">
+            <span>ADD NEW DEPARTMENT</span>
+            </button>
+            <!-- / ADD BUTTON -->
+        </div>
+        <!-- / HEADER -->
+        <!-- CONTENT CARD -->
+        <div class="content-card">
+            <!-- CONTENT -->
+            <div class="content">
+                <ngx-datatable
+                class="material"
+                [rows]="rows || []"
+                [loadingIndicator]="loadingIndicator"
+                [columnMode]="'force'"
+                [headerHeight]="48"
+                [footerHeight]="56"
+                [rowHeight]="'auto'"
+                [scrollbarH]="true"
+                [reorderable]="reorderable"
+                [selectionType]="'checkbox'"
+                [limit]="10">
+                <ngx-datatable-column [width]="48"
+                [canAutoResize]="false"
+                [sortable]="false">
+                <ng-template ngx-datatable-header-template let-value="value" let-allRowsSelected="allRowsSelected"
+                let-selectFn="selectFn">
+                <mat-checkbox [checked]="allRowsSelected" (change)="selectFn(!allRowsSelected)"></mat-checkbox>
+                </ng-template>
+                <ng-template ngx-datatable-cell-template let-value="value" let-isSelected="isSelected"
+                let-onCheckboxChangeFn="onCheckboxChangeFn">
+                <mat-checkbox [checked]="isSelected" (change)="onCheckboxChangeFn($event)"></mat-checkbox>
+                </ng-template>
+                </ngx-datatable-column>
+            <ngx-datatable-column name="Id" prop="id"></ngx-datatable-column>
+            <ngx-datatable-column name="Name" prop="name"></ngx-datatable-column>
+            <ngx-datatable-column name="Location" prop="location"></ngx-datatable-column>
+                <ngx-datatable-column name="Actions" prop="id">
+                <ng-template ngx-datatable-cell-template let-rowIndex="rowIndex" let-value="value"
+                    let-row="row">
+                    <a mat-raised-button class="reference-button mt-sm-0" [routerLink]="'/apps/department/' + value">
+                        <mat-icon class="mr-8">create</mat-icon>
+                    </a>
+                    <a mat-raised-button class="reference-button mt-sm-0" (click)="deleteDepartment(value)">
+                        <mat-icon class="mr-8">delete</mat-icon>
+                    </a>
+                </ng-template>
+                </ngx-datatable-column>
+                </ngx-datatable>
+            </div>
+        </div>
+    </div>
+</div>

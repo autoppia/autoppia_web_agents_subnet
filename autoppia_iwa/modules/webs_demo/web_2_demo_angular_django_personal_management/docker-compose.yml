@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  # -------------------------------
+  # POSTGRES
+  # -------------------------------
+  web2_demo_db:
+    image: postgres:latest
+    container_name: web2_demo_db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=supersecret
+      - POSTGRES_DB=web2_personal_mgmt
+    volumes:
+      - web2_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+
+  # -------------------------------
+  # BACKEND (Django)
+  # -------------------------------
+  web2_demo_backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: web2_demo_backend
+    ports:
+      - "8002:8002"
+#    env_file:
+#      - './backend/.env'
+    depends_on:
+      - web2_demo_db
+
+  # -------------------------------
+  # FRONTEND (Angular)
+  # -------------------------------
+  web2_demo_frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: web2_demo_frontend
+    ports:
+      - "4200:80"  
+    depends_on:
+      - web2_demo_backend
+
+volumes:
+  web2_postgres_data:
