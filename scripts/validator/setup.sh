@@ -51,6 +51,8 @@ install_python_requirements() {
   python3.11 -m playwright install || handle_error "Failed to install Playwright"
   playwright install-deps || handle_error "Failed to install Playwright dependencies"
   success_msg "Python dependencies and Playwright installed successfully."
+  playwright install 
+  
 }
 
 install_current_module() {
