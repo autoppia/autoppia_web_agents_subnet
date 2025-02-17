@@ -27,106 +27,109 @@ MIN_SCORE_FOR_CORRECT_FORMAT = 0.1
 
 
 async def forward(self) -> None:
-    bt.logging.info("Starting forward step.")
-
-    # 1) Get Demo Web Projects
-    demo_web_projects = get_demo_webs_projects()
-    bt.logging.debug(f"Retrieved {len(demo_web_projects)} demo web projects.")
-
-    # 2) Generate a random web URL
     try:
-        demo_web_project = _get_random_demo_web_project(demo_web_projects)
-    except Exception as e:
-        bt.logging.error(f"Failed to select a demo web project: {e}")
-        return
-    web_url = demo_web_project.frontend_url
-    bt.logging.info(f"Selected demo web project with URL: {web_url}")
+        bt.logging.info("Starting forward step.")
 
-    # 3) Create a pipeline and generate tasks
-    bt.logging.warning(f"Generating tasks for Web Project: '{demo_web_project.name}' ...")
-    tasks_generated:List[Task] = await _generate_tasks_for_url(demo_web_project=demo_web_project)
+        # 1) Get Demo Web Projects
+        demo_web_projects = get_demo_webs_projects()
+        bt.logging.debug(f"Retrieved {len(demo_web_projects)} demo web projects.")
 
-    if not tasks_generated:
-        bt.logging.warning("No tasks generated, skipping forward step.")
-        return
-    bt.logging.info(f"Generated {len(tasks_generated)} tasks for {web_url}")
+        # 2) Generate a random web URL
+        try:
+            demo_web_project = _get_random_demo_web_project(demo_web_projects)
+        except Exception as e:
+            bt.logging.error(f"Failed to select a demo web project: {e}")
+            return
+        web_url = demo_web_project.frontend_url
+        bt.logging.info(f"Selected demo web project with URL: {web_url}")
 
-    for index, task in enumerate(tasks_generated):
-        bt.logging.debug(f"Task #{index}: {task.prompt}")
+        # 3) Create a pipeline and generate tasks
+        bt.logging.warning(f"Generating tasks for Web Project: '{demo_web_project.name}' ...")
+        tasks_generated:List[Task] = await _generate_tasks_for_url(demo_web_project=demo_web_project)
 
-        # 4) Task Cleaning for miner
-        miner_task = _clean_miner_task(task=task)
-        bt.logging.info(f"Miner task: {miner_task}")
+        if not tasks_generated:
+            bt.logging.warning("No tasks generated, skipping forward step.")
+            return
+        bt.logging.info(f"Generated {len(tasks_generated)} tasks for {web_url}")
 
-        # 5) Get random UIDs
-        miner_uids = get_random_uids(self, k=self.config.neuron.sample_size)
-        bt.logging.info(f"Miner UIDs chosen: {miner_uids}")
+        for index, task in enumerate(tasks_generated):
+            bt.logging.debug(f"Task #{index}: {task.prompt}")
 
-        # 6) Build the synapse and send query with a timeout
-        bt.logging.info(f"Sending TaskSynapse to {len(miner_uids)} miners.")
+            # 4) Task Cleaning for miner
+            miner_task = _clean_miner_task(task=task)
+            bt.logging.info(f"Miner task: {miner_task}")
 
-        miner_axons = [self.metagraph.axons[uid] for uid in miner_uids]
-        responses: List[TaskSynapse] = await _dendrite_with_retries(
-            dendrite=self.dendrite,
-            axons=miner_axons,
-            synapse=TaskSynapse(prompt=miner_task.prompt, url=miner_task.url, actions=[]),
-            deserialize=True,
-            timeout=TIMEOUT,
-        )
+            # 5) Get random UIDs
+            miner_uids = get_random_uids(self, k=self.config.neuron.sample_size)
+            bt.logging.info(f"Miner UIDs chosen: {miner_uids}")
 
-        bt.logging.info(f"Received {len(responses)} responses.")
+            # 6) Build the synapse and send query with a timeout
+            bt.logging.info(f"Sending TaskSynapse to {len(miner_uids)} miners.")
 
-        # 7) Construct task solutions and track execution times
-        task_solutions = []
-        execution_times = []
-
-        for miner_uid, response in zip(miner_uids, responses):
-            task_solution = None
-            if response:
-                bt.logging.debug(f"Miner {miner_uid} actions: {response.actions}")
-            else:
-                bt.logging.debug(f"Miner {miner_uid} Response None")
-            try:
-                task_solution = _get_task_solution_from_synapse(
-                    task=task,
-                    synapse=response,
-                    web_agent_id=str(miner_uid),
-                )
-            except Exception as e:
-                bt.logging.error(f"Error in Miner Response Format: {e}")
-                task_solution = TaskSolution(task=task, actions=[], web_agent_id=str(miner_uid))
-
-            task_solutions.append(task_solution)
-
-            process_time = (
-                getattr(response.dendrite, "process_time", TIMEOUT) if response else TIMEOUT
+            miner_axons = [self.metagraph.axons[uid] for uid in miner_uids]
+            responses: List[TaskSynapse] = await _dendrite_with_retries(
+                dendrite=self.dendrite,
+                axons=miner_axons,
+                synapse=TaskSynapse(prompt=miner_task.prompt, url=miner_task.url, actions=[]),
+                deserialize=True,
+                timeout=TIMEOUT,
             )
-            execution_times.append(process_time)
 
-        # 8) Compute rewards
-        rewards: np.ndarray = await get_rewards(
-            self,
-            task_solutions=task_solutions,
-            web_url=web_url,
-            execution_times=execution_times,
-            time_weight=TIME_WEIGHT,  # Example parameter usage
-            min_correct_format_score=MIN_SCORE_FOR_CORRECT_FORMAT  # Example parameter usage
-        )
+            bt.logging.info(f"Received {len(responses)} responses.")
 
-        # Log each miner’s final reward
-        bt.logging.info(f"Miners Final Rewards: {rewards}")
+            # 7) Construct task solutions and track execution times
+            task_solutions = []
+            execution_times = []
 
-        # 9) Update scores
-        self.update_scores(rewards, miner_uids)
-        bt.logging.info("Scores updated for miners")
-        bt.logging.success("Task step completed successfully.")
+            for miner_uid, response in zip(miner_uids, responses):
+                task_solution = None
+                if response:
+                    bt.logging.debug(f"Miner {miner_uid} actions: {response.actions}")
+                else:
+                    bt.logging.debug(f"Miner {miner_uid} Response None")
+                try:
+                    task_solution = _get_task_solution_from_synapse(
+                        task=task,
+                        synapse=response,
+                        web_agent_id=str(miner_uid),
+                    )
+                except Exception as e:
+                    bt.logging.error(f"Error in Miner Response Format: {e}")
+                    task_solution = TaskSolution(task=task, actions=[], web_agent_id=str(miner_uid))
 
+                task_solutions.append(task_solution)
+
+                process_time = (
+                    getattr(response.dendrite, "process_time", TIMEOUT) if response else TIMEOUT
+                )
+                execution_times.append(process_time)
+
+            # 8) Compute rewards
+            rewards: np.ndarray = await get_rewards(
+                self,
+                task_solutions=task_solutions,
+                web_url=web_url,
+                execution_times=execution_times,
+                time_weight=TIME_WEIGHT,  # Example parameter usage
+                min_correct_format_score=MIN_SCORE_FOR_CORRECT_FORMAT  # Example parameter usage
+            )
+
+            # Log each miner’s final reward
+            bt.logging.info(f"Miners Final Rewards: {rewards}")
+
+            # 9) Update scores
+            self.update_scores(rewards, miner_uids)
+            bt.logging.info("Scores updated for miners")
+            bt.logging.success("Task step completed successfully.")
+
+            bt.logging.info(f"Sleeping for {FORWARD_SLEEP_SECONDS}s....")
+            await asyncio.sleep(FORWARD_SLEEP_SECONDS)
+
+        bt.logging.success("Forward step completed successfully.")
         bt.logging.info(f"Sleeping for {FORWARD_SLEEP_SECONDS}s....")
         await asyncio.sleep(FORWARD_SLEEP_SECONDS)
-
-    bt.logging.success("Forward step completed successfully.")
-    bt.logging.info(f"Sleeping for {FORWARD_SLEEP_SECONDS}s....")
-    await asyncio.sleep(FORWARD_SLEEP_SECONDS)
+    except Exception as e:
+        bt.logging.error(f"Error on validation forward: {e}")
 
 
 async def _dendrite_with_retries(dendrite: bt.dendrite, axons: list, synapse: TaskSynapse, deserialize: bool, timeout: float, cnt_attempts=3) -> List[TaskSynapse]:
