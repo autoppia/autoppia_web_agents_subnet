@@ -44,8 +44,9 @@ cp .env.example .env
 3. Install dependencies:
 
 ```bash
-chmod +x scripts/install_dependencies.sh
-./scripts/install_dependencies.sh
+# Validator-specific dependencies
+chmod +x scripts/validator/install_dependencies.sh
+./scripts/validator/install_dependencies.sh
 ```
 
 4. **(Optional)** Install **MongoDB** for caching web analysis results:
@@ -68,8 +69,8 @@ MONGODB_URL="mongodb://localhost:27017"
 Setup the validator:
 
 ```bash
-chmod +x scripts/setup.sh
-./scripts/setup.sh
+chmod +x scripts/validator/setup.sh
+./scripts/validator/setup.sh
 ```
 
 # LLM SETUP
