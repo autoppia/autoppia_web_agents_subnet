@@ -89,7 +89,16 @@ pm2 start autoppia_iwa_module/modules/llm_local/run_local_llm.py --name llm_loca
 **To verify if your LLM is working correctly:**
 
 ```bash
-python3 autoppia_iwa_module/modules/llm_local/test/test.py
+curl -X POST "http://127.0.0.1:6000/generate" \
+     -H "Content-Type: application/json" \
+     -d '{
+           "input": {
+             "text": "Hello, how are you? Explain me who are you, what model are you and what benefits you have. Answer directly and short",
+             "ctx": 256,
+             "llm_kwargs": {},
+             "chat_completion_kwargs": {}
+           }
+         }'
 ```
 
 The local setup uses **Qwen/Qwen2.5-3B-Instruct** model.
