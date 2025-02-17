@@ -30,8 +30,8 @@ git submodule update --init --recursive --remote
 2. Install dependencies:
 
 ```bash
-chmod +x scripts/install_dependencies.sh
-./scripts/install_dependencies.sh
+chmod +x scripts/validator/install_dependencies.sh
+./scripts/validator/install_dependencies.sh
 ```
 
 3. Setup environment:
@@ -89,10 +89,19 @@ pm2 start autoppia_iwa_module/modules/llm_local/run_local_llm.py --name llm_loca
 **To verify if your LLM is working correctly:**
 
 ```bash
-python3 autoppia_iwa_module/modules/llm_local/test/test.py
+curl -X POST "http://127.0.0.1:6000/generate" \
+     -H "Content-Type: application/json" \
+     -d '{
+           "input": {
+             "text": "Hello, how are you? Explain me who are you, what model are you and what benefits you have. Answer directly and short",
+             "ctx": 256,
+             "llm_kwargs": {},
+             "chat_completion_kwargs": {}
+           }
+         }'
 ```
 
-The local setup uses **deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B** model.
+The local setup uses **Qwen/Qwen2.5-3B-Instruct** model.
 
 ## Demo Web Projects Setup
 
@@ -126,7 +135,6 @@ DEMO_WEBS_STARTING_PORT=8000
   - Default: `http://localhost:6000`
   - You can modify this if running the LLM on a different server
   - Example remote setup: `http://your-llm-server_ip:port`
-  - _Note: The server hosting the LLM must have CUDA 12.6 installed_
 - **`DEMO_WEBS_ENDPOINT`**: The endpoint where your demo web projects are deployed
   - Default: `http://localhost`
   - You can modify this if running the demo webs on a different server
@@ -163,6 +171,5 @@ Contact **@Daryxx**, **@Riiveer**, or **@Miguelik** on Discord
 ## Important Notes
 
 - For optimal performance, use bare metal GPU
-- Verify CUDA 12.6 installation for local LLM
 - Demo webs require Docker and Docker Compose
 - All components can be deployed on separate machines
