@@ -47,7 +47,7 @@ chmod +x scripts/install_dependencies.sh
 ./scripts/install_dependencies.sh
 ```
 
-4. **(Optional)** Install **MongoDB** for caching web analysis results:
+4. Install **MongoDB** for caching web analysis results:
 
 ```bash
 chmod +x scripts/validator/install_mongo.sh
@@ -167,13 +167,6 @@ pm2 start neurons/validator.py \
   --wallet.hotkey your_hotkey
 ```
 
-## Installation Paths
-
-- Python environment: **/validator_env**
-- Chrome: **/opt/chrome**
-- ChromeDriver: **/opt/chromedriver**
-- LLM service: **localhost:6000**
-- Demo webs: **localhost:8000**
 
 ## Support
 
