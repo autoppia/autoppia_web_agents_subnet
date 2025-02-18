@@ -86,8 +86,8 @@ cp .env.example .env
 Setup the validator:
 
 ```bash
-chmod +x scripts/setup.sh
-./scripts/setup.sh
+chmod +x scripts/validator/setup.sh
+./scripts/validator/setup.sh
 ```
 
 # LLM SETUP
