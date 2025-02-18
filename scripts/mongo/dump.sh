@@ -12,7 +12,7 @@ set -euo pipefail
 
 HOST="localhost"
 PORT="27017"
-OUTPUT_DIR="$(pwd)/mongo-dump"
+OUTPUT_DIR="$(pwd)/data/mongo-dump"
 
 if ! command -v mongodump >/dev/null 2>&1; then
   echo "[ERROR] mongodump is not installed. Aborting." >&2
