@@ -91,8 +91,8 @@ verify_mongo() {
 
 restore_dump() {
   if [ -d "$DUMP_FOLDER" ]; then
-    echo "[INFO] Restoring MongoDB dump from /dump..."
-    docker exec "${CONTAINER_NAME}" mongorestore /dump || handle_error "Failed to restore MongoDB dump"
+    echo "[INFO] Restoring MongoDB dump from /dump with --drop flag..."
+    docker exec "${CONTAINER_NAME}" mongorestore --drop /dump || handle_error "Failed to restore MongoDB dump"
   else
     echo "[INFO] No dump folder found. Skipping dump restore."
   fi

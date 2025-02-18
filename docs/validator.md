@@ -186,6 +186,19 @@ pm2 start neurons/validator.py \
   --wallet.hotkey your_hotkey
 ```
 
+## Auto Update for Validator
+---
+
+Script for *automatic version control* and *safe updates* of your validator:
+
+bash
+chmod +x scripts/validator/auto_update_validator.sh
+./scripts/validator/auto_update_validator.sh
+
+
+*Note*: If you change something edit the script to match your PM2 configuration (process name, wallet keys) before running it.
+
+The script automatically checks for updates, deploys new versions, and includes *automatic rollback* if the update fails. Runs every *5 minutes* to ensure your validator stays up to date.
 
 ## Support
 

@@ -57,8 +57,12 @@ async def get_rewards(
     eval_weight = 1.0 - time_weight
 
     for eval_score, time_score in zip(evaluation_scores, normalized_times):
-        combined = eval_weight * eval_score + time_weight * time_score
-        final_rewards.append(combined)
+        # Only incorporate time if eval_score > 0
+        if eval_score <= 0.0:
+            final_rewards.append(0.0)
+        else:
+            combined = eval_weight * eval_score + time_weight * time_score
+            final_rewards.append(combined)
 
     # Apply format checks
     for i, solution in enumerate(task_solutions):
@@ -66,8 +70,9 @@ async def get_rewards(
         if not solution.actions:
             final_rewards[i] = 0.0
         else:
-            # Ensure at least min_correct_format_score if actions are valid
-            final_rewards[i] = max(final_rewards[i], min_correct_format_score)
+            # Ensure at least min_correct_format_score if final reward > 0
+            if final_rewards[i] > 0.0:
+                final_rewards[i] = max(final_rewards[i], min_correct_format_score)
 
     bt.logging.debug(f"Final Rewards after format checks: {final_rewards}")
     return np.array(final_rewards)
@@ -84,7 +89,6 @@ async def _evaluate_all_task_solutions(
         return [get_score_from_evaluation_result(r) for r in results]
     except Exception as exc:
         bt.logging.error(f"Error evaluating task solutions: {exc}")
-        # Return 0 for all in case of a global evaluation failure
         return [0.0] * len(task_solutions)
 
 
