@@ -5,7 +5,6 @@ Validator setup for Subnet 36.
 ## Requirements
 
 - Ubuntu 22.04.5 LTS (Jammy) or 24.04 LTS (Noble)
-- RAM: 32GB minimum
 - GPU: NVIDIA A40/A6000/A100/H100 (or use OpenAI API)
 - Storage: 200MB minimum
 
