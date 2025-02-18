@@ -1,4 +1,4 @@
-# Web Agents Subnet: Validator Guide
+# Validator Guide
 
 Validator setup for Subnet 36.
 
