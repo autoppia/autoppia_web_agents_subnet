@@ -40,28 +40,36 @@ cp .env.example .env
 # Edit .env with your configuration
 ```
 
-3. Install dependencies:
+3. Install system dependencies:
 
 ```bash
 chmod +x scripts/install_dependencies.sh
 ./scripts/install_dependencies.sh
 ```
 
-4. Install **MongoDB** with Docker for caching web analysis results:
+4. Install Docker:
+
+```bash
+chmod +x scripts/validator/install_docker.sh
+./scripts/validator/install_docker.sh
+
+5. Install **MongoDB** 
+
+A) with Docker for caching web analysis results:
 
 ```bash
 chmod +x scripts/validator/deploy_mongo_docker.sh
 ./scripts/validator/deploy_mongo_docker.sh
 ```
 
-Install it natively without Docker:
+B) Install it natively without Docker:
 
 ```bash
 chmod +x scripts/validator/deploy_mongo.sh
 ./scripts/validator/deploy_mongo.sh
 ```
 
-The validator will use MongoDB with the following default configuration:
+Change mongo url in .env if you have deployed in another IP or Port.
 
 ```bash
 MONGODB_URL="mongodb://localhost:27017"
