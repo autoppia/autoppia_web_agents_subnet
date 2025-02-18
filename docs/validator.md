@@ -191,10 +191,11 @@ pm2 start neurons/validator.py \
 
 Script for *automatic version control* and *safe updates* of your validator:
 
+```bash
 bash
 chmod +x scripts/validator/auto_update_validator.sh
 ./scripts/validator/auto_update_validator.sh
-
+```
 
 *Note*: If you change something edit the script to match your PM2 configuration (process name, wallet keys) before running it.
 
