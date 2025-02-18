@@ -1,24 +1,28 @@
 #!/bin/bash
-# deploy_mongo.sh - Deploy MongoDB via Docker with custom configuration
+# deploy_mongo.sh - Deploy MongoDB via Docker with custom configuration, initial DB scripts,
+# and optional dump restoration.
 #
 # This script:
 #   1. Kills any local process using the specified host port.
 #   2. Stops and removes an existing Docker container with the specified name.
-#   3. Starts a new MongoDB container using Docker with custom port mapping and persistent volume.
-#   4. Verifies the container status and checks the MongoDB connection.
+#   3. Starts a new MongoDB container using Docker with custom port mapping, persistent volume,
+#      and mounts for initialization scripts and a dump (if available).
+#   4. Restores the MongoDB dump (if present) after container startup.
+#   5. Verifies the container status and checks the MongoDB connection.
 #
 # Usage:
-#   ./deploy_mongo_docker.sh
-#
+#   ./deploy_mongo.sh
 
 set -euo pipefail
 
 # Custom configuration variables
 CONTAINER_NAME="mongodb"
 MONGO_VERSION="latest"         # Change this if you want a specific MongoDB version (e.g., 6.0, 5.0, etc.)
-HOST_PORT=27017                # Host port to map (you can change this as needed)
+HOST_PORT=27017                # Host port to map
 CONTAINER_PORT=27017           # Container port (default MongoDB port)
 MONGO_VOLUME="$HOME/mongodb_data"
+MONGO_INIT_FOLDER="$(pwd)/mongo-init"  # Folder containing initialization scripts
+DUMP_FOLDER="$(pwd)/mongo-dump"         # Folder containing a MongoDB dump
 
 handle_error() {
   echo -e "\e[31m[ERROR]\e[0m $1" >&2
@@ -62,13 +66,36 @@ close_existing_container() {
 start_mongo() {
   echo "[INFO] Starting a new MongoDB container using image 'mongo:${MONGO_VERSION}'..."
   mkdir -p "$MONGO_VOLUME"
-  docker run --name "${CONTAINER_NAME}" -d -p "$HOST_PORT":"$CONTAINER_PORT" -v "$MONGO_VOLUME":/data/db mongo:"${MONGO_VERSION}" || handle_error "Failed to deploy MongoDB container"
+  mkdir -p "$MONGO_INIT_FOLDER"
+  
+  # Mount dump folder if it exists
+  if [ -d "$DUMP_FOLDER" ]; then
+    DUMP_VOLUME="-v ${DUMP_FOLDER}:/dump"
+    echo "[INFO] Dump folder detected. It will be mounted to /dump in the container."
+  else
+    DUMP_VOLUME=""
+  fi
+
+  docker run --name "${CONTAINER_NAME}" -d -p "$HOST_PORT":"$CONTAINER_PORT" \
+    -v "$MONGO_VOLUME":/data/db \
+    -v "$MONGO_INIT_FOLDER":/docker-entrypoint-initdb.d \
+    $DUMP_VOLUME \
+    mongo:"${MONGO_VERSION}" || handle_error "Failed to deploy MongoDB container"
 }
 
 verify_mongo() {
   echo "[INFO] Verifying MongoDB container status..."
   docker ps -f name=^/${CONTAINER_NAME}$ || handle_error "MongoDB container is not running."
   echo "[INFO] MongoDB should be accessible at mongodb://localhost:$HOST_PORT"
+}
+
+restore_dump() {
+  if [ -d "$DUMP_FOLDER" ]; then
+    echo "[INFO] Restoring MongoDB dump from /dump..."
+    docker exec "${CONTAINER_NAME}" mongorestore /dump || handle_error "Failed to restore MongoDB dump"
+  else
+    echo "[INFO] No dump folder found. Skipping dump restore."
+  fi
 }
 
 check_mongo_connection() {
@@ -85,6 +112,7 @@ main() {
   close_existing_container
   start_mongo
   verify_mongo
+  restore_dump
   check_mongo_connection
 
   echo "[INFO] MongoDB is running and connection is verified."
