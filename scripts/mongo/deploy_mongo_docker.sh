@@ -22,7 +22,7 @@ HOST_PORT=27017                # Host port to map
 CONTAINER_PORT=27017           # Container port (default MongoDB port)
 MONGO_VOLUME="$HOME/mongodb_data"
 MONGO_INIT_FOLDER="$(pwd)/mongo-init"  # Folder containing initialization scripts
-DUMP_FOLDER="$(pwd)/mongo-dump"         # Folder containing a MongoDB dump
+DUMP_FOLDER="$(pwd)/data/mongo-dump"         # Folder containing a MongoDB dump
 
 handle_error() {
   echo -e "\e[31m[ERROR]\e[0m $1" >&2
