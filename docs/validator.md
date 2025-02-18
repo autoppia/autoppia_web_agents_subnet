@@ -47,11 +47,18 @@ chmod +x scripts/install_dependencies.sh
 ./scripts/install_dependencies.sh
 ```
 
-4. Install **MongoDB** for caching web analysis results:
+4. Install **MongoDB** with Docker for caching web analysis results:
 
 ```bash
-chmod +x scripts/validator/install_mongo.sh
-./scripts/validator/install_mongo.sh
+chmod +x scripts/validator/deploy_mongo_docker.sh
+./scripts/validator/deploy_mongo_docker.sh
+```
+
+Install it natively without Docker:
+
+```bash
+chmod +x scripts/validator/deploy_mongo.sh
+./scripts/validator/deploy_mongo.sh
 ```
 
 The validator will use MongoDB with the following default configuration:

@@ -60,9 +60,11 @@ This script will:
 If you are on runpod or other dockerized env:
 
 ```bash
-chmod +x scripts/miner/no_sudo_setup.sh
-./scripts/miner/no_sudo_setup.sh
+chmod +x scripts/miner/runpod_setup.sh
+./scripts/miner/runpod_setup.sh
 ```
+
+Beware that this script has not being tested exhaustively.
 
 
 ### 4. Start the Miner with PM2
@@ -97,6 +99,8 @@ pm2 start neurons/miner.py \
 ---
 
 ## Optional Components
+
+If you want to develop competitive web agents you will surely need to deploy demo-webs
 
 ### 1. Deploy LLM Generation Endpoint
 
