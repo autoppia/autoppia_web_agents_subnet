@@ -23,7 +23,7 @@ You can deploy components separately:
 - **LLM**: OpenAI API or Local LLM
 - **Demo-Webs**: CPU only (Docker required)
 
-## Quick Start
+## Global Setup
 
 1. Clone and setup:
 
@@ -33,27 +33,21 @@ cd autoppia_web_agents_subnet
 git submodule update --init --recursive --remote
 ```
 
-2. Copy your configuration data to .env:
 
-```bash
-cp .env.example .env
-# Edit .env with your configuration
-```
-
-3. Install system dependencies:
+2. Install system dependencies:
 
 ```bash
 chmod +x scripts/install_dependencies.sh
 ./scripts/install_dependencies.sh
 ```
 
-4. Install Docker:
+3. Install Docker:
 
 ```bash
 chmod +x scripts/validator/install_docker.sh
 ./scripts/validator/install_docker.sh
 
-5. Install **MongoDB** 
+4. Install **MongoDB** 
 
 A) with Docker for caching web analysis results:
 
@@ -74,6 +68,15 @@ Change mongo url in .env if you have deployed in another IP or Port.
 ```bash
 MONGODB_URL="mongodb://localhost:27017"
 ```
+
+5. Copy your configuration data to .env:
+
+```bash
+# Edit .env with your configuration
+cp .env.example .env
+```
+
+
 
 # VALIDATOR SETUP
 
