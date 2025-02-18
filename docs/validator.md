@@ -53,8 +53,8 @@ chmod +x scripts/validator/install_docker.sh
 A) with Docker for caching web analysis results:
 
 ```bash
-chmod +x scripts/validator/deploy_mongo_docker.sh
-./scripts/validator/deploy_mongo_docker.sh
+chmod +x scripts/mongo/deploy_mongo_docker.sh
+./scripts/mongo/deploy_mongo_docker.sh
 ```
 
 B) Install it natively without Docker:
