@@ -193,6 +193,7 @@ async def _generate_tasks_for_url(demo_web_project: WebProject) -> List[Task]:
     )
     pipeline = TaskGenerationPipeline(config)
     output: TasksGenerationOutput = await pipeline.generate()
+    bt.logging.warning(output)
     return output.tasks
 
 
