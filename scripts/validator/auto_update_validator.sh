@@ -26,8 +26,8 @@ version_greater() {
 
 redeploy_old_version() {
     echo "Reverting to previous commits..."
-    # Revert autoppia_iwa_module
-    cd autoppia_iwa_module
+    # Revert autoppia_iwa
+    cd autoppia_iwa
     git reset --hard "$PREV_IWA_HEAD"
     cd ..
 
@@ -37,7 +37,7 @@ redeploy_old_version() {
     echo "Reinstalling old version..."
     source validator_env/bin/activate
     pip install -e .
-    pip install -e autoppia_iwa_module
+    pip install -e autoppia_iwa
 
     echo "Restarting old version in PM2..."
     pm2 restart "$PROCESS_NAME" || pm2 start neurons/validator.py \
@@ -60,9 +60,9 @@ update_and_deploy() {
         return 1
     fi
 
-    cd autoppia_iwa_module
+    cd autoppia_iwa
     if ! git pull origin main; then
-        echo "Failed to pull autoppia_iwa_module."
+        echo "Failed to pull autoppia_iwa."
         cd ..
         redeploy_old_version
         return 1
@@ -78,8 +78,8 @@ update_and_deploy() {
         return 1
     fi
 
-    if ! pip install -e autoppia_iwa_module; then
-        echo "pip install -e autoppia_iwa_module failed"
+    if ! pip install -e autoppia_iwa; then
+        echo "pip install -e autoppia_iwa failed"
         redeploy_old_version
         return 1
     fi
@@ -118,7 +118,7 @@ while true; do
 
             # Capture current commits before updating
             PREV_MAIN_HEAD=$(git rev-parse HEAD)
-            PREV_IWA_HEAD=$(cd autoppia_iwa_module && git rev-parse HEAD)
+            PREV_IWA_HEAD=$(cd autoppia_iwa && git rev-parse HEAD)
 
             if update_and_deploy; then
                 echo "Update successful: now at version $REMOTE_VERSION."

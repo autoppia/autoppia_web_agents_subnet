@@ -1,180 +1,90 @@
-# Web Agents Subnet: Validator Guide
+#!/bin/bash
+# setup.sh - Setup application: create/activate virtual environment, install Python dependencies, and modules.
 
-Validator setup for Subnet 36.
+set -e
 
-## Requirements
+handle_error() {
+  echo -e "\e[31m[ERROR]\e[0m $1" >&2
+  exit 1
+}
 
-- Ubuntu 22.04.5 LTS (Jammy)
-- RAM: 32GB minimum
-- GPU: NVIDIA A40/A6000/A100/H100 (or use OpenAI API)
-- Storage: 200MB minimum
+success_msg() {
+  echo -e "\e[32m[SUCCESS]\e[0m $1"
+}
 
-## Component Overview
+check_python_version() {
+  echo -e "\e[34m[INFO]\e[0m Checking Python version..."
+  python3.11 --version || handle_error "Python 3.11 is required. Please install it."
+}
 
-You can deploy components separately:
+create_and_activate_venv() {
+  VENV_DIR="validator_env"
+  echo -e "\e[34m[INFO]\e[0m Creating virtual environment..."
+  if [ ! -d "$VENV_DIR" ]; then
+    python3.11 -m venv "$VENV_DIR" || handle_error "Failed to create virtual environment"
+    success_msg "Virtual environment created successfully."
+  else
+    echo -e "\e[32m[INFO]\e[0m Virtual environment already exists. Skipping."
+  fi
 
-- **Validator**: CPU only (MongoDB Recommended)
-- **LLM**: OpenAI API or Local LLM
-- **Demo-Webs**: CPU only (Docker required)
+  echo -e "\e[34m[INFO]\e[0m Activating virtual environment..."
+  # shellcheck source=/dev/null
+  source "$VENV_DIR/bin/activate" || handle_error "Failed to activate virtual environment"
+}
 
-## Quick Start
+upgrade_pip_setuptools() {
+  echo -e "\e[34m[INFO]\e[0m Upgrading pip and setuptools..."
+  python3.11 -m ensurepip
+  pip install --upgrade pip setuptools || handle_error "Failed to upgrade pip and setuptools"
+  success_msg "pip and setuptools upgraded successfully."
+}
 
-1. Clone and setup:
+install_python_requirements() {
+  echo -e "\e[34m[INFO]\e[0m Installing Python dependencies and Playwright..."
+  pip install -r requirements.txt || handle_error "Failed to install Python dependencies"
+  
+  if ! python3.11 -m pip show playwright > /dev/null 2>&1; then
+    echo -e "\e[34m[INFO]\e[0m Installing Playwright..."
+    pip install playwright || handle_error "Failed to install Playwright"
+  fi
+  
+  python3.11 -m playwright install || handle_error "Failed to install Playwright"
+  playwright install-deps || handle_error "Failed to install Playwright dependencies"
+  success_msg "Python dependencies and Playwright installed successfully."
+  playwright install 
+  
+}
 
-```bash
-git clone https://github.com/autoppia/autoppia_web_agents_subnet
-cd autoppia_web_agents_subnet
-git submodule update --init --recursive --remote
-```
+install_current_module() {
+  echo -e "\e[34m[INFO]\e[0m Installing current module in editable mode..."
+  pip install -e . || handle_error "Failed to install the current module in editable mode"
+  success_msg "Current module installed in editable mode."
+}
 
-2. Copy your configuration data to .env:
+install_autoppia_iwa() {
+  echo -e "\e[34m[INFO]\e[0m Installing autoppia_iwa module..."
+  if cd autoppia_iwa && pip install -e . && cd ..; then
+    success_msg "autoppia_iwa installed successfully."
+  else
+    handle_error "Failed to install autoppia_iwa module"
+  fi
+}
 
-```bash
-cp .env.example .env
-# Edit .env with your configuration
-```
+install_bittensor() {
+  echo -e "\e[34m[INFO]\e[0m Installing Bittensor..."
+  git clone https://github.com/opentensor/bittensor.git && cd bittensor && pip install . && pip install bittensor==9.0.0 && cd .. && rm -rf bittensor
+  success_msg "Bittensor installed successfully."
+}
 
-3. Install dependencies:
+main() {
+  check_python_version
+  create_and_activate_venv
+  upgrade_pip_setuptools
+  install_python_requirements
+  install_current_module
+  install_autoppia_iwa
+  install_bittensor
+  success_msg "Setup completed successfully!"
+}
 
-```bash
-chmod +x scripts/install_dependencies.sh
-./scripts/install_dependencies.sh
-```
-
-4. **(Optional)** Install **MongoDB** for caching web analysis results:
-
-```bash
-chmod +x scripts/validator/install_mongo.sh
-./scripts/validator/install_mongo.sh
-```
-
-The validator will use MongoDB with the following default configuration:
-```bash
-MONGODB_URL="mongodb://localhost:27017"
-```
-
-# VALIDATOR SETUP
----
-
-Setup the validator:
-
-**Requirements**:
-- Administrative (sudo) access to the machine
-- Ability to run commands with elevated privileges
-
-```bash
-chmod +x scripts/setup.sh
-./scripts/setup.sh
-```
-
-**Note**: This script requires sudo permissions to install system dependencies and configure the validator environment. Ensure you have administrative access to the machine before proceeding.
-
-# LLM SETUP
----
-
-### Option A: OpenAI API (No GPU Required)
-
-Edit `.env`:
-
-```bash
-LLM_PROVIDER="openai"
-OPENAI_API_KEY="your-api-key-here"
-```
-
-### Option B: Local LLM (GPU Required)
-
-1. Edit `.env`:
-
-```bash
-LLM_PROVIDER="local"
-LLM_ENDPOINT="http://localhost:6000/generate"
-```
-
-2. Setup local LLM:
-
-```bash
-chmod +x autoppia_iwa_module/modules/llm_local/setup.sh
-./autoppia_iwa_module/modules/llm_local/setup.sh
-source llm_env/bin/activate
-pm2 start autoppia_iwa_module/modules/llm_local/run_local_llm.py --name llm_local -- --port 6000
-```
-
-**To verify if your LLM is working correctly:**
-
-```bash
-python3 autoppia_iwa_module/modules/llm_local/test/test.py
-```
-
-The local setup uses **deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B** model.
-
-# DEMO WEBS SETUP
----
-
-This script requires **Docker**. The following commands will install Docker and initialize the demo webs:
-
-```bash
-CURRENT_DIR=$(pwd)
-cd autoppia_iwa_module/modules/webs_demo/scripts
-chmod +x install_docker.sh
-./install_docker.sh
-chmod +x setup.sh
-./setup.sh
-cd "$CURRENT_DIR"
-```
-
-For detailed information about the demo webs and their configurations, please refer to the demo webs [README.md](./autoppia_iwa_module/modules/webs_demo/README.md).
-
-### Configure endpoints (optional):
-Edit `.env`:
-
-```bash
-LOCAL_MODEL_ENDPOINT=http://localhost:6000
-DEMO_WEBS_ENDPOINT=http://localhost
-DEMO_WEBS_STARTING_PORT=8000
-```
-
-#### Configuration Options:
-
-- **`LOCAL_MODEL_ENDPOINT`**: The endpoint where your LLM service is running
-  - Default: `http://localhost:6000`
-  - You can modify this if running the LLM on a different server
-  - Example remote setup: `http://your-llm-server_ip:port`
-  - _Note: The server hosting the LLM must have CUDA 12.6 installed_
-- **`DEMO_WEBS_ENDPOINT`**: The endpoint where your demo web projects are deployed
-  - Default: `http://localhost`
-  - You can modify this if running the demo webs on a different server
-  - Example remote setup: `http://your-demo-webs-server-ip`
-
-This configuration allows you to run the validator, LLM service, and demo webs on separate machines for better resource management.
-
-## Start Validator
-
-```bash
-source validator_env/bin/activate
-pm2 start neurons/validator.py \
-  --name "subnet-36-validator" \
-  --interpreter python \
-  -- \
-  --netuid 36 \
-  --subtensor.network finney \
-  --wallet.name your_coldkey \
-  --wallet.hotkey your_hotkey
-```
-
-## Installation Paths
-
-- Python environment: **/validator_env**
-- Chrome: **/opt/chrome**
-- ChromeDriver: **/opt/chromedriver**
-- LLM service: **localhost:6000**
-- Demo webs: **localhost:8000**
-
-## Support
-
-Contact **@Daryxx**, **@Riiveer**, or **@Miguelik** on Discord
-
-## Important Notes
-
-- For optimal performance, use bare metal GPU
-- Demo webs require Docker and Docker Compose
-- All components can be deployed on separate machines
+main "$@"
