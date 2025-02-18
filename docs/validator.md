@@ -46,6 +46,7 @@ chmod +x scripts/install_dependencies.sh
 ```bash
 chmod +x scripts/validator/install_docker.sh
 ./scripts/validator/install_docker.sh
+```
 
 4. Install **MongoDB** 
 
@@ -63,13 +64,13 @@ chmod +x scripts/validator/deploy_mongo.sh
 ./scripts/validator/deploy_mongo.sh
 ```
 
-Change mongo url in .env if you have deployed in another IP or Port.
+Change mongo url in .env if you have deployed it in another IP or Port.
 
 ```bash
 MONGODB_URL="mongodb://localhost:27017"
 ```
 
-5. Copy your configuration data to .env:
+5. Set up .env
 
 ```bash
 # Edit .env with your configuration
