@@ -26,6 +26,12 @@ from autoppia_iwa.src.execution.actions.base import BaseAction
 from autoppia_iwa.src.web_agents.random.agent import RandomClickerWebAgent
 from autoppia_iwa.src.bootstrap import AppBootstrap
 from autoppia_iwa.src.data_generation.domain.classes import Task
+from autoppia_iwa.config.config import (
+    AGENT_HOST,
+    AGENT_NAME,
+    AGENT_PORT,
+    USE_APIFIED_AGENT,
+)
 
 
 class Miner(BaseMinerNeuron):
@@ -39,8 +45,11 @@ class Miner(BaseMinerNeuron):
 
     def __init__(self, config=None):
         super(Miner, self).__init__(config=config)
-        self.agent = RandomClickerWebAgent()
-
+        self.agent = (
+            ApifiedWebAgent(name=AGENT_NAME, host=AGENT_HOST, port=AGENT_PORT)
+            if USE_APIFIED_AGENT
+            else RandomClickerWebAgent()
+        )
         self.load_state()
 
     async def forward(self, synapse: TaskSynapse) -> TaskSynapse:
@@ -60,7 +69,7 @@ class Miner(BaseMinerNeuron):
 
         try:
             start_time = time.time()
-            validator_hotkey = getattr(synapse.dendrite, 'hotkey', None)
+            validator_hotkey = getattr(synapse.dendrite, "hotkey", None)
 
             bt.logging.info(f"Request Received from validator: {validator_hotkey}")
 
@@ -71,7 +80,9 @@ class Miner(BaseMinerNeuron):
 
             synapse.actions = actions
 
-            bt.logging.success(f"Request completed successfully in {time.time() - start_time}s")
+            bt.logging.success(
+                f"Request completed successfully in {time.time() - start_time}s"
+            )
 
         except Exception as e:
             bt.logging.error(f"An Error ocurred on miner forward : {e}")
