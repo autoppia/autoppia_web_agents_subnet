@@ -28,13 +28,13 @@ try_install() {
   local ALT="$2"
   echo -e "\e[34m[INFO]\e[0m Attempting to install '$PKG'..."
   if apt-cache show "$PKG" &>/dev/null; then
-    sudo apt-get install -y "$PKG" && return 0
+    apt-get install -y "$PKG" && return 0
   fi
 
   if [ -n "$ALT" ]; then
     echo -e "\e[33m[WARN]\e[0m '$PKG' not found, trying alternative '$ALT'..."
     if apt-cache show "$ALT" &>/dev/null; then
-      sudo apt-get install -y "$ALT" && return 0
+      apt-get install -y "$ALT" && return 0
     fi
   fi
 
@@ -48,9 +48,9 @@ try_install() {
 # ---------------------------------------------------------
 install_system_dependencies() {
   echo -e "\e[34m[INFO]\e[0m Installing system dependencies..."
-  sudo apt update -y || handle_error "Failed to update package list"
-  sudo apt upgrade -y || handle_error "Failed to upgrade packages"
-  sudo apt install -y sudo || handle_error "Failed to install sudo"
+  apt update -y || handle_error "Failed to update package list"
+  apt upgrade -y || handle_error "Failed to upgrade packages"
+  apt install -y || handle_error "Failed to install sudo"
 }
 
 # ---------------------------------------------------------
@@ -108,8 +108,8 @@ install_python311() {
 # ---------------------------------------------------------
 install_pm2() {
   echo -e "\e[34m[INFO]\e[0m Installing and configuring PM2 service..."
-  sudo apt install -y npm || handle_error "Failed to install npm"
-  sudo npm install -g pm2 || handle_error "Failed to install PM2"
+  apt install -y npm || handle_error "Failed to install npm"
+  npm install -g pm2 || handle_error "Failed to install PM2"
   pm2 update || handle_error "Failed to update PM2"
 }
 
