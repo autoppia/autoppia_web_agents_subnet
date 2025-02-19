@@ -33,12 +33,11 @@ cd autoppia_web_agents_subnet
 git submodule update --init --recursive --remote
 ```
 
-
 2. Install system dependencies:
 
 ```bash
-chmod +x scripts/install_dependencies.sh
-./scripts/install_dependencies.sh
+chmod +x scripts/validator/install_dependencies.sh
+./scripts/validator/install_dependencies.sh
 ```
 
 3. Install Docker:
@@ -48,7 +47,7 @@ chmod +x scripts/validator/install_docker.sh
 ./scripts/validator/install_docker.sh
 ```
 
-4. Install **MongoDB** 
+4. Install **MongoDB**
 
 A) with Docker for caching web analysis results:
 
@@ -76,8 +75,6 @@ MONGODB_URL="mongodb://localhost:27017"
 # Edit .env with your configuration
 cp .env.example .env
 ```
-
-
 
 # VALIDATOR SETUP
 
@@ -187,9 +184,10 @@ pm2 start neurons/validator.py \
 ```
 
 ## Auto Update for Validator
+
 ---
 
-Script for *automatic version control* and *safe updates* of your validator:
+Script for _automatic version control_ and _safe updates_ of your validator:
 
 ```bash
 bash
@@ -197,9 +195,9 @@ chmod +x scripts/validator/auto_update_validator.sh
 ./scripts/validator/auto_update_validator.sh
 ```
 
-*Note*: If you change something edit the script to match your PM2 configuration (process name, wallet keys) before running it.
+_Note_: If you change something edit the script to match your PM2 configuration (process name, wallet keys) before running it.
 
-The script automatically checks for updates, deploys new versions, and includes *automatic rollback* if the update fails. Runs every *5 minutes* to ensure your validator stays up to date.
+The script automatically checks for updates, deploys new versions, and includes _automatic rollback_ if the update fails. Runs every _5 minutes_ to ensure your validator stays up to date.
 
 ## Support
 
