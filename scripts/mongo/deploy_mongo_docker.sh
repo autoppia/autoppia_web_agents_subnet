@@ -5,10 +5,11 @@
 # This script:
 #   1. Kills any local process using the specified host port.
 #   2. Stops and removes an existing Docker container with the specified name.
-#   3. Starts a new MongoDB container using Docker with custom port mapping, persistent volume,
+#   3. Prompts to delete existing MongoDB data if detected.
+#   4. Starts a new MongoDB container using Docker with custom port mapping, persistent volume,
 #      and mounts for initialization scripts and a dump (if available).
-#   4. Restores the MongoDB dump (if present) after container startup.
-#   5. Verifies the container status and checks the MongoDB connection.
+#   5. Restores the MongoDB dump (if present) after container startup.
+#   6. Verifies the container status and checks the MongoDB connection.
 #
 # Usage:
 #   ./deploy_mongo.sh
@@ -22,7 +23,7 @@ HOST_PORT=27017                # Host port to map
 CONTAINER_PORT=27017           # Container port (default MongoDB port)
 MONGO_VOLUME="$HOME/mongodb_data"
 MONGO_INIT_FOLDER="$(pwd)/mongo-init"  # Folder containing initialization scripts
-DUMP_FOLDER="$(pwd)/data/mongo-dump"         # Folder containing a MongoDB dump
+DUMP_FOLDER="$(pwd)/data/mongo-dump"     # Folder containing a MongoDB dump
 
 handle_error() {
   echo -e "\e[31m[ERROR]\e[0m $1" >&2
@@ -63,9 +64,28 @@ close_existing_container() {
   fi
 }
 
+prompt_and_clean_data() {
+  if [ -d "$MONGO_VOLUME" ] && [ "$(ls -A "$MONGO_VOLUME" 2>/dev/null)" ]; then
+    echo "[INFO] Existing MongoDB data detected in $MONGO_VOLUME."
+    read -p "Do you want to delete the current MongoDB data and start fresh? (y/N): " answer
+    case "$answer" in
+      [yY][eE][sS]|[yY])
+        echo "[INFO] Deleting existing MongoDB data..."
+        rm -rf "$MONGO_VOLUME" || handle_error "Failed to delete MongoDB data"
+        mkdir -p "$MONGO_VOLUME"
+        ;;
+      *)
+        echo "[INFO] Keeping existing MongoDB data."
+        ;;
+    esac
+  else
+    mkdir -p "$MONGO_VOLUME"
+  fi
+}
+
 start_mongo() {
   echo "[INFO] Starting a new MongoDB container using image 'mongo:${MONGO_VERSION}'..."
-  mkdir -p "$MONGO_VOLUME"
+  prompt_and_clean_data
   mkdir -p "$MONGO_INIT_FOLDER"
   
   # Mount dump folder if it exists
