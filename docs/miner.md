@@ -38,7 +38,26 @@ Initialize and update the Autoppia IWA submodule:
 git submodule update --init --recursive --remote
 ```
 
-### 3. Run the Setup Script
+### 3. Set Up Environment Variables
+
+Create your `.env` file from the example template:
+
+```bash
+cp .env.example .env
+```
+
+Configure the following values in your `.env` file:
+
+```
+AGENT_NAME="browser_use"
+AGENT_HOST="localhost"
+AGENT_PORT="8080"
+USE_APIFIED_AGENT="false" # Set to "true" if you want to deploy and connect to your own Agent via API
+```
+
+Note: The API connection feature is provided to facilitate those who want to deploy their own Agent and connect to it via API.
+
+### 4. Run the Setup Script
 
 This setup has been tested on ubuntu "jammy" and "noble" distributions.
 Make the setup script executable and run it:
@@ -66,8 +85,7 @@ chmod +x scripts/miner/runpod_setup.sh
 
 Beware that this script has not being tested exhaustively.
 
-
-### 4. Start the Miner with PM2
+### 5. Start the Miner with PM2
 
 Use PM2 to run the miner with your configuration:
 
