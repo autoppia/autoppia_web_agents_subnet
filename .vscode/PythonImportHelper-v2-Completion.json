@@ -7216,27 +7216,27 @@
         "documentation": {}
     },
     {
+        "label": "TaskSynapse",
+        "importPath": "autoppia_web_agents_subnet.protocol",
+        "description": "autoppia_web_agents_subnet.protocol",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.protocol",
+        "documentation": {}
+    },
+    {
+        "label": "TaskSynapse",
+        "importPath": "autoppia_web_agents_subnet.protocol",
+        "description": "autoppia_web_agents_subnet.protocol",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.protocol",
+        "documentation": {}
+    },
+    {
         "label": "get_random_uids",
         "importPath": "autoppia_web_agents_subnet.utils.uids",
         "description": "autoppia_web_agents_subnet.utils.uids",
         "isExtraImport": true,
         "detail": "autoppia_web_agents_subnet.utils.uids",
-        "documentation": {}
-    },
-    {
-        "label": "TaskSynapse",
-        "importPath": "autoppia_web_agents_subnet.protocol",
-        "description": "autoppia_web_agents_subnet.protocol",
-        "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet.protocol",
-        "documentation": {}
-    },
-    {
-        "label": "TaskSynapse",
-        "importPath": "autoppia_web_agents_subnet.protocol",
-        "description": "autoppia_web_agents_subnet.protocol",
-        "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet.protocol",
         "documentation": {}
     },
     {
@@ -12479,7 +12479,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "TIMEOUT = 10\nFORWARD_SLEEP_SECONDS = 60 * 10  # 10 Minutes\nTASK_SLEEP = 60 * 3  # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        # 1) Get Demo Web Projects\n        demo_web_projects = get_demo_webs_projects()",
+        "peekOfCode": "TIMEOUT = 120\nFORWARD_SLEEP_SECONDS = 60 * 10  # 10 Minutes\nTASK_SLEEP = 60 * 3             # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -12488,7 +12488,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "FORWARD_SLEEP_SECONDS = 60 * 10  # 10 Minutes\nTASK_SLEEP = 60 * 3  # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        # 1) Get Demo Web Projects\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")",
+        "peekOfCode": "FORWARD_SLEEP_SECONDS = 60 * 10  # 10 Minutes\nTASK_SLEEP = 60 * 3             # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -12497,7 +12497,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "TASK_SLEEP = 60 * 3  # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        # 1) Get Demo Web Projects\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n        # 2) Generate a random web URL",
+        "peekOfCode": "TASK_SLEEP = 60 * 3             # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n        try:",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -12506,7 +12506,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "TIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        # 1) Get Demo Web Projects\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n        # 2) Generate a random web URL\n        try:",
+        "peekOfCode": "TIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n        try:\n            demo_web_project = _get_random_demo_web_project(demo_web_projects)",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -12515,7 +12515,16 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "MIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        # 1) Get Demo Web Projects\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n        # 2) Generate a random web URL\n        try:\n            demo_web_project = _get_random_demo_web_project(demo_web_projects)",
+        "peekOfCode": "MIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n        try:\n            demo_web_project = _get_random_demo_web_project(demo_web_projects)\n        except Exception as e:",
+        "detail": "autoppia_web_agents_subnet.validator.forward",
+        "documentation": {}
+    },
+    {
+        "label": "MIN_RESPONSE_REWARD",
+        "kind": 5,
+        "importPath": "autoppia_web_agents_subnet.validator.forward",
+        "description": "autoppia_web_agents_subnet.validator.forward",
+        "peekOfCode": "MIN_RESPONSE_REWARD = 0.1\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n        try:\n            demo_web_project = _get_random_demo_web_project(demo_web_projects)\n        except Exception as e:\n            bt.logging.error(f\"Failed to select a demo web project: {e}\")",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -12524,7 +12533,7 @@
         "kind": 2,
         "importPath": "autoppia_web_agents_subnet.validator.reward",
         "description": "autoppia_web_agents_subnet.validator.reward",
-        "peekOfCode": "def normalize_execution_times(times: List[Optional[float]]) -> List[float]:\n    if not times:\n        return []\n    valid_times = [t for t in times if t is not None]\n    if not valid_times:\n        return [0.0] * len(times)\n    min_time = min(valid_times)\n    max_time = max(valid_times)\n    if max_time == min_time:\n        # If they are all the same, assign 1.0 to any non-None and 0.0 to None",
+        "peekOfCode": "def normalize_execution_times(times: List[Optional[float]]) -> List[float]:\n    if not times:\n        return []\n    valid_times = [t for t in times if t is not None]\n    if not valid_times:\n        return [0.0] * len(times)\n    min_time = min(valid_times)\n    max_time = max(valid_times)\n    if max_time == min_time:\n        return [1.0 if t is not None else 0.0 for t in times]",
         "detail": "autoppia_web_agents_subnet.validator.reward",
         "documentation": {}
     },
