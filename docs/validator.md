@@ -38,6 +38,7 @@ git submodule update --init --recursive --remote
 ```bash
 chmod +x scripts/validator/install_dependencies.sh
 ./scripts/validator/install_dependencies.sh
+playwright install
 ```
 
 3. Install Docker:
