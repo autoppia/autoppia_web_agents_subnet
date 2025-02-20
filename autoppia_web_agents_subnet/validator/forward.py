@@ -20,6 +20,7 @@ from autoppia_web_agents_subnet.validator.reward import get_rewards
 from autoppia_web_agents_subnet.utils.uids import get_random_uids
 from autoppia_web_agents_subnet.protocol import TaskSynapse, TaskFeedbackSynapse, MinerStats
 from autoppia_web_agents_subnet.utils.dendrite import dendrite_with_retries
+from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
 
 TIMEOUT = 120
@@ -29,6 +30,7 @@ TIME_WEIGHT = 0.2
 MIN_SCORE_FOR_CORRECT_FORMAT = 0.1
 MIN_RESPONSE_REWARD = 0.1
 SAMPLE_SIZE = 256  # All Miners
+
 
 async def forward(self) -> None:
     try:
@@ -49,13 +51,13 @@ async def forward(self) -> None:
         bt.logging.info(f"Selected demo web project with URL: {web_url}")
 
         bt.logging.warning(f"Generating tasks for Web Project: '{demo_web_project.name}' ...")
+        start_time = time.time()
         tasks_generated: List[Task] = await _generate_tasks_for_url(demo_web_project=demo_web_project)
+        ColoredLogger.info(f"Generated {len(tasks_generated)} tasks in {time.time()-start_time}", ColoredLogger.YELLOW)
 
         if not tasks_generated:
             bt.logging.warning("No tasks generated, skipping forward step.")
             return
-
-        bt.logging.info(f"Generated {len(tasks_generated)} tasks for {web_url}")
 
         total_time_start = time.time()
         tasks_count = 0
