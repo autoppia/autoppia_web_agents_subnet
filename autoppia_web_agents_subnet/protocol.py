@@ -54,5 +54,3 @@ class FeedbackSynapse(Synapse):
 
     def deserialize(self) -> "FeedbackSynapse":
         return self
-
-
