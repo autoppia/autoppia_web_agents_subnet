@@ -18,7 +18,11 @@ from autoppia_iwa.src.data_generation.application.tasks_generation_pipeline impo
 )
 from autoppia_web_agents_subnet.validator.reward import get_rewards
 from autoppia_web_agents_subnet.utils.uids import get_random_uids
-from autoppia_web_agents_subnet.protocol import TaskSynapse, TaskFeedbackSynapse, MinerStats
+from autoppia_web_agents_subnet.protocol import (
+    TaskSynapse,
+    TaskFeedbackSynapse,
+    MinerStats
+)
 from autoppia_web_agents_subnet.utils.dendrite import dendrite_with_retries
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
@@ -115,7 +119,6 @@ async def forward(self) -> None:
                     process_time = response.dendrite.process_time
                 else:
                     process_time = TIMEOUT
-
                 execution_times.append(process_time)
 
             evaluation_start_time = time.time()
@@ -139,19 +142,23 @@ async def forward(self) -> None:
             for i, miner_uid in enumerate(miner_uids):
                 score_value = rewards[i] if rewards[i] is not None else 0.0
                 exec_time_value = execution_times[i] if execution_times[i] is not None else TIMEOUT
+                success = score_value > 0.0
+
                 if miner_uid not in self.miner_stats:
                     self.miner_stats[miner_uid] = MinerStats()
                 self.miner_stats[miner_uid].update(
                     score=float(score_value),
                     execution_time=float(exec_time_value),
                     evaluation_time=evaluation_time,
-                    last_task=task
+                    last_task=task,
+                    success=success
                 )
                 self.miner_stats["aggregated"].update(
                     score=float(score_value),
                     execution_time=float(exec_time_value),
                     evaluation_time=evaluation_time,
-                    last_task=task
+                    last_task=task,
+                    success=success
                 )
 
             feedback_list = [
@@ -175,6 +182,10 @@ async def forward(self) -> None:
                 )
             _ = await asyncio.gather(*feedback_tasks)
             bt.logging.info("TaskFeedbackSynapse responses received.")
+
+            # Print some feedback stats in the terminal
+            for fb in feedback_list:
+                fb.print_in_terminal()
 
             bt.logging.success("Task step completed successfully.")
 
@@ -214,7 +225,7 @@ def _get_task_solution_from_synapse(
     task: Task,
     synapse: TaskSynapse,
     web_agent_id: str
-) -> TaskSolution:
+):
     if not synapse or not hasattr(synapse, 'actions') or not isinstance(synapse.actions, list):
         return TaskSolution(task=task, actions=[], web_agent_id=web_agent_id)
     return TaskSolution(task=task, actions=synapse.actions, web_agent_id=web_agent_id)

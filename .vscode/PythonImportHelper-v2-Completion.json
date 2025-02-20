@@ -7377,6 +7377,22 @@
         "documentation": {}
     },
     {
+        "label": "Console",
+        "importPath": "rich.console",
+        "description": "rich.console",
+        "isExtraImport": true,
+        "detail": "rich.console",
+        "documentation": {}
+    },
+    {
+        "label": "Table",
+        "importPath": "rich.table",
+        "description": "rich.table",
+        "isExtraImport": true,
+        "detail": "rich.table",
+        "documentation": {}
+    },
+    {
         "label": "BaseMinerNeuron",
         "importPath": "autoppia_web_agents_subnet.base.miner",
         "description": "autoppia_web_agents_subnet.base.miner",
@@ -12697,7 +12713,7 @@
         "kind": 6,
         "importPath": "autoppia_web_agents_subnet.protocol",
         "description": "autoppia_web_agents_subnet.protocol",
-        "peekOfCode": "class MinerStats(BaseModel):\n    avg_score: float = 0.0\n    avg_execution_time: float = 0.0\n    avg_evaluation_time: float = 0.0\n    total_tasks: int = 0\n    last_task: Optional[\"Task\"] = None\n    sum_score: float = 0.0\n    sum_execution_time: float = 0.0\n    sum_evaluation_time: float = 0.0\n    def update(self, score: float, execution_time: float, evaluation_time: float, last_task: \"Task\"):",
+        "peekOfCode": "class MinerStats(BaseModel):\n    avg_score: float = 0.0\n    avg_execution_time: float = 0.0\n    avg_evaluation_time: float = 0.0\n    total_tasks: int = 0\n    total_successful_tasks: int = 0\n    last_task: Optional[\"Task\"] = None\n    sum_score: float = 0.0\n    sum_execution_time: float = 0.0\n    sum_evaluation_time: float = 0.0",
         "detail": "autoppia_web_agents_subnet.protocol",
         "documentation": {}
     },
@@ -12715,7 +12731,7 @@
         "kind": 6,
         "importPath": "autoppia_web_agents_subnet.protocol",
         "description": "autoppia_web_agents_subnet.protocol",
-        "peekOfCode": "class TaskFeedbackSynapse(Synapse):\n    version: str = \"\"\n    stats: MinerStats\n    # Add aggregated_stats if needed\n    # aggregated_stats: MinerStats\n    class Config:\n        extra = \"allow\"\n    def deserialize(self) -> \"TaskFeedbackSynapse\":\n        return self",
+        "peekOfCode": "class TaskFeedbackSynapse(Synapse):\n    version: str = \"\"\n    stats: MinerStats\n    class Config:\n        extra = \"allow\"\n    def deserialize(self) -> \"TaskFeedbackSynapse\":\n        return self\n    def print_in_terminal(self):\n        console = Console()\n        table = Table(title=\"Miner Feedback Stats\", show_header=True, header_style=\"bold magenta\")",
         "detail": "autoppia_web_agents_subnet.protocol",
         "documentation": {}
     },
