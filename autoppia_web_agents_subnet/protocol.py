@@ -2,7 +2,6 @@ from pydantic import Field, BaseModel
 from typing import List, Optional
 from bittensor import Synapse
 from autoppia_iwa.src.execution.actions.actions import AllActionsUnion
-from autoppia_web_agents_subnet.validator.stats import MinerStats
 from autoppia_iwa.src.data_generation.domain.classes import Task
 
 
