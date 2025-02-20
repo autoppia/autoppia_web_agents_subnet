@@ -62,7 +62,7 @@ class BaseMinerNeuron(BaseNeuron):
             priority_fn=self.priority,
         )
         self.axon.attach(
-            forward_fn=self.forward,
+            forward_fn=self.forward_feedback,
             blacklist_fn=self.blacklist,
             priority_fn=self.priority,
         )
