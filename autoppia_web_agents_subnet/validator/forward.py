@@ -53,7 +53,7 @@ async def forward(self) -> None:
         bt.logging.warning(f"Generating tasks for Web Project: '{demo_web_project.name}' ...")
         start_time = time.time()
         tasks_generated: List[Task] = await _generate_tasks_for_url(demo_web_project=demo_web_project)
-        ColoredLogger.info(f"Generated {len(tasks_generated)} tasks in {time.time()-start_time}", ColoredLogger.YELLOW)
+        ColoredLogger.info(f"Generated {len(tasks_generated)} tasks in {time.time()-start_time}s", ColoredLogger.YELLOW)
 
         if not tasks_generated:
             bt.logging.warning("No tasks generated, skipping forward step.")
