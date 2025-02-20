@@ -7306,26 +7306,18 @@
     },
     {
         "label": "TaskSynapse",
-        "importPath": "autoppia_web_agents_subnet.protocol.synapse",
-        "description": "autoppia_web_agents_subnet.protocol.synapse",
+        "importPath": "autoppia_web_agents_subnet.protocol",
+        "description": "autoppia_web_agents_subnet.protocol",
         "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet.protocol.synapse",
+        "detail": "autoppia_web_agents_subnet.protocol",
         "documentation": {}
     },
     {
         "label": "FeedbackSynapse",
-        "importPath": "autoppia_web_agents_subnet.protocol.synapse",
-        "description": "autoppia_web_agents_subnet.protocol.synapse",
+        "importPath": "autoppia_web_agents_subnet.protocol",
+        "description": "autoppia_web_agents_subnet.protocol",
         "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet.protocol.synapse",
-        "documentation": {}
-    },
-    {
-        "label": "BaseMinerNeuron",
-        "importPath": "autoppia_web_agents_subnet.base.miner",
-        "description": "autoppia_web_agents_subnet.base.miner",
-        "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet.base.miner",
+        "detail": "autoppia_web_agents_subnet.protocol",
         "documentation": {}
     },
     {
@@ -7334,6 +7326,14 @@
         "description": "autoppia_web_agents_subnet.protocol",
         "isExtraImport": true,
         "detail": "autoppia_web_agents_subnet.protocol",
+        "documentation": {}
+    },
+    {
+        "label": "BaseMinerNeuron",
+        "importPath": "autoppia_web_agents_subnet.base.miner",
+        "description": "autoppia_web_agents_subnet.base.miner",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.base.miner",
         "documentation": {}
     },
     {

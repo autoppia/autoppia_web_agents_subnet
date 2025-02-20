@@ -20,7 +20,7 @@ from autoppia_iwa.src.data_generation.application.tasks_generation_pipeline impo
 from autoppia_web_agents_subnet.validator.reward import get_rewards
 from autoppia_web_agents_subnet.utils.uids import get_random_uids
 from autoppia_web_agents_subnet.validator.stats import MinerStats
-from autoppia_web_agents_subnet.protocol.synapse import TaskSynapse, FeedbackSynapse
+from autoppia_web_agents_subnet.protocol import TaskSynapse, FeedbackSynapse
 
 TIMEOUT = 120
 FORWARD_SLEEP_SECONDS = 60 * 10  # 10 Minutes
