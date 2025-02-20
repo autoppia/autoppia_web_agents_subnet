@@ -1043,6 +1043,14 @@
         "documentation": {}
     },
     {
+        "label": "Optional",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
         "label": "List",
         "importPath": "typing",
         "description": "typing",
@@ -1838,6 +1846,38 @@
         "documentation": {}
     },
     {
+        "label": "WebProject",
+        "importPath": "autoppia_iwa.src.data_generation.domain.classes",
+        "description": "autoppia_iwa.src.data_generation.domain.classes",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.data_generation.domain.classes",
+        "documentation": {}
+    },
+    {
+        "label": "Task",
+        "importPath": "autoppia_iwa.src.data_generation.domain.classes",
+        "description": "autoppia_iwa.src.data_generation.domain.classes",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.data_generation.domain.classes",
+        "documentation": {}
+    },
+    {
+        "label": "TaskGenerationConfig",
+        "importPath": "autoppia_iwa.src.data_generation.domain.classes",
+        "description": "autoppia_iwa.src.data_generation.domain.classes",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.data_generation.domain.classes",
+        "documentation": {}
+    },
+    {
+        "label": "TasksGenerationOutput",
+        "importPath": "autoppia_iwa.src.data_generation.domain.classes",
+        "description": "autoppia_iwa.src.data_generation.domain.classes",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.data_generation.domain.classes",
+        "documentation": {}
+    },
+    {
         "label": "Task",
         "importPath": "autoppia_iwa.src.data_generation.domain.classes",
         "description": "autoppia_iwa.src.data_generation.domain.classes",
@@ -2419,6 +2459,14 @@
     },
     {
         "label": "Task",
+        "importPath": "autoppia_iwa.src.web_agents.classes",
+        "description": "autoppia_iwa.src.web_agents.classes",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.web_agents.classes",
+        "documentation": {}
+    },
+    {
+        "label": "TaskSolution",
         "importPath": "autoppia_iwa.src.web_agents.classes",
         "description": "autoppia_iwa.src.web_agents.classes",
         "isExtraImport": true,
@@ -3131,6 +3179,14 @@
         "documentation": {}
     },
     {
+        "label": "deepcopy",
+        "importPath": "copy",
+        "description": "copy",
+        "isExtraImport": true,
+        "detail": "copy",
+        "documentation": {}
+    },
+    {
         "label": "fields",
         "importPath": "dataclasses",
         "description": "dataclasses",
@@ -3604,6 +3660,22 @@
         "description": "autoppia_iwa.src.backend_demo_web.config",
         "isExtraImport": true,
         "detail": "autoppia_iwa.src.backend_demo_web.config",
+        "documentation": {}
+    },
+    {
+        "label": "get_demo_webs_projects",
+        "importPath": "autoppia_iwa.src.backend_demo_web.config",
+        "description": "autoppia_iwa.src.backend_demo_web.config",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.backend_demo_web.config",
+        "documentation": {}
+    },
+    {
+        "label": "TaskGenerationPipeline",
+        "importPath": "autoppia_iwa.src.data_generation.application.tasks_generation_pipeline",
+        "description": "autoppia_iwa.src.data_generation.application.tasks_generation_pipeline",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.data_generation.application.tasks_generation_pipeline",
         "documentation": {}
     },
     {
@@ -7297,11 +7369,51 @@
         "documentation": {}
     },
     {
+        "label": "get_rewards",
+        "importPath": "autoppia_web_agents_subnet.validator.reward",
+        "description": "autoppia_web_agents_subnet.validator.reward",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.validator.reward",
+        "documentation": {}
+    },
+    {
         "label": "get_random_uids",
         "importPath": "autoppia_web_agents_subnet.utils.uids",
         "description": "autoppia_web_agents_subnet.utils.uids",
         "isExtraImport": true,
         "detail": "autoppia_web_agents_subnet.utils.uids",
+        "documentation": {}
+    },
+    {
+        "label": "get_random_uids",
+        "importPath": "autoppia_web_agents_subnet.utils.uids",
+        "description": "autoppia_web_agents_subnet.utils.uids",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.utils.uids",
+        "documentation": {}
+    },
+    {
+        "label": "TaskSynapse",
+        "importPath": "autoppia_web_agents_subnet.protocol",
+        "description": "autoppia_web_agents_subnet.protocol",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.protocol",
+        "documentation": {}
+    },
+    {
+        "label": "FeedbackSynapse",
+        "importPath": "autoppia_web_agents_subnet.protocol",
+        "description": "autoppia_web_agents_subnet.protocol",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.protocol",
+        "documentation": {}
+    },
+    {
+        "label": "MinerStats",
+        "importPath": "autoppia_web_agents_subnet.protocol",
+        "description": "autoppia_web_agents_subnet.protocol",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.protocol",
         "documentation": {}
     },
     {
@@ -12554,20 +12666,65 @@
         "documentation": {}
     },
     {
-        "label": "check_uid_availability",
-        "kind": 2,
+        "label": "TIMEOUT",
+        "kind": 5,
         "importPath": "autoppia_web_agents_subnet.utils.uids",
         "description": "autoppia_web_agents_subnet.utils.uids",
-        "peekOfCode": "def check_uid_availability(\n    metagraph: \"bt.metagraph.Metagraph\", uid: int, vpermit_tao_limit: int\n) -> bool:\n    \"\"\"Check if uid is available. The UID should be available if it is serving and has less than vpermit_tao_limit stake\n    Args:\n        metagraph (:obj: bt.metagraph.Metagraph): Metagraph object\n        uid (int): uid to be checked\n        vpermit_tao_limit (int): Validator permit tao limit\n    Returns:\n        bool: True if uid is available, False otherwise",
+        "peekOfCode": "TIMEOUT = 120\nFORWARD_SLEEP_SECONDS = 60 * 10  # 10 Minutes\nTASK_SLEEP = 60 * 3             # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        _init_miner_stats(self)",
         "detail": "autoppia_web_agents_subnet.utils.uids",
         "documentation": {}
     },
     {
-        "label": "get_random_uids",
-        "kind": 2,
+        "label": "FORWARD_SLEEP_SECONDS",
+        "kind": 5,
         "importPath": "autoppia_web_agents_subnet.utils.uids",
         "description": "autoppia_web_agents_subnet.utils.uids",
-        "peekOfCode": "def get_random_uids(self, k: int, exclude: List[int] = None) -> np.ndarray:\n    \"\"\"Returns k available random uids from the metagraph.\n    Args:\n        k (int): Number of uids to return.\n        exclude (List[int]): List of uids to exclude from the random sampling.\n    Returns:\n        uids (np.ndarray): Randomly sampled available uids.\n    Notes:\n        If `k` is larger than the number of available `uids`, set `k` to the number of available `uids`.\n    \"\"\"",
+        "peekOfCode": "FORWARD_SLEEP_SECONDS = 60 * 10  # 10 Minutes\nTASK_SLEEP = 60 * 3             # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        _init_miner_stats(self)\n        bt.logging.info(\"Starting forward step for validator (vali).\")",
+        "detail": "autoppia_web_agents_subnet.utils.uids",
+        "documentation": {}
+    },
+    {
+        "label": "TASK_SLEEP",
+        "kind": 5,
+        "importPath": "autoppia_web_agents_subnet.utils.uids",
+        "description": "autoppia_web_agents_subnet.utils.uids",
+        "peekOfCode": "TASK_SLEEP = 60 * 3             # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        _init_miner_stats(self)\n        bt.logging.info(\"Starting forward step for validator (vali).\")\n        demo_web_projects = get_demo_webs_projects()",
+        "detail": "autoppia_web_agents_subnet.utils.uids",
+        "documentation": {}
+    },
+    {
+        "label": "TIME_WEIGHT",
+        "kind": 5,
+        "importPath": "autoppia_web_agents_subnet.utils.uids",
+        "description": "autoppia_web_agents_subnet.utils.uids",
+        "peekOfCode": "TIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        _init_miner_stats(self)\n        bt.logging.info(\"Starting forward step for validator (vali).\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")",
+        "detail": "autoppia_web_agents_subnet.utils.uids",
+        "documentation": {}
+    },
+    {
+        "label": "MIN_SCORE_FOR_CORRECT_FORMAT",
+        "kind": 5,
+        "importPath": "autoppia_web_agents_subnet.utils.uids",
+        "description": "autoppia_web_agents_subnet.utils.uids",
+        "peekOfCode": "MIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        _init_miner_stats(self)\n        bt.logging.info(\"Starting forward step for validator (vali).\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n        demo_web_project = _select_demo_project(demo_web_projects)",
+        "detail": "autoppia_web_agents_subnet.utils.uids",
+        "documentation": {}
+    },
+    {
+        "label": "MIN_RESPONSE_REWARD",
+        "kind": 5,
+        "importPath": "autoppia_web_agents_subnet.utils.uids",
+        "description": "autoppia_web_agents_subnet.utils.uids",
+        "peekOfCode": "MIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        _init_miner_stats(self)\n        bt.logging.info(\"Starting forward step for validator (vali).\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n        demo_web_project = _select_demo_project(demo_web_projects)\n        if demo_web_project is None:",
+        "detail": "autoppia_web_agents_subnet.utils.uids",
+        "documentation": {}
+    },
+    {
+        "label": "SAMPLE_SIZE",
+        "kind": 5,
+        "importPath": "autoppia_web_agents_subnet.utils.uids",
+        "description": "autoppia_web_agents_subnet.utils.uids",
+        "peekOfCode": "SAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        _init_miner_stats(self)\n        bt.logging.info(\"Starting forward step for validator (vali).\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n        demo_web_project = _select_demo_project(demo_web_projects)\n        if demo_web_project is None:\n            bt.logging.error(\"No valid demo web project selected. Aborting forward step.\")",
         "detail": "autoppia_web_agents_subnet.utils.uids",
         "documentation": {}
     },

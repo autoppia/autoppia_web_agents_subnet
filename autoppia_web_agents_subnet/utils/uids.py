@@ -18,7 +18,6 @@ from autoppia_iwa.src.data_generation.application.tasks_generation_pipeline impo
     TaskGenerationPipeline,
 )
 from autoppia_web_agents_subnet.validator.reward import get_rewards
-from autoppia_web_agents_subnet.utils.uids import get_random_uids
 from autoppia_web_agents_subnet.protocol import TaskSynapse, FeedbackSynapse, MinerStats
 
 # Constants
@@ -30,6 +29,48 @@ MIN_SCORE_FOR_CORRECT_FORMAT = 0.1
 MIN_RESPONSE_REWARD = 0.1
 SAMPLE_SIZE = 256  # All Miners
 
+def check_uid_availability(metagraph, uid, limit) -> bool:
+    """
+    Stub implementation for uid availability check.
+    Replace this with the actual logic as needed.
+    """
+    # For now, assume all uids are available.
+    return True
+
+def get_random_uids(self, k: int, exclude: List[int] = None) -> np.ndarray:
+    """Returns k available random uids from the metagraph.
+    Args:
+        k (int): Number of uids to return.
+        exclude (List[int]): List of uids to exclude from the random sampling.
+    Returns:
+        uids (np.ndarray): Randomly sampled available uids.
+    Notes:
+        If `k` is larger than the number of available `uids`, set `k` to the number of available `uids`.
+    """
+    candidate_uids = []
+    avail_uids = []
+
+    for uid in range(self.metagraph.n.item()):
+        uid_is_available = check_uid_availability(
+            self.metagraph, uid, self.config.neuron.vpermit_tao_limit
+        )
+        uid_is_not_excluded = exclude is None or uid not in exclude
+
+        if uid_is_available:
+            avail_uids.append(uid)
+            if uid_is_not_excluded:
+                candidate_uids.append(uid)
+    # If k is larger than the number of available uids, set k to the number of available uids.
+    k = min(k, len(avail_uids))
+    # Check if candidate_uids contain enough for querying; if not, grab remaining available uids.
+    available_uids = candidate_uids
+    if len(candidate_uids) < k:
+        available_uids += random.sample(
+            [uid for uid in avail_uids if uid not in candidate_uids],
+            k - len(candidate_uids),
+        )
+    uids = np.array(random.sample(available_uids, k))
+    return uids
 
 async def forward(self) -> None:
     try:
@@ -48,7 +89,6 @@ async def forward(self) -> None:
         web_url = demo_web_project.frontend_url
         bt.logging.info(f"Selected demo web project with URL: {web_url}")
 
-        # Generate tasks for the selected demo web project
         bt.logging.warning(f"Generating tasks for Web Project: '{demo_web_project.name}'.")
         tasks_generated: List[Task] = await _generate_tasks_for_url(demo_web_project)
         if not tasks_generated:
