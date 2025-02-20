@@ -17,7 +17,7 @@
 # DEALINGS IN THE SOFTWARE.
 
 from autoppia_web_agents_subnet.base.miner import BaseMinerNeuron
-from autoppia_web_agents_subnet.protocol import TaskSynapse
+from autoppia_web_agents_subnet.protocol import TaskSynapse, TaskFeedbackSynapse
 import bittensor as bt
 import time
 import typing
@@ -88,6 +88,12 @@ class Miner(BaseMinerNeuron):
         except Exception as e:
             bt.logging.error(f"An Error ocurred on miner forward : {e}")
 
+        return synapse
+
+    async def forward_feedback(self, synapse: TaskFeedbackSynapse) -> TaskFeedbackSynapse:
+        print("===================")
+        bt.logging.info(f"Task Feedback: {synapse}")
+        print("===================")
         return synapse
 
     async def blacklist(self, synapse: TaskSynapse) -> typing.Tuple[bool, str]:

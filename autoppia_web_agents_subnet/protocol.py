@@ -43,7 +43,7 @@ class TaskSynapse(Synapse):
         return self
 
 
-class FeedbackSynapse(Synapse):
+class TaskFeedbackSynapse(Synapse):
     version: str = ""
     stats: MinerStats
     # Add aggregated_stats if needed
@@ -52,5 +52,5 @@ class FeedbackSynapse(Synapse):
     class Config:
         extra = "allow"
 
-    def deserialize(self) -> "FeedbackSynapse":
+    def deserialize(self) -> "TaskFeedbackSynapse":
         return self

@@ -18,7 +18,7 @@ from autoppia_iwa.src.data_generation.application.tasks_generation_pipeline impo
 )
 from autoppia_web_agents_subnet.validator.reward import get_rewards
 from autoppia_web_agents_subnet.utils.uids import get_random_uids
-from autoppia_web_agents_subnet.protocol import TaskSynapse, FeedbackSynapse, MinerStats
+from autoppia_web_agents_subnet.protocol import TaskSynapse, TaskFeedbackSynapse, MinerStats
 from autoppia_web_agents_subnet.utils.dendrite import dendrite_with_retries
 
 
@@ -153,11 +153,11 @@ async def forward(self) -> None:
                 )
 
             feedback_list = [
-                FeedbackSynapse(version="v1", stats=self.miner_stats[miner_uid])
+                TaskFeedbackSynapse(version="v1", stats=self.miner_stats[miner_uid])
                 for miner_uid in miner_uids
             ]
 
-            bt.logging.info(f"Sending FeedbackSynapse to {len(miner_uids)} miners in parallel.")
+            bt.logging.info(f"Sending TaskFeedbackSynapse to {len(miner_uids)} miners in parallel.")
             feedback_tasks = []
             for axon, feedback_synapse in zip(miner_axons, feedback_list):
                 feedback_tasks.append(
@@ -172,7 +172,7 @@ async def forward(self) -> None:
                     )
                 )
             _ = await asyncio.gather(*feedback_tasks)
-            bt.logging.info("FeedbackSynapse responses received.")
+            bt.logging.info("TaskFeedbackSynapse responses received.")
 
             bt.logging.success("Task step completed successfully.")
 

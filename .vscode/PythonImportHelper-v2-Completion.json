@@ -7280,7 +7280,7 @@
         "documentation": {}
     },
     {
-        "label": "FeedbackSynapse",
+        "label": "TaskFeedbackSynapse",
         "importPath": "autoppia_web_agents_subnet.protocol",
         "description": "autoppia_web_agents_subnet.protocol",
         "isExtraImport": true,
@@ -7297,6 +7297,14 @@
     },
     {
         "label": "TaskSynapse",
+        "importPath": "autoppia_web_agents_subnet.protocol",
+        "description": "autoppia_web_agents_subnet.protocol",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.protocol",
+        "documentation": {}
+    },
+    {
+        "label": "TaskFeedbackSynapse",
         "importPath": "autoppia_web_agents_subnet.protocol",
         "description": "autoppia_web_agents_subnet.protocol",
         "isExtraImport": true,
@@ -12696,11 +12704,11 @@
         "documentation": {}
     },
     {
-        "label": "FeedbackSynapse",
+        "label": "TaskFeedbackSynapse",
         "kind": 6,
         "importPath": "autoppia_web_agents_subnet.protocol",
         "description": "autoppia_web_agents_subnet.protocol",
-        "peekOfCode": "class FeedbackSynapse(Synapse):\n    version: str = \"\"\n    stats: MinerStats\n    # Add aggregated_stats if needed\n    # aggregated_stats: MinerStats\n    class Config:\n        extra = \"allow\"\n    def deserialize(self) -> \"FeedbackSynapse\":\n        return self",
+        "peekOfCode": "class TaskFeedbackSynapse(Synapse):\n    version: str = \"\"\n    stats: MinerStats\n    # Add aggregated_stats if needed\n    # aggregated_stats: MinerStats\n    class Config:\n        extra = \"allow\"\n    def deserialize(self) -> \"TaskFeedbackSynapse\":\n        return self",
         "detail": "autoppia_web_agents_subnet.protocol",
         "documentation": {}
     },
