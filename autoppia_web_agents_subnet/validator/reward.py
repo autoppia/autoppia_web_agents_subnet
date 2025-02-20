@@ -8,6 +8,7 @@ from autoppia_iwa.src.evaluation.evaluator.evaluator import (
 )
 from autoppia_iwa.src.web_agents.classes import TaskSolution
 from autoppia_iwa.src.evaluation.classes import EvaluationResult
+from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
 
 def normalize_execution_times(times: List[Optional[float]]) -> List[float]:
@@ -91,7 +92,7 @@ async def _evaluate_all_task_solutions(
 
     total_time = end_time - start_time
     avg_time = total_time / len(task_solutions) if task_solutions else 0.0
-    bt.logging.debug(f"Evaluation took {total_time:.3f} seconds total, average {avg_time:.3f} per miner")
+    ColoredLogger.info(f"Evaluation took {total_time:.3f} seconds total, average {avg_time:.3f} per miner", ColoredLogger.YELLOW)
 
     return scores
 

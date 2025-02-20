@@ -7361,6 +7361,22 @@
         "documentation": {}
     },
     {
+        "label": "ColoredLogger",
+        "importPath": "autoppia_web_agents_subnet.utils.logging",
+        "description": "autoppia_web_agents_subnet.utils.logging",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.utils.logging",
+        "documentation": {}
+    },
+    {
+        "label": "ColoredLogger",
+        "importPath": "autoppia_web_agents_subnet.utils.logging",
+        "description": "autoppia_web_agents_subnet.utils.logging",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.utils.logging",
+        "documentation": {}
+    },
+    {
         "label": "BaseMinerNeuron",
         "importPath": "autoppia_web_agents_subnet.base.miner",
         "description": "autoppia_web_agents_subnet.base.miner",
@@ -12530,6 +12546,15 @@
         "description": "autoppia_web_agents_subnet.utils.config",
         "peekOfCode": "def config(cls):\n    \"\"\"\n    Returns the configuration object specific to this miner or validator after adding relevant arguments.\n    \"\"\"\n    parser = argparse.ArgumentParser()\n    bt.wallet.add_args(parser)\n    bt.subtensor.add_args(parser)\n    bt.logging.add_args(parser)\n    bt.axon.add_args(parser)\n    cls.add_args(parser)",
         "detail": "autoppia_web_agents_subnet.utils.config",
+        "documentation": {}
+    },
+    {
+        "label": "ColoredLogger",
+        "kind": 6,
+        "importPath": "autoppia_web_agents_subnet.utils.logging",
+        "description": "autoppia_web_agents_subnet.utils.logging",
+        "peekOfCode": "class ColoredLogger:\n    \"\"\"A simple logger that uses ANSI colors when calling bt.logging methods.\"\"\"\n    BLUE = \"blue\"\n    YELLOW = \"yellow\"\n    RED = \"red\"\n    RESET = \"reset\"\n    _COLORS = {\n        \"blue\": \"\\033[94m\",\n        \"yellow\": \"\\033[93m\",\n        \"red\": \"\\033[91m\",",
+        "detail": "autoppia_web_agents_subnet.utils.logging",
         "documentation": {}
     },
     {

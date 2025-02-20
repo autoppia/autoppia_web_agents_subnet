@@ -1,6 +1,7 @@
 import os
 import logging
 from logging.handlers import RotatingFileHandler
+import bittensor as bt
 
 EVENTS_LEVEL_NUM = 38
 DEFAULT_LOG_BACKUP_COUNT = 10
@@ -33,3 +34,38 @@ def setup_events_logger(full_path, events_retention_size):
     logger.addHandler(file_handler)
 
     return logger
+
+
+class ColoredLogger:
+    """A simple logger that uses ANSI colors when calling bt.logging methods."""
+    BLUE = "blue"
+    YELLOW = "yellow"
+    RED = "red"
+    RESET = "reset"
+
+    _COLORS = {
+        "blue": "\033[94m",
+        "yellow": "\033[93m",
+        "red": "\033[91m",
+        "reset": "\033[0m"
+    }
+
+    @staticmethod
+    def _colored_msg(message: str, color: str) -> str:
+        """Return the colored message based on the color provided."""
+        if color not in ColoredLogger._COLORS:
+            # Default to no color if unsupported color is provided
+            return message
+        return f"{ColoredLogger._COLORS[color]}{message}{ColoredLogger._COLORS['reset']}"
+
+    @staticmethod
+    def info(message: str, color: str = "blue") -> None:
+        bt.logging.info(ColoredLogger._colored_msg(message, color))
+
+    @staticmethod
+    def warning(message: str, color: str = "yellow") -> None:
+        bt.logging.warning(ColoredLogger._colored_msg(message, color))
+
+    @staticmethod
+    def error(message: str, color: str = "red") -> None:
+        bt.logging.error(ColoredLogger._colored_msg(message, color))
