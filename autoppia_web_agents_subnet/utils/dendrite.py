@@ -2,6 +2,7 @@ import bittensor as bt
 from typing import List
 from autoppia_web_agents_subnet.protocol import TaskSynapse
 
+
 async def dendrite_with_retries(
     dendrite: bt.dendrite,
     axons: list,
