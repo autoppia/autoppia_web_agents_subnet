@@ -192,10 +192,6 @@ class Miner(BaseMinerNeuron):
         )
         return priority
 
-    def set_weights(self):
-        # Overriding the abstract method from BaseNeuron to avoid instantiation error
-        pass
-
 
 if __name__ == "__main__":
     # This is Miner Entrypoint
