@@ -1,5 +1,6 @@
 import numpy as np
 from typing import List, Optional
+import time
 import bittensor as bt
 from autoppia_iwa.src.evaluation.evaluator.evaluator import (
     ConcurrentEvaluator,
@@ -77,14 +78,22 @@ async def _evaluate_all_task_solutions(
     evaluator: ConcurrentEvaluator,
     task_solutions: List[TaskSolution]
 ) -> List[float]:
+    start_time = time.time()
     try:
         results: List[EvaluationResult] = await evaluator.evaluate_all_tasks(
             task_solutions=task_solutions
         )
-        return [get_score_from_evaluation_result(r) for r in results]
+        scores = [get_score_from_evaluation_result(r) for r in results]
     except Exception as exc:
         bt.logging.error(f"Error evaluating task solutions: {exc}")
-        return [0.0] * len(task_solutions)
+        scores = [0.0] * len(task_solutions)
+    end_time = time.time()
+
+    total_time = end_time - start_time
+    avg_time = total_time / len(task_solutions) if task_solutions else 0.0
+    bt.logging.debug(f"Evaluation took {total_time:.3f} seconds total, average {avg_time:.3f} per miner")
+
+    return scores
 
 
 def get_score_from_evaluation_result(result: EvaluationResult) -> float:

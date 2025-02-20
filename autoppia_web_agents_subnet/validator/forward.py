@@ -66,8 +66,8 @@ async def forward(self) -> None:
 
         for index, task in enumerate(tasks_generated):
             task_start_time = time.time()
-
             bt.logging.debug(f"Task #{index} (ID: {task.id}): {task.prompt}")
+
             miner_task: Task = _clean_miner_task(task=task)
             bt.logging.info(f"Miner task: {miner_task}")
 
@@ -76,7 +76,6 @@ async def forward(self) -> None:
 
             miner_axons = [self.metagraph.axons[uid] for uid in miner_uids]
 
-            # Send the SAME TaskSynapse to all miners
             task_synapse = TaskSynapse(prompt=miner_task.prompt, url=miner_task.url, actions=[])
             bt.logging.info(f"Sending TaskSynapse to {len(miner_uids)} miners.")
             responses: List[TaskSynapse] = await dendrite_with_retries(
@@ -86,17 +85,18 @@ async def forward(self) -> None:
                 deserialize=True,
                 timeout=TIMEOUT,
             )
-            bt.logging.info(f"Received {len(responses)} responses.")
+
+            num_valid_responses = sum(resp is not None for resp in responses)
+            num_none_responses = len(responses) - num_valid_responses
+            bt.logging.info(
+                f"Received {len(responses)} responses: "
+                f"{num_valid_responses} valid, {num_none_responses} errors."
+            )
 
             task_solutions = []
             execution_times = []
 
             for miner_uid, response in zip(miner_uids, responses):
-                if response:
-                    bt.logging.debug(f"Miner {miner_uid} actions: {response.actions}")
-                else:
-                    bt.logging.debug(f"Miner {miner_uid} Response None")
-
                 try:
                     task_solution = _get_task_solution_from_synapse(
                         task=task,
@@ -108,7 +108,12 @@ async def forward(self) -> None:
                     task_solution = TaskSolution(task=task, actions=[], web_agent_id=str(miner_uid))
 
                 task_solutions.append(task_solution)
-                process_time = getattr(response.dendrite, "process_time", TIMEOUT) if response else TIMEOUT
+
+                if response and hasattr(response.dendrite, "process_time") and response.dendrite.process_time is not None:
+                    process_time = response.dendrite.process_time
+                else:
+                    process_time = TIMEOUT
+
                 execution_times.append(process_time)
 
             evaluation_start_time = time.time()
@@ -130,28 +135,28 @@ async def forward(self) -> None:
             bt.logging.info("Scores updated for miners")
 
             for i, miner_uid in enumerate(miner_uids):
+                score_value = rewards[i] if rewards[i] is not None else 0.0
+                exec_time_value = execution_times[i] if execution_times[i] is not None else TIMEOUT
                 if miner_uid not in self.miner_stats:
                     self.miner_stats[miner_uid] = MinerStats()
                 self.miner_stats[miner_uid].update(
-                    score=float(rewards[i]),
-                    execution_time=float(execution_times[i]),
+                    score=float(score_value),
+                    execution_time=float(exec_time_value),
                     evaluation_time=evaluation_time,
                     last_task=task
                 )
                 self.miner_stats["aggregated"].update(
-                    score=float(rewards[i]),
-                    execution_time=float(execution_times[i]),
+                    score=float(score_value),
+                    execution_time=float(exec_time_value),
                     evaluation_time=evaluation_time,
                     last_task=task
                 )
 
-            # Prepare FeedbackSynapse for each miner
             feedback_list = [
                 FeedbackSynapse(version="v1", stats=self.miner_stats[miner_uid])
                 for miner_uid in miner_uids
             ]
 
-            # Send each feedback synapse to the corresponding miner IN PARALLEL
             bt.logging.info(f"Sending FeedbackSynapse to {len(miner_uids)} miners in parallel.")
             feedback_tasks = []
             for axon, feedback_synapse in zip(miner_axons, feedback_list):
@@ -159,10 +164,10 @@ async def forward(self) -> None:
                     asyncio.create_task(
                         dendrite_with_retries(
                             dendrite=self.dendrite,
-                            axons=[axon],                # single axon
-                            synapse=feedback_synapse,    # different feedback synapse per miner
+                            axons=[axon],
+                            synapse=feedback_synapse,
                             deserialize=True,
-                            timeout=5                    # 5s for quick feedback
+                            timeout=5
                         )
                     )
                 )
