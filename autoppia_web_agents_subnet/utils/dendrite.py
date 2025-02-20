@@ -1,21 +1,21 @@
 import bittensor as bt
 from typing import List
-from autoppia_web_agents_subnet.protocol import TextSynapse
+from autoppia_web_agents_subnet.protocol import TaskSynapse
 
 async def dendrite_with_retries(
     dendrite: bt.dendrite,
     axons: list,
-    synapse: TextSynapse,
+    synapse: TaskSynapse,
     deserialize: bool,
     timeout: float,
     cnt_attempts=3
-) -> List[TextSynapse]:
-    res: List[TextSynapse | None] = [None] * len(axons)
+) -> List[TaskSynapse]:
+    res: List[TaskSynapse | None] = [None] * len(axons)
     idx = list(range(len(axons)))
     axons = axons.copy()
 
     for attempt in range(cnt_attempts):
-        responses: List[TextSynapse] = await dendrite(
+        responses: List[TaskSynapse] = await dendrite(
             axons=axons,
             synapse=synapse,
             deserialize=deserialize,
