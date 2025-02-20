@@ -184,11 +184,11 @@ async def forward(self) -> None:
             tasks_total_time += task_duration
 
             avg_miner_time = sum(execution_times) / len(execution_times) if execution_times else 0.0
-            bt.logging.info(
+            ColoredLogger.info(
                 f"Task analysis time: {task_duration:.2f}s, "
                 f"average miner request time: {avg_miner_time:.2f}s, "
                 f"evaluation time: {evaluation_time:.2f}s"
-            )
+                ,ColoredLogger.YELLOW)
 
             bt.logging.info(f"Sleeping for {FORWARD_SLEEP_SECONDS}s....")
             await asyncio.sleep(FORWARD_SLEEP_SECONDS)
