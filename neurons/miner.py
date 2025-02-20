@@ -26,6 +26,7 @@ from autoppia_iwa.src.execution.actions.base import BaseAction
 from autoppia_iwa.src.web_agents.random.agent import RandomClickerWebAgent
 from autoppia_iwa.src.bootstrap import AppBootstrap
 from autoppia_iwa.src.data_generation.domain.classes import Task
+from autoppia_iwa.src.web_agents.apified_agent import ApifiedWebAgent
 from autoppia_iwa.config.config import (
     AGENT_HOST,
     AGENT_NAME,
