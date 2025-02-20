@@ -1,52 +1,51 @@
-from typing import List, Optional
 import bittensor as bt
+from typing import List
+from autoppia_web_agents_subnet.protocol import TaskSynapse
 
 
 async def dendrite_with_retries(
-    dendrite: bt.dendrite,
-    axons: List,
-    synapses: List,
-    deserialize: bool,
-    timeout: float,
-    cnt_attempts: int = 3
-) -> List:
-    res: List[Optional] = [None] * len(axons)
+    dendrite: bt.dendrite, 
+    axons: list, 
+    inputs: List[TaskSynapse],   # <-- CHANGED: now accepts a list
+    deserialize: bool, 
+    timeout: float, 
+    cnt_attempts=3
+) -> List[TaskSynapse]:
+    res: List[TaskSynapse | None] = [None] * len(axons)
     idx = list(range(len(axons)))
-    axons_copy = axons.copy()
-    synapses_copy = synapses.copy()
+    axons = axons.copy()
 
     for attempt in range(cnt_attempts):
-        responses: List = await dendrite(
-            axons=axons_copy,
-            synapses=synapses_copy,
+        # Only send the subset of inputs corresponding to the current idx
+        attempt_inputs = [inputs[i] for i in idx]
+
+        responses: List[TaskSynapse] = await dendrite.forward(
+            endpoints=axons,
+            inputs=attempt_inputs,
             deserialize=deserialize,
             timeout=timeout
         )
 
         new_idx = []
         new_axons = []
-        new_synapses = []
-        for i, syn_rsp in enumerate(responses):
-            if syn_rsp.dendrite.status_code is not None and int(syn_rsp.dendrite.status_code) == 422:
+        for i, response in enumerate(responses):
+            if response.dendrite.status_code is not None and int(response.dendrite.status_code) == 422:
                 if attempt == cnt_attempts - 1:
-                    res[idx[i]] = syn_rsp
-                    bt.logging.info(
-                        f"Could not get answer from axon {axons_copy[i]} after {cnt_attempts} attempts"
-                    )
+                    res[idx[i]] = response
+                    bt.logging.info("Wasn't able to get answers from axon {} after {} attempts".format(axons[i], cnt_attempts))
                 else:
                     new_idx.append(idx[i])
-                    new_axons.append(axons_copy[i])
-                    new_synapses.append(synapses_copy[i])
+                    new_axons.append(axons[i])
             else:
-                res[idx[i]] = syn_rsp
+                res[idx[i]] = response
 
-        if new_idx:
-            bt.logging.info(f"Retrying {len(new_idx)} miners with broken pipe")
-            idx = new_idx
-            axons_copy = new_axons
-            synapses_copy = new_synapses
+        if len(new_idx):
+            bt.logging.info('Found {} responses with broken pipe, retrying them'.format(len(new_idx)))
         else:
             break
 
-    assert all(el is not None for el in res)
-    return res  # type: ignore
+        idx = new_idx
+        axons = new_axons
+
+    assert all([el is not None for el in res])
+    return res
