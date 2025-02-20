@@ -92,7 +92,7 @@ async def _evaluate_all_task_solutions(
 
     total_time = end_time - start_time
     avg_time = total_time / len(task_solutions) if task_solutions else 0.0
-    ColoredLogger.info(f"Evaluation took {total_time:.3f} seconds total, average {avg_time:.3f} per miner", ColoredLogger.YELLOW)
+    ColoredLogger.info(f"Evaluation took {total_time:.3f}s total, average {avg_time:.3f}s per miner", ColoredLogger.YELLOW)
 
     return scores
 
