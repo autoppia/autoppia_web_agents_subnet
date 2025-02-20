@@ -1,5 +1,6 @@
 import asyncio
 import random
+import time
 import numpy as np
 import bittensor as bt
 from copy import deepcopy
@@ -54,7 +55,13 @@ async def forward(self) -> None:
 
         bt.logging.info(f"Generated {len(tasks_generated)} tasks for {web_url}")
 
+        total_time_start = time.time()
+        tasks_count = 0
+        tasks_total_time = 0.0
+
         for index, task in enumerate(tasks_generated):
+            task_start_time = time.time()
+
             bt.logging.debug(f"Task #{index}: {task.prompt}")
             miner_task = _clean_miner_task(task=task)
             bt.logging.info(f"Miner task: {miner_task}")
@@ -114,10 +121,30 @@ async def forward(self) -> None:
             bt.logging.info("Scores updated for miners")
             bt.logging.success("Task step completed successfully.")
 
+            task_end_time = time.time()
+            task_duration = task_end_time - task_start_time
+            tasks_count += 1
+            tasks_total_time += task_duration
+
+            avg_miner_time = sum(execution_times) / len(execution_times) if execution_times else 0.0
+            bt.logging.info(
+                f"Task analysis time: {task_duration:.2f}s, "
+                f"average miner request time: {avg_miner_time:.2f}s"
+            )
+
             bt.logging.info(f"Sleeping for {FORWARD_SLEEP_SECONDS}s....")
             await asyncio.sleep(FORWARD_SLEEP_SECONDS)
 
+        end_time = time.time()
+        total_duration = end_time - total_time_start
+        avg_task_time = tasks_total_time / tasks_count if tasks_count > 0 else 0.0
+
         bt.logging.success("Forward step completed successfully.")
+        bt.logging.info(
+            f"Total tasks processed: {tasks_count}, total time: {total_duration:.2f}s, "
+            f"average time per task: {avg_task_time:.2f}s"
+        )
+
         bt.logging.info(f"Sleeping for {FORWARD_SLEEP_SECONDS}s....")
         await asyncio.sleep(FORWARD_SLEEP_SECONDS)
 
