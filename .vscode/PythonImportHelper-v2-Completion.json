@@ -7321,14 +7321,6 @@
         "documentation": {}
     },
     {
-        "label": "MinerStats",
-        "importPath": "autoppia_web_agents_subnet.validator.stats",
-        "description": "autoppia_web_agents_subnet.validator.stats",
-        "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet.validator.stats",
-        "documentation": {}
-    },
-    {
         "label": "BaseMinerNeuron",
         "importPath": "autoppia_web_agents_subnet.base.miner",
         "description": "autoppia_web_agents_subnet.base.miner",
@@ -12654,6 +12646,15 @@
         "documentation": {}
     },
     {
+        "label": "MinerStats",
+        "kind": 6,
+        "importPath": "autoppia_web_agents_subnet.protocol",
+        "description": "autoppia_web_agents_subnet.protocol",
+        "peekOfCode": "class MinerStats(BaseModel):\n    avg_score: float = 0.0\n    avg_execution_time: float = 0.0\n    avg_evaluation_time: float = 0.0\n    total_tasks: int = 0\n    last_task: Optional[\"Task\"] = None\n    sum_score: float = 0.0\n    sum_execution_time: float = 0.0\n    sum_evaluation_time: float = 0.0\n    def update(self, score: float, execution_time: float, evaluation_time: float, last_task: \"Task\"):",
+        "detail": "autoppia_web_agents_subnet.protocol",
+        "documentation": {}
+    },
+    {
         "label": "TaskSynapse",
         "kind": 6,
         "importPath": "autoppia_web_agents_subnet.protocol",
@@ -12667,16 +12668,7 @@
         "kind": 6,
         "importPath": "autoppia_web_agents_subnet.protocol",
         "description": "autoppia_web_agents_subnet.protocol",
-        "peekOfCode": "class FeedbackSynapse(Synapse):\n    version: str = \"\"\n    stats: MinerStats\n    # Add aggregated_stats if needed\n    # aggregated_stats: MinerStats\n    class Config:\n        extra = \"allow\"\n    def deserialize(self) -> \"FeedbackSynapse\":\n        return self\nclass MinerStats(BaseModel):",
-        "detail": "autoppia_web_agents_subnet.protocol",
-        "documentation": {}
-    },
-    {
-        "label": "MinerStats",
-        "kind": 6,
-        "importPath": "autoppia_web_agents_subnet.protocol",
-        "description": "autoppia_web_agents_subnet.protocol",
-        "peekOfCode": "class MinerStats(BaseModel):\n    avg_score: float = 0.0\n    avg_execution_time: float = 0.0\n    avg_evaluation_time: float = 0.0\n    total_tasks: int = 0\n    last_task: Optional[\"Task\"] = None\n    sum_score: float = 0.0\n    sum_execution_time: float = 0.0\n    sum_evaluation_time: float = 0.0\n    def update(self, score: float, execution_time: float, evaluation_time: float, last_task: \"Task\"):",
+        "peekOfCode": "class FeedbackSynapse(Synapse):\n    version: str = \"\"\n    stats: MinerStats\n    # Add aggregated_stats if needed\n    # aggregated_stats: MinerStats\n    class Config:\n        extra = \"allow\"\n    def deserialize(self) -> \"FeedbackSynapse\":\n        return self",
         "detail": "autoppia_web_agents_subnet.protocol",
         "documentation": {}
     },
