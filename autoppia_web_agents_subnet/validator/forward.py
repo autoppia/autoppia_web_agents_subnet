@@ -95,10 +95,11 @@ async def _process_tasks(self, tasks_generated: List[Task], web_url: str) -> Non
         miner_task: Task = _clean_miner_task(task)
         bt.logging.debug(f"Prepared miner task: {miner_task}")
 
-        miner_uids = get_random_uids(self, k=SAMPLE_SIZE)
-        bt.logging.info(f"Miner UIDs selected: {miner_uids}")
+        # Query all miners instead of sampling a subset
+        miner_uids = list(self.metagraph.axons.keys())
+        bt.logging.info(f"All Miner UIDs selected: {miner_uids}")
 
-        miner_axons = [self.metagraph.axons[uid] for uid in miner_uids]
+        miner_axons = list(self.metagraph.axons.values())
         responses: List[TaskSynapse] = await _send_task_to_miners(self, miner_axons, miner_task)
         bt.logging.info(f"Received {len(responses)} responses from miners.")
 
