@@ -1067,6 +1067,14 @@
         "documentation": {}
     },
     {
+        "label": "Optional",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
         "label": "List",
         "importPath": "typing",
         "description": "typing",
@@ -1302,6 +1310,14 @@
     },
     {
         "label": "Field",
+        "importPath": "pydantic",
+        "description": "pydantic",
+        "isExtraImport": true,
+        "detail": "pydantic",
+        "documentation": {}
+    },
+    {
+        "label": "BaseModel",
         "importPath": "pydantic",
         "description": "pydantic",
         "isExtraImport": true,
@@ -1822,6 +1838,14 @@
         "documentation": {}
     },
     {
+        "label": "Task",
+        "importPath": "autoppia_iwa.src.data_generation.domain.classes",
+        "description": "autoppia_iwa.src.data_generation.domain.classes",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.data_generation.domain.classes",
+        "documentation": {}
+    },
+    {
         "label": "EVENTS_ALLOWED",
         "importPath": "modules.webs_demo.web_1_demo_django_jobs.events.events",
         "description": "modules.webs_demo.web_1_demo_django_jobs.events.events",
@@ -2206,6 +2230,15 @@
         "description": "enum",
         "isExtraImport": true,
         "detail": "enum",
+        "documentation": {}
+    },
+    {
+        "label": "uuid",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "uuid",
+        "description": "uuid",
+        "detail": "uuid",
         "documentation": {}
     },
     {
@@ -7248,22 +7281,6 @@
         "documentation": {}
     },
     {
-        "label": "TaskSynapse",
-        "importPath": "autoppia_web_agents_subnet.protocol",
-        "description": "autoppia_web_agents_subnet.protocol",
-        "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet.protocol",
-        "documentation": {}
-    },
-    {
-        "label": "TaskSynapse",
-        "importPath": "autoppia_web_agents_subnet.protocol",
-        "description": "autoppia_web_agents_subnet.protocol",
-        "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet.protocol",
-        "documentation": {}
-    },
-    {
         "label": "get_random_uids",
         "importPath": "autoppia_web_agents_subnet.utils.uids",
         "description": "autoppia_web_agents_subnet.utils.uids",
@@ -7272,11 +7289,51 @@
         "documentation": {}
     },
     {
+        "label": "MinerStats",
+        "importPath": "autoppia_web_agents_subnet.validator.stats",
+        "description": "autoppia_web_agents_subnet.validator.stats",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.validator.stats",
+        "documentation": {}
+    },
+    {
+        "label": "MinerStats",
+        "importPath": "autoppia_web_agents_subnet.validator.stats",
+        "description": "autoppia_web_agents_subnet.validator.stats",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.validator.stats",
+        "documentation": {}
+    },
+    {
+        "label": "TaskSynapse",
+        "importPath": "autoppia_web_agents_subnet.protocol.synapse",
+        "description": "autoppia_web_agents_subnet.protocol.synapse",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.protocol.synapse",
+        "documentation": {}
+    },
+    {
+        "label": "FeedbackSynapse",
+        "importPath": "autoppia_web_agents_subnet.protocol.synapse",
+        "description": "autoppia_web_agents_subnet.protocol.synapse",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.protocol.synapse",
+        "documentation": {}
+    },
+    {
         "label": "BaseMinerNeuron",
         "importPath": "autoppia_web_agents_subnet.base.miner",
         "description": "autoppia_web_agents_subnet.base.miner",
         "isExtraImport": true,
         "detail": "autoppia_web_agents_subnet.base.miner",
+        "documentation": {}
+    },
+    {
+        "label": "TaskSynapse",
+        "importPath": "autoppia_web_agents_subnet.protocol",
+        "description": "autoppia_web_agents_subnet.protocol",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.protocol",
         "documentation": {}
     },
     {
@@ -7678,7 +7735,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.classes",
         "description": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.classes",
-        "peekOfCode": "class Task(BaseModel):\n    \"\"\"\n    Represents a task with a prompt, URL, browser specifications, tests, milestones, and web analysis.\n    \"\"\"\n    prompt: str = Field(..., description=\"Prompt for the task\")\n    url: str = Field(..., description=\"URL where the task is to be performed\")\n    specifications: BrowserSpecification = Field(default_factory=BrowserSpecification, description=\"Browser specifications for the task\")\n    tests: List[BaseTaskTest] = Field(default_factory=list, description=\"List of tests associated with the task\")\n    milestones: Optional[List[\"Task\"]] = Field(None, description=\"List of milestone tasks\")\n    web_analysis: Optional[DomainAnalysis] = Field(None, description=\"Domain analysis for the task\")",
+        "peekOfCode": "class Task(BaseModel):\n    \"\"\"\n    Represents a task with a unique id, prompt, URL, browser specs, tests, milestones, and web analysis.\n    \"\"\"\n    id: str = Field(default_factory=lambda: str(uuid.uuid4()), description=\"Unique identifier for the task\")\n    prompt: str = Field(..., description=\"Prompt for the task\")\n    url: str = Field(..., description=\"URL where the task is to be performed\")\n    specifications: BrowserSpecification = Field(default_factory=BrowserSpecification, description=\"Browser specifications for the task\")\n    tests: List[BaseTaskTest] = Field(default_factory=list, description=\"List of tests associated with the task\")\n    milestones: Optional[List[\"Task\"]] = Field(None, description=\"List of milestone tasks\")",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.classes",
         "documentation": {}
     },
@@ -12520,7 +12577,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "TIMEOUT = 120\nFORWARD_SLEEP_SECONDS = 60 * 10  # 10 Minutes\nTASK_SLEEP = 60 * 3             # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")",
+        "peekOfCode": "TIMEOUT = 120\nFORWARD_SLEEP_SECONDS = 60 * 10  # 10 Minutes\nTASK_SLEEP = 60 * 3             # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        if not hasattr(self, \"miner_stats\"):",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -12529,7 +12586,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "FORWARD_SLEEP_SECONDS = 60 * 10  # 10 Minutes\nTASK_SLEEP = 60 * 3             # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()",
+        "peekOfCode": "FORWARD_SLEEP_SECONDS = 60 * 10  # 10 Minutes\nTASK_SLEEP = 60 * 3             # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        if not hasattr(self, \"miner_stats\"):\n            self.miner_stats = {}",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -12538,7 +12595,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "TASK_SLEEP = 60 * 3             # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")",
+        "peekOfCode": "TASK_SLEEP = 60 * 3             # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        if not hasattr(self, \"miner_stats\"):\n            self.miner_stats = {}\n        bt.logging.info(\"Starting forward step.\")",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -12547,7 +12604,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "TIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n        try:",
+        "peekOfCode": "TIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        if not hasattr(self, \"miner_stats\"):\n            self.miner_stats = {}\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -12556,7 +12613,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "MIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n        try:\n            demo_web_project = _get_random_demo_web_project(demo_web_projects)",
+        "peekOfCode": "MIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        if not hasattr(self, \"miner_stats\"):\n            self.miner_stats = {}\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -12565,7 +12622,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "MIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n        try:\n            demo_web_project = _get_random_demo_web_project(demo_web_projects)\n        except Exception as e:",
+        "peekOfCode": "MIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        if not hasattr(self, \"miner_stats\"):\n            self.miner_stats = {}\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n        try:",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -12574,7 +12631,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "SAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n        try:\n            demo_web_project = _get_random_demo_web_project(demo_web_projects)\n        except Exception as e:\n            bt.logging.error(f\"Failed to select a demo web project: {e}\")",
+        "peekOfCode": "SAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        if not hasattr(self, \"miner_stats\"):\n            self.miner_stats = {}\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n        try:\n            demo_web_project = _get_random_demo_web_project(demo_web_projects)",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -12597,11 +12654,29 @@
         "documentation": {}
     },
     {
+        "label": "MinerStats",
+        "kind": 6,
+        "importPath": "autoppia_web_agents_subnet.validator.stats",
+        "description": "autoppia_web_agents_subnet.validator.stats",
+        "peekOfCode": "class MinerStats(BaseModel):\n    avg_score: float = 0.0\n    avg_execution_time: float = 0.0\n    avg_evaluation_time: float = 0.0\n    total_tasks: int = 0\n    last_task: Optional[Task] = None\n    sum_score: float = 0.0\n    sum_execution_time: float = 0.0\n    sum_evaluation_time: float = 0.0\n    def update(self, score: float, execution_time: float, evaluation_time: float, last_task: Task):",
+        "detail": "autoppia_web_agents_subnet.validator.stats",
+        "documentation": {}
+    },
+    {
         "label": "TaskSynapse",
         "kind": 6,
         "importPath": "autoppia_web_agents_subnet.protocol",
         "description": "autoppia_web_agents_subnet.protocol",
         "peekOfCode": "class TaskSynapse(Synapse):\n    version: str = \"\"\n    prompt: str = \"\"\n    url: str = \"\"\n    actions: List[AllActionsUnion] = Field(\n        default_factory=list,\n        description=\"The actions that solve the task\"\n    )\n    class Config:\n        extra = \"allow\"",
+        "detail": "autoppia_web_agents_subnet.protocol",
+        "documentation": {}
+    },
+    {
+        "label": "FeedbackSynapse",
+        "kind": 6,
+        "importPath": "autoppia_web_agents_subnet.protocol",
+        "description": "autoppia_web_agents_subnet.protocol",
+        "peekOfCode": "class FeedbackSynapse(Synapse):\n    version: str = \"\"\n    stats: MinerStats\n    # Add aggregated_stats if needed\n    # aggregated_stats: MinerStats\n    class Config:\n        extra = \"allow\"\n    def deserialize(self) -> \"FeedbackSynapse\":\n        return self",
         "detail": "autoppia_web_agents_subnet.protocol",
         "documentation": {}
     },
