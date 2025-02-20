@@ -61,6 +61,11 @@ class BaseMinerNeuron(BaseNeuron):
             blacklist_fn=self.blacklist,
             priority_fn=self.priority,
         )
+        self.axon.attach(
+            forward_fn=self.forward,
+            blacklist_fn=self.blacklist,
+            priority_fn=self.priority,
+        )
         bt.logging.info(f"Axon created: {self.axon}")
 
         # Instantiate runners
@@ -189,6 +194,10 @@ class BaseMinerNeuron(BaseNeuron):
 
         # Sync the metagraph.
         self.metagraph.sync(subtensor=self.subtensor)
+
+    # Overriding the abstract method from BaseNeuron to avoid instantiation error
+    def set_weights(self):
+        pass
 
     @classmethod
     def add_args(cls, parser: argparse.ArgumentParser):
