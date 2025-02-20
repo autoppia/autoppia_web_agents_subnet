@@ -5,7 +5,6 @@ import numpy as np
 import bittensor as bt
 from copy import deepcopy
 from typing import List
-
 from autoppia_iwa.src.web_agents.classes import TaskSolution
 from autoppia_iwa.src.data_generation.domain.classes import (
     WebProject,
@@ -87,7 +86,7 @@ async def forward(self) -> None:
             responses: List[TaskSynapse] = await dendrite_with_retries(
                 dendrite=self.dendrite,
                 axons=miner_axons,
-                synapses=task_synapses,
+                inputs=task_synapses,      # <-- CHANGED from synapses=...
                 deserialize=True,
                 timeout=TIMEOUT,
             )
@@ -164,7 +163,7 @@ async def forward(self) -> None:
             _ = await dendrite_with_retries(
                 dendrite=self.dendrite,
                 axons=miner_axons,
-                synapses=feedback_list,
+                inputs=feedback_list,   # <-- CHANGED from synapses=...
                 deserialize=True,
                 timeout=TIMEOUT,
             )
