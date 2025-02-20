@@ -1478,6 +1478,38 @@
         "documentation": {}
     },
     {
+        "label": "AGENT_HOST",
+        "importPath": "autoppia_iwa.config.config",
+        "description": "autoppia_iwa.config.config",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.config.config",
+        "documentation": {}
+    },
+    {
+        "label": "AGENT_NAME",
+        "importPath": "autoppia_iwa.config.config",
+        "description": "autoppia_iwa.config.config",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.config.config",
+        "documentation": {}
+    },
+    {
+        "label": "AGENT_PORT",
+        "importPath": "autoppia_iwa.config.config",
+        "description": "autoppia_iwa.config.config",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.config.config",
+        "documentation": {}
+    },
+    {
+        "label": "USE_APIFIED_AGENT",
+        "importPath": "autoppia_iwa.config.config",
+        "description": "autoppia_iwa.config.config",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.config.config",
+        "documentation": {}
+    },
+    {
         "label": "WebProject",
         "importPath": "autoppia_iwa.src.data_generation.domain.classes",
         "description": "autoppia_iwa.src.data_generation.domain.classes",
@@ -7439,7 +7471,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.config.config",
         "description": "autoppia_iwa_module.autoppia_iwa.config.config",
-        "peekOfCode": "DEMO_WEBS_ENDPOINT = os.getenv(\"DEMO_WEBS_ENDPOINT\", \"http://localhost\")\nDEMO_WEBS_STARTING_PORT = int(os.getenv(\"DEMO_WEBS_STARTING_PORT\", '8000'))\n# ============================\n# Agent Configurations\n# ============================\nAGENT_NAME = os.getenv(\"AGENT_NAME\")\nAGENT_HOST = os.getenv(\"AGENT_HOST\", 'localhost')\nAGENT_PORT = int(os.getenv(\"AGENT_PORT\", '8080'))",
+        "peekOfCode": "DEMO_WEBS_ENDPOINT = os.getenv(\"DEMO_WEBS_ENDPOINT\", \"http://localhost\")\nDEMO_WEBS_STARTING_PORT = int(os.getenv(\"DEMO_WEBS_STARTING_PORT\", '8000'))\n# ============================\n# Agent Configurations\n# ============================\nAGENT_NAME = os.getenv(\"AGENT_NAME\")\nUSE_APIFIED_AGENT = os.getenv(\"USE_APIFIED_AGENT\", \"false\")\nAGENT_HOST = os.getenv(\"AGENT_HOST\", 'localhost')\nAGENT_PORT = int(os.getenv(\"AGENT_PORT\", '8080'))",
         "detail": "autoppia_iwa_module.autoppia_iwa.config.config",
         "documentation": {}
     },
@@ -7448,7 +7480,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.config.config",
         "description": "autoppia_iwa_module.autoppia_iwa.config.config",
-        "peekOfCode": "DEMO_WEBS_STARTING_PORT = int(os.getenv(\"DEMO_WEBS_STARTING_PORT\", '8000'))\n# ============================\n# Agent Configurations\n# ============================\nAGENT_NAME = os.getenv(\"AGENT_NAME\")\nAGENT_HOST = os.getenv(\"AGENT_HOST\", 'localhost')\nAGENT_PORT = int(os.getenv(\"AGENT_PORT\", '8080'))",
+        "peekOfCode": "DEMO_WEBS_STARTING_PORT = int(os.getenv(\"DEMO_WEBS_STARTING_PORT\", '8000'))\n# ============================\n# Agent Configurations\n# ============================\nAGENT_NAME = os.getenv(\"AGENT_NAME\")\nUSE_APIFIED_AGENT = os.getenv(\"USE_APIFIED_AGENT\", \"false\")\nAGENT_HOST = os.getenv(\"AGENT_HOST\", 'localhost')\nAGENT_PORT = int(os.getenv(\"AGENT_PORT\", '8080'))",
         "detail": "autoppia_iwa_module.autoppia_iwa.config.config",
         "documentation": {}
     },
@@ -7457,7 +7489,16 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.config.config",
         "description": "autoppia_iwa_module.autoppia_iwa.config.config",
-        "peekOfCode": "AGENT_NAME = os.getenv(\"AGENT_NAME\")\nAGENT_HOST = os.getenv(\"AGENT_HOST\", 'localhost')\nAGENT_PORT = int(os.getenv(\"AGENT_PORT\", '8080'))",
+        "peekOfCode": "AGENT_NAME = os.getenv(\"AGENT_NAME\")\nUSE_APIFIED_AGENT = os.getenv(\"USE_APIFIED_AGENT\", \"false\")\nAGENT_HOST = os.getenv(\"AGENT_HOST\", 'localhost')\nAGENT_PORT = int(os.getenv(\"AGENT_PORT\", '8080'))",
+        "detail": "autoppia_iwa_module.autoppia_iwa.config.config",
+        "documentation": {}
+    },
+    {
+        "label": "USE_APIFIED_AGENT",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.config.config",
+        "description": "autoppia_iwa_module.autoppia_iwa.config.config",
+        "peekOfCode": "USE_APIFIED_AGENT = os.getenv(\"USE_APIFIED_AGENT\", \"false\")\nAGENT_HOST = os.getenv(\"AGENT_HOST\", 'localhost')\nAGENT_PORT = int(os.getenv(\"AGENT_PORT\", '8080'))",
         "detail": "autoppia_iwa_module.autoppia_iwa.config.config",
         "documentation": {}
     },
@@ -12479,7 +12520,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "TIMEOUT = 120\nFORWARD_SLEEP_SECONDS = 60 * 10  # 10 Minutes\nTASK_SLEEP = 60 * 3             # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()",
+        "peekOfCode": "TIMEOUT = 120\nFORWARD_SLEEP_SECONDS = 60 * 10  # 10 Minutes\nTASK_SLEEP = 60 * 3             # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -12488,7 +12529,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "FORWARD_SLEEP_SECONDS = 60 * 10  # 10 Minutes\nTASK_SLEEP = 60 * 3             # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")",
+        "peekOfCode": "FORWARD_SLEEP_SECONDS = 60 * 10  # 10 Minutes\nTASK_SLEEP = 60 * 3             # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -12497,7 +12538,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "TASK_SLEEP = 60 * 3             # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n        try:",
+        "peekOfCode": "TASK_SLEEP = 60 * 3             # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -12506,7 +12547,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "TIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n        try:\n            demo_web_project = _get_random_demo_web_project(demo_web_projects)",
+        "peekOfCode": "TIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n        try:",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -12515,7 +12556,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "MIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n        try:\n            demo_web_project = _get_random_demo_web_project(demo_web_projects)\n        except Exception as e:",
+        "peekOfCode": "MIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n        try:\n            demo_web_project = _get_random_demo_web_project(demo_web_projects)",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -12524,7 +12565,16 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "MIN_RESPONSE_REWARD = 0.1\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n        try:\n            demo_web_project = _get_random_demo_web_project(demo_web_projects)\n        except Exception as e:\n            bt.logging.error(f\"Failed to select a demo web project: {e}\")",
+        "peekOfCode": "MIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n        try:\n            demo_web_project = _get_random_demo_web_project(demo_web_projects)\n        except Exception as e:",
+        "detail": "autoppia_web_agents_subnet.validator.forward",
+        "documentation": {}
+    },
+    {
+        "label": "SAMPLE_SIZE",
+        "kind": 5,
+        "importPath": "autoppia_web_agents_subnet.validator.forward",
+        "description": "autoppia_web_agents_subnet.validator.forward",
+        "peekOfCode": "SAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n        try:\n            demo_web_project = _get_random_demo_web_project(demo_web_projects)\n        except Exception as e:\n            bt.logging.error(f\"Failed to select a demo web project: {e}\")",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -12560,7 +12610,7 @@
         "kind": 6,
         "importPath": "neurons.miner",
         "description": "neurons.miner",
-        "peekOfCode": "class Miner(BaseMinerNeuron):\n    \"\"\"\n    Your miner neuron class. You should use this class to define your miner's behavior. In particular, you should replace the forward function with your own logic. You may also want to override the blacklist and priority functions according to your needs.\n    This class inherits from the BaseMinerNeuron class, which in turn inherits from BaseNeuron. The BaseNeuron class takes care of routine tasks such as setting up wallet, subtensor, metagraph, logging directory, parsing config, etc. You can override any of the methods in BaseNeuron if you need to customize the behavior.\n    This class provides reasonable default behavior for a miner such as blacklisting unrecognized hotkeys, prioritizing requests based on stake, and forwarding requests to the forward function. If you need to define custom\n    \"\"\"\n    def __init__(self, config=None):\n        super(Miner, self).__init__(config=config)\n        self.agent = RandomClickerWebAgent()\n        self.load_state()",
+        "peekOfCode": "class Miner(BaseMinerNeuron):\n    \"\"\"\n    Your miner neuron class. You should use this class to define your miner's behavior. In particular, you should replace the forward function with your own logic. You may also want to override the blacklist and priority functions according to your needs.\n    This class inherits from the BaseMinerNeuron class, which in turn inherits from BaseNeuron. The BaseNeuron class takes care of routine tasks such as setting up wallet, subtensor, metagraph, logging directory, parsing config, etc. You can override any of the methods in BaseNeuron if you need to customize the behavior.\n    This class provides reasonable default behavior for a miner such as blacklisting unrecognized hotkeys, prioritizing requests based on stake, and forwarding requests to the forward function. If you need to define custom\n    \"\"\"\n    def __init__(self, config=None):\n        super(Miner, self).__init__(config=config)\n        self.agent = (\n            ApifiedWebAgent(name=AGENT_NAME, host=AGENT_HOST, port=AGENT_PORT)",
         "detail": "neurons.miner",
         "documentation": {}
     },

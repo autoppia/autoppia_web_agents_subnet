@@ -26,6 +26,7 @@ TASK_SLEEP = 60 * 3             # 3 Minutes
 TIME_WEIGHT = 0.2
 MIN_SCORE_FOR_CORRECT_FORMAT = 0.1
 MIN_RESPONSE_REWARD = 0.1
+SAMPLE_SIZE = 256  # All Miners
 
 
 async def forward(self) -> None:
@@ -58,7 +59,7 @@ async def forward(self) -> None:
             miner_task = _clean_miner_task(task=task)
             bt.logging.info(f"Miner task: {miner_task}")
 
-            miner_uids = get_random_uids(self, k=self.config.neuron.sample_size)
+            miner_uids = get_random_uids(self, k=SAMPLE_SIZE)
             bt.logging.info(f"Miner UIDs chosen: {miner_uids}")
 
             bt.logging.info(f"Sending TaskSynapse to {len(miner_uids)} miners.")
