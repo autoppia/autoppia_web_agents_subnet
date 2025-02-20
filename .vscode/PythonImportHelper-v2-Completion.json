@@ -8652,30 +8652,12 @@
         "documentation": {}
     },
     {
-        "label": "test_generate_endpoint_working_200_OK",
+        "label": "flatten_openai_messages",
         "kind": 2,
-        "importPath": "autoppia_iwa_module.modules.llm_local.test.test",
-        "description": "autoppia_iwa_module.modules.llm_local.test.test",
-        "peekOfCode": "def test_generate_endpoint_working_200_OK():\n    \"\"\"\n    Basic test\n    \"\"\"\n    try:\n        response = requests.post(URL, json=payload)\n        assert response.status_code == 200, f\"Expected 200, got {response.status_code}\"\n        response_data = response.json()\n        assert \"output\" in response_data, \"Missing 'output' in response\"\n        print(\"Response from server:\", response_data[\"output\"])",
-        "detail": "autoppia_iwa_module.modules.llm_local.test.test",
-        "documentation": {}
-    },
-    {
-        "label": "URL",
-        "kind": 5,
-        "importPath": "autoppia_iwa_module.modules.llm_local.test.test",
-        "description": "autoppia_iwa_module.modules.llm_local.test.test",
-        "peekOfCode": "URL = \"http://127.0.0.1:6000/generate\"\npayload = {\n    \"input\": {\n        \"text\": \"Hello, how are you? Explain me who are you, what model are you and what benefits you have. Answer directly and short\",\n        \"ctx\": 256,\n        \"llm_kwargs\": {},\n        \"chat_completion_kwargs\": {},\n    }\n}\ndef test_generate_endpoint_working_200_OK():",
-        "detail": "autoppia_iwa_module.modules.llm_local.test.test",
-        "documentation": {}
-    },
-    {
-        "label": "payload",
-        "kind": 5,
-        "importPath": "autoppia_iwa_module.modules.llm_local.test.test",
-        "description": "autoppia_iwa_module.modules.llm_local.test.test",
-        "peekOfCode": "payload = {\n    \"input\": {\n        \"text\": \"Hello, how are you? Explain me who are you, what model are you and what benefits you have. Answer directly and short\",\n        \"ctx\": 256,\n        \"llm_kwargs\": {},\n        \"chat_completion_kwargs\": {},\n    }\n}\ndef test_generate_endpoint_working_200_OK():\n    \"\"\"",
-        "detail": "autoppia_iwa_module.modules.llm_local.test.test",
+        "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm",
+        "description": "autoppia_iwa_module.modules.llm_local.run_local_llm",
+        "peekOfCode": "def flatten_openai_messages(messages):\n    \"\"\"\n    Converts a list of OpenAI-style messages into a single string.\n    Example:\n    [\n      {\"role\": \"system\", \"content\": \"You are a helpful assistant.\"},\n      {\"role\": \"user\", \"content\": \"Hello, how are you?\"}\n    ]\n    becomes something like:\n    \"SYSTEM: You are a helpful assistant.\\n\\nUSER: Hello, how are you?\"",
+        "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "documentation": {}
     },
     {
@@ -8692,7 +8674,7 @@
         "kind": 2,
         "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "description": "autoppia_iwa_module.modules.llm_local.run_local_llm",
-        "peekOfCode": "def handler():\n    \"\"\"\n    Handle incoming POST requests to generate data using the model.\n    Expects JSON of the form:\n    {\n       \"input\": {\n           \"text\": \"Your prompt here\",\n           \"ctx\": 256,\n           \"generation_kwargs\": {...}\n       }",
+        "peekOfCode": "def handler():\n    \"\"\"\n    Handle incoming POST requests to generate data using the model.\n    Possible JSON formats:\n    1) Simple string payload:\n       {\n         \"input\": {\n           \"text\": \"Your prompt here\",\n           \"ctx\": 256,\n           \"generation_kwargs\": {...}",
         "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "documentation": {}
     },
@@ -8701,7 +8683,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "description": "autoppia_iwa_module.modules.llm_local.run_local_llm",
-        "peekOfCode": "app = Flask(__name__)\nCORS(app, resources={r\"/*\": {\"origins\": \"*\"}})\nlogger = logging.getLogger(__name__)\nlogger.setLevel(logging.INFO)\n# -----------------------------------------------------------------------------\n# REPLACE THE MODEL NAME WITH A Qwen/Qwen2.5-3B-Instruct\n# -----------------------------------------------------------------------------\nMODEL_NAME = \"Qwen/Qwen2.5-3B-Instruct\"\nlogger.info(f\"Loading the tokenizer and model from '{MODEL_NAME}'...\")\ntokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)",
+        "peekOfCode": "app = Flask(__name__)\nCORS(app, resources={r\"/*\": {\"origins\": \"*\"}})\nlogger = logging.getLogger(__name__)\nlogger.setLevel(logging.INFO)\n# -----------------------------------------------------------------------------\n# The following model determines the intelligence of everything\n# -----------------------------------------------------------------------------\nMODEL_NAME = \"Qwen/Qwen2-7B-Instruct\"\nlogger.info(f\"Loading the tokenizer and model from '{MODEL_NAME}'...\")\nprint(f\"Loading model {MODEL_NAME}\")",
         "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "documentation": {}
     },
@@ -8710,7 +8692,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "description": "autoppia_iwa_module.modules.llm_local.run_local_llm",
-        "peekOfCode": "logger = logging.getLogger(__name__)\nlogger.setLevel(logging.INFO)\n# -----------------------------------------------------------------------------\n# REPLACE THE MODEL NAME WITH A Qwen/Qwen2.5-3B-Instruct\n# -----------------------------------------------------------------------------\nMODEL_NAME = \"Qwen/Qwen2.5-3B-Instruct\"\nlogger.info(f\"Loading the tokenizer and model from '{MODEL_NAME}'...\")\ntokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)\nmodel = AutoModelForCausalLM.from_pretrained(MODEL_NAME)\n# If you have a GPU available, uncomment the next line:",
+        "peekOfCode": "logger = logging.getLogger(__name__)\nlogger.setLevel(logging.INFO)\n# -----------------------------------------------------------------------------\n# The following model determines the intelligence of everything\n# -----------------------------------------------------------------------------\nMODEL_NAME = \"Qwen/Qwen2-7B-Instruct\"\nlogger.info(f\"Loading the tokenizer and model from '{MODEL_NAME}'...\")\nprint(f\"Loading model {MODEL_NAME}\")\ntokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)\nmodel = AutoModelForCausalLM.from_pretrained(MODEL_NAME)",
         "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "documentation": {}
     },
@@ -8719,7 +8701,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "description": "autoppia_iwa_module.modules.llm_local.run_local_llm",
-        "peekOfCode": "MODEL_NAME = \"Qwen/Qwen2.5-3B-Instruct\"\nlogger.info(f\"Loading the tokenizer and model from '{MODEL_NAME}'...\")\ntokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)\nmodel = AutoModelForCausalLM.from_pretrained(MODEL_NAME)\n# If you have a GPU available, uncomment the next line:\nmodel.to(\"cuda\")\nmodel.eval()\ndef generate_data(\n    message_payload: str,\n    max_new_tokens: int = 256,",
+        "peekOfCode": "MODEL_NAME = \"Qwen/Qwen2-7B-Instruct\"\nlogger.info(f\"Loading the tokenizer and model from '{MODEL_NAME}'...\")\nprint(f\"Loading model {MODEL_NAME}\")\ntokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)\nmodel = AutoModelForCausalLM.from_pretrained(MODEL_NAME)\n# If you have a GPU available, uncomment the next line:\nmodel.to(\"cuda\")\nmodel.eval()\ndef flatten_openai_messages(messages):\n    \"\"\"",
         "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "documentation": {}
     },
@@ -8728,7 +8710,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "description": "autoppia_iwa_module.modules.llm_local.run_local_llm",
-        "peekOfCode": "tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)\nmodel = AutoModelForCausalLM.from_pretrained(MODEL_NAME)\n# If you have a GPU available, uncomment the next line:\nmodel.to(\"cuda\")\nmodel.eval()\ndef generate_data(\n    message_payload: str,\n    max_new_tokens: int = 256,\n    generation_kwargs: dict = None,\n) -> str:",
+        "peekOfCode": "tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)\nmodel = AutoModelForCausalLM.from_pretrained(MODEL_NAME)\n# If you have a GPU available, uncomment the next line:\nmodel.to(\"cuda\")\nmodel.eval()\ndef flatten_openai_messages(messages):\n    \"\"\"\n    Converts a list of OpenAI-style messages into a single string.\n    Example:\n    [",
         "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "documentation": {}
     },
@@ -8737,7 +8719,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "description": "autoppia_iwa_module.modules.llm_local.run_local_llm",
-        "peekOfCode": "model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)\n# If you have a GPU available, uncomment the next line:\nmodel.to(\"cuda\")\nmodel.eval()\ndef generate_data(\n    message_payload: str,\n    max_new_tokens: int = 256,\n    generation_kwargs: dict = None,\n) -> str:\n    if generation_kwargs is None:",
+        "peekOfCode": "model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)\n# If you have a GPU available, uncomment the next line:\nmodel.to(\"cuda\")\nmodel.eval()\ndef flatten_openai_messages(messages):\n    \"\"\"\n    Converts a list of OpenAI-style messages into a single string.\n    Example:\n    [\n      {\"role\": \"system\", \"content\": \"You are a helpful assistant.\"},",
         "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "documentation": {}
     },
