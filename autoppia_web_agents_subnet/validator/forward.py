@@ -30,7 +30,6 @@ MIN_SCORE_FOR_CORRECT_FORMAT = 0.1
 MIN_RESPONSE_REWARD = 0.1
 SAMPLE_SIZE = 256  # All Miners
 
-
 async def forward(self) -> None:
     try:
         if not hasattr(self, "miner_stats"):
@@ -77,16 +76,13 @@ async def forward(self) -> None:
 
             miner_axons = [self.metagraph.axons[uid] for uid in miner_uids]
 
-            # Send TaskSynapse to miners
-            task_synapses = [
-                TaskSynapse(prompt=miner_task.prompt, url=miner_task.url, actions=[])
-                for _ in miner_uids
-            ]
+            # Send the SAME TaskSynapse to all miners
+            task_synapse = TaskSynapse(prompt=miner_task.prompt, url=miner_task.url, actions=[])
             bt.logging.info(f"Sending TaskSynapse to {len(miner_uids)} miners.")
             responses: List[TaskSynapse] = await dendrite_with_retries(
                 dendrite=self.dendrite,
                 axons=miner_axons,
-                inputs=task_synapses,      # <-- CHANGED from synapses=...
+                synapse=task_synapse,
                 deserialize=True,
                 timeout=TIMEOUT,
             )
@@ -149,24 +145,29 @@ async def forward(self) -> None:
                     last_task=task
                 )
 
-            feedback_list = []
-            for miner_uid in miner_uids:
-                feedback_list.append(
-                    FeedbackSynapse(
-                        version="v1",
-                        stats=self.miner_stats[miner_uid],
+            # Prepare FeedbackSynapse for each miner
+            feedback_list = [
+                FeedbackSynapse(version="v1", stats=self.miner_stats[miner_uid])
+                for miner_uid in miner_uids
+            ]
+
+            # Send each feedback synapse to the corresponding miner IN PARALLEL
+            bt.logging.info(f"Sending FeedbackSynapse to {len(miner_uids)} miners in parallel.")
+            feedback_tasks = []
+            for axon, feedback_synapse in zip(miner_axons, feedback_list):
+                feedback_tasks.append(
+                    asyncio.create_task(
+                        dendrite_with_retries(
+                            dendrite=self.dendrite,
+                            axons=[axon],                # single axon
+                            synapse=feedback_synapse,    # different feedback synapse per miner
+                            deserialize=True,
+                            timeout=5                    # 5s for quick feedback
+                        )
                     )
                 )
-
-            # Send FeedbackSynapse to miners
-            bt.logging.info(f"Sending FeedbackSynapse to {len(miner_uids)} miners.")
-            _ = await dendrite_with_retries(
-                dendrite=self.dendrite,
-                axons=miner_axons,
-                inputs=feedback_list,   # <-- CHANGED from synapses=...
-                deserialize=True,
-                timeout=TIMEOUT,
-            )
+            _ = await asyncio.gather(*feedback_tasks)
+            bt.logging.info("FeedbackSynapse responses received.")
 
             bt.logging.success("Task step completed successfully.")
 
