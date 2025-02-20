@@ -33,7 +33,7 @@ SAMPLE_SIZE = 256  # All Miners
 
 async def forward(self) -> None:
     try:
-        _init_miner_stats()
+        _init_miner_stats(self)
 
         bt.logging.info("Starting forward step for validator (vali).")
 
