@@ -1,6 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
-from autoppia_iwa.src.data_generation.domain.classes import Task
+from typing import Any, Optional
 
 
 class MinerStats(BaseModel):
@@ -8,12 +7,12 @@ class MinerStats(BaseModel):
     avg_execution_time: float = 0.0
     avg_evaluation_time: float = 0.0
     total_tasks: int = 0
-    last_task: Optional[Task] = None
+    last_task: Optional[Any] = None
     sum_score: float = 0.0
     sum_execution_time: float = 0.0
     sum_evaluation_time: float = 0.0
 
-    def update(self, score: float, execution_time: float, evaluation_time: float, last_task: Task):
+    def update(self, score: float, execution_time: float, evaluation_time: float, last_task):
         self.total_tasks += 1
         self.sum_score += score
         self.sum_execution_time += execution_time
