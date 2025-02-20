@@ -8605,7 +8605,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.benchmark",
         "description": "autoppia_iwa_module.autoppia_iwa.src.benchmark",
-        "peekOfCode": "app = AppBootstrap()\nAGENTS: List[BaseAgent] = [RandomClickerWebAgent(name=\"Random-clicker\"), ApifiedWebAgent(name=\"Autoppia-agent\", host=\"localhost\", port=8080)]\nasync def evaluate_project_for_agent(agent, demo_project, tasks, results):\n    \"\"\"\n    Evaluate all tasks for a given demo project and agent.\n    For each task, the agent will attempt to solve it and the evaluation score\n    will be stored both in the agent's global scores and in the project-specific scores.\n    \"\"\"\n    # Initialize project entry in results if not already present.\n    if demo_project.name not in results[agent.id][\"projects\"]:",
+        "peekOfCode": "app = AppBootstrap()\nAGENTS: List[BaseAgent] = [RandomClickerWebAgent(name=\"Random-clicker\")]\n# ApifiedWebAgent(name=\"Autoppia-agent\", host=\"localhost\", port=8080)\nasync def evaluate_project_for_agent(agent, demo_project, tasks, results):\n    \"\"\"\n    Evaluate all tasks for a given demo project and agent.\n    For each task, the agent will attempt to solve it and the evaluation score\n    will be stored both in the agent's global scores and in the project-specific scores.\n    \"\"\"\n    # Initialize project entry in results if not already present.",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.benchmark",
         "documentation": {}
     },
