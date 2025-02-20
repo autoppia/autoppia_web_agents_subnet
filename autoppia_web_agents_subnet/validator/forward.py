@@ -18,8 +18,9 @@ from autoppia_iwa.src.data_generation.application.tasks_generation_pipeline impo
     TaskGenerationPipeline,
 )
 from autoppia_web_agents_subnet.validator.reward import get_rewards
-from autoppia_web_agents_subnet.protocol import TaskSynapse
 from autoppia_web_agents_subnet.utils.uids import get_random_uids
+from autoppia_web_agents_subnet.validator.stats import MinerStats
+from autoppia_web_agents_subnet.protocol.synapse import TaskSynapse, FeedbackSynapse
 
 TIMEOUT = 120
 FORWARD_SLEEP_SECONDS = 60 * 10  # 10 Minutes
@@ -32,6 +33,8 @@ SAMPLE_SIZE = 256  # All Miners
 
 async def forward(self) -> None:
     try:
+        if not hasattr(self, "miner_stats"):
+            self.miner_stats = {}
         bt.logging.info("Starting forward step.")
 
         demo_web_projects = get_demo_webs_projects()
@@ -59,10 +62,13 @@ async def forward(self) -> None:
         tasks_count = 0
         tasks_total_time = 0.0
 
+        if "aggregated" not in self.miner_stats:
+            self.miner_stats["aggregated"] = MinerStats()
+
         for index, task in enumerate(tasks_generated):
             task_start_time = time.time()
 
-            bt.logging.debug(f"Task #{index}: {task.prompt}")
+            bt.logging.debug(f"Task #{index} (ID: {task.id}): {task.prompt}")
             miner_task = _clean_miner_task(task=task)
             bt.logging.info(f"Miner task: {miner_task}")
 
@@ -75,7 +81,10 @@ async def forward(self) -> None:
             responses: List[TaskSynapse] = await _dendrite_with_retries(
                 dendrite=self.dendrite,
                 axons=miner_axons,
-                synapse=TaskSynapse(prompt=miner_task.prompt, url=miner_task.url, actions=[]),
+                synapses=[
+                    TaskSynapse(prompt=miner_task.prompt, url=miner_task.url, actions=[])
+                    for _ in miner_uids
+                ],
                 deserialize=True,
                 timeout=TIMEOUT,
             )
@@ -105,6 +114,7 @@ async def forward(self) -> None:
                 process_time = getattr(response.dendrite, "process_time", TIMEOUT) if response else TIMEOUT
                 execution_times.append(process_time)
 
+            evaluation_start_time = time.time()
             rewards: np.ndarray = await get_rewards(
                 self,
                 task_solutions=task_solutions,
@@ -114,11 +124,48 @@ async def forward(self) -> None:
                 min_correct_format_score=MIN_SCORE_FOR_CORRECT_FORMAT,
                 min_response_reward=MIN_RESPONSE_REWARD
             )
+            evaluation_end_time = time.time()
+            evaluation_time = evaluation_end_time - evaluation_start_time
 
             bt.logging.info(f"Miners Final Rewards: {rewards}")
 
             self.update_scores(rewards, miner_uids)
             bt.logging.info("Scores updated for miners")
+
+            for i, miner_uid in enumerate(miner_uids):
+                if miner_uid not in self.miner_stats:
+                    self.miner_stats[miner_uid] = MinerStats()
+                self.miner_stats[miner_uid].update(
+                    score=float(rewards[i]),
+                    execution_time=float(execution_times[i]),
+                    evaluation_time=evaluation_time,
+                    last_task=task
+                )
+                self.miner_stats["aggregated"].update(
+                    score=float(rewards[i]),
+                    execution_time=float(execution_times[i]),
+                    evaluation_time=evaluation_time,
+                    last_task=task
+                )
+
+            feedback_synapses = []
+            for miner_uid in miner_uids:
+                feedback_synapses.append(
+                    FeedbackSynapse(
+                        version="v1",
+                        stats=self.miner_stats[miner_uid],
+                        # aggregated_stats=self.miner_stats["aggregated"]  # Uncomment if you want global stats as well
+                    )
+                )
+
+            _ = await _dendrite_with_retries(
+                dendrite=self.dendrite,
+                axons=miner_axons,
+                synapses=feedback_synapses,
+                deserialize=True,
+                timeout=TIMEOUT,
+            )
+
             bt.logging.success("Task step completed successfully.")
 
             task_end_time = time.time()
@@ -129,7 +176,8 @@ async def forward(self) -> None:
             avg_miner_time = sum(execution_times) / len(execution_times) if execution_times else 0.0
             bt.logging.info(
                 f"Task analysis time: {task_duration:.2f}s, "
-                f"average miner request time: {avg_miner_time:.2f}s"
+                f"average miner request time: {avg_miner_time:.2f}s, "
+                f"evaluation time: {evaluation_time:.2f}s"
             )
 
             bt.logging.info(f"Sleeping for {FORWARD_SLEEP_SECONDS}s....")
@@ -137,7 +185,7 @@ async def forward(self) -> None:
 
         end_time = time.time()
         total_duration = end_time - total_time_start
-        avg_task_time = tasks_total_time / tasks_count if tasks_count > 0 else 0.0
+        avg_task_time = tasks_total_time / tasks_count if tasks_count else 0.0
 
         bt.logging.success("Forward step completed successfully.")
         bt.logging.info(
@@ -155,25 +203,27 @@ async def forward(self) -> None:
 async def _dendrite_with_retries(
     dendrite: bt.dendrite,
     axons: list,
-    synapse: TaskSynapse,
+    synapses: List[TaskSynapse],
     deserialize: bool,
     timeout: float,
     cnt_attempts=3
 ) -> List[TaskSynapse]:
-    res: List[TaskSynapse | None] = [None] * len(axons)
+    res: List[Optional[TaskSynapse]] = [None] * len(axons)
     idx = list(range(len(axons)))
     axons = axons.copy()
+    synapses = synapses.copy()
 
     for attempt in range(cnt_attempts):
         responses: List[TaskSynapse] = await dendrite(
             axons=axons,
-            synapse=synapse,
+            synapses=synapses,
             deserialize=deserialize,
             timeout=timeout
         )
 
         new_idx = []
         new_axons = []
+        new_synapses = []
         for i, syn_rsp in enumerate(responses):
             if syn_rsp.dendrite.status_code is not None and int(syn_rsp.dendrite.status_code) == 422:
                 if attempt == cnt_attempts - 1:
@@ -184,6 +234,7 @@ async def _dendrite_with_retries(
                 else:
                     new_idx.append(idx[i])
                     new_axons.append(axons[i])
+                    new_synapses.append(synapses[i])
             else:
                 res[idx[i]] = syn_rsp
 
@@ -194,9 +245,10 @@ async def _dendrite_with_retries(
 
         idx = new_idx
         axons = new_axons
+        synapses = new_synapses
 
     assert all(el is not None for el in res)
-    return res
+    return res  # type: ignore
 
 
 def _get_task_solution_from_synapse(
