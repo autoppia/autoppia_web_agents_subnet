@@ -7264,7 +7264,7 @@
         "documentation": {}
     },
     {
-        "label": "TaskSynapse",
+        "label": "TextSynapse",
         "importPath": "autoppia_web_agents_subnet.protocol",
         "description": "autoppia_web_agents_subnet.protocol",
         "isExtraImport": true,
