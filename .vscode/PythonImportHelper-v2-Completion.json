@@ -8177,6 +8177,14 @@
         "documentation": {}
     },
     {
+        "label": "ColoredLogger",
+        "importPath": "autoppia_web_agents_subnet.utils.logging",
+        "description": "autoppia_web_agents_subnet.utils.logging",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.utils.logging",
+        "documentation": {}
+    },
+    {
         "label": "Console",
         "importPath": "rich.console",
         "description": "rich.console",
@@ -13297,7 +13305,7 @@
         "kind": 6,
         "importPath": "autoppia_web_agents_subnet.utils.logging",
         "description": "autoppia_web_agents_subnet.utils.logging",
-        "peekOfCode": "class ColoredLogger:\n    \"\"\"A simple logger that uses ANSI colors when calling bt.logging methods.\"\"\"\n    BLUE = \"blue\"\n    YELLOW = \"yellow\"\n    RED = \"red\"\n    RESET = \"reset\"\n    _COLORS = {\n        \"blue\": \"\\033[94m\",\n        \"yellow\": \"\\033[93m\",\n        \"red\": \"\\033[91m\",",
+        "peekOfCode": "class ColoredLogger:\n    \"\"\"A simple logger that uses ANSI colors when calling bt.logging methods.\"\"\"\n    BLUE = \"blue\"\n    YELLOW = \"yellow\"\n    RED = \"red\"\n    GREEN = \"green\"\n    RESET = \"reset\"\n    _COLORS = {\n        \"blue\": \"\\033[94m\",\n        \"yellow\": \"\\033[93m\",",
         "detail": "autoppia_web_agents_subnet.utils.logging",
         "documentation": {}
     },
