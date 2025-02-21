@@ -8408,7 +8408,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.config.config",
         "description": "autoppia_iwa_module.autoppia_iwa.config.config",
-        "peekOfCode": "DEMO_WEBS_ENDPOINT = os.getenv(\"DEMO_WEBS_ENDPOINT\", \"http://localhost\")\nDEMO_WEBS_STARTING_PORT = int(os.getenv(\"DEMO_WEBS_STARTING_PORT\", '8000'))\n# ============================\n# Agent Configurations\n# ============================\nAGENT_NAME = os.getenv(\"AGENT_NAME\")\nUSE_APIFIED_AGENT = bool(strtobool(os.getenv(\"USE_APIFIED_AGENT\", \"false\")))\nAGENT_HOST = os.getenv(\"AGENT_HOST\", 'localhost')\nAGENT_PORT = int(os.getenv(\"AGENT_PORT\", '8080'))",
+        "peekOfCode": "DEMO_WEBS_ENDPOINT = os.getenv(\"DEMO_WEBS_ENDPOINT\", \"http://localhost\")\nDEMO_WEBS_STARTING_PORT = int(os.getenv(\"DEMO_WEBS_STARTING_PORT\", '8000'))\n# ============================\n# Agent Configurations\n# ============================\nAGENT_NAME = os.getenv(\"AGENT_NAME\")\nUSE_APIFIED_AGENT = bool(strtobool(os.getenv(\"USE_APIFIED_AGENT\", False)))\nAGENT_HOST = os.getenv(\"AGENT_HOST\", 'localhost')\nAGENT_PORT = int(os.getenv(\"AGENT_PORT\", '8080'))",
         "detail": "autoppia_iwa_module.autoppia_iwa.config.config",
         "documentation": {}
     },
@@ -8417,7 +8417,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.config.config",
         "description": "autoppia_iwa_module.autoppia_iwa.config.config",
-        "peekOfCode": "DEMO_WEBS_STARTING_PORT = int(os.getenv(\"DEMO_WEBS_STARTING_PORT\", '8000'))\n# ============================\n# Agent Configurations\n# ============================\nAGENT_NAME = os.getenv(\"AGENT_NAME\")\nUSE_APIFIED_AGENT = bool(strtobool(os.getenv(\"USE_APIFIED_AGENT\", \"false\")))\nAGENT_HOST = os.getenv(\"AGENT_HOST\", 'localhost')\nAGENT_PORT = int(os.getenv(\"AGENT_PORT\", '8080'))",
+        "peekOfCode": "DEMO_WEBS_STARTING_PORT = int(os.getenv(\"DEMO_WEBS_STARTING_PORT\", '8000'))\n# ============================\n# Agent Configurations\n# ============================\nAGENT_NAME = os.getenv(\"AGENT_NAME\")\nUSE_APIFIED_AGENT = bool(strtobool(os.getenv(\"USE_APIFIED_AGENT\", False)))\nAGENT_HOST = os.getenv(\"AGENT_HOST\", 'localhost')\nAGENT_PORT = int(os.getenv(\"AGENT_PORT\", '8080'))",
         "detail": "autoppia_iwa_module.autoppia_iwa.config.config",
         "documentation": {}
     },
@@ -8426,7 +8426,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.config.config",
         "description": "autoppia_iwa_module.autoppia_iwa.config.config",
-        "peekOfCode": "AGENT_NAME = os.getenv(\"AGENT_NAME\")\nUSE_APIFIED_AGENT = bool(strtobool(os.getenv(\"USE_APIFIED_AGENT\", \"false\")))\nAGENT_HOST = os.getenv(\"AGENT_HOST\", 'localhost')\nAGENT_PORT = int(os.getenv(\"AGENT_PORT\", '8080'))",
+        "peekOfCode": "AGENT_NAME = os.getenv(\"AGENT_NAME\")\nUSE_APIFIED_AGENT = bool(strtobool(os.getenv(\"USE_APIFIED_AGENT\", False)))\nAGENT_HOST = os.getenv(\"AGENT_HOST\", 'localhost')\nAGENT_PORT = int(os.getenv(\"AGENT_PORT\", '8080'))",
         "detail": "autoppia_iwa_module.autoppia_iwa.config.config",
         "documentation": {}
     },
@@ -8435,7 +8435,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.config.config",
         "description": "autoppia_iwa_module.autoppia_iwa.config.config",
-        "peekOfCode": "USE_APIFIED_AGENT = bool(strtobool(os.getenv(\"USE_APIFIED_AGENT\", \"false\")))\nAGENT_HOST = os.getenv(\"AGENT_HOST\", 'localhost')\nAGENT_PORT = int(os.getenv(\"AGENT_PORT\", '8080'))",
+        "peekOfCode": "USE_APIFIED_AGENT = bool(strtobool(os.getenv(\"USE_APIFIED_AGENT\", False)))\nAGENT_HOST = os.getenv(\"AGENT_HOST\", 'localhost')\nAGENT_PORT = int(os.getenv(\"AGENT_PORT\", '8080'))",
         "detail": "autoppia_iwa_module.autoppia_iwa.config.config",
         "documentation": {}
     },
