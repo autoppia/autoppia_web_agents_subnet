@@ -71,3 +71,7 @@ class ColoredLogger:
     @staticmethod
     def error(message: str, color: str = "red") -> None:
         bt.logging.error(ColoredLogger._colored_msg(message, color))
+
+    @staticmethod
+    def success(message: str, color: str = "green") -> None:
+        bt.logging.error(ColoredLogger._colored_msg(message, color))
