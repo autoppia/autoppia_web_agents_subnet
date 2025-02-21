@@ -92,7 +92,11 @@ class Miner(BaseMinerNeuron):
         return synapse
 
     async def forward_feedback(self, synapse: TaskFeedbackSynapse) -> TaskFeedbackSynapse:
-        synapse.print_in_terminal()
+        try:
+            synapse.print_in_terminal()
+        except Exception as e:
+            ColoredLogger.error("Error occurred while printing in terminal TaskFeedback")
+            bt.logging.info(e)
         return synapse
 
     async def blacklist(self, synapse: TaskSynapse) -> typing.Tuple[bool, str]:
