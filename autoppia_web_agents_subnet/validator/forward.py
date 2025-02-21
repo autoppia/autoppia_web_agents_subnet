@@ -248,4 +248,16 @@ def _clean_miner_task(task: Task) -> Task:
     task_copy.tests = None
     task_copy.milestones = None
     task_copy.web_analysis = None
+
+    # Ensure `html` is never None
+    if hasattr(task_copy, "html") and task_copy.html is None:
+        task_copy.html = ""
+
+    # Convert any string 'id' to int if needed
+    if hasattr(task_copy, "id") and isinstance(task_copy.id, str):
+        try:
+            task_copy.id = int(task_copy.id)
+        except ValueError:
+            pass
+
     return task_copy

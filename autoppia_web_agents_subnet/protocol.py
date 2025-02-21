@@ -20,6 +20,11 @@ class MinerStats(BaseModel):
     sum_execution_time: float = 0.0
     sum_evaluation_time: float = 0.0
 
+    # Allow extra fields to avoid strict validation on nested objects
+    class Config:
+        extra = "allow"
+        arbitrary_types_allowed = True
+
     def update(
         self,
         score: float,
@@ -64,6 +69,7 @@ class TaskFeedbackSynapse(Synapse):
 
     class Config:
         extra = "allow"
+        arbitrary_types_allowed = True
 
     def deserialize(self) -> "TaskFeedbackSynapse":
         return self
@@ -84,7 +90,7 @@ class TaskFeedbackSynapse(Synapse):
         if self.stats.last_task:
             last_task_id = self.stats.last_task.id or "N/A"
             last_task_prompt = self.stats.last_task.prompt or "N/A"
-            table.add_row("Last Task ID", last_task_id)
+            table.add_row("Last Task ID", str(last_task_id))
             table.add_row("Last Task Prompt", last_task_prompt)
         else:
             table.add_row("Last Task ID", "None")

@@ -13485,7 +13485,7 @@
         "kind": 6,
         "importPath": "autoppia_web_agents_subnet.protocol",
         "description": "autoppia_web_agents_subnet.protocol",
-        "peekOfCode": "class TaskFeedbackSynapse(Synapse):\n    version: str = \"\"\n    stats: MinerStats\n    class Config:\n        extra = \"allow\"\n    def deserialize(self) -> \"TaskFeedbackSynapse\":\n        return self\n    def print_in_terminal(self):\n        console = Console()\n        table = Table(title=\"Miner Feedback Stats\", show_header=True, header_style=\"bold magenta\")",
+        "peekOfCode": "class TaskFeedbackSynapse(Synapse):\n    version: str = \"\"\n    stats: MinerStats\n    class Config:\n        extra = \"allow\"\n        arbitrary_types_allowed = True\n    def deserialize(self) -> \"TaskFeedbackSynapse\":\n        return self\n    def print_in_terminal(self):\n        console = Console()",
         "detail": "autoppia_web_agents_subnet.protocol",
         "documentation": {}
     },
