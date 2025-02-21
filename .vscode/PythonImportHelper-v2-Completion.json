@@ -8607,7 +8607,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.classes",
         "description": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.classes",
-        "peekOfCode": "class Task(BaseModel):\n    \"\"\"\n    Represents a task with a unique id, prompt, URL, browser specs, tests, milestones, and web analysis.\n    \"\"\"\n    id: str = Field(default_factory=lambda: str(uuid.uuid4()), description=\"Unique identifier for the task\")\n    prompt: str = Field(..., description=\"Prompt for the task\")\n    url: str = Field(..., description=\"URL where the task is to be performed\")\n    specifications: BrowserSpecification = Field(default_factory=BrowserSpecification, description=\"Browser specifications for the task\")\n    tests: List[BaseTaskTest] = Field(default_factory=list, description=\"List of tests associated with the task\")\n    milestones: Optional[List[\"Task\"]] = Field(None, description=\"List of milestone tasks\")",
+        "peekOfCode": "class Task(BaseModel):\n    \"\"\"\n    Represents a task with a unique id, prompt, URL, browser specs, tests, milestones, and web analysis.\n    \"\"\"\n    id: str = Field(default_factory=lambda: str(uuid.uuid4()), description=\"Unique identifier for the task\")\n    prompt: str = Field(..., description=\"Prompt for the task\")\n    url: str = Field(..., description=\"URL where the task is to be performed\")\n    html:str = \"\"\n    screenshot:Any = None\n    specifications: BrowserSpecification = Field(default_factory=BrowserSpecification, description=\"Browser specifications for the task\")",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.classes",
         "documentation": {}
     },
