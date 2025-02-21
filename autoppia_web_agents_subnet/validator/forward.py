@@ -31,8 +31,8 @@ TIMEOUT = 120
 FORWARD_SLEEP_SECONDS = 60 * 10  # 10 Minutes
 TASK_SLEEP = 60 * 3             # 3 Minutes
 TIME_WEIGHT = 0.2
-MIN_SCORE_FOR_CORRECT_FORMAT = 0
-MIN_RESPONSE_REWARD = 0
+MIN_SCORE_FOR_CORRECT_FORMAT = 0.1
+MIN_RESPONSE_REWARD = 0.1
 SAMPLE_SIZE = 256  # All Miners
 
 
@@ -142,7 +142,7 @@ async def forward(self) -> None:
             for i, miner_uid in enumerate(miner_uids):
                 score_value = rewards[i] if rewards[i] is not None else 0.0
                 exec_time_value = execution_times[i] if execution_times[i] is not None else TIMEOUT
-                success = score_value > 0.0
+                success = score_value >= TIME_WEIGHT
 
                 if miner_uid not in self.miner_stats:
                     self.miner_stats[miner_uid] = MinerStats()
