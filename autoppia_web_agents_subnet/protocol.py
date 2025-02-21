@@ -20,6 +20,10 @@ class MinerStats(BaseModel):
     sum_execution_time: float = 0.0
     sum_evaluation_time: float = 0.0
 
+    # New fields
+    last_task_score: float = 0.0
+    last_execution_time: float = 0.0
+
     # Allow extra fields to avoid strict validation on nested objects
     class Config:
         extra = "allow"
@@ -43,7 +47,11 @@ class MinerStats(BaseModel):
         self.avg_score = self.sum_score / self.total_tasks
         self.avg_execution_time = self.sum_execution_time / self.total_tasks
         self.avg_evaluation_time = self.sum_evaluation_time / self.total_tasks
+
         self.last_task = last_task
+        # Update new fields
+        self.last_task_score = score
+        self.last_execution_time = execution_time
 
 
 class TaskSynapse(Synapse):
@@ -86,6 +94,13 @@ class TaskFeedbackSynapse(Synapse):
         table.add_row("Avg Score", f"{self.stats.avg_score:.2f}")
         table.add_row("Avg Exec Time", f"{self.stats.avg_execution_time:.2f}s")
         table.add_row("Avg Eval Time", f"{self.stats.avg_evaluation_time:.2f}s")
+
+        # Add empty row between global stats and last task stats
+        table.add_row("", "")
+
+        # Display new fields for the last task
+        table.add_row("Last Task Score", f"{self.stats.last_task_score:.2f}")
+        table.add_row("Last Exec Time", f"{self.stats.last_execution_time:.2f}s")
 
         if self.stats.last_task:
             last_task_id = self.stats.last_task.id or "N/A"
