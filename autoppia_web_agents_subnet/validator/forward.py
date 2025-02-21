@@ -182,11 +182,6 @@ async def forward(self) -> None:
                 )
             _ = await asyncio.gather(*feedback_tasks)
             bt.logging.info("TaskFeedbackSynapse responses received.")
-
-            # Print some feedback stats in the terminal
-            for fb in feedback_list:
-                fb.print_in_terminal()
-
             bt.logging.success("Task step completed successfully.")
 
             task_end_time = time.time()
