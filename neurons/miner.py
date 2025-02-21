@@ -91,9 +91,7 @@ class Miner(BaseMinerNeuron):
         return synapse
 
     async def forward_feedback(self, synapse: TaskFeedbackSynapse) -> TaskFeedbackSynapse:
-        print("===================")
-        bt.logging.info(f"Task Feedback: {synapse}")
-        print("===================")
+        synapse.print_in_terminal()
         return synapse
 
     async def blacklist(self, synapse: TaskSynapse) -> typing.Tuple[bool, str]:
