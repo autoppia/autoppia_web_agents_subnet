@@ -13386,7 +13386,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "TIMEOUT = 120\nFORWARD_SLEEP_SECONDS = 60 * 10  # 10 Minutes\nTASK_SLEEP = 60 * 3             # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        if not hasattr(self, \"miner_stats\"):",
+        "peekOfCode": "TIMEOUT = 120\nFORWARD_SLEEP_SECONDS = 60 * 10  # 10 Minutes\nTASK_SLEEP = 60 * 3             # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        if not hasattr(self, \"miner_stats\"):",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -13395,7 +13395,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "FORWARD_SLEEP_SECONDS = 60 * 10  # 10 Minutes\nTASK_SLEEP = 60 * 3             # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        if not hasattr(self, \"miner_stats\"):\n            self.miner_stats = {}",
+        "peekOfCode": "FORWARD_SLEEP_SECONDS = 60 * 10  # 10 Minutes\nTASK_SLEEP = 60 * 3             # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        if not hasattr(self, \"miner_stats\"):\n            self.miner_stats = {}",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -13404,7 +13404,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "TASK_SLEEP = 60 * 3             # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        if not hasattr(self, \"miner_stats\"):\n            self.miner_stats = {}\n        bt.logging.info(\"Starting forward step.\")",
+        "peekOfCode": "TASK_SLEEP = 60 * 3             # 3 Minutes\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        if not hasattr(self, \"miner_stats\"):\n            self.miner_stats = {}\n        bt.logging.info(\"Starting forward step.\")",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -13413,7 +13413,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "TIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        if not hasattr(self, \"miner_stats\"):\n            self.miner_stats = {}\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()",
+        "peekOfCode": "TIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        if not hasattr(self, \"miner_stats\"):\n            self.miner_stats = {}\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -13422,7 +13422,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "MIN_SCORE_FOR_CORRECT_FORMAT = 0\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        if not hasattr(self, \"miner_stats\"):\n            self.miner_stats = {}\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")",
+        "peekOfCode": "MIN_SCORE_FOR_CORRECT_FORMAT = 0.1\nMIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        if not hasattr(self, \"miner_stats\"):\n            self.miner_stats = {}\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -13431,7 +13431,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "MIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        if not hasattr(self, \"miner_stats\"):\n            self.miner_stats = {}\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n        try:",
+        "peekOfCode": "MIN_RESPONSE_REWARD = 0.1\nSAMPLE_SIZE = 256  # All Miners\nasync def forward(self) -> None:\n    try:\n        if not hasattr(self, \"miner_stats\"):\n            self.miner_stats = {}\n        bt.logging.info(\"Starting forward step.\")\n        demo_web_projects = get_demo_webs_projects()\n        bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n        try:",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
