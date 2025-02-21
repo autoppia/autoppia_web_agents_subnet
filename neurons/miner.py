@@ -33,6 +33,7 @@ from autoppia_iwa.config.config import (
     AGENT_PORT,
     USE_APIFIED_AGENT,
 )
+from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
 
 class Miner(BaseMinerNeuron):
@@ -72,7 +73,7 @@ class Miner(BaseMinerNeuron):
             start_time = time.time()
             validator_hotkey = getattr(synapse.dendrite, "hotkey", None)
 
-            bt.logging.info(f"Request Received from validator: {validator_hotkey}")
+            ColoredLogger.info(f"Request Received from validator: {validator_hotkey}", ColoredLogger.BLUE)
 
             task = Task(prompt=synapse.prompt, url=synapse.url)
             task_solution = await self.agent.solve_task(task=task)
@@ -81,9 +82,9 @@ class Miner(BaseMinerNeuron):
 
             synapse.actions = actions
 
-            bt.logging.success(
+            ColoredLogger.success(
                 f"Request completed successfully in {time.time() - start_time}s"
-            )
+                , ColoredLogger.GREEN)
 
         except Exception as e:
             bt.logging.error(f"An Error ocurred on miner forward : {e}")

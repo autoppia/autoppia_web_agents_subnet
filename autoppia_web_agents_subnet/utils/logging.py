@@ -41,12 +41,14 @@ class ColoredLogger:
     BLUE = "blue"
     YELLOW = "yellow"
     RED = "red"
+    GREEN = "green"
     RESET = "reset"
 
     _COLORS = {
         "blue": "\033[94m",
         "yellow": "\033[93m",
         "red": "\033[91m",
+        "green": "\033[92m",
         "reset": "\033[0m"
     }
 
