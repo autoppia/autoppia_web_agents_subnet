@@ -9,7 +9,6 @@ For OpenAI API usage:
 - Storage: 10GB minimum
 
 For Local LLM usage:
-- Ubuntu 22.04.5 LTS (Jammy) or 24.04 LTS (Noble)
 - GPU: NVIDIA A40
 - Storage: 100GB minimum
 
