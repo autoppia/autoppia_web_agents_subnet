@@ -4,9 +4,14 @@ Validator setup for Subnet 36.
 
 ## Requirements
 
+For OpenAI API usage:
+- CPU: Any modern processor
+- Storage: 10GB minimum
+
+For Local LLM usage:
 - Ubuntu 22.04.5 LTS (Jammy) or 24.04 LTS (Noble)
-- GPU: NVIDIA A40/A6000/A100/H100 (or use OpenAI API)
-- Storage: 200MB minimum
+- GPU: NVIDIA A40
+- Storage: 100GB minimum
 
 **Important Linux Distribution Note**:
 
@@ -17,7 +22,7 @@ Validator setup for Subnet 36.
 
 ## Component Overview
 
-You can deploy components separately:
+The deployment is compartmentalized, allowing each component to be deployed separately:
 
 - **Validator**: CPU only (MongoDB Recommended)
 - **LLM**: OpenAI API or Local LLM
@@ -125,7 +130,7 @@ pm2 start autoppia_iwa_module/modules/llm_local/run_local_llm.py --name llm_loca
 python3 autoppia_iwa_module/modules/llm_local/test/test.py
 ```
 
-The local setup uses **deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B** model.
+The local setup uses **Qwen/Qwen2.5-14B-Instruct** model.
 
 # DEMO WEBS SETUP
 
@@ -142,8 +147,6 @@ chmod +x setup.sh
 ./setup.sh
 cd "$CURRENT_DIR"
 ```
-
-For detailed information about the demo webs and their configurations, please refer to the demo webs [README.md](./autoppia_iwa_module/modules/webs_demo/README.md).
 
 ### Configure endpoints (optional):
 
