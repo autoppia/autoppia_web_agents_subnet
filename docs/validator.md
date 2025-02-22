@@ -120,13 +120,30 @@ LLM_ENDPOINT="http://localhost:6000/generate"
 chmod +x autoppia_iwa_module/modules/llm_local/setup.sh
 ./autoppia_iwa_module/modules/llm_local/setup.sh
 source llm_env/bin/activate
-pm2 start autoppia_iwa_module/modules/llm_local/run_local_llm.py --name llm_local -- --port 6000
+CUDA_VISIBLE_DEVICES=0 pm2 start autoppia_iwa_module/modules/llm_local/run_local_llm.py --name llm_local -- --port 6000
 ```
 
 **To verify if your LLM is working correctly:**
 
 ```bash
-python3 autoppia_iwa_module/modules/llm_local/test/test.py
+curl -X POST "http://127.0.0.1:6000/generate" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "input": {
+         "text": [
+           {
+             "role": "system",
+             "content": "You are Qwen, created by Alibaba Cloud. You are a helpful assistant."
+           },
+           {
+             "role": "user",
+             "content": "Give me a short introduction to large language model."
+           }
+         ],
+         "ctx": 10000,
+         "generation_kwargs": {}
+       }
+     }'
 ```
 
 The local setup uses **Qwen/Qwen2.5-14B-Instruct** model.
