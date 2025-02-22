@@ -146,6 +146,13 @@ curl -X POST "http://127.0.0.1:6000/generate" \
      }'
 ```
 
+Expected output from the LLM:
+```
+{
+  "output": "A large language model is an artificial intelligence system designed to understand and generate human-like text based on the input it receives. ETC ETC ETC 
+}
+```
+
 The local setup uses **Qwen/Qwen2.5-14B-Instruct** model.
 
 # DEMO WEBS SETUP
