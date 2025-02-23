@@ -21,7 +21,7 @@ from autoppia_web_agents_subnet.utils.uids import get_random_uids
 from autoppia_web_agents_subnet.protocol import (
     TaskSynapse,
     TaskFeedbackSynapse,
-    MinerStats
+    MinerStats,
 )
 from autoppia_web_agents_subnet.utils.dendrite import dendrite_with_retries
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
@@ -29,7 +29,7 @@ from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
 TIMEOUT = 120
 FORWARD_SLEEP_SECONDS = 60 * 10  # 10 Minutes
-TASK_SLEEP = 60 * 3             # 3 Minutes
+TASK_SLEEP = 60 * 3  # 3 Minutes
 TIME_WEIGHT = 0.2
 MIN_SCORE_FOR_CORRECT_FORMAT = 0.1
 MIN_RESPONSE_REWARD = 0.1
@@ -54,10 +54,18 @@ async def forward(self) -> None:
         web_url = demo_web_project.frontend_url
         bt.logging.info(f"Selected demo web project with URL: {web_url}")
 
-        bt.logging.warning(f"Generating tasks for Web Project: '{demo_web_project.name}' ...")
+        ColoredLogger.info(
+            f"Generating tasks for Web Project: '{demo_web_project.name}'",
+            ColoredLogger.YELLOW,
+        )
         start_time = time.time()
-        tasks_generated: List[Task] = await _generate_tasks_for_url(demo_web_project=demo_web_project)
-        ColoredLogger.info(f"Generated {len(tasks_generated)} tasks in {time.time()-start_time}s", ColoredLogger.YELLOW)
+        tasks_generated: List[Task] = await _generate_tasks_for_url(
+            demo_web_project=demo_web_project
+        )
+        ColoredLogger.info(
+            f"Generated {len(tasks_generated)} tasks in {time.time()-start_time}s",
+            ColoredLogger.YELLOW,
+        )
 
         if not tasks_generated:
             bt.logging.warning("No tasks generated, skipping forward step.")
@@ -82,7 +90,9 @@ async def forward(self) -> None:
 
             miner_axons = [self.metagraph.axons[uid] for uid in miner_uids]
 
-            task_synapse = TaskSynapse(prompt=miner_task.prompt, url=miner_task.url, actions=[])
+            task_synapse = TaskSynapse(
+                prompt=miner_task.prompt, url=miner_task.url, actions=[]
+            )
             bt.logging.info(f"Sending TaskSynapse to {len(miner_uids)} miners.")
             responses: List[TaskSynapse] = await dendrite_with_retries(
                 dendrite=self.dendrite,
@@ -111,11 +121,17 @@ async def forward(self) -> None:
                     )
                 except Exception as e:
                     bt.logging.error(f"Error in Miner Response Format: {e}")
-                    task_solution = TaskSolution(task=task, actions=[], web_agent_id=str(miner_uid))
+                    task_solution = TaskSolution(
+                        task=task, actions=[], web_agent_id=str(miner_uid)
+                    )
 
                 task_solutions.append(task_solution)
 
-                if response and hasattr(response.dendrite, "process_time") and response.dendrite.process_time is not None:
+                if (
+                    response
+                    and hasattr(response.dendrite, "process_time")
+                    and response.dendrite.process_time is not None
+                ):
                     process_time = response.dendrite.process_time
                 else:
                     process_time = TIMEOUT
@@ -129,7 +145,7 @@ async def forward(self) -> None:
                 execution_times=execution_times,
                 time_weight=TIME_WEIGHT,
                 min_correct_format_score=MIN_SCORE_FOR_CORRECT_FORMAT,
-                min_response_reward=MIN_RESPONSE_REWARD
+                min_response_reward=MIN_RESPONSE_REWARD,
             )
             evaluation_end_time = time.time()
             evaluation_time = evaluation_end_time - evaluation_start_time
@@ -141,7 +157,9 @@ async def forward(self) -> None:
 
             for i, miner_uid in enumerate(miner_uids):
                 score_value = rewards[i] if rewards[i] is not None else 0.0
-                exec_time_value = execution_times[i] if execution_times[i] is not None else TIMEOUT
+                exec_time_value = (
+                    execution_times[i] if execution_times[i] is not None else TIMEOUT
+                )
                 success = score_value >= TIME_WEIGHT
 
                 if miner_uid not in self.miner_stats:
@@ -151,14 +169,14 @@ async def forward(self) -> None:
                     execution_time=float(exec_time_value),
                     evaluation_time=evaluation_time,
                     last_task=task,
-                    success=success
+                    success=success,
                 )
                 self.miner_stats["aggregated"].update(
                     score=float(score_value),
                     execution_time=float(exec_time_value),
                     evaluation_time=evaluation_time,
                     last_task=task,
-                    success=success
+                    success=success,
                 )
 
             feedback_list = [
@@ -166,7 +184,9 @@ async def forward(self) -> None:
                 for miner_uid in miner_uids
             ]
 
-            bt.logging.info(f"Sending TaskFeedbackSynapse to {len(miner_uids)} miners in parallel.")
+            bt.logging.info(
+                f"Sending TaskFeedbackSynapse to {len(miner_uids)} miners in parallel."
+            )
             feedback_tasks = []
             for axon, feedback_synapse in zip(miner_axons, feedback_list):
                 feedback_tasks.append(
@@ -176,7 +196,7 @@ async def forward(self) -> None:
                             axons=[axon],
                             synapse=feedback_synapse,
                             deserialize=True,
-                            timeout=5
+                            timeout=5,
                         )
                     )
                 )
@@ -189,12 +209,15 @@ async def forward(self) -> None:
             tasks_count += 1
             tasks_total_time += task_duration
 
-            avg_miner_time = sum(execution_times) / len(execution_times) if execution_times else 0.0
+            avg_miner_time = (
+                sum(execution_times) / len(execution_times) if execution_times else 0.0
+            )
             ColoredLogger.info(
                 f"Task analysis time: {task_duration:.2f}s, "
                 f"average miner request time: {avg_miner_time:.2f}s, "
-                f"evaluation time: {evaluation_time:.2f}s"
-                ,ColoredLogger.YELLOW)
+                f"evaluation time: {evaluation_time:.2f}s",
+                ColoredLogger.YELLOW,
+            )
 
             bt.logging.info(f"Sleeping for {FORWARD_SLEEP_SECONDS}s....")
             await asyncio.sleep(FORWARD_SLEEP_SECONDS)
@@ -217,11 +240,13 @@ async def forward(self) -> None:
 
 
 def _get_task_solution_from_synapse(
-    task: Task,
-    synapse: TaskSynapse,
-    web_agent_id: str
+    task: Task, synapse: TaskSynapse, web_agent_id: str
 ):
-    if not synapse or not hasattr(synapse, 'actions') or not isinstance(synapse.actions, list):
+    if (
+        not synapse
+        or not hasattr(synapse, "actions")
+        or not isinstance(synapse.actions, list)
+    ):
         return TaskSolution(task=task, actions=[], web_agent_id=web_agent_id)
     return TaskSolution(task=task, actions=synapse.actions, web_agent_id=web_agent_id)
 
@@ -236,7 +261,7 @@ async def _generate_tasks_for_url(demo_web_project: WebProject) -> List[Task]:
     config = TaskGenerationConfig(
         web_project=demo_web_project,
         save_web_analysis_in_db=True,
-        save_task_in_db=False
+        save_task_in_db=False,
     )
     pipeline = TaskGenerationPipeline(config)
     output: TasksGenerationOutput = await pipeline.generate()
