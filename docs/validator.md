@@ -104,7 +104,7 @@ OPENAI_API_KEY="your-api-key-here"
 
 ```bash
 LLM_PROVIDER="local"
-LLM_ENDPOINT="http://localhost:6000/generate"
+LOCAL_MODEL_ENDPOINT="http://localhost:6000/generate"
 ```
 
 2. Setup local LLM:
