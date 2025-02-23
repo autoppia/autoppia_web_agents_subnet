@@ -73,7 +73,10 @@ class Miner(BaseMinerNeuron):
             start_time = time.time()
             validator_hotkey = getattr(synapse.dendrite, "hotkey", None)
 
-            ColoredLogger.info(f"Request Received from validator: {validator_hotkey}", ColoredLogger.BLUE)
+            ColoredLogger.info(
+                f"Request Received from validator: {validator_hotkey}. Task:{synapse.prompt}",
+                ColoredLogger.BLUE,
+            )
 
             task = Task(prompt=synapse.prompt, url=synapse.url)
             task_solution = await self.agent.solve_task(task=task)
@@ -83,19 +86,24 @@ class Miner(BaseMinerNeuron):
             synapse.actions = actions
 
             ColoredLogger.success(
-                f"Request completed successfully in {time.time() - start_time}s"
-                , ColoredLogger.GREEN)
+                f"Request completed successfully in {time.time() - start_time}s",
+                ColoredLogger.GREEN,
+            )
 
         except Exception as e:
             bt.logging.error(f"An Error ocurred on miner forward : {e}")
 
         return synapse
 
-    async def forward_feedback(self, synapse: TaskFeedbackSynapse) -> TaskFeedbackSynapse:
+    async def forward_feedback(
+        self, synapse: TaskFeedbackSynapse
+    ) -> TaskFeedbackSynapse:
         try:
             synapse.print_in_terminal()
         except Exception as e:
-            ColoredLogger.error("Error occurred while printing in terminal TaskFeedback")
+            ColoredLogger.error(
+                "Error occurred while printing in terminal TaskFeedback"
+            )
             bt.logging.info(e)
         return synapse
 
@@ -159,7 +167,9 @@ class Miner(BaseMinerNeuron):
         )
         return False, "Hotkey recognized!"
 
-    async def blacklist_feedback(self, synapse: TaskFeedbackSynapse) -> typing.Tuple[bool, str]:
+    async def blacklist_feedback(
+        self, synapse: TaskFeedbackSynapse
+    ) -> typing.Tuple[bool, str]:
         """
         Determines whether an incoming request should be blacklisted and thus ignored. Your implementation should
         define the logic for blacklisting requests based on your needs and desired security parameters.
