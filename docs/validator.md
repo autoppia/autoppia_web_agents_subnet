@@ -4,14 +4,6 @@ Validator setup for Subnet 36.
 
 ## Requirements
 
-For OpenAI API usage:
-- CPU: Any modern processor
-- Storage: 10GB minimum
-
-For Local LLM usage:
-- GPU: NVIDIA A40
-- Storage: 100GB minimum
-
 **Important Linux Distribution Note**:
 
 - Our **install_dependencies.sh** script currently supports:
@@ -83,8 +75,6 @@ cp .env.example .env
 
 # VALIDATOR SETUP
 
----
-
 Setup the validator:
 
 ```bash
@@ -94,7 +84,10 @@ chmod +x scripts/validator/setup.sh
 
 # LLM SETUP
 
----
+- **POD TYPE**: We suggest using A40 in RunPod
+- **Requirements**: CUDA 12.4.1 and PyTorch 2.4.0
+- **Tested on RunPod template**: `runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04`
+- **Model**: Using Qwen/Qwen2.5-14B-Instruct by default in `run_local_llm.py`
 
 ### Option A: OpenAI API (No GPU Required)
 
@@ -119,45 +112,22 @@ LLM_ENDPOINT="http://localhost:6000/generate"
 ```bash
 chmod +x autoppia_iwa_module/modules/llm_local/setup.sh
 ./autoppia_iwa_module/modules/llm_local/setup.sh
+```
+
+3. Setup in PM2:
+
+```bash
 source llm_env/bin/activate
 CUDA_VISIBLE_DEVICES=0 pm2 start autoppia_iwa_module/modules/llm_local/run_local_llm.py --name llm_local -- --port 6000
 ```
 
-**To verify if your LLM is working correctly:**
+To verify if your LLM is working correctly:
 
 ```bash
-curl -X POST "http://127.0.0.1:6000/generate" \
-     -H "Content-Type: application/json" \
-     -d '{
-       "input": {
-         "text": [
-           {
-             "role": "system",
-             "content": "You are Qwen, created by Alibaba Cloud. You are a helpful assistant."
-           },
-           {
-             "role": "user",
-             "content": "Give me a short introduction to large language model."
-           }
-         ],
-         "ctx": 10000,
-         "generation_kwargs": {}
-       }
-     }'
+python3 autoppia_iwa_module/modules/llm_local/test/test.py
 ```
-
-Expected output from the LLM:
-```
-{
-  "output": "A large language model is an artificial intelligence system designed to understand and generate human-like text based on the input it receives. ETC ETC ETC 
-}
-```
-
-The local setup uses **Qwen/Qwen2.5-14B-Instruct** model.
 
 # DEMO WEBS SETUP
-
----
 
 This script requires **Docker**. The following commands will install Docker and initialize the demo webs:
 
@@ -213,12 +183,9 @@ pm2 start neurons/validator.py \
 
 ## Auto Update for Validator
 
----
-
 Script for _automatic version control_ and _safe updates_ of your validator:
 
 ```bash
-bash
 chmod +x scripts/validator/auto_update_validator.sh
 pm2 start --name auto_update_validator --interpreter /bin/bash ./scripts/validator/auto_update_validator.sh
 ```
