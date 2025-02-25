@@ -2357,6 +2357,14 @@
         "documentation": {}
     },
     {
+        "label": "WebProject",
+        "importPath": "autoppia_iwa.src.demo_webs.classes",
+        "description": "autoppia_iwa.src.demo_webs.classes",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.demo_webs.classes",
+        "documentation": {}
+    },
+    {
         "label": "BackendEvent",
         "importPath": "autoppia_iwa.src.demo_webs.classes",
         "description": "autoppia_iwa.src.demo_webs.classes",
@@ -2530,6 +2538,14 @@
         "description": "autoppia_iwa.src.di_container",
         "isExtraImport": true,
         "detail": "autoppia_iwa.src.di_container",
+        "documentation": {}
+    },
+    {
+        "label": "TestGenerationPipeline",
+        "importPath": "autoppia_iwa.src.data_generation.application.tests.test_generation_pipeline",
+        "description": "autoppia_iwa.src.data_generation.application.tests.test_generation_pipeline",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.data_generation.application.tests.test_generation_pipeline",
         "documentation": {}
     },
     {
@@ -8810,6 +8826,15 @@
         "documentation": {}
     },
     {
+        "label": "LocalTaskGenerationPipeline",
+        "kind": 6,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.local_task_generation",
+        "description": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.local_task_generation",
+        "peekOfCode": "class LocalTaskGenerationPipeline:\n    def __init__(self, web_project: WebProject, llm_service: \"ILLM\" = Provide[DIContainer.llm_service]):\n        self.web_project:WebProject = web_project\n        self.llm_service:ILLM = llm_service\n    async def generate(self, page_url: str) -> List[\"Task\"]:\n        html, clean_html, screenshot, screenshot_desc = await get_html_and_screenshot(page_url)\n        interactive_elems = detect_interactive_elements(clean_html)\n        draft_list = await self._phase1_generate_draft_tasks(\n            clean_html, screenshot_desc, interactive_elems\n        )",
+        "detail": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.local_task_generation",
+        "documentation": {}
+    },
+    {
         "label": "LOCAL_TASKS_CONTEXT_PROMPT",
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.prompts",
@@ -13863,7 +13888,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "TIMEOUT = 60 * 2  # 2 Min\nFORWARD_SLEEP_SECONDS = 60 * 1  # 1 Minutes\nTASK_SLEEP = 60 * 1  # 1 Minute\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\ndef init_miner_stats(validator) -> None:\n    \"\"\"\n    Ensure `validator.miner_stats` is initialized.",
+        "peekOfCode": "TIMEOUT = 60 * 2  # 2 Min\nFORWARD_SLEEP_SECONDS = 60 * 1  # 1 Minutes\nTASK_SLEEP = 60 * 1  # 1 Minute\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\ndef init_miner_stats(validator) -> None:\n    \"\"\"\n    Ensure `validator.miner_stats` is initialized.",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -13872,7 +13897,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "FORWARD_SLEEP_SECONDS = 60 * 1  # 1 Minutes\nTASK_SLEEP = 60 * 1  # 1 Minute\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\ndef init_miner_stats(validator) -> None:\n    \"\"\"\n    Ensure `validator.miner_stats` is initialized.\n    \"\"\"",
+        "peekOfCode": "FORWARD_SLEEP_SECONDS = 60 * 1  # 1 Minutes\nTASK_SLEEP = 60 * 1  # 1 Minute\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\ndef init_miner_stats(validator) -> None:\n    \"\"\"\n    Ensure `validator.miner_stats` is initialized.\n    \"\"\"",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -13881,7 +13906,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "TASK_SLEEP = 60 * 1  # 1 Minute\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\ndef init_miner_stats(validator) -> None:\n    \"\"\"\n    Ensure `validator.miner_stats` is initialized.\n    \"\"\"\n    if not hasattr(validator, \"miner_stats\"):",
+        "peekOfCode": "TASK_SLEEP = 60 * 1  # 1 Minute\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\ndef init_miner_stats(validator) -> None:\n    \"\"\"\n    Ensure `validator.miner_stats` is initialized.\n    \"\"\"\n    if not hasattr(validator, \"miner_stats\"):",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -13890,7 +13915,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "TIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\ndef init_miner_stats(validator) -> None:\n    \"\"\"\n    Ensure `validator.miner_stats` is initialized.\n    \"\"\"\n    if not hasattr(validator, \"miner_stats\"):\n        validator.miner_stats = {}",
+        "peekOfCode": "TIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\ndef init_miner_stats(validator) -> None:\n    \"\"\"\n    Ensure `validator.miner_stats` is initialized.\n    \"\"\"\n    if not hasattr(validator, \"miner_stats\"):\n        validator.miner_stats = {}",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -13899,7 +13924,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "MIN_SCORE_FOR_CORRECT_FORMAT = 0  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\ndef init_miner_stats(validator) -> None:\n    \"\"\"\n    Ensure `validator.miner_stats` is initialized.\n    \"\"\"\n    if not hasattr(validator, \"miner_stats\"):\n        validator.miner_stats = {}\n    if \"aggregated\" not in validator.miner_stats:",
+        "peekOfCode": "MIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\ndef init_miner_stats(validator) -> None:\n    \"\"\"\n    Ensure `validator.miner_stats` is initialized.\n    \"\"\"\n    if not hasattr(validator, \"miner_stats\"):\n        validator.miner_stats = {}\n    if \"aggregated\" not in validator.miner_stats:",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
