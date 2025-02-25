@@ -31,6 +31,7 @@ class MinerStats(BaseModel):
 
     def update(
         self,
+        validator_hotkey, 
         score: float,
         execution_time: float,
         evaluation_time: float,
@@ -49,7 +50,6 @@ class MinerStats(BaseModel):
         self.avg_evaluation_time = self.sum_evaluation_time / self.total_tasks
 
         self.last_task = last_task
-        # Update new fields
         self.last_task_score = score
         self.last_execution_time = execution_time
 
@@ -83,7 +83,9 @@ class TaskFeedbackSynapse(Synapse):
         return self
 
     def print_in_terminal(self):
-        #TODO add validator_hotkey = getattr(synapse.dendrite, "hotkey", None) to row
+        # TODO add validator_hotkey to row
+        validator_hotkey = getattr(self.synapse.dendrite, "hotkey", None)  
+
         console = Console()
         table = Table(title="Miner Feedback Stats", show_header=True, header_style="bold magenta")
         table.add_column("Metric", style="dim")
@@ -111,5 +113,8 @@ class TaskFeedbackSynapse(Synapse):
         else:
             table.add_row("Last Task ID", "None")
             table.add_row("Last Task Prompt", "None")
+
+        # Add Validator Hotkey row
+        table.add_row("Validator Hotkey", validator_hotkey if validator_hotkey else "None")
 
         console.print(table)

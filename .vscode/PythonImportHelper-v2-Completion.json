@@ -13987,7 +13987,7 @@
         "kind": 6,
         "importPath": "autoppia_web_agents_subnet.protocol",
         "description": "autoppia_web_agents_subnet.protocol",
-        "peekOfCode": "class TaskFeedbackSynapse(Synapse):\n    version: str = \"\"\n    stats: MinerStats\n    class Config:\n        extra = \"allow\"\n        arbitrary_types_allowed = True\n    def deserialize(self) -> \"TaskFeedbackSynapse\":\n        return self\n    def print_in_terminal(self):\n        #TODO add validator_hotkey = getattr(synapse.dendrite, \"hotkey\", None) to row",
+        "peekOfCode": "class TaskFeedbackSynapse(Synapse):\n    version: str = \"\"\n    stats: MinerStats\n    class Config:\n        extra = \"allow\"\n        arbitrary_types_allowed = True\n    def deserialize(self) -> \"TaskFeedbackSynapse\":\n        return self\n    def print_in_terminal(self):\n        # TODO add validator_hotkey to row",
         "detail": "autoppia_web_agents_subnet.protocol",
         "documentation": {}
     },
