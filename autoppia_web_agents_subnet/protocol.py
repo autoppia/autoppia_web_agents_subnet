@@ -99,6 +99,7 @@ class TaskFeedbackSynapse(Synapse):
 
         # Add empty row between global stats and last task stats
         table.add_row("", "")
+        table.add_row("Validator Hotkey", validator_hotkey if validator_hotkey else "None")
 
         if self.stats.last_task:
             last_task_id = self.stats.last_task.id or "N/A"
@@ -113,7 +114,6 @@ class TaskFeedbackSynapse(Synapse):
         table.add_row("Last Task Score", f"{self.stats.last_task_score:.2f}")
         table.add_row("Last Exec Time", f"{self.stats.last_execution_time:.2f}s")
 
-        # Add Validator Hotkey row
-        table.add_row("Validator Hotkey", validator_hotkey if validator_hotkey else "None")
+        
 
         console.print(table)
