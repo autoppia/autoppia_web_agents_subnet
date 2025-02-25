@@ -27,7 +27,6 @@ from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 import asyncio
 
 
-# Constants
 TIMEOUT = 120  # 2 Min
 FORWARD_SLEEP_SECONDS = 60 * 5  # 5 Minutes
 TASK_SLEEP = 60  # 1 Minute
