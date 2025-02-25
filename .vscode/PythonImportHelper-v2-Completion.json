@@ -2453,7 +2453,7 @@
         "documentation": {}
     },
     {
-        "label": "get_demo_webs_projects",
+        "label": "initialize_demo_webs_projects",
         "importPath": "autoppia_iwa.src.demo_webs.config",
         "description": "autoppia_iwa.src.demo_webs.config",
         "isExtraImport": true,
@@ -13870,7 +13870,7 @@
         "kind": 2,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "def retrieve_random_demo_web_project() -> WebProject:\n    \"\"\"\n    Retrieves a random demo web project from the available ones.\n    Raises an Exception if none are available.\n    \"\"\"\n    demo_web_projects = get_demo_webs_projects()\n    bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n    if not demo_web_projects:\n        raise Exception(\"No demo web projects available.\")\n    project = random.choice(demo_web_projects)",
+        "peekOfCode": "def retrieve_random_demo_web_project() -> WebProject:\n    \"\"\"\n    Retrieves a random demo web project from the available ones.\n    Raises an Exception if none are available.\n    \"\"\"\n    demo_web_projects = initialize_demo_webs_projects()\n    bt.logging.debug(f\"Retrieved {len(demo_web_projects)} demo web projects.\")\n    if not demo_web_projects:\n        raise Exception(\"No demo web projects available.\")\n    project = random.choice(demo_web_projects)",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
