@@ -9712,7 +9712,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.web_agents.apified_agent",
         "description": "autoppia_iwa_module.autoppia_iwa.src.web_agents.apified_agent",
-        "peekOfCode": "class ApifiedWebAgent(IWebAgent):\n    \"\"\"\n    Calls a remote /solve_task endpoint and rebuilds a TaskSolution.\n    \"\"\"\n    def __init__(self, host: str, port: int, id: str | None = None, name: str | None = None, timeout=60):\n        self.id = id or generate_random_web_agent_id()\n        self.name = name or f\"Agent {self.id}\"\n        self.base_url = f\"http://{host}:{port}\"\n        self.timeout = timeout\n        super().__init__()",
+        "peekOfCode": "class ApifiedWebAgent(IWebAgent):\n    \"\"\"\n    Calls a remote /solve_task endpoint and rebuilds a TaskSolution.\n    \"\"\"\n    def __init__(self, host: str, port: int, id: str | None = None, name: str | None = None, timeout=100):\n        self.id = id or generate_random_web_agent_id()\n        self.name = name or f\"Agent {self.id}\"\n        self.base_url = f\"http://{host}:{port}\"\n        self.timeout = timeout\n        super().__init__()",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.web_agents.apified_agent",
         "documentation": {}
     },
