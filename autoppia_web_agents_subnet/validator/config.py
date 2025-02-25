@@ -20,5 +20,4 @@ def read_config() -> bt.config:
 
     parser.add_argument("--neuron.sync_interval", type=int, help="Metagraph sync interval, seconds", default=30 * 60)
 
-
     return bt.config(parser)
