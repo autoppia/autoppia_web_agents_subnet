@@ -98,7 +98,7 @@ async def process_tasks(validator, tasks_generated: List[Task]) -> None:
         bt.logging.debug(f"Task #{index} (ID: {task.id}): {task.prompt}")
         # Clean task for miners
         miner_task: Task = clean_miner_task(task=task)
-        bt.logging.info(f"Miner task: {miner_task}")
+        bt.logging.info(f"Miner task: {miner_task.summary()}")
         # Get random UIDs & miner axons
         miner_uids = get_random_uids(validator, k=SAMPLE_SIZE)
         bt.logging.info(f"Miner UIDs chosen: {miner_uids}")
