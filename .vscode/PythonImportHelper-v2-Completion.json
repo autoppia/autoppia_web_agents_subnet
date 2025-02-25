@@ -13863,7 +13863,7 @@
         "kind": 2,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "def clean_miner_task(task: Task) -> Task:\n    \"\"\"\n    Creates a shallow copy of the Task removing fields not needed by miners,\n    and ensures the `html` attribute is never None.\n    \"\"\"\n    task_copy = deepcopy(task)\n    task_copy.tests = None\n    task_copy.milestones = None\n    task_copy.domain_analysis = None\n    # Ensure `html` is never None",
+        "peekOfCode": "def clean_miner_task(task: Task) -> Task:\n    \"\"\"\n    Creates a shallow copy of the Task removing fields not needed by miners,\n    and ensures the `html` attribute is never None.\n    \"\"\"\n    task_copy = deepcopy(task)\n    task_copy.tests = None\n    task_copy.milestones = None\n    # Ensure `html` is never None\n    if hasattr(task_copy, \"html\") and task_copy.html is None:",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
