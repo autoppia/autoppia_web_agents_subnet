@@ -83,7 +83,6 @@ class TaskFeedbackSynapse(Synapse):
         return self
 
     def print_in_terminal(self):
-        # TODO add validator_hotkey to row
         validator_hotkey = getattr(self.synapse.dendrite, "hotkey", None)  
 
         console = Console()
@@ -101,10 +100,6 @@ class TaskFeedbackSynapse(Synapse):
         # Add empty row between global stats and last task stats
         table.add_row("", "")
 
-        # Display new fields for the last task
-        table.add_row("Last Task Score", f"{self.stats.last_task_score:.2f}")
-        table.add_row("Last Exec Time", f"{self.stats.last_execution_time:.2f}s")
-
         if self.stats.last_task:
             last_task_id = self.stats.last_task.id or "N/A"
             last_task_prompt = self.stats.last_task.prompt or "N/A"
@@ -113,6 +108,10 @@ class TaskFeedbackSynapse(Synapse):
         else:
             table.add_row("Last Task ID", "None")
             table.add_row("Last Task Prompt", "None")
+
+        # Display new fields for the last task
+        table.add_row("Last Task Score", f"{self.stats.last_task_score:.2f}")
+        table.add_row("Last Exec Time", f"{self.stats.last_execution_time:.2f}s")
 
         # Add Validator Hotkey row
         table.add_row("Validator Hotkey", validator_hotkey if validator_hotkey else "None")
