@@ -83,6 +83,7 @@ class TaskFeedbackSynapse(Synapse):
         return self
 
     def print_in_terminal(self):
+        #TODO add validator_hotkey = getattr(synapse.dendrite, "hotkey", None) to row
         console = Console()
         table = Table(title="Miner Feedback Stats", show_header=True, header_style="bold magenta")
         table.add_column("Metric", style="dim")
