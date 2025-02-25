@@ -13854,7 +13854,7 @@
         "kind": 2,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "def get_task_solution_from_synapse(\n    task: Task, synapse: TaskSynapse, web_agent_id: str\n) -> TaskSolution:\n    \"\"\"\n    Safely extracts actions from a TaskSynapse response and creates a TaskSolution \n    with the original task reference.\n    \"\"\"\n    actions = []\n    if synapse and hasattr(synapse, \"actions\") and isinstance(synapse.actions, list):\n        actions = synapse.actions",
+        "peekOfCode": "def get_task_solution_from_synapse(\n    task_id, synapse: TaskSynapse, web_agent_id: str\n) -> TaskSolution:\n    \"\"\"\n    Safely extracts actions from a TaskSynapse response and creates a TaskSolution \n    with the original task reference.\n    \"\"\"\n    actions = []\n    if synapse and hasattr(synapse, \"actions\") and isinstance(synapse.actions, list):\n        actions = synapse.actions",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
