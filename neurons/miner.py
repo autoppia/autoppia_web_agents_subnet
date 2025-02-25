@@ -77,6 +77,10 @@ class Miner(BaseMinerNeuron):
                 f"Request Received from validator: {validator_hotkey}. Task:{synapse.prompt}",
                 ColoredLogger.BLUE,
             )
+            ColoredLogger.info(
+                f"Task:{synapse.prompt}",
+                ColoredLogger.YELLOW,
+            )
 
             task = Task(prompt=synapse.prompt, url=synapse.url)
             task_solution = await self.agent.solve_task(task=task)
