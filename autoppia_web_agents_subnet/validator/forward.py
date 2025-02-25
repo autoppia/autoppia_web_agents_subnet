@@ -315,7 +315,7 @@ async def send_feedback_synapse_to_miners(
 
 
 def get_task_solution_from_synapse(
-    task: Task, synapse: TaskSynapse, web_agent_id: str
+    task_id, synapse: TaskSynapse, web_agent_id: str
 ) -> TaskSolution:
     """
     Safely extracts actions from a TaskSynapse response and creates a TaskSolution 
@@ -326,7 +326,7 @@ def get_task_solution_from_synapse(
         actions = synapse.actions
 
     # Create a TaskSolution with our trusted task object, not one from the miner
-    return TaskSolution(task=task, actions=actions, web_agent_id=web_agent_id)
+    return TaskSolution(task_id=task_id, actions=actions, web_agent_id=web_agent_id)
 
 
 def clean_miner_task(task: Task) -> Task:
