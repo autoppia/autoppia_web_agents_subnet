@@ -3,3 +3,4 @@ rich
 pytest
 numpy
 setuptools
+loguru
