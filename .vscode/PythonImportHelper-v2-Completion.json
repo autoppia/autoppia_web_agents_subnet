@@ -9739,7 +9739,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.web_agents.classes",
         "description": "autoppia_iwa_module.autoppia_iwa.src.web_agents.classes",
-        "peekOfCode": "class TaskSolution(BaseModel):\n    task_id: str = Field(\n        default_factory=lambda: str(uuid.uuid4()),\n        description=\"Unique identifier for the task, auto-generated using UUID4\"\n    )\n    actions: List[BaseAction] = Field(default_factory=list)\n    web_agent_id: Optional[str] = None\n    def nested_model_dump(self, *args, **kwargs) -> str:\n        base_dump = super().model_dump(*args, **kwargs)\n        base_dump[\"task\"] = self.task.nested_model_dump(*args, **kwargs)",
+        "peekOfCode": "class TaskSolution(BaseModel):\n    task_id: str = Field(\n        default_factory=lambda: str(uuid.uuid4()),\n        description=\"Unique identifier for the task, auto-generated using UUID4\"\n    )\n    actions: List[BaseAction] = Field(default_factory=list)\n    web_agent_id: Optional[str] = None\n    def nested_model_dump(self, *args, **kwargs) -> str:\n        base_dump = super().model_dump(*args, **kwargs)\n        base_dump[\"actions\"] = [action.model_dump() for action in self.actions]",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.web_agents.classes",
         "documentation": {}
     },
