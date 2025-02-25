@@ -27,12 +27,12 @@ from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 import asyncio
 
 
-TIMEOUT = 120  # 2 Min
-FORWARD_SLEEP_SECONDS = 60 * 5  # 5 Minutes
-TASK_SLEEP = 60  # 1 Minute
+TIMEOUT = 60 * 2  # 2 Min
+FORWARD_SLEEP_SECONDS = 60 * 1  # 1 Minutes
+TASK_SLEEP = 60 * 1  # 1 Minute
 TIME_WEIGHT = 0.2
-MIN_SCORE_FOR_CORRECT_FORMAT = 0.1
-MIN_RESPONSE_REWARD = 0.1
+MIN_SCORE_FOR_CORRECT_FORMAT = 0  # 10%
+MIN_RESPONSE_REWARD = 0
 SAMPLE_SIZE = 256  # Number of Miners
 
 
