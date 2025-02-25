@@ -34,6 +34,7 @@ TIME_WEIGHT = 0.2
 MIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%
 MIN_RESPONSE_REWARD = 0
 SAMPLE_SIZE = 256  # Number of Miners
+MAX_ACTIONS_LENGTH = 15
 
 
 def init_miner_stats(validator) -> None:
@@ -318,11 +319,11 @@ def get_task_solution_from_synapse(
 ) -> TaskSolution:
     """
     Safely extracts actions from a TaskSynapse response and creates a TaskSolution 
-    with the original task reference.
+    with the original task reference, limiting actions to a maximum of 15.
     """
     actions = []
     if synapse and hasattr(synapse, "actions") and isinstance(synapse.actions, list):
-        actions = synapse.actions
+        actions = synapse.actions[:MAX_ACTIONS_LENGTH]  # Limit actions to at most 15
 
     # Create a TaskSolution with our trusted task object, not one from the miner
     return TaskSolution(task_id=task_id, actions=actions, web_agent_id=web_agent_id)
