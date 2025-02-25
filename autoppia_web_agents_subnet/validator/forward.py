@@ -11,7 +11,7 @@ from autoppia_iwa.src.data_generation.domain.classes import (
     TasksGenerationOutput,
 )
 from autoppia_iwa.src.demo_webs.classes import WebProject
-from autoppia_iwa.src.demo_webs.config import get_demo_webs_projects
+from autoppia_iwa.src.demo_webs.config import initialize_demo_webs_projects
 from autoppia_iwa.src.data_generation.application.tasks_generation_pipeline import (
     TaskGenerationPipeline,
 )
@@ -34,6 +34,7 @@ MIN_SCORE_FOR_CORRECT_FORMAT = 0.1
 MIN_RESPONSE_REWARD = 0.1
 SAMPLE_SIZE = 256  # Number of Miners
 
+
 def init_miner_stats(validator) -> None:
     """
     Ensure `validator.miner_stats` is initialized.
@@ -43,12 +44,13 @@ def init_miner_stats(validator) -> None:
     if "aggregated" not in validator.miner_stats:
         validator.miner_stats["aggregated"] = MinerStats()
 
+
 def retrieve_random_demo_web_project() -> WebProject:
     """
     Retrieves a random demo web project from the available ones.
     Raises an Exception if none are available.
     """
-    demo_web_projects = get_demo_webs_projects()
+    demo_web_projects = initialize_demo_webs_projects()
     bt.logging.debug(f"Retrieved {len(demo_web_projects)} demo web projects.")
     if not demo_web_projects:
         raise Exception("No demo web projects available.")
@@ -58,6 +60,7 @@ def retrieve_random_demo_web_project() -> WebProject:
         ColoredLogger.YELLOW,
     )
     return project
+
 
 async def generate_tasks_for_url(demo_web_project: WebProject) -> List[Task]:
     """
@@ -78,6 +81,7 @@ async def generate_tasks_for_url(demo_web_project: WebProject) -> List[Task]:
         ColoredLogger.YELLOW,
     )
     return tasks_generated
+
 
 async def process_tasks(validator, web_url: str, tasks_generated: List[Task]) -> None:
     """
@@ -143,6 +147,7 @@ async def process_tasks(validator, web_url: str, tasks_generated: List[Task]) ->
         f"average time per task: {avg_task_time:.2f}s"
     )
 
+
 async def send_task_synapse_to_miners(
     validator,
     miner_axons: List[bt.axon],
@@ -167,6 +172,7 @@ async def send_task_synapse_to_miners(
         f"{num_valid_responses} valid, {num_none_responses} errors."
     )
     return responses
+
 
 def collect_task_solutions(
     task: Task,
@@ -202,6 +208,7 @@ def collect_task_solutions(
         execution_times.append(process_time)
     return task_solutions, execution_times
 
+
 async def compute_rewards(
     validator,
     task_solutions: List[TaskSolution],
@@ -226,6 +233,7 @@ async def compute_rewards(
         f"Rewards computed in {evaluation_end_time - evaluation_start_time:.2f}s."
     )
     return rewards
+
 
 async def update_miner_stats_and_scores(
     validator,
@@ -271,6 +279,7 @@ async def update_miner_stats_and_scores(
         evaluation_time = evaluation_time_end - evaluation_time_start
     return evaluation_time
 
+
 async def send_feedback_synapse_to_miners(
     validator,
     miner_axons: List[bt.axon],
@@ -303,6 +312,7 @@ async def send_feedback_synapse_to_miners(
     bt.logging.info("TaskFeedbackSynapse responses received.")
     bt.logging.success("Task step completed successfully.")
 
+
 def get_task_solution_from_synapse(
     task: Task, synapse: TaskSynapse, web_agent_id: str
 ) -> TaskSolution:
@@ -316,6 +326,7 @@ def get_task_solution_from_synapse(
     ):
         return TaskSolution(task=task, actions=[], web_agent_id=web_agent_id)
     return TaskSolution(task=task, actions=synapse.actions, web_agent_id=web_agent_id)
+
 
 def clean_miner_task(task: Task) -> Task:
     """
@@ -336,6 +347,7 @@ def clean_miner_task(task: Task) -> Task:
         except ValueError:
             pass
     return task_copy
+
 
 async def forward(self) -> None:
     """
