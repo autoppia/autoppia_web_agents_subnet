@@ -45,12 +45,12 @@ def init_miner_stats(validator) -> None:
         validator.miner_stats["aggregated"] = MinerStats()
 
 
-def retrieve_random_demo_web_project() -> WebProject:
+async def retrieve_random_demo_web_project() -> WebProject:
     """
     Retrieves a random demo web project from the available ones.
     Raises an Exception if none are available.
     """
-    demo_web_projects = initialize_demo_webs_projects()
+    demo_web_projects = await initialize_demo_webs_projects()
     bt.logging.debug(f"Retrieved {len(demo_web_projects)} demo web projects.")
     if not demo_web_projects:
         raise Exception("No demo web projects available.")
@@ -361,7 +361,7 @@ async def forward(self) -> None:
         init_miner_stats(self)
         bt.logging.info("Starting forward step.")
         # 1. Retrieve a random demo web project
-        demo_web_project = retrieve_random_demo_web_project()
+        demo_web_project = await retrieve_random_demo_web_project()
         web_url = demo_web_project.frontend_url
         bt.logging.info(f"Selected demo web project with URL: {web_url}")
         # 2. Generate tasks
