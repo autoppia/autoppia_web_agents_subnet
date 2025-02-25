@@ -29,6 +29,7 @@ from autoppia_web_agents_subnet.base.validator import BaseValidatorNeuron
 from autoppia_web_agents_subnet.validator import forward
 
 from autoppia_iwa.src.bootstrap import AppBootstrap
+from loguru import logger
 
 
 class Validator(BaseValidatorNeuron):
@@ -62,6 +63,11 @@ if __name__ == "__main__":
     # This is Miner Entrypoint
     # Initializing Dependency Injection In IWA
     app = AppBootstrap()
+
+    # IWA logging with loguru
+    logger.remove()  # Remove default handler
+    logger.add("logfile.log", level="WARNING")  # Log to a file
+    logger.add(lambda msg: print(msg, end=""), level="WARNING")  # Log to console
 
     with Validator() as validator:
         while True:

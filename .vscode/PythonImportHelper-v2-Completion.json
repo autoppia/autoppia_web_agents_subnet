@@ -3112,6 +3112,14 @@
         "documentation": {}
     },
     {
+        "label": "logger",
+        "importPath": "loguru",
+        "description": "loguru",
+        "isExtraImport": true,
+        "detail": "loguru",
+        "documentation": {}
+    },
+    {
         "label": "BaseTaskTest",
         "importPath": "autoppia_iwa.src.data_generation.domain.tests_classes",
         "description": "autoppia_iwa.src.data_generation.domain.tests_classes",
