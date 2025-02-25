@@ -1237,14 +1237,6 @@
         "documentation": {}
     },
     {
-        "label": "BrowserSpecification",
-        "importPath": "autoppia_iwa.src.data_generation.domain.classes",
-        "description": "autoppia_iwa.src.data_generation.domain.classes",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.data_generation.domain.classes",
-        "documentation": {}
-    },
-    {
         "label": "Task",
         "importPath": "autoppia_iwa.src.data_generation.domain.classes",
         "description": "autoppia_iwa.src.data_generation.domain.classes",
@@ -1261,7 +1253,7 @@
         "documentation": {}
     },
     {
-        "label": "BrowserSpecification",
+        "label": "Task",
         "importPath": "autoppia_iwa.src.data_generation.domain.classes",
         "description": "autoppia_iwa.src.data_generation.domain.classes",
         "isExtraImport": true,
@@ -1269,7 +1261,7 @@
         "documentation": {}
     },
     {
-        "label": "Task",
+        "label": "BrowserSpecification",
         "importPath": "autoppia_iwa.src.data_generation.domain.classes",
         "description": "autoppia_iwa.src.data_generation.domain.classes",
         "isExtraImport": true,
@@ -1941,14 +1933,6 @@
         "documentation": {}
     },
     {
-        "label": "Task",
-        "importPath": "autoppia_iwa.src.web_agents.classes",
-        "description": "autoppia_iwa.src.web_agents.classes",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.web_agents.classes",
-        "documentation": {}
-    },
-    {
         "label": "TaskSolution",
         "importPath": "autoppia_iwa.src.web_agents.classes",
         "description": "autoppia_iwa.src.web_agents.classes",
@@ -2085,14 +2069,6 @@
         "documentation": {}
     },
     {
-        "label": "TASK_EXAMPLES",
-        "importPath": "autoppia_iwa.src.data_generation.domain.task_examples",
-        "description": "autoppia_iwa.src.data_generation.domain.task_examples",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.data_generation.domain.task_examples",
-        "documentation": {}
-    },
-    {
         "label": "ApifiedWebAgent",
         "importPath": "autoppia_iwa.src.web_agents.apified_agent",
         "description": "autoppia_iwa.src.web_agents.apified_agent",
@@ -2330,6 +2306,14 @@
         "description": "autoppia_iwa.src.bootstrap",
         "isExtraImport": true,
         "detail": "autoppia_iwa.src.bootstrap",
+        "documentation": {}
+    },
+    {
+        "label": "WebProject",
+        "importPath": "autoppia_iwa.src.demo_webs.classes",
+        "description": "autoppia_iwa.src.demo_webs.classes",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.demo_webs.classes",
         "documentation": {}
     },
     {
@@ -2541,6 +2525,14 @@
         "documentation": {}
     },
     {
+        "label": "DIContainer",
+        "importPath": "autoppia_iwa.src.di_container",
+        "description": "autoppia_iwa.src.di_container",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.di_container",
+        "documentation": {}
+    },
+    {
         "label": "TestGenerationPipeline",
         "importPath": "autoppia_iwa.src.data_generation.application.tests.test_generation_pipeline",
         "description": "autoppia_iwa.src.data_generation.application.tests.test_generation_pipeline",
@@ -2580,6 +2572,70 @@
         "importPath": "logging",
         "description": "logging",
         "detail": "logging",
+        "documentation": {}
+    },
+    {
+        "label": "Provide",
+        "importPath": "dependency_injector.wiring",
+        "description": "dependency_injector.wiring",
+        "isExtraImport": true,
+        "detail": "dependency_injector.wiring",
+        "documentation": {}
+    },
+    {
+        "label": "Provide",
+        "importPath": "dependency_injector.wiring",
+        "description": "dependency_injector.wiring",
+        "isExtraImport": true,
+        "detail": "dependency_injector.wiring",
+        "documentation": {}
+    },
+    {
+        "label": "Provide",
+        "importPath": "dependency_injector.wiring",
+        "description": "dependency_injector.wiring",
+        "isExtraImport": true,
+        "detail": "dependency_injector.wiring",
+        "documentation": {}
+    },
+    {
+        "label": "Provide",
+        "importPath": "dependency_injector.wiring",
+        "description": "dependency_injector.wiring",
+        "isExtraImport": true,
+        "detail": "dependency_injector.wiring",
+        "documentation": {}
+    },
+    {
+        "label": "Provide",
+        "importPath": "dependency_injector.wiring",
+        "description": "dependency_injector.wiring",
+        "isExtraImport": true,
+        "detail": "dependency_injector.wiring",
+        "documentation": {}
+    },
+    {
+        "label": "Provide",
+        "importPath": "dependency_injector.wiring",
+        "description": "dependency_injector.wiring",
+        "isExtraImport": true,
+        "detail": "dependency_injector.wiring",
+        "documentation": {}
+    },
+    {
+        "label": "Provide",
+        "importPath": "dependency_injector.wiring",
+        "description": "dependency_injector.wiring",
+        "isExtraImport": true,
+        "detail": "dependency_injector.wiring",
+        "documentation": {}
+    },
+    {
+        "label": "Provide",
+        "importPath": "dependency_injector.wiring",
+        "description": "dependency_injector.wiring",
+        "isExtraImport": true,
+        "detail": "dependency_injector.wiring",
         "documentation": {}
     },
     {
@@ -3120,30 +3176,6 @@
         "documentation": {}
     },
     {
-        "label": "CheckEventTest",
-        "importPath": "autoppia_iwa.src.data_generation.domain.tests_classes",
-        "description": "autoppia_iwa.src.data_generation.domain.tests_classes",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.data_generation.domain.tests_classes",
-        "documentation": {}
-    },
-    {
-        "label": "CheckPageViewEventTest",
-        "importPath": "autoppia_iwa.src.data_generation.domain.tests_classes",
-        "description": "autoppia_iwa.src.data_generation.domain.tests_classes",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.data_generation.domain.tests_classes",
-        "documentation": {}
-    },
-    {
-        "label": "FindInHtmlTest",
-        "importPath": "autoppia_iwa.src.data_generation.domain.tests_classes",
-        "description": "autoppia_iwa.src.data_generation.domain.tests_classes",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.data_generation.domain.tests_classes",
-        "documentation": {}
-    },
-    {
         "label": "BaseTaskTest",
         "importPath": "autoppia_iwa.src.data_generation.domain.tests_classes",
         "description": "autoppia_iwa.src.data_generation.domain.tests_classes",
@@ -3277,62 +3309,6 @@
         "description": "autoppia_iwa.src.data_generation.domain.tests_classes",
         "isExtraImport": true,
         "detail": "autoppia_iwa.src.data_generation.domain.tests_classes",
-        "documentation": {}
-    },
-    {
-        "label": "Provide",
-        "importPath": "dependency_injector.wiring",
-        "description": "dependency_injector.wiring",
-        "isExtraImport": true,
-        "detail": "dependency_injector.wiring",
-        "documentation": {}
-    },
-    {
-        "label": "Provide",
-        "importPath": "dependency_injector.wiring",
-        "description": "dependency_injector.wiring",
-        "isExtraImport": true,
-        "detail": "dependency_injector.wiring",
-        "documentation": {}
-    },
-    {
-        "label": "Provide",
-        "importPath": "dependency_injector.wiring",
-        "description": "dependency_injector.wiring",
-        "isExtraImport": true,
-        "detail": "dependency_injector.wiring",
-        "documentation": {}
-    },
-    {
-        "label": "Provide",
-        "importPath": "dependency_injector.wiring",
-        "description": "dependency_injector.wiring",
-        "isExtraImport": true,
-        "detail": "dependency_injector.wiring",
-        "documentation": {}
-    },
-    {
-        "label": "Provide",
-        "importPath": "dependency_injector.wiring",
-        "description": "dependency_injector.wiring",
-        "isExtraImport": true,
-        "detail": "dependency_injector.wiring",
-        "documentation": {}
-    },
-    {
-        "label": "Provide",
-        "importPath": "dependency_injector.wiring",
-        "description": "dependency_injector.wiring",
-        "isExtraImport": true,
-        "detail": "dependency_injector.wiring",
-        "documentation": {}
-    },
-    {
-        "label": "Provide",
-        "importPath": "dependency_injector.wiring",
-        "description": "dependency_injector.wiring",
-        "isExtraImport": true,
-        "detail": "dependency_injector.wiring",
         "documentation": {}
     },
     {
@@ -8830,7 +8806,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.local_task_generation",
         "description": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.local_task_generation",
-        "peekOfCode": "class LocalTaskGenerationPipeline:\n    def __init__(self, llm_service: \"ILLM\"):\n        self.llm_service = llm_service\n    async def generate(self, page_url: str) -> List[\"Task\"]:\n        html, clean_html, screenshot, screenshot_desc = await get_html_and_screenshot(page_url)\n        interactive_elems = detect_interactive_elements(clean_html)\n        draft_list = await self._phase1_generate_draft_tasks(\n            clean_html, screenshot_desc, interactive_elems\n        )\n        feasible_list = await self._phase2_filter(",
+        "peekOfCode": "class LocalTaskGenerationPipeline:\n    def __init__(self, web_project: WebProject, llm_service: \"ILLM\" = Provide[DIContainer.llm_service]):\n        self.web_project:WebProject = web_project\n        self.llm_service:ILLM = llm_service\n    async def generate(self, page_url: str) -> List[\"Task\"]:\n        html, clean_html, screenshot, screenshot_desc = await get_html_and_screenshot(page_url)\n        interactive_elems = detect_interactive_elements(clean_html)\n        draft_list = await self._phase1_generate_draft_tasks(\n            clean_html, screenshot_desc, interactive_elems\n        )",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.local_task_generation",
         "documentation": {}
     },
@@ -9060,15 +9036,6 @@
         "documentation": {}
     },
     {
-        "label": "TASK_EXAMPLES",
-        "kind": 5,
-        "importPath": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.task_examples",
-        "description": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.task_examples",
-        "peekOfCode": "TASK_EXAMPLES = [\n    Task(\n        id='5bd668de-8c2e-4c53-9a72-6037cbdfb9a0',\n        prompt=\"Fill in the email and password fields in the login form and click the 'Log in' button to attempt logging into the website.\",\n        url='http://localhost:8000/',\n        specifications=BrowserSpecification(viewport_width=1920, viewport_height=1080, screen_width=1920, screen_height=1080, device_pixel_ratio=1.0, scroll_x=0, scroll_y=0, browser_x=0, browser_y=0),\n        tests=[\n            CheckEventTest(description='Verify if the backend emitted the specified event', test_type='backend', event_name='login'),\n            CheckPageViewEventTest(description='Check if the backend logged a page view event for the specified URL', test_type='backend', page_view_url='/login')\n        ],",
-        "detail": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.task_examples",
-        "documentation": {}
-    },
-    {
         "label": "ITest",
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.tests_classes",
@@ -9217,7 +9184,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.evaluation.evaluator.evaluator",
         "description": "autoppia_iwa_module.autoppia_iwa.src.evaluation.evaluator.evaluator",
-        "peekOfCode": "class ConcurrentEvaluator(IEvaluator):\n    def __init__(self, config: EvaluatorConfig):\n        self.config = config\n        # Cache for random clicker results by task ID\n        self._random_clicker_cache: Dict[str, Tuple[List[int], float]] = {}\n    async def evaluate_single_task(self, task_solution: TaskSolution) -> EvaluationResult:\n        return await self._evaluate_single_task(task_solution)\n    async def evaluate_all_tasks(self, task_solutions: List[TaskSolution]) -> List[EvaluationResult]:\n        return await self._group_and_evaluate_tasks(task_solutions)\n    async def _group_and_evaluate_tasks(self, task_solutions: List[TaskSolution]) -> List[EvaluationResult]:",
+        "peekOfCode": "class ConcurrentEvaluator(IEvaluator):\n    def __init__(self, config: EvaluatorConfig):\n        self.config = config\n        # Cache for random clicker results by task ID\n        self._random_clicker_cache: Dict[str, Tuple[List[int], float]] = {}\n    async def evaluate_single_task_solution(self, task: Task, task_solution: TaskSolution) -> EvaluationResult:\n        \"\"\"\n        Evaluate a single task solution given both the task and task solution.\n        Args:\n            task: The Task object containing task details",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.evaluation.evaluator.evaluator",
         "documentation": {}
     },
@@ -9271,7 +9238,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.evaluation.interfaces",
         "description": "autoppia_iwa_module.autoppia_iwa.src.evaluation.interfaces",
-        "peekOfCode": "class IEvaluator(ABC):\n    \"\"\"\n    The design allows for multiple web agents to implement this interface, ensuring standardized inputs and behaviors across different agents.\n    Every web agent that implements this interface must define the required methods and properties, ensuring consistency and compatibility.\n    Example:\n    - An 'Autopilot Web Agent' would implement this interface, adhering to the standardized inputs and outputs specified here.\n    The goal is to provide a common structure that all web agents will follow, facilitating integration and interoperability among them.\n    \"\"\"\n    @abstractmethod\n    def evaluate_single_task(self, task_solution: TaskSolution) -> EvaluationResult:",
+        "peekOfCode": "class IEvaluator(ABC):\n    \"\"\"\n    The design allows for multiple web agents to implement this interface, ensuring standardized inputs and behaviors across different agents.\n    Every web agent that implements this interface must define the required methods and properties, ensuring consistency and compatibility.\n    Example:\n    - An 'Autopilot Web Agent' would implement this interface, adhering to the standardized inputs and outputs specified here.\n    The goal is to provide a common structure that all web agents will follow, facilitating integration and interoperability among them.\n    \"\"\"\n    @abstractmethod\n    async def evaluate_single_task_solution(self, task: Task, task_solution: TaskSolution) -> EvaluationResult:",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.evaluation.interfaces",
         "documentation": {}
     },
@@ -9748,7 +9715,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.web_agents.classes",
         "description": "autoppia_iwa_module.autoppia_iwa.src.web_agents.classes",
-        "peekOfCode": "class TaskSolution(BaseModel):\n    task: Task\n    actions: List[BaseAction] = Field(default_factory=list)\n    web_agent_id: Optional[str] = None\n    def nested_model_dump(self, *args, **kwargs) -> str:\n        base_dump = super().model_dump(*args, **kwargs)\n        base_dump[\"task\"] = self.task.nested_model_dump(*args, **kwargs)\n        base_dump[\"actions\"] = [action.model_dump() for action in self.actions]\n        return base_dump",
+        "peekOfCode": "class TaskSolution(BaseModel):\n    task_id: str = Field(\n        default_factory=lambda: str(uuid.uuid4()),\n        description=\"Unique identifier for the task, auto-generated using UUID4\"\n    )\n    actions: List[BaseAction] = Field(default_factory=list)\n    web_agent_id: Optional[str] = None\n    def nested_model_dump(self, *args, **kwargs) -> str:\n        base_dump = super().model_dump(*args, **kwargs)\n        base_dump[\"task\"] = self.task.nested_model_dump(*args, **kwargs)",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.web_agents.classes",
         "documentation": {}
     },
@@ -13879,7 +13846,7 @@
         "kind": 2,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "def get_task_solution_from_synapse(\n    task: Task, synapse: TaskSynapse, web_agent_id: str\n) -> TaskSolution:\n    \"\"\"\n    Safely extracts a TaskSolution from a TaskSynapse response.\n    \"\"\"\n    if (\n        not synapse\n        or not hasattr(synapse, \"actions\")\n        or not isinstance(synapse.actions, list)",
+        "peekOfCode": "def get_task_solution_from_synapse(\n    task: Task, synapse: TaskSynapse, web_agent_id: str\n) -> TaskSolution:\n    \"\"\"\n    Safely extracts actions from a TaskSynapse response and creates a TaskSolution \n    with the original task reference.\n    \"\"\"\n    actions = []\n    if synapse and hasattr(synapse, \"actions\") and isinstance(synapse.actions, list):\n        actions = synapse.actions",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
