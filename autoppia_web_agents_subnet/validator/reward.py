@@ -6,6 +6,7 @@ from autoppia_iwa.src.evaluation.evaluator.evaluator import (
     ConcurrentEvaluator,
     EvaluatorConfig,
 )
+from autoppia_iwa.src.data_generation.domain.classes import Task
 from autoppia_iwa.src.web_agents.classes import TaskSolution
 from autoppia_iwa.src.evaluation.classes import EvaluationResult
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
@@ -35,18 +36,16 @@ def normalize_execution_times(times: List[Optional[float]]) -> List[float]:
 
 async def get_rewards(
     self,
+    task:Task,
     task_solutions: List[TaskSolution],
-    web_url: str,
     execution_times: List[float],
     time_weight: float = 0.2,
     min_correct_format_score: float = 0.1,
     min_response_reward: float = 0.01
 ) -> np.ndarray:
-    evaluator_config = EvaluatorConfig(current_url=web_url)
-    evaluator = ConcurrentEvaluator(evaluator_config)
 
     evaluation_scores: List[float] = await _evaluate_all_task_solutions(
-        evaluator=evaluator,
+        task=task,
         task_solutions=task_solutions
     )
     bt.logging.debug(f"Evaluation Scores: {evaluation_scores}")
@@ -76,13 +75,17 @@ async def get_rewards(
 
 
 async def _evaluate_all_task_solutions(
-    evaluator: ConcurrentEvaluator,
+    task:Task, 
     task_solutions: List[TaskSolution]
 ) -> List[float]:
     start_time = time.time()
+
+    evaluator_config = EvaluatorConfig(current_url=task.url)
+    evaluator = ConcurrentEvaluator(evaluator_config)
+
     try:
-        results: List[EvaluationResult] = await evaluator.evaluate_all_tasks(
-            task_solutions=task_solutions
+        results: List[EvaluationResult] = await evaluator.evaluate_task_solutions(
+            task=task, task_solutions=task_solutions
         )
         scores = [get_score_from_evaluation_result(r) for r in results]
     except Exception as exc:
