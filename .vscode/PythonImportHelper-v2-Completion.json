@@ -2349,14 +2349,6 @@
         "documentation": {}
     },
     {
-        "label": "WebProject",
-        "importPath": "autoppia_iwa.src.demo_webs.classes",
-        "description": "autoppia_iwa.src.demo_webs.classes",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.demo_webs.classes",
-        "documentation": {}
-    },
-    {
         "label": "BackendEvent",
         "importPath": "autoppia_iwa.src.demo_webs.classes",
         "description": "autoppia_iwa.src.demo_webs.classes",
@@ -8807,15 +8799,6 @@
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
         "peekOfCode": "app = AppBootstrap()\nasync def main():\n    try:\n        # Create a WebProject (with its web analysis populated)\n        demo_web_projects: List[WebProject] = await initialize_demo_webs_projects()\n        web_project: WebProject = demo_web_projects[0]\n        # Create TaskGenerationConfig if needed by TaskGenerationPipeline\n        config = TaskGenerationConfig(\n            save_task_in_db=False,\n            save_web_analysis_in_db=False,",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
-        "documentation": {}
-    },
-    {
-        "label": "LocalTaskGenerationPipeline",
-        "kind": 6,
-        "importPath": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.local_task_generation",
-        "description": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.local_task_generation",
-        "peekOfCode": "class LocalTaskGenerationPipeline:\n    def __init__(self, web_project: WebProject, llm_service: \"ILLM\" = Provide[DIContainer.llm_service]):\n        self.web_project:WebProject = web_project\n        self.llm_service:ILLM = llm_service\n    async def generate(self, page_url: str) -> List[\"Task\"]:\n        html, clean_html, screenshot, screenshot_desc = await get_html_and_screenshot(page_url)\n        interactive_elems = detect_interactive_elements(clean_html)\n        draft_list = await self._phase1_generate_draft_tasks(\n            clean_html, screenshot_desc, interactive_elems\n        )",
-        "detail": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.local_task_generation",
         "documentation": {}
     },
     {
