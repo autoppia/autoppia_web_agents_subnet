@@ -35,6 +35,7 @@ MIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%
 MIN_RESPONSE_REWARD = 0
 SAMPLE_SIZE = 256  # Number of Miners
 MAX_ACTIONS_LENGTH = 15
+NUM_URLS = 1
 
 
 def init_miner_stats(validator) -> None:
@@ -72,7 +73,7 @@ async def generate_tasks_for_web_project(demo_web_project: WebProject) -> List[T
         web_project=demo_web_project,
         save_domain_analysis_in_db=True,
         save_task_in_db=False,
-        num_or_urls=4
+        num_or_urls=NUM_URLS
     )
     pipeline = TaskGenerationPipeline(config=config, web_project=demo_web_project)
     start_time = time.time()

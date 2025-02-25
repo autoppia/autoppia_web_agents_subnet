@@ -13888,7 +13888,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "TIMEOUT = 60 * 2  # 2 Min\nFORWARD_SLEEP_SECONDS = 60 * 1  # 1 Minutes\nTASK_SLEEP = 60 * 1  # 1 Minute\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\ndef init_miner_stats(validator) -> None:\n    \"\"\"",
+        "peekOfCode": "TIMEOUT = 60 * 2  # 2 Min\nFORWARD_SLEEP_SECONDS = 60 * 1  # 1 Minutes\nTASK_SLEEP = 60 * 1  # 1 Minute\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\ndef init_miner_stats(validator) -> None:",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -13897,7 +13897,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "FORWARD_SLEEP_SECONDS = 60 * 1  # 1 Minutes\nTASK_SLEEP = 60 * 1  # 1 Minute\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\ndef init_miner_stats(validator) -> None:\n    \"\"\"\n    Ensure `validator.miner_stats` is initialized.",
+        "peekOfCode": "FORWARD_SLEEP_SECONDS = 60 * 1  # 1 Minutes\nTASK_SLEEP = 60 * 1  # 1 Minute\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\ndef init_miner_stats(validator) -> None:\n    \"\"\"",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -13906,7 +13906,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "TASK_SLEEP = 60 * 1  # 1 Minute\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\ndef init_miner_stats(validator) -> None:\n    \"\"\"\n    Ensure `validator.miner_stats` is initialized.\n    \"\"\"",
+        "peekOfCode": "TASK_SLEEP = 60 * 1  # 1 Minute\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\ndef init_miner_stats(validator) -> None:\n    \"\"\"\n    Ensure `validator.miner_stats` is initialized.",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -13915,7 +13915,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "TIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\ndef init_miner_stats(validator) -> None:\n    \"\"\"\n    Ensure `validator.miner_stats` is initialized.\n    \"\"\"\n    if not hasattr(validator, \"miner_stats\"):",
+        "peekOfCode": "TIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\ndef init_miner_stats(validator) -> None:\n    \"\"\"\n    Ensure `validator.miner_stats` is initialized.\n    \"\"\"",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -13924,7 +13924,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "MIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\ndef init_miner_stats(validator) -> None:\n    \"\"\"\n    Ensure `validator.miner_stats` is initialized.\n    \"\"\"\n    if not hasattr(validator, \"miner_stats\"):\n        validator.miner_stats = {}",
+        "peekOfCode": "MIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\ndef init_miner_stats(validator) -> None:\n    \"\"\"\n    Ensure `validator.miner_stats` is initialized.\n    \"\"\"\n    if not hasattr(validator, \"miner_stats\"):",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -13933,7 +13933,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "MIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\ndef init_miner_stats(validator) -> None:\n    \"\"\"\n    Ensure `validator.miner_stats` is initialized.\n    \"\"\"\n    if not hasattr(validator, \"miner_stats\"):\n        validator.miner_stats = {}\n    if \"aggregated\" not in validator.miner_stats:",
+        "peekOfCode": "MIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\ndef init_miner_stats(validator) -> None:\n    \"\"\"\n    Ensure `validator.miner_stats` is initialized.\n    \"\"\"\n    if not hasattr(validator, \"miner_stats\"):\n        validator.miner_stats = {}",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -13942,7 +13942,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "SAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\ndef init_miner_stats(validator) -> None:\n    \"\"\"\n    Ensure `validator.miner_stats` is initialized.\n    \"\"\"\n    if not hasattr(validator, \"miner_stats\"):\n        validator.miner_stats = {}\n    if \"aggregated\" not in validator.miner_stats:\n        validator.miner_stats[\"aggregated\"] = MinerStats()",
+        "peekOfCode": "SAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\ndef init_miner_stats(validator) -> None:\n    \"\"\"\n    Ensure `validator.miner_stats` is initialized.\n    \"\"\"\n    if not hasattr(validator, \"miner_stats\"):\n        validator.miner_stats = {}\n    if \"aggregated\" not in validator.miner_stats:",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -13951,7 +13951,16 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "MAX_ACTIONS_LENGTH = 15\ndef init_miner_stats(validator) -> None:\n    \"\"\"\n    Ensure `validator.miner_stats` is initialized.\n    \"\"\"\n    if not hasattr(validator, \"miner_stats\"):\n        validator.miner_stats = {}\n    if \"aggregated\" not in validator.miner_stats:\n        validator.miner_stats[\"aggregated\"] = MinerStats()\nasync def retrieve_random_demo_web_project() -> WebProject:",
+        "peekOfCode": "MAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\ndef init_miner_stats(validator) -> None:\n    \"\"\"\n    Ensure `validator.miner_stats` is initialized.\n    \"\"\"\n    if not hasattr(validator, \"miner_stats\"):\n        validator.miner_stats = {}\n    if \"aggregated\" not in validator.miner_stats:\n        validator.miner_stats[\"aggregated\"] = MinerStats()",
+        "detail": "autoppia_web_agents_subnet.validator.forward",
+        "documentation": {}
+    },
+    {
+        "label": "NUM_URLS",
+        "kind": 5,
+        "importPath": "autoppia_web_agents_subnet.validator.forward",
+        "description": "autoppia_web_agents_subnet.validator.forward",
+        "peekOfCode": "NUM_URLS = 1\ndef init_miner_stats(validator) -> None:\n    \"\"\"\n    Ensure `validator.miner_stats` is initialized.\n    \"\"\"\n    if not hasattr(validator, \"miner_stats\"):\n        validator.miner_stats = {}\n    if \"aggregated\" not in validator.miner_stats:\n        validator.miner_stats[\"aggregated\"] = MinerStats()\nasync def retrieve_random_demo_web_project() -> WebProject:",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
