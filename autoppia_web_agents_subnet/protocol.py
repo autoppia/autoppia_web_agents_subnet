@@ -31,7 +31,6 @@ class MinerStats(BaseModel):
 
     def update(
         self,
-        validator_hotkey, 
         score: float,
         execution_time: float,
         evaluation_time: float,
