@@ -1,4 +1,3 @@
-import asyncio
 import random
 import time
 import numpy as np
@@ -35,52 +34,16 @@ MIN_SCORE_FOR_CORRECT_FORMAT = 0.1
 MIN_RESPONSE_REWARD = 0.1
 SAMPLE_SIZE = 256  # Number of Miners
 
-
-async def forward(self) -> None:
+def init_miner_stats(validator) -> None:
     """
-    Main entry point for the forward process:
-      1. Retrieves random web project and generates tasks.
-      2. Sends tasks to miners, gathers responses, evaluates them.
-      3. Updates miners' scores and sends feedback.
-      4. Sleeps to avoid flooding.
+    Ensure `validator.miner_stats` is initialized.
     """
-    try:
-        self._init_miner_stats()
-        bt.logging.info("Starting forward step.")
+    if not hasattr(validator, "miner_stats"):
+        validator.miner_stats = {}
+    if "aggregated" not in validator.miner_stats:
+        validator.miner_stats["aggregated"] = MinerStats()
 
-        # 1. Retrieve a random demo web project
-        demo_web_project = self._retrieve_random_demo_web_project()
-        web_url = demo_web_project.frontend_url
-        bt.logging.info(f"Selected demo web project with URL: {web_url}")
-
-        # 2. Generate tasks
-        tasks_generated = await self._generate_tasks_for_url(demo_web_project)
-        if not tasks_generated:
-            bt.logging.warning("No tasks generated, skipping forward step.")
-            return
-
-        # 3. Process each task
-        await self._process_tasks(web_url, tasks_generated)
-
-        bt.logging.success("Forward step completed successfully.")
-        bt.logging.info(f"Sleeping for {FORWARD_SLEEP_SECONDS}s....")
-        await asyncio.sleep(FORWARD_SLEEP_SECONDS)
-
-    except Exception as e:
-        bt.logging.error(f"Error on validation forward: {e}")
-
-
-def _init_miner_stats(self) -> None:
-    """
-    Ensure `self.miner_stats` is initialized.
-    """
-    if not hasattr(self, "miner_stats"):
-        self.miner_stats = {}
-    if "aggregated" not in self.miner_stats:
-        self.miner_stats["aggregated"] = MinerStats()
-
-
-def _retrieve_random_demo_web_project(self) -> WebProject:
+def retrieve_random_demo_web_project() -> WebProject:
     """
     Retrieves a random demo web project from the available ones.
     Raises an Exception if none are available.
@@ -89,7 +52,6 @@ def _retrieve_random_demo_web_project(self) -> WebProject:
     bt.logging.debug(f"Retrieved {len(demo_web_projects)} demo web projects.")
     if not demo_web_projects:
         raise Exception("No demo web projects available.")
-
     project = random.choice(demo_web_projects)
     ColoredLogger.info(
         f"Generating tasks for Web Project: '{project.name}'",
@@ -97,8 +59,7 @@ def _retrieve_random_demo_web_project(self) -> WebProject:
     )
     return project
 
-
-async def _generate_tasks_for_url(self, demo_web_project: WebProject) -> List[Task]:
+async def generate_tasks_for_url(demo_web_project: WebProject) -> List[Task]:
     """
     Generates tasks for the given web project using the TaskGenerationPipeline.
     """
@@ -106,20 +67,19 @@ async def _generate_tasks_for_url(self, demo_web_project: WebProject) -> List[Ta
         web_project=demo_web_project,
         save_web_analysis_in_db=True,
         save_task_in_db=False,
+        num_or_urls=4
     )
-    pipeline = TaskGenerationPipeline(config)
+    pipeline = TaskGenerationPipeline(config=config, web_project=demo_web_project)
     start_time = time.time()
     output: TasksGenerationOutput = await pipeline.generate()
     tasks_generated = output.tasks
-
     ColoredLogger.info(
         f"Generated {len(tasks_generated)} tasks in {time.time() - start_time:.2f}s",
         ColoredLogger.YELLOW,
     )
     return tasks_generated
 
-
-async def _process_tasks(self, web_url: str, tasks_generated: List[Task]) -> None:
+async def process_tasks(validator, web_url: str, tasks_generated: List[Task]) -> None:
     """
     Iterates over each task, sends it to the miners, evaluates responses, updates scores,
     and sends feedback. Also manages timing and logging.
@@ -127,52 +87,43 @@ async def _process_tasks(self, web_url: str, tasks_generated: List[Task]) -> Non
     total_time_start = time.time()
     tasks_count = 0
     tasks_total_time = 0.0
-
     for index, task in enumerate(tasks_generated):
         task_start_time = time.time()
         bt.logging.debug(f"Task #{index} (ID: {task.id}): {task.prompt}")
-
         # Clean task for miners
-        miner_task: Task = _clean_miner_task(task=task)
+        miner_task: Task = clean_miner_task(task=task)
         bt.logging.info(f"Miner task: {miner_task}")
-
         # Get random UIDs & miner axons
-        miner_uids = get_random_uids(self, k=SAMPLE_SIZE)
+        miner_uids = get_random_uids(validator, k=SAMPLE_SIZE)
         bt.logging.info(f"Miner UIDs chosen: {miner_uids}")
-        miner_axons = [self.metagraph.axons[uid] for uid in miner_uids]
-
+        miner_axons = [validator.metagraph.axons[uid] for uid in miner_uids]
         # Create synapse and send tasks
         task_synapse = TaskSynapse(
             prompt=miner_task.prompt,
             url=miner_task.url,
             actions=[],
         )
-        responses = await self._send_task_synapse_to_miners(
-            miner_axons, task_synapse, miner_uids
+        responses = await send_task_synapse_to_miners(
+            validator, miner_axons, task_synapse, miner_uids
         )
-
         # Evaluate & compute rewards
-        task_solutions, execution_times = self._collect_task_solutions(
+        task_solutions, execution_times = collect_task_solutions(
             task, responses, miner_uids
         )
-        rewards = await self._compute_rewards(
-            task_solutions, web_url, execution_times
+        rewards = await compute_rewards(
+            validator, task_solutions, web_url, execution_times
         )
         bt.logging.info(f"Miners Final Rewards: {rewards}")
-
         # Update miners' scores
-        evaluation_time = await self._update_miner_stats_and_scores(
-            rewards, miner_uids, execution_times, task
+        evaluation_time = await update_miner_stats_and_scores(
+            validator, rewards, miner_uids, execution_times, task
         )
-
         # Send feedback synapse
-        await self._send_feedback_synapse_to_miners(miner_axons, miner_uids)
-
+        await send_feedback_synapse_to_miners(validator, miner_axons, miner_uids)
         task_end_time = time.time()
         task_duration = task_end_time - task_start_time
         tasks_count += 1
         tasks_total_time += task_duration
-
         avg_miner_time = (
             sum(execution_times) / len(execution_times) if execution_times else 0.0
         )
@@ -182,10 +133,8 @@ async def _process_tasks(self, web_url: str, tasks_generated: List[Task]) -> Non
             f"evaluation time: {evaluation_time:.2f}s",
             ColoredLogger.YELLOW,
         )
-
         bt.logging.info(f"Sleeping for {TASK_SLEEP}s....")
         await asyncio.sleep(TASK_SLEEP)
-
     end_time = time.time()
     total_duration = end_time - total_time_start
     avg_task_time = tasks_total_time / tasks_count if tasks_count else 0.0
@@ -194,9 +143,8 @@ async def _process_tasks(self, web_url: str, tasks_generated: List[Task]) -> Non
         f"average time per task: {avg_task_time:.2f}s"
     )
 
-
-async def _send_task_synapse_to_miners(
-    self,
+async def send_task_synapse_to_miners(
+    validator,
     miner_axons: List[bt.axon],
     task_synapse: TaskSynapse,
     miner_uids: List[int],
@@ -206,13 +154,12 @@ async def _send_task_synapse_to_miners(
     """
     bt.logging.info(f"Sending TaskSynapse to {len(miner_uids)} miners.")
     responses: List[TaskSynapse] = await dendrite_with_retries(
-        dendrite=self.dendrite,
+        dendrite=validator.dendrite,
         axons=miner_axons,
         synapse=task_synapse,
         deserialize=True,
         timeout=TIMEOUT,
     )
-
     num_valid_responses = sum(resp is not None for resp in responses)
     num_none_responses = len(responses) - num_valid_responses
     bt.logging.info(
@@ -221,10 +168,8 @@ async def _send_task_synapse_to_miners(
     )
     return responses
 
-
-def _collect_task_solutions(
-    self,
-    original_task: Task,
+def collect_task_solutions(
+    task: Task,
     responses: List[TaskSynapse],
     miner_uids: List[int],
 ) -> (List[TaskSolution], List[float]):
@@ -233,22 +178,19 @@ def _collect_task_solutions(
     """
     task_solutions = []
     execution_times = []
-
     for miner_uid, response in zip(miner_uids, responses):
         try:
-            task_solution = _get_task_solution_from_synapse(
-                task=original_task,
+            task_solution = get_task_solution_from_synapse(
+                task=task,
                 synapse=response,
                 web_agent_id=str(miner_uid),
             )
         except Exception as e:
             bt.logging.error(f"Error in Miner Response Format: {e}")
             task_solution = TaskSolution(
-                task=original_task, actions=[], web_agent_id=str(miner_uid)
+                task=task, actions=[], web_agent_id=str(miner_uid)
             )
-
         task_solutions.append(task_solution)
-
         if (
             response
             and hasattr(response.dendrite, "process_time")
@@ -257,14 +199,11 @@ def _collect_task_solutions(
             process_time = response.dendrite.process_time
         else:
             process_time = TIMEOUT
-
         execution_times.append(process_time)
-
     return task_solutions, execution_times
 
-
-async def _compute_rewards(
-    self,
+async def compute_rewards(
+    validator,
     task_solutions: List[TaskSolution],
     web_url: str,
     execution_times: List[float],
@@ -274,7 +213,7 @@ async def _compute_rewards(
     """
     evaluation_start_time = time.time()
     rewards: np.ndarray = await get_rewards(
-        self,
+        validator,
         task_solutions=task_solutions,
         web_url=web_url,
         execution_times=execution_times,
@@ -288,9 +227,8 @@ async def _compute_rewards(
     )
     return rewards
 
-
-async def _update_miner_stats_and_scores(
-    self,
+async def update_miner_stats_and_scores(
+    validator,
     rewards: np.ndarray,
     miner_uids: List[int],
     execution_times: List[float],
@@ -305,43 +243,36 @@ async def _update_miner_stats_and_scores(
         # The get_rewards method encloses some of the evaluation logic time
         # We'll track only the update loop here if needed
         evaluation_time_start = time.time()
-
-        self.update_scores(rewards, miner_uids)
+        validator.update_scores(rewards, miner_uids)
         bt.logging.info("Scores updated for miners")
-
         for i, miner_uid in enumerate(miner_uids):
             score_value = rewards[i] if rewards[i] is not None else 0.0
             exec_time_value = (
                 execution_times[i] if execution_times[i] is not None else TIMEOUT
             )
             success = score_value >= TIME_WEIGHT
-
-            if miner_uid not in self.miner_stats:
-                self.miner_stats[miner_uid] = MinerStats()
-
-            self.miner_stats[miner_uid].update(
+            if miner_uid not in validator.miner_stats:
+                validator.miner_stats[miner_uid] = MinerStats()
+            validator.miner_stats[miner_uid].update(
                 score=float(score_value),
                 execution_time=float(exec_time_value),
                 evaluation_time=(time.time() - evaluation_time_start),
                 last_task=task,
                 success=success,
             )
-            self.miner_stats["aggregated"].update(
+            validator.miner_stats["aggregated"].update(
                 score=float(score_value),
                 execution_time=float(exec_time_value),
                 evaluation_time=(time.time() - evaluation_time_start),
                 last_task=task,
                 success=success,
             )
-
         evaluation_time_end = time.time()
         evaluation_time = evaluation_time_end - evaluation_time_start
-
     return evaluation_time
 
-
-async def _send_feedback_synapse_to_miners(
-    self,
+async def send_feedback_synapse_to_miners(
+    validator,
     miner_axons: List[bt.axon],
     miner_uids: List[int],
 ) -> None:
@@ -349,20 +280,18 @@ async def _send_feedback_synapse_to_miners(
     Sends TaskFeedbackSynapse to each miner in parallel.
     """
     feedback_list = [
-        TaskFeedbackSynapse(version="v1", stats=self.miner_stats[miner_uid])
+        TaskFeedbackSynapse(version="v1", stats=validator.miner_stats[miner_uid])
         for miner_uid in miner_uids
     ]
-
     bt.logging.info(
         f"Sending TaskFeedbackSynapse to {len(miner_uids)} miners in parallel."
     )
-
     feedback_tasks = []
     for axon, feedback_synapse in zip(miner_axons, feedback_list):
         feedback_tasks.append(
             asyncio.create_task(
                 dendrite_with_retries(
-                    dendrite=self.dendrite,
+                    dendrite=validator.dendrite,
                     axons=[axon],
                     synapse=feedback_synapse,
                     deserialize=True,
@@ -370,13 +299,11 @@ async def _send_feedback_synapse_to_miners(
                 )
             )
         )
-
-    _ = await asyncio.gather(*feedback_tasks)
+    results = await asyncio.gather(*feedback_tasks)
     bt.logging.info("TaskFeedbackSynapse responses received.")
     bt.logging.success("Task step completed successfully.")
 
-
-def _get_task_solution_from_synapse(
+def get_task_solution_from_synapse(
     task: Task, synapse: TaskSynapse, web_agent_id: str
 ) -> TaskSolution:
     """
@@ -390,8 +317,7 @@ def _get_task_solution_from_synapse(
         return TaskSolution(task=task, actions=[], web_agent_id=web_agent_id)
     return TaskSolution(task=task, actions=synapse.actions, web_agent_id=web_agent_id)
 
-
-def _clean_miner_task(task: Task) -> Task:
+def clean_miner_task(task: Task) -> Task:
     """
     Creates a shallow copy of the Task removing fields not needed by miners,
     and ensures the `html` attribute is never None.
@@ -400,16 +326,41 @@ def _clean_miner_task(task: Task) -> Task:
     task_copy.tests = None
     task_copy.milestones = None
     task_copy.web_analysis = None
-
     # Ensure `html` is never None
     if hasattr(task_copy, "html") and task_copy.html is None:
         task_copy.html = ""
-
     # Convert any string 'id' to int if needed
     if hasattr(task_copy, "id") and isinstance(task_copy.id, str):
         try:
             task_copy.id = int(task_copy.id)
         except ValueError:
             pass
-
     return task_copy
+
+async def forward(self) -> None:
+    """
+    Main entry point for the forward process:
+      1. Retrieves random web project and generates tasks.
+      2. Sends tasks to miners, gathers responses, evaluates them.
+      3. Updates miners' scores and sends feedback.
+      4. Sleeps to avoid flooding.
+    """
+    try:
+        init_miner_stats(self)
+        bt.logging.info("Starting forward step.")
+        # 1. Retrieve a random demo web project
+        demo_web_project = retrieve_random_demo_web_project()
+        web_url = demo_web_project.frontend_url
+        bt.logging.info(f"Selected demo web project with URL: {web_url}")
+        # 2. Generate tasks
+        tasks_generated = await generate_tasks_for_url(demo_web_project)
+        if not tasks_generated:
+            bt.logging.warning("No tasks generated, skipping forward step.")
+            return
+        # 3. Process each task
+        await process_tasks(self, web_url, tasks_generated)
+        bt.logging.success("Forward step completed successfully.")
+        bt.logging.info(f"Sleeping for {FORWARD_SLEEP_SECONDS}s....")
+        await asyncio.sleep(FORWARD_SLEEP_SECONDS)
+    except Exception as e:
+        bt.logging.error(f"Error on validation forward: {e}")
