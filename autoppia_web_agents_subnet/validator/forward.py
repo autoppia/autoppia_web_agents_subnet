@@ -70,7 +70,7 @@ async def generate_tasks_for_web_project(demo_web_project: WebProject) -> List[T
     """
     config = TaskGenerationConfig(
         web_project=demo_web_project,
-        save_web_analysis_in_db=True,
+        save_domain_analysis_in_db=True,
         save_task_in_db=False,
         num_or_urls=4
     )
@@ -338,7 +338,7 @@ def clean_miner_task(task: Task) -> Task:
     task_copy = deepcopy(task)
     task_copy.tests = None
     task_copy.milestones = None
-    task_copy.web_analysis = None
+    task_copy.domain_analysis = None
     # Ensure `html` is never None
     if hasattr(task_copy, "html") and task_copy.html is None:
         task_copy.html = ""
