@@ -8830,7 +8830,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.local_task_generation",
         "description": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.local_task_generation",
-        "peekOfCode": "class LocalTaskGenerationPipeline:\n    def __init__(self, web_project: WebProject, llm_service: \"ILLM\" = Provide[DIContainer.llm_service]):\n        self.web_project:WebProject = web_project\n        self.llm_service:ILLM = llm_service\n    async def generate(self, page_url: str) -> List[\"Task\"]:\n        html, clean_html, screenshot, screenshot_desc = await get_html_and_screenshot(page_url)\n        interactive_elems = detect_interactive_elements(clean_html)\n        draft_list = await self._phase1_generate_draft_tasks(\n            clean_html, screenshot_desc, interactive_elems\n        )",
+        "peekOfCode": "class LocalTaskGenerationPipeline:\n    def __init__(self, web_project: WebProject, llm_service: \"ILLM\" = Provide[DIContainer.llm_service]):\n        self.web_project: WebProject = web_project\n        self.llm_service: ILLM = llm_service\n    async def generate(self, page_url: str) -> List[\"Task\"]:\n        # Fetch the HTML and screenshot\n        html, clean_html, screenshot, screenshot_desc = await get_html_and_screenshot(page_url)\n        interactive_elems = detect_interactive_elements(clean_html)\n        # Phase 1: Draft generation\n        draft_list = await self._phase1_generate_draft_tasks(",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.local_task_generation",
         "documentation": {}
     },
