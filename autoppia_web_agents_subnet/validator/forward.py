@@ -24,6 +24,8 @@ from autoppia_web_agents_subnet.protocol import (
 )
 from autoppia_web_agents_subnet.utils.dendrite import dendrite_with_retries
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+import asyncio
+
 
 # Constants
 TIMEOUT = 120  # 2 Min
@@ -62,7 +64,7 @@ async def retrieve_random_demo_web_project() -> WebProject:
     return project
 
 
-async def generate_tasks_for_url(demo_web_project: WebProject) -> List[Task]:
+async def generate_tasks_for_web_project(demo_web_project: WebProject) -> List[Task]:
     """
     Generates tasks for the given web project using the TaskGenerationPipeline.
     """
@@ -83,7 +85,7 @@ async def generate_tasks_for_url(demo_web_project: WebProject) -> List[Task]:
     return tasks_generated
 
 
-async def process_tasks(validator, web_url: str, tasks_generated: List[Task]) -> None:
+async def process_tasks(validator, tasks_generated: List[Task]) -> None:
     """
     Iterates over each task, sends it to the miners, evaluates responses, updates scores,
     and sends feedback. Also manages timing and logging.
@@ -115,7 +117,7 @@ async def process_tasks(validator, web_url: str, tasks_generated: List[Task]) ->
             task, responses, miner_uids
         )
         rewards = await compute_rewards(
-            validator, task_solutions, web_url, execution_times
+            validator, task_solutions, task.url, execution_times
         )
         bt.logging.info(f"Miners Final Rewards: {rewards}")
         # Update miners' scores
@@ -187,14 +189,14 @@ def collect_task_solutions(
     for miner_uid, response in zip(miner_uids, responses):
         try:
             task_solution = get_task_solution_from_synapse(
-                task=task,
+                task_id=task.id,
                 synapse=response,
                 web_agent_id=str(miner_uid),
             )
         except Exception as e:
             bt.logging.error(f"Error in Miner Response Format: {e}")
             task_solution = TaskSolution(
-                task=task, actions=[], web_agent_id=str(miner_uid)
+                task_id=task.id, actions=[], web_agent_id=str(miner_uid)
             )
         task_solutions.append(task_solution)
         if (
@@ -222,7 +224,7 @@ async def compute_rewards(
     rewards: np.ndarray = await get_rewards(
         validator,
         task_solutions=task_solutions,
-        web_url=web_url,
+        web_url=web_url,  # This should now be task.url from the calling function
         execution_times=execution_times,
         time_weight=TIME_WEIGHT,
         min_correct_format_score=MIN_SCORE_FOR_CORRECT_FORMAT,
@@ -317,15 +319,15 @@ def get_task_solution_from_synapse(
     task: Task, synapse: TaskSynapse, web_agent_id: str
 ) -> TaskSolution:
     """
-    Safely extracts a TaskSolution from a TaskSynapse response.
+    Safely extracts actions from a TaskSynapse response and creates a TaskSolution 
+    with the original task reference.
     """
-    if (
-        not synapse
-        or not hasattr(synapse, "actions")
-        or not isinstance(synapse.actions, list)
-    ):
-        return TaskSolution(task=task, actions=[], web_agent_id=web_agent_id)
-    return TaskSolution(task=task, actions=synapse.actions, web_agent_id=web_agent_id)
+    actions = []
+    if synapse and hasattr(synapse, "actions") and isinstance(synapse.actions, list):
+        actions = synapse.actions
+
+    # Create a TaskSolution with our trusted task object, not one from the miner
+    return TaskSolution(task=task, actions=actions, web_agent_id=web_agent_id)
 
 
 def clean_miner_task(task: Task) -> Task:
@@ -361,16 +363,15 @@ async def forward(self) -> None:
         init_miner_stats(self)
         bt.logging.info("Starting forward step.")
         # 1. Retrieve a random demo web project
-        demo_web_project = await retrieve_random_demo_web_project()
-        web_url = demo_web_project.frontend_url
-        bt.logging.info(f"Selected demo web project with URL: {web_url}")
+        demo_web_project:WebProject = await retrieve_random_demo_web_project()
+        bt.logging.info(f"Selected demo web project with URL: {demo_web_project.frontend_url}")
         # 2. Generate tasks
-        tasks_generated = await generate_tasks_for_url(demo_web_project)
+        tasks_generated = await generate_tasks_for_web_project(demo_web_project)
         if not tasks_generated:
             bt.logging.warning("No tasks generated, skipping forward step.")
             return
         # 3. Process each task
-        await process_tasks(self, web_url, tasks_generated)
+        await process_tasks(self, tasks_generated)
         bt.logging.success("Forward step completed successfully.")
         bt.logging.info(f"Sleeping for {FORWARD_SLEEP_SECONDS}s....")
         await asyncio.sleep(FORWARD_SLEEP_SECONDS)
