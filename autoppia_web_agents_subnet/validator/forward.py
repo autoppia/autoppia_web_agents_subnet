@@ -11,7 +11,7 @@ from autoppia_iwa.src.data_generation.domain.classes import (
     TasksGenerationOutput,
 )
 from autoppia_iwa.src.demo_webs.classes import WebProject
-from autoppia_iwa.src.backend_demo_web.config import get_demo_webs_projects
+from autoppia_iwa.src.demo_webs.config import get_demo_webs_projects
 from autoppia_iwa.src.data_generation.application.tasks_generation_pipeline import (
     TaskGenerationPipeline,
 )

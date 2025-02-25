@@ -2453,6 +2453,14 @@
         "documentation": {}
     },
     {
+        "label": "get_demo_webs_projects",
+        "importPath": "autoppia_iwa.src.demo_webs.config",
+        "description": "autoppia_iwa.src.demo_webs.config",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.demo_webs.config",
+        "documentation": {}
+    },
+    {
         "label": "DIContainer",
         "importPath": "autoppia_iwa.src.di_container",
         "description": "autoppia_iwa.src.di_container",
@@ -8351,14 +8359,6 @@
         "description": "math",
         "isExtraImport": true,
         "detail": "math",
-        "documentation": {}
-    },
-    {
-        "label": "get_demo_webs_projects",
-        "importPath": "autoppia_iwa.src.backend_demo_web.config",
-        "description": "autoppia_iwa.src.backend_demo_web.config",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.backend_demo_web.config",
         "documentation": {}
     },
     {
