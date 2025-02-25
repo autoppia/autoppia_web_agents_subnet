@@ -115,7 +115,7 @@ async def process_tasks(validator, tasks_generated: List[Task]) -> None:
             task, responses, miner_uids
         )
         rewards = await compute_rewards(
-            validator, task_solutions, task.url, execution_times
+            validator, task_solutions, execution_times
         )
         bt.logging.info(f"Miners Final Rewards: {rewards}")
         # Update miners' scores
@@ -212,7 +212,6 @@ def collect_task_solutions(
 async def compute_rewards(
     validator,
     task_solutions: List[TaskSolution],
-    web_url: str,
     execution_times: List[float],
 ) -> np.ndarray:
     """
