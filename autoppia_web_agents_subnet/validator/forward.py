@@ -94,7 +94,7 @@ async def process_tasks(validator, tasks_generated: List[Task]) -> None:
     tasks_total_time = 0.0
     for index, task in enumerate(tasks_generated):
         task_start_time = time.time()
-        bt.logging.debug(f"Task #{index} (ID: {task.id}): {task.prompt}")
+        bt.logging.debug(f"Task #{index} (URL: {task.url} ID: {task.id}): {task.prompt}")
         # Clean task for miners
         miner_task: Task = clean_miner_task(task=task)
         # Get random UIDs & miner axons
@@ -222,7 +222,6 @@ async def compute_rewards(
     rewards: np.ndarray = await get_rewards(
         validator,
         task_solutions=task_solutions,
-        web_url=web_url,  # This should now be task.url from the calling function
         execution_times=execution_times,
         time_weight=TIME_WEIGHT,
         min_correct_format_score=MIN_SCORE_FOR_CORRECT_FORMAT,
