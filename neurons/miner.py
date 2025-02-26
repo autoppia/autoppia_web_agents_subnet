@@ -19,7 +19,6 @@
 from autoppia_web_agents_subnet.base.miner import BaseMinerNeuron
 from autoppia_web_agents_subnet.protocol import TaskSynapse, TaskFeedbackSynapse
 import bittensor as bt
-import os
 import time
 import typing
 from typing import List
