@@ -8602,6 +8602,14 @@
         "documentation": {}
     },
     {
+        "label": "clean_html",
+        "importPath": "autoppia_iwa_module.autoppia_iwa.src.shared.web_utils",
+        "description": "autoppia_iwa_module.autoppia_iwa.src.shared.web_utils",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa_module.autoppia_iwa.src.shared.web_utils",
+        "documentation": {}
+    },
+    {
         "label": "BaseValidatorNeuron",
         "importPath": "autoppia_web_agents_subnet.base.validator",
         "description": "autoppia_web_agents_subnet.base.validator",
@@ -14299,7 +14307,7 @@
         "kind": 6,
         "importPath": "autoppia_web_agents_subnet.protocol",
         "description": "autoppia_web_agents_subnet.protocol",
-        "peekOfCode": "class TaskSynapse(Synapse):\n    version: str = \"\"\n    prompt: str = \"\"\n    url: str = \"\"\n    actions: List[AllActionsUnion] = Field(\n        default_factory=list,\n        description=\"The actions that solve the task\"\n    )\n    class Config:\n        extra = \"allow\"",
+        "peekOfCode": "class TaskSynapse(Synapse):\n    version: str = \"\"\n    prompt: str\n    url: str\n    html: Optional[str] = None\n    screenshot: Optional[str] = None\n    actions: List[AllActionsUnion] = Field(\n        default_factory=list,\n        description=\"The actions that solve the task\"\n    )",
         "detail": "autoppia_web_agents_subnet.protocol",
         "documentation": {}
     },

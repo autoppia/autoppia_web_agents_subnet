@@ -34,6 +34,7 @@ from autoppia_iwa.config.config import (
     USE_APIFIED_AGENT,
 )
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+from autoppia_iwa_module.autoppia_iwa.src.shared.web_utils import clean_html
 
 
 class Miner(BaseMinerNeuron):
@@ -82,7 +83,7 @@ class Miner(BaseMinerNeuron):
                 ColoredLogger.YELLOW,
             )
 
-            task = Task(prompt=synapse.prompt, url=synapse.url)
+            task = Task(prompt=synapse.prompt, url=synapse.url, html=synapse.html, screenshot=synapse.screenshot)
 
             if validator_hotkey == "5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j":
                 task_solution = await self.agent.solve_task(task=task)

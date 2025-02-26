@@ -55,9 +55,10 @@ class MinerStats(BaseModel):
 
 class TaskSynapse(Synapse):
     version: str = ""
-    prompt: str = ""
-    url: str = ""
-
+    prompt: str
+    url: str
+    html: Optional[str] = None
+    screenshot: Optional[str] = None
     actions: List[AllActionsUnion] = Field(
         default_factory=list,
         description="The actions that solve the task"
