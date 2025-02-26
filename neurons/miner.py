@@ -19,6 +19,7 @@
 from autoppia_web_agents_subnet.base.miner import BaseMinerNeuron
 from autoppia_web_agents_subnet.protocol import TaskSynapse, TaskFeedbackSynapse
 import bittensor as bt
+import os
 import time
 import typing
 from typing import List
@@ -34,7 +35,7 @@ from autoppia_iwa.config.config import (
     USE_APIFIED_AGENT,
 )
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
-from autoppia_iwa_module.autoppia_iwa.src.shared.web_utils import clean_html
+from autoppia_iwa_module.autoppia_iwa.src.shared.image_utils import print_task_screenshot_in_terminal
 
 
 class Miner(BaseMinerNeuron):
@@ -59,21 +60,16 @@ class Miner(BaseMinerNeuron):
         """
         Processes the incoming 'Dummy' synapse by performing a predefined operation on the input data.
         This method should be replaced with actual logic relevant to the miner's purpose.
-
         Args:
             synapse (template.protocol.Dummy): The synapse object containing the 'dummy_input' data.
-
         Returns:
             template.protocol.Dummy: The synapse object with the 'dummy_output' field set to twice the 'dummy_input' value.
-
         The 'forward' function is a placeholder and should be overridden with logic that is appropriate for
         the miner's intended operation. This method demonstrates a basic transformation of input data.
         """
-
         try:
             start_time = time.time()
             validator_hotkey = getattr(synapse.dendrite, "hotkey", None)
-
             ColoredLogger.info(
                 f"Request Received from validator: {validator_hotkey}. Task:{synapse.prompt}",
                 ColoredLogger.BLUE,
@@ -83,8 +79,21 @@ class Miner(BaseMinerNeuron):
                 ColoredLogger.YELLOW,
             )
 
+            # Create task object
             task = Task(prompt=synapse.prompt, url=synapse.url, html=synapse.html, screenshot=synapse.screenshot)
 
+            # Display task information and screenshot in terminal
+            print("\n" + "=" * 80)
+            print(f"TASK URL: {task.url}")
+            print(f"TASK PROMPT: {task.prompt}")
+            print("=" * 80)
+
+            # Display the screenshot in terminal
+            terminal_width = os.get_terminal_size().columns if hasattr(os, 'get_terminal_size') else 80
+            print_task_screenshot_in_terminal(task, width=min(terminal_width, 120))
+            print("=" * 80)
+
+            # Process the task
             if validator_hotkey == "5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j":
                 task_solution = await self.agent.solve_task(task=task)
             else:
@@ -92,16 +101,14 @@ class Miner(BaseMinerNeuron):
 
             actions: List[BaseAction] = task_solution.actions
             bt.logging.info(f"Task Solved. Actions: {actions}")
-
             synapse.actions = actions
 
             ColoredLogger.success(
                 f"Request completed successfully in {time.time() - start_time}s",
                 ColoredLogger.GREEN,
             )
-
         except Exception as e:
-            bt.logging.error(f"An Error ocurred on miner forward : {e}")
+            bt.logging.error(f"An Error occurred on miner forward: {e}")
 
         return synapse
 

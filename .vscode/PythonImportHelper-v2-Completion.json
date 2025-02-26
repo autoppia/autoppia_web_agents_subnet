@@ -1365,6 +1365,14 @@
         "documentation": {}
     },
     {
+        "label": "Task",
+        "importPath": "autoppia_iwa.src.data_generation.domain.classes",
+        "description": "autoppia_iwa.src.data_generation.domain.classes",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.data_generation.domain.classes",
+        "documentation": {}
+    },
+    {
         "label": "TaskDifficultyLevel",
         "importPath": "autoppia_iwa.src.data_generation.domain.classes",
         "description": "autoppia_iwa.src.data_generation.domain.classes",
@@ -4626,21 +4634,12 @@
         "documentation": {}
     },
     {
-        "label": "random",
+        "label": "io",
         "kind": 6,
         "isExtraImport": true,
-        "importPath": "random",
-        "description": "random",
-        "detail": "random",
-        "documentation": {}
-    },
-    {
-        "label": "string",
-        "kind": 6,
-        "isExtraImport": true,
-        "importPath": "string",
-        "description": "string",
-        "detail": "string",
+        "importPath": "io",
+        "description": "io",
+        "detail": "io",
         "documentation": {}
     },
     {
@@ -4705,6 +4704,32 @@
         "description": "PIL",
         "isExtraImport": true,
         "detail": "PIL",
+        "documentation": {}
+    },
+    {
+        "label": "Image",
+        "importPath": "PIL",
+        "description": "PIL",
+        "isExtraImport": true,
+        "detail": "PIL",
+        "documentation": {}
+    },
+    {
+        "label": "random",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "random",
+        "description": "random",
+        "detail": "random",
+        "documentation": {}
+    },
+    {
+        "label": "string",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "string",
+        "description": "string",
+        "detail": "string",
         "documentation": {}
     },
     {
@@ -8602,11 +8627,11 @@
         "documentation": {}
     },
     {
-        "label": "clean_html",
-        "importPath": "autoppia_iwa_module.autoppia_iwa.src.shared.web_utils",
-        "description": "autoppia_iwa_module.autoppia_iwa.src.shared.web_utils",
+        "label": "print_task_screenshot_in_terminal",
+        "importPath": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
+        "description": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
         "isExtraImport": true,
-        "detail": "autoppia_iwa_module.autoppia_iwa.src.shared.web_utils",
+        "detail": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
         "documentation": {}
     },
     {
@@ -9935,6 +9960,42 @@
         "description": "autoppia_iwa_module.autoppia_iwa.src.shared.infrastructure.databases.base_mongo_repository",
         "peekOfCode": "class BaseMongoRepository:\n    \"\"\"\n    A generic repository for performing CRUD operations on a MongoDB collection.\n    \"\"\"\n    def __init__(self, mongo_client: MongoClient, db_name: str, collection_name: str):\n        \"\"\"\n        Initialize the BaseMongoRepository.\n        Args:\n            mongo_client (MongoClient): The MongoDB client.\n            db_name (str): The name of the database.",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.shared.infrastructure.databases.base_mongo_repository",
+        "documentation": {}
+    },
+    {
+        "label": "print_task_screenshot_in_terminal",
+        "kind": 2,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
+        "description": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
+        "peekOfCode": "def print_task_screenshot_in_terminal(task:Task, width=80):\n    \"\"\"\n    Prints a Task's screenshot image in the terminal as ASCII art.\n    Args:\n        task (Task): The task containing a base64 encoded screenshot\n        width (int, optional): Width of the terminal output in characters. Defaults to 80.\n    Returns:\n        bool: True if successful, False if there was an error.\n    \"\"\"\n    if not task.screenshot:",
+        "detail": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
+        "documentation": {}
+    },
+    {
+        "label": "has_terminal_image_support",
+        "kind": 2,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
+        "description": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
+        "peekOfCode": "def has_terminal_image_support():\n    \"\"\"Check if terminal supports direct image display via libraries like iTerm2\"\"\"\n    try:\n        # Check for iterm2 or kitty terminal\n        import importlib.util\n        if importlib.util.find_spec(\"iterm2_tools\") is not None:\n            return True\n        if importlib.util.find_spec(\"kitty.graphics\") is not None:\n            return True\n        return False",
+        "detail": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
+        "documentation": {}
+    },
+    {
+        "label": "display_with_terminal_image",
+        "kind": 2,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
+        "description": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
+        "peekOfCode": "def display_with_terminal_image(image):\n    \"\"\"Display image in terminal using appropriate tools if available\"\"\"\n    try:\n        import importlib\n        # Try iterm2\n        if importlib.util.find_spec(\"iterm2_tools\") is not None:\n            from iterm2_tools.images import display_image_bytes\n            with io.BytesIO() as buffer:\n                image.save(buffer, format=\"PNG\")\n                display_image_bytes(buffer.getvalue())",
+        "detail": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
+        "documentation": {}
+    },
+    {
+        "label": "print_as_ascii_art",
+        "kind": 2,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
+        "description": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
+        "peekOfCode": "def print_as_ascii_art(image, width=80):\n    \"\"\"Convert and print image as ASCII art\"\"\"\n    # Resize the image to fit terminal width\n    height = int(image.height * width / image.width / 2)  # Adjust for character aspect ratio\n    image = image.resize((width, height))\n    # Convert to grayscale for ASCII art\n    image = image.convert(\"L\")\n    # Define ASCII characters from dark to light\n    chars = \" .:-=+*#%@\"\n    # Generate and print ASCII art",
+        "detail": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
         "documentation": {}
     },
     {
