@@ -1365,14 +1365,6 @@
         "documentation": {}
     },
     {
-        "label": "Task",
-        "importPath": "autoppia_iwa.src.data_generation.domain.classes",
-        "description": "autoppia_iwa.src.data_generation.domain.classes",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.data_generation.domain.classes",
-        "documentation": {}
-    },
-    {
         "label": "TaskDifficultyLevel",
         "importPath": "autoppia_iwa.src.data_generation.domain.classes",
         "description": "autoppia_iwa.src.data_generation.domain.classes",
@@ -9975,7 +9967,7 @@
         "kind": 2,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
         "description": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
-        "peekOfCode": "def print_task_screenshot_in_terminal(task:Task, width=80):\n    \"\"\"\n    Prints a Task's screenshot image in the terminal as ASCII art.\n    Args:\n        task (Task): The task containing a base64 encoded screenshot\n        width (int, optional): Width of the terminal output in characters. Defaults to 80.\n    Returns:\n        bool: True if successful, False if there was an error.\n    \"\"\"\n    if not task.screenshot:",
+        "peekOfCode": "def print_task_screenshot_in_terminal(task, width=80):\n    \"\"\"\n    Prints a Task's screenshot image in the terminal as ASCII art.\n    Args:\n        task (Task): The task containing a base64 encoded screenshot\n        width (int, optional): Width of the terminal output in characters. Defaults to 80.\n    Returns:\n        bool: True if successful, False if there was an error.\n    \"\"\"\n    if not task.screenshot:",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
         "documentation": {}
     },
@@ -10002,7 +9994,7 @@
         "kind": 2,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
         "description": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
-        "peekOfCode": "def print_as_ascii_art(image, width=80):\n    \"\"\"Convert and print image as ASCII art\"\"\"\n    # Resize the image to fit terminal width\n    height = int(image.height * width / image.width / 2)  # Adjust for character aspect ratio\n    image = image.resize((width, height))\n    # Convert to grayscale for ASCII art\n    image = image.convert(\"L\")\n    # Define ASCII characters from dark to light\n    chars = \" .:-=+*#%@\"\n    # Generate and print ASCII art",
+        "peekOfCode": "def print_as_ascii_art(image, width=80):\n    \"\"\"Convert and print image as ASCII art\"\"\"\n    try:\n        # Ensure width is positive\n        width = max(10, min(width, 200))\n        # Resize the image to fit terminal width\n        height = max(1, int(image.height * width / image.width / 2))  # Adjust for character aspect ratio\n        image = image.resize((width, height))\n        # Convert to grayscale for ASCII art\n        image = image.convert(\"L\")",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
         "documentation": {}
     },
