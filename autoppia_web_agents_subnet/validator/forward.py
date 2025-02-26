@@ -83,6 +83,9 @@ async def generate_tasks_for_web_project(demo_web_project: WebProject) -> List[T
         f"Generated {len(tasks_generated)} tasks in {time.time() - start_time:.2f}s",
         ColoredLogger.YELLOW,
     )
+    for task in tasks_generated:
+        bt.logging.info(task.prompt)
+
     return tasks_generated
 
 
