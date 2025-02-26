@@ -50,7 +50,7 @@ class Miner(BaseMinerNeuron):
         self.agent = (
             ApifiedWebAgent(name=AGENT_NAME, host=AGENT_HOST, port=AGENT_PORT)
             if USE_APIFIED_AGENT
-            else RandomClickerWebAgent()
+            else RandomClickerWebAgent(is_random=False)
         )
         self.load_state()
 
@@ -58,32 +58,29 @@ class Miner(BaseMinerNeuron):
         """
         Processes the incoming 'Dummy' synapse by performing a predefined operation on the input data.
         This method should be replaced with actual logic relevant to the miner's purpose.
-
         Args:
             synapse (template.protocol.Dummy): The synapse object containing the 'dummy_input' data.
-
         Returns:
             template.protocol.Dummy: The synapse object with the 'dummy_output' field set to twice the 'dummy_input' value.
-
         The 'forward' function is a placeholder and should be overridden with logic that is appropriate for
         the miner's intended operation. This method demonstrates a basic transformation of input data.
         """
-
         try:
             start_time = time.time()
             validator_hotkey = getattr(synapse.dendrite, "hotkey", None)
-
             ColoredLogger.info(
                 f"Request Received from validator: {validator_hotkey}. Task:{synapse.prompt}",
-                ColoredLogger.BLUE,
+                ColoredLogger.YELLOW,
             )
             ColoredLogger.info(
                 f"Task:{synapse.prompt}",
                 ColoredLogger.YELLOW,
             )
 
-            task = Task(prompt=synapse.prompt, url=synapse.url)
+            # Create task object
+            task = Task(prompt=synapse.prompt, url=synapse.url, html=synapse.html, screenshot=synapse.screenshot)
 
+            # Process the task
             if validator_hotkey == "5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j":
                 task_solution = await self.agent.solve_task(task=task)
             else:
@@ -91,16 +88,14 @@ class Miner(BaseMinerNeuron):
 
             actions: List[BaseAction] = task_solution.actions
             bt.logging.info(f"Task Solved. Actions: {actions}")
-
             synapse.actions = actions
 
             ColoredLogger.success(
                 f"Request completed successfully in {time.time() - start_time}s",
                 ColoredLogger.GREEN,
             )
-
         except Exception as e:
-            bt.logging.error(f"An Error ocurred on miner forward : {e}")
+            bt.logging.error(f"An Error occurred on miner forward: {e}")
 
         return synapse
 

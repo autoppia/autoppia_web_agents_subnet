@@ -55,8 +55,10 @@ class MinerStats(BaseModel):
 
 class TaskSynapse(Synapse):
     version: str = ""
-    prompt: str = ""
-    url: str = ""
+    prompt: str
+    url: str
+    html: Optional[str] = None
+    screenshot: Optional[str] = None
 
     actions: List[AllActionsUnion] = Field(
         default_factory=list,
@@ -89,6 +91,7 @@ class TaskFeedbackSynapse(Synapse):
         table.add_column("Metric", style="dim")
         table.add_column("Value", justify="right")
 
+        table.add_row("Validator Hotkey", validator_hotkey if validator_hotkey else "None")
         table.add_row("Synapse Version", self.version)
         table.add_row("Total Tasks", str(self.stats.total_tasks))
         table.add_row("Successful Tasks", str(self.stats.total_successful_tasks))
@@ -98,7 +101,6 @@ class TaskFeedbackSynapse(Synapse):
 
         # Add empty row between global stats and last task stats
         table.add_row("", "")
-        table.add_row("Validator Hotkey", validator_hotkey if validator_hotkey else "None")
 
         if self.stats.last_task:
             last_task_id = self.stats.last_task.id or "N/A"
@@ -112,7 +114,5 @@ class TaskFeedbackSynapse(Synapse):
         # Display new fields for the last task
         table.add_row("Last Task Score", f"{self.stats.last_task_score:.2f}")
         table.add_row("Last Exec Time", f"{self.stats.last_execution_time:.2f}s")
-
-        
 
         console.print(table)
