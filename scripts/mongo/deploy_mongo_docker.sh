@@ -13,9 +13,7 @@
 #
 # Usage:
 #   ./deploy_mongo.sh
-
 set -euo pipefail
-
 # Custom configuration variables
 CONTAINER_NAME="mongodb"
 MONGO_VERSION="latest"         # Change this if you want a specific MongoDB version (e.g., 6.0, 5.0, etc.)
@@ -24,6 +22,11 @@ CONTAINER_PORT=27017           # Container port (default MongoDB port)
 MONGO_VOLUME="$HOME/mongodb_data"
 MONGO_INIT_FOLDER="$(pwd)/mongo-init"  # Folder containing initialization scripts
 DUMP_FOLDER="$(pwd)/data/mongo-dump"     # Folder containing a MongoDB dump
+
+# MongoDB security configuration
+MONGO_USERNAME="admin"
+MONGO_PASSWORD="$(openssl rand -base64 24)"  # Generate a secure random password
+MONGO_AUTH_DB="admin"
 
 handle_error() {
   echo -e "\e[31m[ERROR]\e[0m $1" >&2
@@ -83,10 +86,27 @@ prompt_and_clean_data() {
   fi
 }
 
+create_mongo_init_script() {
+  # Create a MongoDB initialization script to set up authentication
+  mkdir -p "$MONGO_INIT_FOLDER"
+  cat > "$MONGO_INIT_FOLDER/init-mongo.js" << EOF
+db = db.getSiblingDB('admin');
+db.createUser({
+  user: '${MONGO_USERNAME}',
+  pwd: '${MONGO_PASSWORD}',
+  roles: [{ role: 'root', db: 'admin' }]
+});
+EOF
+  echo "[INFO] Created MongoDB initialization script with authentication setup."
+  echo "[INFO] MongoDB username: ${MONGO_USERNAME}"
+  echo "[INFO] MongoDB password: ${MONGO_PASSWORD}"
+  echo "[INFO] Please save these credentials securely!"
+}
+
 start_mongo() {
   echo "[INFO] Starting a new MongoDB container using image 'mongo:${MONGO_VERSION}'..."
   prompt_and_clean_data
-  mkdir -p "$MONGO_INIT_FOLDER"
+  create_mongo_init_script
   
   # Mount dump folder if it exists
   if [ -d "$DUMP_FOLDER" ]; then
@@ -95,24 +115,33 @@ start_mongo() {
   else
     DUMP_VOLUME=""
   fi
-
-  docker run --name "${CONTAINER_NAME}" -d -p "$HOST_PORT":"$CONTAINER_PORT" \
+  
+  # Use 127.0.0.1 explicitly to bind only to localhost
+  docker run --name "${CONTAINER_NAME}" -d \
+    -p "127.0.0.1:$HOST_PORT:$CONTAINER_PORT" \
     -v "$MONGO_VOLUME":/data/db \
     -v "$MONGO_INIT_FOLDER":/docker-entrypoint-initdb.d \
     $DUMP_VOLUME \
-    mongo:"${MONGO_VERSION}" || handle_error "Failed to deploy MongoDB container"
+    --env MONGO_INITDB_ROOT_USERNAME="${MONGO_USERNAME}" \
+    --env MONGO_INITDB_ROOT_PASSWORD="${MONGO_PASSWORD}" \
+    mongo:"${MONGO_VERSION}" \
+    --bind_ip 127.0.0.1 \
+    --auth || handle_error "Failed to deploy MongoDB container"
 }
 
 verify_mongo() {
   echo "[INFO] Verifying MongoDB container status..."
   docker ps -f name=^/${CONTAINER_NAME}$ || handle_error "MongoDB container is not running."
-  echo "[INFO] MongoDB should be accessible at mongodb://localhost:$HOST_PORT"
+  echo "[INFO] MongoDB should be accessible at mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@localhost:$HOST_PORT"
 }
 
 restore_dump() {
   if [ -d "$DUMP_FOLDER" ]; then
+    echo "[INFO] Waiting for MongoDB to fully initialize..."
+    sleep 10
     echo "[INFO] Restoring MongoDB dump from /dump with --drop flag..."
-    docker exec "${CONTAINER_NAME}" mongorestore --drop /dump || handle_error "Failed to restore MongoDB dump"
+    docker exec "${CONTAINER_NAME}" mongorestore --authenticationDatabase admin \
+      -u "${MONGO_USERNAME}" -p "${MONGO_PASSWORD}" --drop /dump || handle_error "Failed to restore MongoDB dump"
   else
     echo "[INFO] No dump folder found. Skipping dump restore."
   fi
@@ -121,21 +150,28 @@ restore_dump() {
 check_mongo_connection() {
   echo "[INFO] Checking MongoDB connection by listing databases..."
   sleep 3
-  docker exec "${CONTAINER_NAME}" mongosh --eval "db.adminCommand('listDatabases')" || handle_error "Failed to list databases. MongoDB connection issue."
+  docker exec "${CONTAINER_NAME}" mongosh --authenticationDatabase admin \
+    -u "${MONGO_USERNAME}" -p "${MONGO_PASSWORD}" \
+    --eval "db.adminCommand('listDatabases')" || handle_error "Failed to list databases. MongoDB connection issue."
+}
+
+generate_connection_string() {
+  echo "[INFO] Your secure MongoDB connection string is:"
+  echo "mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@localhost:${HOST_PORT}/${MONGO_AUTH_DB}?authSource=admin"
+  echo "[INFO] Update your application configuration to use this connection string."
 }
 
 main() {
   check_command lsof
   check_docker_installed
-
   kill_local_mongo_process
   close_existing_container
   start_mongo
   verify_mongo
   restore_dump
   check_mongo_connection
-
-  echo "[INFO] MongoDB is running and connection is verified."
+  generate_connection_string
+  echo "[INFO] MongoDB is running securely and connection is verified."
 }
 
 main "$@"
