@@ -35,7 +35,6 @@ from autoppia_iwa.config.config import (
     USE_APIFIED_AGENT,
 )
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
-from autoppia_iwa_module.autoppia_iwa.src.shared.image_utils import print_task_screenshot_in_terminal
 
 
 class Miner(BaseMinerNeuron):
@@ -52,7 +51,7 @@ class Miner(BaseMinerNeuron):
         self.agent = (
             ApifiedWebAgent(name=AGENT_NAME, host=AGENT_HOST, port=AGENT_PORT)
             if USE_APIFIED_AGENT
-            else RandomClickerWebAgent()
+            else RandomClickerWebAgent(is_random=False)
         )
         self.load_state()
 
