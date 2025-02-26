@@ -8627,14 +8627,6 @@
         "documentation": {}
     },
     {
-        "label": "print_task_screenshot_in_terminal",
-        "importPath": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
-        "description": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
-        "documentation": {}
-    },
-    {
         "label": "BaseValidatorNeuron",
         "importPath": "autoppia_web_agents_subnet.base.validator",
         "description": "autoppia_web_agents_subnet.base.validator",
@@ -9076,7 +9068,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "USE_CACHED_TASKS = True  # Set to True to use cached tasks from JSON file\nTASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nOUTPUT_DIR = \"results\"  # Directory to store test results\nM = 100  # Set this to your desired number of copies\nNUMBER_OF_TASKS = 1\n# Initialize the app\napp = AppBootstrap()\n# Define agents for the stress test\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),",
+        "peekOfCode": "USE_CACHED_TASKS = True  # Set to True to use cached tasks from JSON file\nTASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nOUTPUT_DIR = \"results\"  # Directory to store test results\nM = 1  # Set this to your desired number of copies\nNUMBER_OF_TASKS = 1\n# Initialize the app\napp = AppBootstrap()\n# Define agents for the stress test\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -9085,7 +9077,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "TASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nOUTPUT_DIR = \"results\"  # Directory to store test results\nM = 100  # Set this to your desired number of copies\nNUMBER_OF_TASKS = 1\n# Initialize the app\napp = AppBootstrap()\n# Define agents for the stress test\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),\n    ApifiedWebAgent(name=\"browser-use\", host=\"localhost\", port=9000)",
+        "peekOfCode": "TASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nOUTPUT_DIR = \"results\"  # Directory to store test results\nM = 1  # Set this to your desired number of copies\nNUMBER_OF_TASKS = 1\n# Initialize the app\napp = AppBootstrap()\n# Define agents for the stress test\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),\n    ApifiedWebAgent(name=\"browser-use\", host=\"localhost\", port=9000)",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -9094,7 +9086,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "OUTPUT_DIR = \"results\"  # Directory to store test results\nM = 100  # Set this to your desired number of copies\nNUMBER_OF_TASKS = 1\n# Initialize the app\napp = AppBootstrap()\n# Define agents for the stress test\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),\n    ApifiedWebAgent(name=\"browser-use\", host=\"localhost\", port=9000)\n]",
+        "peekOfCode": "OUTPUT_DIR = \"results\"  # Directory to store test results\nM = 1  # Set this to your desired number of copies\nNUMBER_OF_TASKS = 1\n# Initialize the app\napp = AppBootstrap()\n# Define agents for the stress test\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),\n    ApifiedWebAgent(name=\"browser-use\", host=\"localhost\", port=9000)\n]",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -9103,7 +9095,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "M = 100  # Set this to your desired number of copies\nNUMBER_OF_TASKS = 1\n# Initialize the app\napp = AppBootstrap()\n# Define agents for the stress test\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),\n    ApifiedWebAgent(name=\"browser-use\", host=\"localhost\", port=9000)\n]\nclass TimingMetrics:",
+        "peekOfCode": "M = 1  # Set this to your desired number of copies\nNUMBER_OF_TASKS = 1\n# Initialize the app\napp = AppBootstrap()\n# Define agents for the stress test\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),\n    ApifiedWebAgent(name=\"browser-use\", host=\"localhost\", port=9000)\n]\nclass TimingMetrics:",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -10057,7 +10049,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.web_agents.random.agent",
         "description": "autoppia_iwa_module.autoppia_iwa.src.web_agents.random.agent",
-        "peekOfCode": "class RandomClickerWebAgent(BaseAgent):\n    \"\"\"\n    Web Agent that executes random actions within the screen dimensions.\n    \"\"\"\n    def __init__(self, name=\"Random clicker\"):\n        super().__init__(name=name)\n    async def solve_task(self, task: Task) -> TaskSolution:\n        \"\"\"\n        Generates a list of random click actions within the screen dimensions.\n        :param task: The task for which actions are being generated.",
+        "peekOfCode": "class RandomClickerWebAgent(BaseAgent):\n    \"\"\"\n    Web Agent that executes random actions within the screen dimensions.\n    \"\"\"\n    def __init__(self, name=\"Random clicker\", is_random:bool = True):\n        super().__init__(name=name)\n        self.is_random = is_random\n    async def solve_task(self, task: Task) -> TaskSolution:\n        \"\"\"\n        Generates a list of random click actions within the screen dimensions.",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.web_agents.random.agent",
         "documentation": {}
     },
