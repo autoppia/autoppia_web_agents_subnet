@@ -148,18 +148,7 @@ create_and_activate_venv() {
 }
 
 # ---------------------------------------------------------
-# Section 6: Upgrade PIP/Setuptools
-# Ensures pip/setuptools are up-to-date in the new venv.
-# ---------------------------------------------------------
-upgrade_pip_setuptools() {
-  echo -e "\e[34m[INFO]\e[0m Upgrading pip and setuptools..."
-  python3.11 -m ensurepip
-  uv pip install --upgrade pip setuptools || handle_error "Failed to upgrade pip and setuptools"
-  success_msg "pip and setuptools upgraded successfully."
-}
-
-# ---------------------------------------------------------
-# Section 7: Install Python Requirements
+# Section 6: Install Python Requirements
 # Installs project dependencies from requirements.txt.
 # ---------------------------------------------------------
 install_python_requirements() {
@@ -171,16 +160,32 @@ install_python_requirements() {
 }
 
 # ---------------------------------------------------------
+# Section 7: Upgrade PIP/Setuptools
+# Ensures pip/setuptools are up-to-date in the new venv.
+# ---------------------------------------------------------
+upgrade_pip_setuptools() {
+  echo -e "\e[34m[INFO]\e[0m Upgrading pip and setuptools..."
+  python3.11 -m ensurepip
+  uv pip install --upgrade pip setuptools || handle_error "Failed to upgrade pip and setuptools"
+  success_msg "pip and setuptools upgraded successfully."
+}
+
+# ---------------------------------------------------------
 # Section 8: Install autoppia_iwa
 # Installs the submodule in editable mode.
 # ---------------------------------------------------------
 install_autoppia_iwa() {
   echo -e "\e[34m[INFO]\e[0m Installing autoppia_iwa package..."
+  # Explicitly install required dependencies to avoid warnings
+  uv pip install loguru numpy pydantic pytest rich
+  
   if cd autoppia_iwa_module && uv pip install -e . && cd ..; then
     success_msg "autoppia_iwa_module package installed successfully."
   else
     handle_error "Failed to install autoppia_iwa package"
   fi
+  
+  # Install the main package in editable mode
   uv pip install -e .
 }
 
@@ -208,8 +213,12 @@ main() {
   python3.11 --version || handle_error "Python 3.11 not found"
 
   create_and_activate_venv
-  upgrade_pip_setuptools
+  
+  # Install requirements first, then upgrade pip
   install_python_requirements
+  upgrade_pip_setuptools
+  
+  # Install packages
   install_autoppia_iwa
   install_bittensor
 }
