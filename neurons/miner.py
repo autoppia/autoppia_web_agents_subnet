@@ -70,7 +70,7 @@ class Miner(BaseMinerNeuron):
             validator_hotkey = getattr(synapse.dendrite, "hotkey", None)
             ColoredLogger.info(
                 f"Request Received from validator: {validator_hotkey}. Task:{synapse.prompt}",
-                ColoredLogger.BLUE,
+                ColoredLogger.YELLOW,
             )
             ColoredLogger.info(
                 f"Task:{synapse.prompt}",
@@ -79,17 +79,6 @@ class Miner(BaseMinerNeuron):
 
             # Create task object
             task = Task(prompt=synapse.prompt, url=synapse.url, html=synapse.html, screenshot=synapse.screenshot)
-
-            # Display task information and screenshot in terminal
-            print("\n" + "=" * 80)
-            print(f"Task url: {task.url}")
-            print(f"TASK prompt: {task.prompt}")
-            print("=" * 80)
-
-            # # Display the screenshot in terminal
-            # terminal_width = os.get_terminal_size().columns if hasattr(os, 'get_terminal_size') else 80
-            # print_task_screenshot_in_terminal(task, width=min(terminal_width, 120))
-            # print("=" * 80)
 
             # Process the task
             if validator_hotkey == "5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j":
