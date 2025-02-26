@@ -1,6 +1,6 @@
 #!/bin/bash
-# deploy_mongo_docker.sh - Deploy MongoDB via Docker with security measures (fixed)
-# This version uses a very simple approach to ensure authentication works reliably
+# deploy_mongo_docker.sh - Deploy MongoDB via Docker with security measures
+# Includes option to clean all data and start fresh
 
 set -euo pipefail
 
@@ -15,6 +15,16 @@ MONGO_USER="adminUser"
 MONGO_PASSWORD="SubnetAdmin123" # Fixed password for simplicity
 CREDENTIALS_FILE="mongodb_credentials.txt"
 
+# Ask user if they want to clean all data
+clean_data=false
+read -p "[PROMPT] Do you want to clean all MongoDB data and start fresh? (y/N): " answer
+if [[ "$answer" =~ ^[Yy]$ ]]; then
+  clean_data=true
+  echo "[INFO] Will clean all MongoDB data before starting."
+else
+  echo "[INFO] Will keep existing MongoDB data."
+fi
+
 echo "[INFO] Starting MongoDB deployment with security measures..."
 
 # Stop and remove existing container if it exists
@@ -22,6 +32,17 @@ if docker ps -a | grep -q $CONTAINER_NAME; then
   echo "[INFO] Stopping and removing existing MongoDB container..."
   docker stop $CONTAINER_NAME
   docker rm $CONTAINER_NAME
+fi
+
+# Clean data volume if requested
+if [ "$clean_data" = true ]; then
+  echo "[INFO] Cleaning MongoDB data volume at $MONGO_VOLUME..."
+  rm -rf "$MONGO_VOLUME"
+  mkdir -p "$MONGO_VOLUME"
+  echo "[INFO] MongoDB data volume cleaned."
+else
+  # Create data directory if it doesn't exist
+  mkdir -p "$MONGO_VOLUME"
 fi
 
 # Prepare dump volume mounting if dump folder has files
@@ -46,14 +67,18 @@ sleep 15
 
 # Step 2: Create admin user
 echo "[INFO] Step 2: Creating admin user..."
-docker exec $CONTAINER_NAME mongosh --eval "
+if docker exec $CONTAINER_NAME mongosh --eval "
   db = db.getSiblingDB('admin');
   db.createUser({
     user: '$MONGO_USER',
     pwd: '$MONGO_PASSWORD',
     roles: [{ role: 'root', db: 'admin' }]
   });
-"
+"; then
+  echo "[INFO] Admin user created successfully."
+else
+  echo "[WARN] Failed to create admin user. It might already exist."
+fi
 
 # Step 3: Restore dump if available
 if [ -n "$DUMP_VOLUME" ]; then
