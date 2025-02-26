@@ -1,5 +1,5 @@
 #!/bin/bash
-# install_mongodb.sh - MongoDB installation for Ubuntu/Debian systems
+# install_mongodb.sh - MongoDB installation for Ubuntu/Debian systems. Secured
 
 echo "🔵 Installing MongoDB..."
 
