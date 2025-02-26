@@ -1,6 +1,6 @@
 #!/bin/bash
-# deploy_mongo_docker.sh - Deploy MongoDB via Docker with security measures
-# Includes option to clean all data and start fresh
+# deploy_mongo_docker.sh - Deploy MongoDB via Docker with enhanced security
+# Automatically generates a secure random password and updates .env file
 
 set -euo pipefail
 
@@ -12,8 +12,9 @@ CONTAINER_PORT=27017
 MONGO_VOLUME="$HOME/mongodb_data"
 DUMP_FOLDER="$(pwd)/data/mongo-dump"
 MONGO_USER="adminUser"
-MONGO_PASSWORD="SubnetAdmin123" # Fixed password for simplicity
-CREDENTIALS_FILE="mongodb_credentials.txt"
+# Generate a secure random password (32 characters)
+MONGO_PASSWORD=$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32)
+ENV_FILE=".env"
 
 # Ask user if they want to clean all data
 clean_data=false
@@ -65,8 +66,8 @@ docker run --name $CONTAINER_NAME -d \
 echo "[INFO] Waiting for MongoDB to initialize (15 seconds)..."
 sleep 15
 
-# Step 2: Create admin user
-echo "[INFO] Step 2: Creating admin user..."
+# Step 2: Create admin user with secure random password
+echo "[INFO] Step 2: Creating admin user with secure random password..."
 if docker exec $CONTAINER_NAME mongosh --eval "
   db = db.getSiblingDB('admin');
   db.createUser({
@@ -75,9 +76,13 @@ if docker exec $CONTAINER_NAME mongosh --eval "
     roles: [{ role: 'root', db: 'admin' }]
   });
 "; then
-  echo "[INFO] Admin user created successfully."
+  echo "[INFO] Admin user created successfully with secure random password."
 else
   echo "[WARN] Failed to create admin user. It might already exist."
+  if [ "$clean_data" = false ]; then
+    echo "[WARN] Your existing MongoDB may have a different password."
+    echo "[WARN] If connection fails, rerun this script with clean data option."
+  fi
 fi
 
 # Step 3: Restore dump if available
@@ -113,7 +118,7 @@ RETRY_COUNT=0
 CONNECTION_SUCCESS=false
 
 while [ $RETRY_COUNT -lt $MAX_RETRY ] && [ "$CONNECTION_SUCCESS" = false ]; do
-  if docker exec $CONTAINER_NAME mongosh --quiet --eval "db.runCommand({ping:1})" -u "$MONGO_USER" -p "$MONGO_PASSWORD" --authenticationDatabase admin; then
+  if docker exec $CONTAINER_NAME mongosh --quiet --eval "db.runCommand({ping:1})" -u "$MONGO_USER" -p "$MONGO_PASSWORD" --authenticationDatabase admin &>/dev/null; then
     echo "[INFO] MongoDB connection verified successfully with authentication."
     CONNECTION_SUCCESS=true
   else
@@ -128,20 +133,34 @@ while [ $RETRY_COUNT -lt $MAX_RETRY ] && [ "$CONNECTION_SUCCESS" = false ]; do
   fi
 done
 
-# Save connection details to a file
-CONNECTION_STRING="mongodb://$MONGO_USER:$MONGO_PASSWORD@localhost:$HOST_PORT/admin?authSource=admin"
-echo "MongoDB connection string: $CONNECTION_STRING" > $CREDENTIALS_FILE
-echo "User: $MONGO_USER" >> $CREDENTIALS_FILE
-echo "Password: $MONGO_PASSWORD" >> $CREDENTIALS_FILE
-chmod 600 $CREDENTIALS_FILE  # Restrict file permissions for security
+# Create connection string with URL encoding for special characters in password
+ENCODED_PASSWORD=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$MONGO_PASSWORD'))")
+CONNECTION_STRING="mongodb://$MONGO_USER:$ENCODED_PASSWORD@localhost:$HOST_PORT/admin?authSource=admin"
 
-echo "[INFO] MongoDB deployed successfully!"
-echo "[INFO] Connection credentials saved to $CREDENTIALS_FILE"
+# Update .env file with new connection string if it exists
+if [ -f "$ENV_FILE" ]; then
+  echo "[INFO] Updating .env file with MongoDB connection string..."
+  # Check if MONGODB_URL exists in .env file
+  if grep -q "MONGODB_URL=" "$ENV_FILE"; then
+    # Replace existing MONGODB_URL line
+    sed -i "s|MONGODB_URL=.*|MONGODB_URL=\"$CONNECTION_STRING\"|" "$ENV_FILE"
+  else
+    # Add MONGODB_URL line at the end
+    echo "MONGODB_URL=\"$CONNECTION_STRING\"" >> "$ENV_FILE"
+  fi
+  echo "[INFO] .env file updated successfully."
+else
+  echo "[WARN] .env file not found. Creating a new one with MongoDB connection string."
+  echo "MONGODB_URL=\"$CONNECTION_STRING\"" > "$ENV_FILE"
+fi
+
+echo "[INFO] MongoDB deployed successfully with secure configuration!"
+echo "[INFO] Your MongoDB is now accessible only from localhost and requires authentication."
+echo "[INFO] Your connection string has been automatically added to the .env file."
 echo ""
 echo "================================================================"
-echo "IMPORTANT: Update your .env file with the following line:"
-echo "MONGODB_URL=\"$CONNECTION_STRING\""
+echo "IMPORTANT: Your MongoDB is now secured with a randomly generated"
+echo "password that has been stored in your .env file. You don't need"
+echo "to know the actual password since the connection string is all"
+echo "your application needs."
 echo "================================================================"
-echo ""
-echo "You can test the connection manually with:"
-echo "docker exec -it $CONTAINER_NAME mongosh -u \"$MONGO_USER\" -p \"$MONGO_PASSWORD\" --authenticationDatabase admin"
