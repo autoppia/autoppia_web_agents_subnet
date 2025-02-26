@@ -9967,34 +9967,16 @@
         "kind": 2,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
         "description": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
-        "peekOfCode": "def print_task_screenshot_in_terminal(task, width=80):\n    \"\"\"\n    Prints a Task's screenshot image in the terminal as ASCII art.\n    Args:\n        task (Task): The task containing a base64 encoded screenshot\n        width (int, optional): Width of the terminal output in characters. Defaults to 80.\n    Returns:\n        bool: True if successful, False if there was an error.\n    \"\"\"\n    if not task.screenshot:",
+        "peekOfCode": "def print_task_screenshot_in_terminal(task, width=80):\n    \"\"\"\n    Prints a Task's screenshot image in the terminal as simple ASCII art.\n    Args:\n        task (Task): The task containing a base64 encoded screenshot\n        width (int): Width of the ASCII art in characters. Defaults to 80.\n    Returns:\n        bool: True if successful, False if there was an error.\n    \"\"\"\n    if not task.screenshot:",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
         "documentation": {}
     },
     {
-        "label": "has_terminal_image_support",
+        "label": "simple_ascii_art",
         "kind": 2,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
         "description": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
-        "peekOfCode": "def has_terminal_image_support():\n    \"\"\"Check if terminal supports direct image display via libraries like iTerm2\"\"\"\n    try:\n        # Check for iterm2 or kitty terminal\n        import importlib.util\n        if importlib.util.find_spec(\"iterm2_tools\") is not None:\n            return True\n        if importlib.util.find_spec(\"kitty.graphics\") is not None:\n            return True\n        return False",
-        "detail": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
-        "documentation": {}
-    },
-    {
-        "label": "display_with_terminal_image",
-        "kind": 2,
-        "importPath": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
-        "description": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
-        "peekOfCode": "def display_with_terminal_image(image):\n    \"\"\"Display image in terminal using appropriate tools if available\"\"\"\n    try:\n        import importlib\n        # Try iterm2\n        if importlib.util.find_spec(\"iterm2_tools\") is not None:\n            from iterm2_tools.images import display_image_bytes\n            with io.BytesIO() as buffer:\n                image.save(buffer, format=\"PNG\")\n                display_image_bytes(buffer.getvalue())",
-        "detail": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
-        "documentation": {}
-    },
-    {
-        "label": "print_as_ascii_art",
-        "kind": 2,
-        "importPath": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
-        "description": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
-        "peekOfCode": "def print_as_ascii_art(image, width=80):\n    \"\"\"Convert and print image as ASCII art\"\"\"\n    try:\n        # Ensure width is positive\n        width = max(10, min(width, 200))\n        # Resize the image to fit terminal width\n        height = max(1, int(image.height * width / image.width / 2))  # Adjust for character aspect ratio\n        image = image.resize((width, height))\n        # Convert to grayscale for ASCII art\n        image = image.convert(\"L\")",
+        "peekOfCode": "def simple_ascii_art(image, width=80):\n    \"\"\"Convert and print image as ASCII art with no terminal operations\"\"\"\n    try:\n        # Hard-coded safe width\n        width = min(width, 100)\n        # Calculate height with aspect ratio, with safety bounds\n        aspect_ratio = image.height / max(1, image.width)\n        height = max(1, int(width * aspect_ratio * 0.5))\n        # Resize and convert to grayscale safely\n        try:",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.shared.image_utils",
         "documentation": {}
     },
