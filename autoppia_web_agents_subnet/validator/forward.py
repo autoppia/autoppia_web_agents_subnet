@@ -86,7 +86,7 @@ async def generate_tasks_for_web_project(demo_web_project: WebProject) -> List[T
     return tasks_generated
 
 
-async def process_tasks(validator, tasks_generated: List[Task]) -> None:
+async def process_tasks(validator, web_project, tasks_generated: List[Task]) -> None:
     """
     Iterates over each task, sends it to the miners, evaluates responses, updates scores,
     and sends feedback. Also manages timing and logging.
@@ -120,7 +120,7 @@ async def process_tasks(validator, tasks_generated: List[Task]) -> None:
             task, responses, miner_uids
         )
         rewards = await compute_rewards(
-            validator, task, task_solutions, execution_times
+            validator, web_project, task, task_solutions, execution_times
         )
         bt.logging.info(f"Miners Final Rewards: {rewards}")
         # Update miners' scores
@@ -215,6 +215,7 @@ def collect_task_solutions(
 
 async def compute_rewards(
     validator,
+    web_project:WebProject,
     task:Task,
     task_solutions: List[TaskSolution],
     execution_times: List[float],
@@ -225,6 +226,7 @@ async def compute_rewards(
     evaluation_start_time = time.time()
     rewards: np.ndarray = await get_rewards(
         validator,
+        web_project=web_project,
         task=task, 
         task_solutions=task_solutions,
         execution_times=execution_times,
@@ -373,7 +375,7 @@ async def forward(self) -> None:
             bt.logging.warning("No tasks generated, skipping forward step.")
             return
         # 3. Process each task
-        await process_tasks(self, tasks_generated)
+        await process_tasks(self, demo_web_project, tasks_generated)
         bt.logging.success("Forward step completed successfully.")
         bt.logging.info(f"Sleeping for {FORWARD_SLEEP_SECONDS}s....")
         await asyncio.sleep(FORWARD_SLEEP_SECONDS)
