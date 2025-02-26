@@ -244,6 +244,14 @@
         "documentation": {}
     },
     {
+        "label": "List",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
         "label": "Dict",
         "importPath": "typing",
         "description": "typing",
@@ -452,6 +460,14 @@
         "documentation": {}
     },
     {
+        "label": "Optional",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
         "label": "List",
         "importPath": "typing",
         "description": "typing",
@@ -477,6 +493,14 @@
     },
     {
         "label": "Tuple",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Any",
         "importPath": "typing",
         "description": "typing",
         "isExtraImport": true,
@@ -1141,6 +1165,14 @@
         "documentation": {}
     },
     {
+        "label": "TaskGenerationPipeline",
+        "importPath": "autoppia_iwa.src.data_generation.application.tasks_generation_pipeline",
+        "description": "autoppia_iwa.src.data_generation.application.tasks_generation_pipeline",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.data_generation.application.tasks_generation_pipeline",
+        "documentation": {}
+    },
+    {
         "label": "TaskGenerationConfig",
         "importPath": "autoppia_iwa.src.data_generation.domain.classes",
         "description": "autoppia_iwa.src.data_generation.domain.classes",
@@ -1158,6 +1190,22 @@
     },
     {
         "label": "TasksGenerationOutput",
+        "importPath": "autoppia_iwa.src.data_generation.domain.classes",
+        "description": "autoppia_iwa.src.data_generation.domain.classes",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.data_generation.domain.classes",
+        "documentation": {}
+    },
+    {
+        "label": "TaskGenerationConfig",
+        "importPath": "autoppia_iwa.src.data_generation.domain.classes",
+        "description": "autoppia_iwa.src.data_generation.domain.classes",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.data_generation.domain.classes",
+        "documentation": {}
+    },
+    {
+        "label": "Task",
         "importPath": "autoppia_iwa.src.data_generation.domain.classes",
         "description": "autoppia_iwa.src.data_generation.domain.classes",
         "isExtraImport": true,
@@ -1533,6 +1581,14 @@
         "documentation": {}
     },
     {
+        "label": "EvaluationResult",
+        "importPath": "autoppia_iwa.src.evaluation.classes",
+        "description": "autoppia_iwa.src.evaluation.classes",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.evaluation.classes",
+        "documentation": {}
+    },
+    {
         "label": "TestResult",
         "importPath": "autoppia_iwa.src.evaluation.classes",
         "description": "autoppia_iwa.src.evaluation.classes",
@@ -1754,6 +1810,30 @@
         "description": "autoppia_iwa.src.evaluation.evaluator.evaluator",
         "isExtraImport": true,
         "detail": "autoppia_iwa.src.evaluation.evaluator.evaluator",
+        "documentation": {}
+    },
+    {
+        "label": "ConcurrentEvaluator",
+        "importPath": "autoppia_iwa.src.evaluation.evaluator.evaluator",
+        "description": "autoppia_iwa.src.evaluation.evaluator.evaluator",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.evaluation.evaluator.evaluator",
+        "documentation": {}
+    },
+    {
+        "label": "EvaluatorConfig",
+        "importPath": "autoppia_iwa.src.evaluation.evaluator.evaluator",
+        "description": "autoppia_iwa.src.evaluation.evaluator.evaluator",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.evaluation.evaluator.evaluator",
+        "documentation": {}
+    },
+    {
+        "label": "BaseAction",
+        "importPath": "autoppia_iwa.src.execution.actions.base",
+        "description": "autoppia_iwa.src.execution.actions.base",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.execution.actions.base",
         "documentation": {}
     },
     {
@@ -1917,6 +1997,14 @@
         "documentation": {}
     },
     {
+        "label": "BaseAgent",
+        "importPath": "autoppia_iwa.src.web_agents.base",
+        "description": "autoppia_iwa.src.web_agents.base",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.web_agents.base",
+        "documentation": {}
+    },
+    {
         "label": "IWebAgent",
         "importPath": "autoppia_iwa.src.web_agents.base",
         "description": "autoppia_iwa.src.web_agents.base",
@@ -2045,11 +2133,11 @@
         "documentation": {}
     },
     {
-        "label": "RandomClickerWebAgent",
-        "importPath": "autoppia_iwa.src.web_agents.random.agent",
-        "description": "autoppia_iwa.src.web_agents.random.agent",
+        "label": "TaskSolution",
+        "importPath": "autoppia_iwa.src.web_agents.classes",
+        "description": "autoppia_iwa.src.web_agents.classes",
         "isExtraImport": true,
-        "detail": "autoppia_iwa.src.web_agents.random.agent",
+        "detail": "autoppia_iwa.src.web_agents.classes",
         "documentation": {}
     },
     {
@@ -2077,11 +2165,19 @@
         "documentation": {}
     },
     {
-        "label": "ApifiedWebAgent",
-        "importPath": "autoppia_iwa.src.web_agents.apified_agent",
-        "description": "autoppia_iwa.src.web_agents.apified_agent",
+        "label": "RandomClickerWebAgent",
+        "importPath": "autoppia_iwa.src.web_agents.random.agent",
+        "description": "autoppia_iwa.src.web_agents.random.agent",
         "isExtraImport": true,
-        "detail": "autoppia_iwa.src.web_agents.apified_agent",
+        "detail": "autoppia_iwa.src.web_agents.random.agent",
+        "documentation": {}
+    },
+    {
+        "label": "RandomClickerWebAgent",
+        "importPath": "autoppia_iwa.src.web_agents.random.agent",
+        "description": "autoppia_iwa.src.web_agents.random.agent",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.web_agents.random.agent",
         "documentation": {}
     },
     {
@@ -2157,11 +2253,19 @@
         "documentation": {}
     },
     {
-        "label": "AppBootstrap",
-        "importPath": "autoppia_iwa.src.bootstrap",
-        "description": "autoppia_iwa.src.bootstrap",
+        "label": "ApifiedWebAgent",
+        "importPath": "autoppia_iwa.src.web_agents.apified_agent",
+        "description": "autoppia_iwa.src.web_agents.apified_agent",
         "isExtraImport": true,
-        "detail": "autoppia_iwa.src.bootstrap",
+        "detail": "autoppia_iwa.src.web_agents.apified_agent",
+        "documentation": {}
+    },
+    {
+        "label": "ApifiedWebAgent",
+        "importPath": "autoppia_iwa.src.web_agents.apified_agent",
+        "description": "autoppia_iwa.src.web_agents.apified_agent",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.web_agents.apified_agent",
         "documentation": {}
     },
     {
@@ -2314,6 +2418,30 @@
         "description": "autoppia_iwa.src.bootstrap",
         "isExtraImport": true,
         "detail": "autoppia_iwa.src.bootstrap",
+        "documentation": {}
+    },
+    {
+        "label": "AppBootstrap",
+        "importPath": "autoppia_iwa.src.bootstrap",
+        "description": "autoppia_iwa.src.bootstrap",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.bootstrap",
+        "documentation": {}
+    },
+    {
+        "label": "AppBootstrap",
+        "importPath": "autoppia_iwa.src.bootstrap",
+        "description": "autoppia_iwa.src.bootstrap",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.bootstrap",
+        "documentation": {}
+    },
+    {
+        "label": "WebProject",
+        "importPath": "autoppia_iwa.src.demo_webs.classes",
+        "description": "autoppia_iwa.src.demo_webs.classes",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.demo_webs.classes",
         "documentation": {}
     },
     {
@@ -2366,6 +2494,14 @@
     },
     {
         "label": "BackendEvent",
+        "importPath": "autoppia_iwa.src.demo_webs.classes",
+        "description": "autoppia_iwa.src.demo_webs.classes",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.demo_webs.classes",
+        "documentation": {}
+    },
+    {
+        "label": "WebProject",
         "importPath": "autoppia_iwa.src.demo_webs.classes",
         "description": "autoppia_iwa.src.demo_webs.classes",
         "isExtraImport": true,
@@ -2429,6 +2565,14 @@
         "documentation": {}
     },
     {
+        "label": "initialize_demo_webs_projects",
+        "importPath": "autoppia_iwa.src.demo_webs.config",
+        "description": "autoppia_iwa.src.demo_webs.config",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.demo_webs.config",
+        "documentation": {}
+    },
+    {
         "label": "initialize_test_demo_web_projects",
         "importPath": "autoppia_iwa.src.demo_webs.config",
         "description": "autoppia_iwa.src.demo_webs.config",
@@ -2541,6 +2685,22 @@
         "documentation": {}
     },
     {
+        "label": "DIContainer",
+        "importPath": "autoppia_iwa.src.di_container",
+        "description": "autoppia_iwa.src.di_container",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.di_container",
+        "documentation": {}
+    },
+    {
+        "label": "TestGenerationPipeline",
+        "importPath": "autoppia_iwa.src.data_generation.application.tests.test_generation_pipeline",
+        "description": "autoppia_iwa.src.data_generation.application.tests.test_generation_pipeline",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.data_generation.application.tests.test_generation_pipeline",
+        "documentation": {}
+    },
+    {
         "label": "TestGenerationPipeline",
         "importPath": "autoppia_iwa.src.data_generation.application.tests.test_generation_pipeline",
         "description": "autoppia_iwa.src.data_generation.application.tests.test_generation_pipeline",
@@ -2562,6 +2722,153 @@
         "description": "autoppia_iwa.src.data_generation.application.tests.test_generation_pipeline",
         "isExtraImport": true,
         "detail": "autoppia_iwa.src.data_generation.application.tests.test_generation_pipeline",
+        "documentation": {}
+    },
+    {
+        "label": "time",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "time",
+        "description": "time",
+        "detail": "time",
+        "documentation": {}
+    },
+    {
+        "label": "json",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "json",
+        "description": "json",
+        "detail": "json",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "datetime",
+        "description": "datetime",
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "date",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "timedelta",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
         "documentation": {}
     },
     {
@@ -2652,15 +2959,6 @@
         "description": "dependency_injector.wiring",
         "isExtraImport": true,
         "detail": "dependency_injector.wiring",
-        "documentation": {}
-    },
-    {
-        "label": "json",
-        "kind": 6,
-        "isExtraImport": true,
-        "importPath": "json",
-        "description": "json",
-        "detail": "json",
         "documentation": {}
     },
     {
@@ -3136,6 +3434,14 @@
         "documentation": {}
     },
     {
+        "label": "logger",
+        "importPath": "loguru",
+        "description": "loguru",
+        "isExtraImport": true,
+        "detail": "loguru",
+        "documentation": {}
+    },
+    {
         "label": "BaseTaskTest",
         "importPath": "autoppia_iwa.src.data_generation.domain.tests_classes",
         "description": "autoppia_iwa.src.data_generation.domain.tests_classes",
@@ -3350,135 +3656,6 @@
         "importPath": "re",
         "description": "re",
         "detail": "re",
-        "documentation": {}
-    },
-    {
-        "label": "datetime",
-        "kind": 6,
-        "isExtraImport": true,
-        "importPath": "datetime",
-        "description": "datetime",
-        "detail": "datetime",
-        "documentation": {}
-    },
-    {
-        "label": "datetime",
-        "importPath": "datetime",
-        "description": "datetime",
-        "isExtraImport": true,
-        "detail": "datetime",
-        "documentation": {}
-    },
-    {
-        "label": "datetime",
-        "importPath": "datetime",
-        "description": "datetime",
-        "isExtraImport": true,
-        "detail": "datetime",
-        "documentation": {}
-    },
-    {
-        "label": "datetime",
-        "importPath": "datetime",
-        "description": "datetime",
-        "isExtraImport": true,
-        "detail": "datetime",
-        "documentation": {}
-    },
-    {
-        "label": "datetime",
-        "importPath": "datetime",
-        "description": "datetime",
-        "isExtraImport": true,
-        "detail": "datetime",
-        "documentation": {}
-    },
-    {
-        "label": "datetime",
-        "importPath": "datetime",
-        "description": "datetime",
-        "isExtraImport": true,
-        "detail": "datetime",
-        "documentation": {}
-    },
-    {
-        "label": "datetime",
-        "importPath": "datetime",
-        "description": "datetime",
-        "isExtraImport": true,
-        "detail": "datetime",
-        "documentation": {}
-    },
-    {
-        "label": "datetime",
-        "importPath": "datetime",
-        "description": "datetime",
-        "isExtraImport": true,
-        "detail": "datetime",
-        "documentation": {}
-    },
-    {
-        "label": "datetime",
-        "importPath": "datetime",
-        "description": "datetime",
-        "isExtraImport": true,
-        "detail": "datetime",
-        "documentation": {}
-    },
-    {
-        "label": "date",
-        "importPath": "datetime",
-        "description": "datetime",
-        "isExtraImport": true,
-        "detail": "datetime",
-        "documentation": {}
-    },
-    {
-        "label": "datetime",
-        "importPath": "datetime",
-        "description": "datetime",
-        "isExtraImport": true,
-        "detail": "datetime",
-        "documentation": {}
-    },
-    {
-        "label": "timedelta",
-        "importPath": "datetime",
-        "description": "datetime",
-        "isExtraImport": true,
-        "detail": "datetime",
-        "documentation": {}
-    },
-    {
-        "label": "datetime",
-        "importPath": "datetime",
-        "description": "datetime",
-        "isExtraImport": true,
-        "detail": "datetime",
-        "documentation": {}
-    },
-    {
-        "label": "datetime",
-        "importPath": "datetime",
-        "description": "datetime",
-        "isExtraImport": true,
-        "detail": "datetime",
-        "documentation": {}
-    },
-    {
-        "label": "datetime",
-        "importPath": "datetime",
-        "description": "datetime",
-        "isExtraImport": true,
-        "detail": "datetime",
-        "documentation": {}
-    },
-    {
-        "label": "DomainAnalysis",
-        "importPath": "autoppia_iwa.src.web_analysis.domain.analysis_classes",
-        "description": "autoppia_iwa.src.web_analysis.domain.analysis_classes",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.web_analysis.domain.analysis_classes",
         "documentation": {}
     },
     {
@@ -4124,6 +4301,15 @@
         "documentation": {}
     },
     {
+        "label": "aiohttp",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "aiohttp",
+        "description": "aiohttp",
+        "detail": "aiohttp",
+        "documentation": {}
+    },
+    {
         "label": "urlparse",
         "importPath": "urllib.parse",
         "description": "urllib.parse",
@@ -4156,29 +4342,11 @@
         "documentation": {}
     },
     {
-        "label": "aiohttp",
-        "kind": 6,
+        "label": "ClientError",
+        "importPath": "aiohttp.client_exceptions",
+        "description": "aiohttp.client_exceptions",
         "isExtraImport": true,
-        "importPath": "aiohttp",
-        "description": "aiohttp",
-        "detail": "aiohttp",
-        "documentation": {}
-    },
-    {
-        "label": "requests",
-        "kind": 6,
-        "isExtraImport": true,
-        "importPath": "requests",
-        "description": "requests",
-        "detail": "requests",
-        "documentation": {}
-    },
-    {
-        "label": "RequestException",
-        "importPath": "requests.exceptions",
-        "description": "requests.exceptions",
-        "isExtraImport": true,
-        "detail": "requests.exceptions",
+        "detail": "aiohttp.client_exceptions",
         "documentation": {}
     },
     {
@@ -4188,15 +4356,6 @@
         "importPath": "hashlib",
         "description": "hashlib",
         "detail": "hashlib",
-        "documentation": {}
-    },
-    {
-        "label": "time",
-        "kind": 6,
-        "isExtraImport": true,
-        "importPath": "time",
-        "description": "time",
-        "detail": "time",
         "documentation": {}
     },
     {
@@ -4723,6 +4882,15 @@
         "importPath": "networkx",
         "description": "networkx",
         "detail": "networkx",
+        "documentation": {}
+    },
+    {
+        "label": "requests",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "requests",
+        "description": "requests",
+        "detail": "requests",
         "documentation": {}
     },
     {
@@ -8740,7 +8908,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.benchmark",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.benchmark",
-        "peekOfCode": "app = AppBootstrap()\nAGENTS: List[BaseAgent] = [RandomClickerWebAgent(name=\"Random-clicker\"), ApifiedWebAgent(name=\"Text-External-Agent\", host=\"localhost\", port=9000)]\niterations = 1  # total_tasks = tasks * iterations\nasync def evaluate_project_for_agent(agent, demo_project, tasks, results):\n    \"\"\"\n    Evaluate all tasks for a given demo project and agent.\n    For each task, the agent will attempt to solve it and the evaluation score\n    will be stored both in the agent's global scores and in the project-specific scores.\n    \"\"\"\n    # Initialize project entry in results if not already present.",
+        "peekOfCode": "app = AppBootstrap()\nAGENTS: List[BaseAgent] = [RandomClickerWebAgent(name=\"Random-clicker\"), ApifiedWebAgent(name=\"Text-External-Agent\", host=\"localhost\", port=9000)]\niterations = 1  # total_tasks = tasks * iterations\nNUM_OF_URLS = 1\nasync def evaluate_project_for_agent(agent, demo_project, tasks, results):\n    \"\"\"\n    Evaluate all tasks for a given demo project and agent.\n    For each task, the agent will attempt to solve it and the evaluation score\n    will be stored both in the agent's global scores and in the project-specific scores.\n    \"\"\"",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.benchmark",
         "documentation": {}
     },
@@ -8749,17 +8917,17 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.benchmark",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.benchmark",
-        "peekOfCode": "iterations = 1  # total_tasks = tasks * iterations\nasync def evaluate_project_for_agent(agent, demo_project, tasks, results):\n    \"\"\"\n    Evaluate all tasks for a given demo project and agent.\n    For each task, the agent will attempt to solve it and the evaluation score\n    will be stored both in the agent's global scores and in the project-specific scores.\n    \"\"\"\n    # Initialize project entry in results if not already present.\n    if demo_project.name not in results[agent.id][\"projects\"]:\n        results[agent.id][\"projects\"][demo_project.name] = []",
+        "peekOfCode": "iterations = 1  # total_tasks = tasks * iterations\nNUM_OF_URLS = 1\nasync def evaluate_project_for_agent(agent, demo_project, tasks, results):\n    \"\"\"\n    Evaluate all tasks for a given demo project and agent.\n    For each task, the agent will attempt to solve it and the evaluation score\n    will be stored both in the agent's global scores and in the project-specific scores.\n    \"\"\"\n    # Initialize project entry in results if not already present.\n    if demo_project.name not in results[agent.id][\"projects\"]:",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.benchmark",
         "documentation": {}
     },
     {
-        "label": "generate_tasks",
-        "kind": 2,
-        "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.evaluation",
-        "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.evaluation",
-        "peekOfCode": "def generate_tasks(num_tasks: int = 3):\n    test_projects = initialize_test_demo_web_projects()\n    web_project = test_projects[0]\n    config = TaskGenerationConfig(\n        save_task_in_db=False,\n        save_web_analysis_in_db=True,\n        enable_crawl=True,\n        generate_milestones=False,\n        global_tasks_to_generate=num_tasks,\n        local_tasks_to_generate_per_url=1,",
-        "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.evaluation",
+        "label": "NUM_OF_URLS",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.benchmark",
+        "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.benchmark",
+        "peekOfCode": "NUM_OF_URLS = 1\nasync def evaluate_project_for_agent(agent, demo_project, tasks, results):\n    \"\"\"\n    Evaluate all tasks for a given demo project and agent.\n    For each task, the agent will attempt to solve it and the evaluation score\n    will be stored both in the agent's global scores and in the project-specific scores.\n    \"\"\"\n    # Initialize project entry in results if not already present.\n    if demo_project.name not in results[agent.id][\"projects\"]:\n        results[agent.id][\"projects\"][demo_project.name] = []",
+        "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.benchmark",
         "documentation": {}
     },
     {
@@ -8803,8 +8971,125 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.evaluation",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.evaluation",
-        "peekOfCode": "app = AppBootstrap()\ndef generate_tasks(num_tasks: int = 3):\n    test_projects = initialize_test_demo_web_projects()\n    web_project = test_projects[0]\n    config = TaskGenerationConfig(\n        save_task_in_db=False,\n        save_web_analysis_in_db=True,\n        enable_crawl=True,\n        generate_milestones=False,\n        global_tasks_to_generate=num_tasks,",
+        "peekOfCode": "app = AppBootstrap()\nasync def generate_tasks(num_tasks: int = 3):\n    test_projects = await initialize_test_demo_web_projects()\n    web_project = test_projects[0]\n    config = TaskGenerationConfig(\n        save_task_in_db=False,\n        save_web_analysis_in_db=True,\n        enable_crawl=True,\n        generate_milestones=False,\n        global_tasks_to_generate=num_tasks,",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.evaluation",
+        "documentation": {}
+    },
+    {
+        "label": "TimingMetrics",
+        "kind": 6,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "peekOfCode": "class TimingMetrics:\n    \"\"\"Track timing metrics for tasks and agents\"\"\"\n    def __init__(self):\n        self.start_time = None\n        self.end_time = None\n        # Structure: {agent_id: {task_id: time}} for both solution and evaluation times\n        self.solution_times = {}  \n        self.evaluation_times = {}\n    def start(self):\n        \"\"\"Start the overall timing\"\"\"",
+        "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "documentation": {}
+    },
+    {
+        "label": "get_cache_filename",
+        "kind": 2,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "peekOfCode": "def get_cache_filename(project: WebProject) -> str:\n    \"\"\"\n    Generate a project-specific cache filename based on the project's name or ID.\n    Args:\n        project (WebProject): The web project\n    Returns:\n        str: Path to the cache file for this specific project\n    \"\"\"\n    # Create cache directory if it doesn't exist\n    os.makedirs(TASKS_CACHE_DIR, exist_ok=True)",
+        "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "documentation": {}
+    },
+    {
+        "label": "compute_statistics",
+        "kind": 2,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "peekOfCode": "def compute_statistics(values: List[float]) -> dict:\n    \"\"\"\n    Compute statistics for a list of values.\n    Args:\n        values: List of numeric values\n    Returns:\n        Dictionary with statistics\n    \"\"\"\n    if not values:\n        return {",
+        "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "documentation": {}
+    },
+    {
+        "label": "save_results_to_json",
+        "kind": 2,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "peekOfCode": "def save_results_to_json(results, agents, timing_metrics):\n    \"\"\"\n    Save comprehensive results to a JSON file.\n    Args:\n        results: Results data by agent and task\n        agents: List of agents\n        timing_metrics: Timing metrics collected during evaluation\n    \"\"\"\n    # Create output directory if it doesn't exist\n    os.makedirs(OUTPUT_DIR, exist_ok=True)",
+        "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "documentation": {}
+    },
+    {
+        "label": "print_performance_statistics",
+        "kind": 2,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "peekOfCode": "def print_performance_statistics(results, agents, timing_metrics):\n    \"\"\"\n    Print comprehensive performance statistics for each agent.\n    Args:\n        results: Results data organized by agent and task\n        agents: List of agents\n        timing_metrics: Timing metrics collected during evaluation\n    \"\"\"\n    timestamp = datetime.now().strftime(\"%Y-%m-%d %H:%M:%S\")\n    print(f\"\\n===== PERFORMANCE REPORT ({timestamp}) =====\")",
+        "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "documentation": {}
+    },
+    {
+        "label": "plot_results",
+        "kind": 2,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "peekOfCode": "def plot_results(results, agents, timing_metrics):\n    \"\"\"\n    Generate plots comparing agent performance and timing across all tasks.\n    Args:\n        results: Results data organized by agent and task\n        agents: List of agents\n        timing_metrics: Timing metrics collected during evaluation\n    Returns:\n        Path to the saved plot file\n    \"\"\"",
+        "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "documentation": {}
+    },
+    {
+        "label": "plot_task_comparison",
+        "kind": 2,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "peekOfCode": "def plot_task_comparison(results, agents, tasks):\n    \"\"\"\n    Generate a chart comparing agent performance across different tasks.\n    Args:\n        results: Results data organized by agent and task\n        agents: List of agents\n        tasks: List of tasks\n    Returns:\n        Path to the saved plot file\n    \"\"\"",
+        "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "documentation": {}
+    },
+    {
+        "label": "USE_CACHED_TASKS",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "peekOfCode": "USE_CACHED_TASKS = True  # Set to True to use cached tasks from JSON file\nTASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nOUTPUT_DIR = \"results\"  # Directory to store test results\nM = 100  # Set this to your desired number of copies\nNUMBER_OF_TASKS = 1\n# Initialize the app\napp = AppBootstrap()\n# Define agents for the stress test\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),",
+        "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "documentation": {}
+    },
+    {
+        "label": "TASKS_CACHE_DIR",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "peekOfCode": "TASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nOUTPUT_DIR = \"results\"  # Directory to store test results\nM = 100  # Set this to your desired number of copies\nNUMBER_OF_TASKS = 1\n# Initialize the app\napp = AppBootstrap()\n# Define agents for the stress test\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),\n    ApifiedWebAgent(name=\"browser-use\", host=\"localhost\", port=9000)",
+        "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "documentation": {}
+    },
+    {
+        "label": "OUTPUT_DIR",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "peekOfCode": "OUTPUT_DIR = \"results\"  # Directory to store test results\nM = 100  # Set this to your desired number of copies\nNUMBER_OF_TASKS = 1\n# Initialize the app\napp = AppBootstrap()\n# Define agents for the stress test\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),\n    ApifiedWebAgent(name=\"browser-use\", host=\"localhost\", port=9000)\n]",
+        "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "documentation": {}
+    },
+    {
+        "label": "M",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "peekOfCode": "M = 100  # Set this to your desired number of copies\nNUMBER_OF_TASKS = 1\n# Initialize the app\napp = AppBootstrap()\n# Define agents for the stress test\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),\n    ApifiedWebAgent(name=\"browser-use\", host=\"localhost\", port=9000)\n]\nclass TimingMetrics:",
+        "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "documentation": {}
+    },
+    {
+        "label": "NUMBER_OF_TASKS",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "peekOfCode": "NUMBER_OF_TASKS = 1\n# Initialize the app\napp = AppBootstrap()\n# Define agents for the stress test\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),\n    ApifiedWebAgent(name=\"browser-use\", host=\"localhost\", port=9000)\n]\nclass TimingMetrics:\n    \"\"\"Track timing metrics for tasks and agents\"\"\"",
+        "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "documentation": {}
+    },
+    {
+        "label": "app",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
+        "peekOfCode": "app = AppBootstrap()\n# Define agents for the stress test\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),\n    ApifiedWebAgent(name=\"browser-use\", host=\"localhost\", port=9000)\n]\nclass TimingMetrics:\n    \"\"\"Track timing metrics for tasks and agents\"\"\"\n    def __init__(self):\n        self.start_time = None",
+        "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
     {
@@ -9073,7 +9358,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.tests_classes",
         "description": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.tests_classes",
-        "peekOfCode": "class BaseTaskTest(BaseModel, ITest):\n    \"\"\"\n    Base class for all task tests.\n    \"\"\"\n    class Config:\n        arbitrary_types_allowed = True\n    def execute_test(\n        self,\n        current_iteration: int,\n        prompt:str,",
+        "peekOfCode": "class BaseTaskTest(BaseModel, ITest):\n    \"\"\"\n    Base class for all task tests.\n    \"\"\"\n    class Config:\n        arbitrary_types_allowed = True\n    def execute_test(\n        self,\n        current_iteration: int,\n        prompt: str,",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.tests_classes",
         "documentation": {}
     },
@@ -9091,7 +9376,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.tests_classes",
         "description": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.tests_classes",
-        "peekOfCode": "class FindInHtmlTest(BaseTaskTest):\n    \"\"\"\n    Test class to find specific keywords in the current HTML content.\n    \"\"\"\n    type: str = \"FindInHtmlTest\"\n    keywords: List[str] = Field(..., description=\"List of keywords to search for in the HTML\")\n    @field_validator('keywords')\n    @classmethod\n    def validate_keywords(cls, keywords: List[str]) -> List[str]:\n        if not all(keyword.strip() for keyword in keywords):",
+        "peekOfCode": "class FindInHtmlTest(BaseTaskTest):\n    \"\"\"\n    Test class to find specific keywords in the current HTML content.\n    \"\"\"\n    type: str = \"FindInHtmlTest\"\n    keywords: List[str] = Field(..., description=\"List of keywords to search for in the HTML\")\n    description: str = Field(\n        default=\"Find keywords in HTML\",\n        description=\"Description of the test\",\n    )",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.tests_classes",
         "documentation": {}
     },
@@ -9100,7 +9385,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.tests_classes",
         "description": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.tests_classes",
-        "peekOfCode": "class CheckEventTest(BaseTaskTest):\n    \"\"\"\n    Test class to verify if a specific backend event was emitted.\n    \"\"\"\n    type: str = \"CheckEventTest\"\n    event_name: str = Field(..., description=\"Name of the expected backend event\")\n    def _execute_test(\n        self,\n        current_iteration: int,\n        prompt:str,",
+        "peekOfCode": "class CheckEventTest(BaseTaskTest):\n    \"\"\"\n    Test class to verify if a specific backend event was emitted.\n    \"\"\"\n    type: str = \"CheckEventTest\"\n    event_name: str = Field(..., description=\"Name of the expected backend event\")\n    description: str = Field(\n        default=\"Check event\",\n        description=\"Description of the test\",\n    )",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.tests_classes",
         "documentation": {}
     },
@@ -9109,7 +9394,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.tests_classes",
         "description": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.tests_classes",
-        "peekOfCode": "class CheckPageViewEventTest(BaseTaskTest):\n    \"\"\"\n    Test class to verify if a specific page view event was logged in the backend.\n    \"\"\"\n    type: str = \"CheckPageViewEventTest\"\n    page_view_url: str = Field(..., description=\"The URL expected to trigger a page view event\")\n    def _execute_test(\n        self,\n        current_iteration: int,\n        prompt:str,",
+        "peekOfCode": "class CheckPageViewEventTest(BaseTaskTest):\n    \"\"\"\n    Test class to verify if a specific page view event was logged in the backend.\n    \"\"\"\n    type: str = \"CheckPageViewEventTest\"\n    page_view_url: str = Field(..., description=\"The URL expected to trigger a page view event\")\n    description: str = Field(\n        default=\"Check page view event\",\n        description=\"Description of the test\",\n    )",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.tests_classes",
         "documentation": {}
     },
@@ -9118,7 +9403,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.tests_classes",
         "description": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.tests_classes",
-        "peekOfCode": "class JudgeBaseOnHTML(BaseTaskTest):\n    \"\"\"\n    Test class to generate an opinion based on changes in HTML before and after an action.\n    \"\"\"\n    type: str = \"JudgeBaseOnHTML\"\n    success_criteria: str = Field(..., description=\"What should the LLM look for to verify success of the task.\")\n    class Config:\n        arbitrary_types_allowed = True\n    def __init__(self, **data):\n        super().__init__(**data)",
+        "peekOfCode": "class JudgeBaseOnHTML(BaseTaskTest):\n    \"\"\"\n    Test class to generate an opinion based on changes in HTML before and after an action.\n    \"\"\"\n    type: str = \"JudgeBaseOnHTML\"\n    success_criteria: str = Field(..., description=\"What should the LLM look for to verify success of the task.\")\n    description: str = Field(\n        default=\"Judge based on HTML changes\",\n        description=\"Description of the test\",\n    )",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.tests_classes",
         "documentation": {}
     },
@@ -9127,7 +9412,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.tests_classes",
         "description": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.tests_classes",
-        "peekOfCode": "class JudgeBaseOnScreenshot(BaseTaskTest):\n    \"\"\"\n    Test class to generate an opinion based on screenshots before and after an action.\n    \"\"\"\n    type: str = \"JudgeBaseOnScreenshot\"\n    success_criteria: str = Field(..., description=\"What should the LLM look for to verify success of the task.\")\n    class Config:\n        arbitrary_types_allowed = True\n    def _execute_test(\n        self,",
+        "peekOfCode": "class JudgeBaseOnScreenshot(BaseTaskTest):\n    \"\"\"\n    Test class to generate an opinion based on screenshots before and after an action.\n    \"\"\"\n    type: str = \"JudgeBaseOnScreenshot\"\n    success_criteria: str = Field(..., description=\"What should the LLM look for to verify success of the task.\")\n    description: str = Field(\n        default=\"Judge based on screenshot changes\",\n        description=\"Description of the test\",\n    )",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.tests_classes",
         "documentation": {}
     },
@@ -9136,7 +9421,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.classes",
         "description": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.classes",
-        "peekOfCode": "class WebProject(BaseModel):\n    name: str = Field(..., min_length=1, description=\"Name of the web project\")\n    backend_url: str = Field(..., description=\"URL of the backend server\")\n    frontend_url: str = Field(..., description=\"URL of the frontend application\")\n    is_web_real: bool = False\n    domain_analysis:Optional[DomainAnalysis] = None\n    events: List[str] = Field(default_factory=list, description=\"List of events to monitor\")\n    urls:List[str] = []\n    relevant_data: Dict[str, Any] = Field(default_factory=dict, description=\"Structured additional information about the web project\")\nclass BackendEvent(BaseModel):",
+        "peekOfCode": "class WebProject(BaseModel):\n    id: str = Field(..., description=\"Unique identifier of the web project\")\n    name: str = Field(..., min_length=1, description=\"Name of the web project\")\n    backend_url: str = Field(..., description=\"URL of the backend server\")\n    frontend_url: str = Field(..., description=\"URL of the frontend application\")\n    is_web_real: bool = False\n    domain_analysis:Optional[DomainAnalysis] = None\n    events: List[str] = Field(default_factory=list, description=\"List of events to monitor\")\n    urls:List[str] = []\n    relevant_data: Dict[str, Any] = Field(default_factory=dict, description=\"Structured additional information about the web project\")",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.classes",
         "documentation": {}
     },
@@ -9154,7 +9439,7 @@
         "kind": 2,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.config",
         "description": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.config",
-        "peekOfCode": "def get_frontend_url(index):\n    return f\"{DEMO_WEBS_ENDPOINT}:{str(8000 + index) + '/'}\"\ndef get_backend_url(index: int, symetric=True):\n    if symetric:\n        return f\"{DEMO_WEBS_ENDPOINT}:{str(DEMO_WEBS_STARTING_PORT + index) + '/'}\"\n    else:\n        return f\"{DEMO_WEBS_ENDPOINT}:{str(DEMO_WEBS_STARTING_PORT + index + 1) + '/'}\"\ndemo_web_projects = [\n    WebProject(\n        name=\"jobs\",",
+        "peekOfCode": "def get_frontend_url(index):\n    return f\"{DEMO_WEBS_ENDPOINT}:{str(8000 + index) + '/'}\"\ndef get_backend_url(index: int, symetric=True):\n    if symetric:\n        return f\"{DEMO_WEBS_ENDPOINT}:{str(DEMO_WEBS_STARTING_PORT + index) + '/'}\"\n    else:\n        return f\"{DEMO_WEBS_ENDPOINT}:{str(DEMO_WEBS_STARTING_PORT + index + 1) + '/'}\"\ndemo_web_projects = [\n    WebProject(\n        id=\"jobs\",",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.config",
         "documentation": {}
     },
@@ -9163,7 +9448,7 @@
         "kind": 2,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.config",
         "description": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.config",
-        "peekOfCode": "def get_backend_url(index: int, symetric=True):\n    if symetric:\n        return f\"{DEMO_WEBS_ENDPOINT}:{str(DEMO_WEBS_STARTING_PORT + index) + '/'}\"\n    else:\n        return f\"{DEMO_WEBS_ENDPOINT}:{str(DEMO_WEBS_STARTING_PORT + index + 1) + '/'}\"\ndemo_web_projects = [\n    WebProject(\n        name=\"jobs\",\n        frontend_url=get_frontend_url(index=0),\n        backend_url=get_backend_url(index=0),",
+        "peekOfCode": "def get_backend_url(index: int, symetric=True):\n    if symetric:\n        return f\"{DEMO_WEBS_ENDPOINT}:{str(DEMO_WEBS_STARTING_PORT + index) + '/'}\"\n    else:\n        return f\"{DEMO_WEBS_ENDPOINT}:{str(DEMO_WEBS_STARTING_PORT + index + 1) + '/'}\"\ndemo_web_projects = [\n    WebProject(\n        id=\"jobs\",\n        name=\"Jobs Demo Website\",\n        frontend_url=get_frontend_url(index=0),",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.config",
         "documentation": {}
     },
@@ -9172,7 +9457,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.config",
         "description": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.config",
-        "peekOfCode": "demo_web_projects = [\n    WebProject(\n        name=\"jobs\",\n        frontend_url=get_frontend_url(index=0),\n        backend_url=get_backend_url(index=0),\n        events=events_allowed_web_1,\n        relevant_data=relevant_data_web_1,\n    )\n    # ),\n    # DemoWebProject(",
+        "peekOfCode": "demo_web_projects = [\n    WebProject(\n        id=\"jobs\",\n        name=\"Jobs Demo Website\",\n        frontend_url=get_frontend_url(index=0),\n        backend_url=get_backend_url(index=0),\n        events=events_allowed_web_1,\n        relevant_data=relevant_data_web_1,\n    )\n    # ),",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.config",
         "documentation": {}
     },
@@ -9181,8 +9466,26 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.demo_webs_service",
         "description": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.demo_webs_service",
-        "peekOfCode": "class BackendDemoWebService:\n    \"\"\"\n    Service for interacting with backend of the demo web endpoints.\n    \"\"\"\n    def __init__(self, base_url: str) -> None:\n        \"\"\"\n        Initialize the service.\n        Args:\n            base_url (str): Base URL for the backend API.\n        \"\"\"",
+        "peekOfCode": "class BackendDemoWebService:\n    \"\"\"\n    Service for interacting with the backend of demo web endpoints.\n    Stores the web_project on initialization and uses its backend_url for API calls.\n    \"\"\"\n    def __init__(self, web_project:WebProject) -> None:\n        \"\"\"\n        Initialize a single aiohttp session holder and store the web_project.\n        Args:\n            web_project: The web project containing the backend_url to use",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.demo_webs_service",
+        "documentation": {}
+    },
+    {
+        "label": "logger",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.demo_webs_service",
+        "description": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.demo_webs_service",
+        "peekOfCode": "logger = logging.getLogger(__name__)\nclass BackendDemoWebService:\n    \"\"\"\n    Service for interacting with the backend of demo web endpoints.\n    Stores the web_project on initialization and uses its backend_url for API calls.\n    \"\"\"\n    def __init__(self, web_project:WebProject) -> None:\n        \"\"\"\n        Initialize a single aiohttp session holder and store the web_project.\n        Args:",
+        "detail": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.demo_webs_service",
+        "documentation": {}
+    },
+    {
+        "label": "EvaluationStats",
+        "kind": 6,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.src.evaluation.evaluator.evaluator",
+        "description": "autoppia_iwa_module.autoppia_iwa.src.evaluation.evaluator.evaluator",
+        "peekOfCode": "class EvaluationStats(BaseModel):\n    \"\"\"Statistics for a single evaluation\"\"\"\n    web_agent_id: str\n    task_id: str\n    action_count: int\n    action_types: Dict[str, int] = Field(default_factory=dict)\n    # Timing stats\n    start_time: float\n    total_time: float = 0\n    browser_setup_time: float = 0",
+        "detail": "autoppia_iwa_module.autoppia_iwa.src.evaluation.evaluator.evaluator",
         "documentation": {}
     },
     {
@@ -9190,7 +9493,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.evaluation.evaluator.evaluator",
         "description": "autoppia_iwa_module.autoppia_iwa.src.evaluation.evaluator.evaluator",
-        "peekOfCode": "class EvaluationResult(BaseEvaluationResult):\n    # Extend the base model if needed to hold the web_agent_id\n    web_agent_id: Optional[str] = None\n    # Add fields to track original and adjusted scores\n    raw_score: float = 0.0\n    random_clicker_score: float = 0.0\n    random_passed_tests: List[int] = Field(default_factory=list)\nclass EvaluatorConfig(BaseModel):\n    save_results_in_db: bool = False\n    task_delay_in_seconds: float = Field(default=0.2, gt=0)",
+        "peekOfCode": "class EvaluationResult(BaseEvaluationResult):\n    web_agent_id: Optional[str] = None\n    raw_score: float = 0.0\n    random_clicker_score: float = 0.0\n    random_passed_tests: List[int] = Field(default_factory=list)\n    evaluation_time: float = 0.0  # Time taken to evaluate this solution\n    stats: Optional[EvaluationStats] = None\nclass EvaluatorConfig(BaseModel):\n    save_results_in_db: bool = False\n    task_delay_in_seconds: float = Field(default=0.2, gt=0)",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.evaluation.evaluator.evaluator",
         "documentation": {}
     },
@@ -9199,7 +9502,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.evaluation.evaluator.evaluator",
         "description": "autoppia_iwa_module.autoppia_iwa.src.evaluation.evaluator.evaluator",
-        "peekOfCode": "class EvaluatorConfig(BaseModel):\n    save_results_in_db: bool = False\n    task_delay_in_seconds: float = Field(default=0.2, gt=0)\n    chunk_size: int = Field(default=5, gt=0)\n    browser_timeout: float = Field(default=10000, gt=0)\n    event_monitor_interval: float = Field(default=0.1, gt=0, le=0.5)\n    enable_grouping_tasks: bool = Field(default=True)\n    # Add configuration for random clicker evaluation\n    exclude_random_passed_tests: bool = Field(default=True)\n    cache_random_clicker_results: bool = Field(default=True)",
+        "peekOfCode": "class EvaluatorConfig(BaseModel):\n    save_results_in_db: bool = False\n    task_delay_in_seconds: float = Field(default=0.2, gt=0)\n    chunk_size: int = Field(default=5, gt=0)\n    browser_timeout: float = Field(default=10000, gt=0)\n    event_monitor_interval: float = Field(default=0.1, gt=0, le=0.5)\n    enable_grouping_tasks: bool = Field(default=True)\n    exclude_random_passed_tests: bool = Field(default=True)\n    cache_random_clicker_results: bool = Field(default=True)\n    normalize_scores: bool = Field(default=True)",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.evaluation.evaluator.evaluator",
         "documentation": {}
     },
@@ -9208,7 +9511,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.evaluation.evaluator.evaluator",
         "description": "autoppia_iwa_module.autoppia_iwa.src.evaluation.evaluator.evaluator",
-        "peekOfCode": "class ConcurrentEvaluator(IEvaluator):\n    def __init__(self, config: EvaluatorConfig):\n        self.config = config\n        # Cache for random clicker results by task ID\n        self._random_clicker_cache: Dict[str, Tuple[List[int], float]] = {}\n    async def evaluate_single_task_solution(self, task: Task, task_solution: TaskSolution) -> EvaluationResult:\n        \"\"\"\n        Evaluate a single task solution given both the task and task solution.\n        Args:\n            task: The Task object containing task details",
+        "peekOfCode": "class ConcurrentEvaluator(IEvaluator):\n    def __init__(self, web_project, config: EvaluatorConfig):\n        self.config = config\n        self._random_clicker_cache: Dict[str, Tuple[List[int], float]] = {}\n        self.total_evaluation_time = 0.0\n        self.evaluation_count = 0\n        self.web_project = web_project\n        self.backend_demo_webs_service = BackendDemoWebService(web_project=web_project)\n        # Statistics collection\n        self.evaluation_stats = []  # List of completed evaluation stats",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.evaluation.evaluator.evaluator",
         "documentation": {}
     },
@@ -9532,7 +9835,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.execution.browser_executor",
         "description": "autoppia_iwa_module.autoppia_iwa.src.execution.browser_executor",
-        "peekOfCode": "class PlaywrightBrowserExecutor:\n    def __init__(self, browser_config: BrowserSpecification, demo_webs_service: BackendDemoWebService, page: Optional[Page] = None):\n        \"\"\"\n        Initializes the PlaywrightBrowserExecutor with a backend service and an optional Playwright page.\n        Args:\n            demo_webs_service: Service for interacting with the backend.\n            page: Optional Playwright page object.\n        \"\"\"\n        self.browser_config = browser_config\n        self.page: Optional[Page] = page",
+        "peekOfCode": "class PlaywrightBrowserExecutor:\n    def __init__(self, browser_config: BrowserSpecification, page: Optional[Page] = None, backend_demo_webs_service: BackendDemoWebService = None):\n        \"\"\"\n        Initializes the PlaywrightBrowserExecutor with a backend service and an optional Playwright page.\n        Args:\n            backend_demo_webs_service: Service for interacting with the backend.\n            page: Optional Playwright page object.\n        \"\"\"\n        self.browser_config = browser_config\n        self.page: Optional[Page] = page",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.execution.browser_executor",
         "documentation": {}
     },
