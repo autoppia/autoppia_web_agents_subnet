@@ -112,6 +112,8 @@ verify_mongo() {
 restore_dump() {
   if [ -d "$DUMP_FOLDER" ]; then
     echo "[INFO] Restoring MongoDB dump from /dump with --drop flag..."
+    echo "[INFO] Sleeping for 30 seconds to ensure MongoDB is ready..."
+    sleep 30
     docker exec "${CONTAINER_NAME}" mongorestore --drop /dump || handle_error "Failed to restore MongoDB dump"
   else
     echo "[INFO] No dump folder found. Skipping dump restore."
@@ -120,7 +122,7 @@ restore_dump() {
 
 check_mongo_connection() {
   echo "[INFO] Checking MongoDB connection by listing databases..."
-  sleep 3
+  sleep 10
   docker exec "${CONTAINER_NAME}" mongosh --eval "db.adminCommand('listDatabases')" || handle_error "Failed to list databases. MongoDB connection issue."
 }
 
