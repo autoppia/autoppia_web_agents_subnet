@@ -10,6 +10,7 @@ from autoppia_iwa.src.data_generation.domain.classes import Task
 from autoppia_iwa.src.web_agents.classes import TaskSolution
 from autoppia_iwa.src.evaluation.classes import EvaluationResult
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+from autoppia_iwa.src.demo_webs.classes import WebProject
 
 
 def normalize_execution_times(times: List[Optional[float]]) -> List[float]:
@@ -37,6 +38,7 @@ def normalize_execution_times(times: List[Optional[float]]) -> List[float]:
 async def get_rewards(
     self,
     task:Task,
+    web_project:WebProject,
     task_solutions: List[TaskSolution],
     execution_times: List[float],
     time_weight: float = 0.2,
@@ -45,6 +47,7 @@ async def get_rewards(
 ) -> np.ndarray:
 
     evaluation_scores: List[float] = await _evaluate_all_task_solutions(
+        web_project=web_project,
         task=task,
         task_solutions=task_solutions
     )
@@ -75,13 +78,14 @@ async def get_rewards(
 
 
 async def _evaluate_all_task_solutions(
+    web_project:WebProject,
     task:Task, 
     task_solutions: List[TaskSolution]
 ) -> List[float]:
     start_time = time.time()
 
-    evaluator_config = EvaluatorConfig(current_url=task.url)
-    evaluator = ConcurrentEvaluator(evaluator_config)
+    evaluator_config = EvaluatorConfig(starting_url=task.url)
+    evaluator = ConcurrentEvaluator(web_project, evaluator_config)
 
     try:
         results: List[EvaluationResult] = await evaluator.evaluate_task_solutions(
