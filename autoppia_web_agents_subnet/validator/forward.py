@@ -108,6 +108,8 @@ async def process_tasks(validator, tasks_generated: List[Task]) -> None:
         task_synapse = TaskSynapse(
             prompt=miner_task.prompt,
             url=miner_task.url,
+            html=miner_task.html, 
+            screenshot=miner_task.screenshot,
             actions=[],
         )
         responses = await send_task_synapse_to_miners(
