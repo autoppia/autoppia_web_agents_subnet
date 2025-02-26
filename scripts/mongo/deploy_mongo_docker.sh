@@ -78,46 +78,51 @@ docker run --name $CONTAINER_NAME -d \
   $DUMP_VOLUME \
   mongo:$MONGO_VERSION --auth
 
-# Wait for MongoDB to start
-echo "[INFO] Waiting for MongoDB to initialize..."
-sleep 10
-
-# Restore dump if available
-if [ -n "$DUMP_VOLUME" ]; then
-  echo "[INFO] Attempting to restore MongoDB dump from /dump..."
-  # First try without credentials (during initial setup)
-  if docker exec $CONTAINER_NAME mongorestore --drop /dump; then
-    echo "[INFO] MongoDB dump restored successfully without credentials."
-  else
-    echo "[INFO] Initial restore failed, trying with admin credentials..."
-    # Wait a bit more for auth to be fully set up
-    sleep 5
-    # Try with credentials
-    if docker exec $CONTAINER_NAME mongorestore --drop -u "$MONGO_USER" -p "$MONGO_PASSWORD" --authenticationDatabase admin /dump; then
-      echo "[INFO] MongoDB dump restored successfully with credentials."
-    else
-      echo "[WARN] Failed to restore MongoDB dump. You may need to restore manually."
-    fi
-  fi
-else
-  echo "[INFO] No dump content found. Skipping restore operation."
-fi
-
-# Verify MongoDB is running
-echo "[INFO] Verifying MongoDB connection..."
-sleep 5
-if docker exec $CONTAINER_NAME mongosh --eval "db.adminCommand('ping')" -u "$MONGO_USER" -p "$MONGO_PASSWORD" --authenticationDatabase admin; then
-  echo "[INFO] MongoDB connection verified successfully."
-else
-  echo "[WARN] MongoDB verification failed. Container may still be initializing."
-fi
-
 # Save connection details to a file
 CONNECTION_STRING="mongodb://$MONGO_USER:$MONGO_PASSWORD@localhost:$HOST_PORT/admin?authSource=admin"
 echo "MongoDB connection string: $CONNECTION_STRING" > $CREDENTIALS_FILE
 echo "User: $MONGO_USER" >> $CREDENTIALS_FILE
 echo "Password: $MONGO_PASSWORD" >> $CREDENTIALS_FILE
 chmod 600 $CREDENTIALS_FILE  # Restrict file permissions for security
+
+# Wait for MongoDB to initialize completely (important for auth to be set up)
+echo "[INFO] Waiting for MongoDB to initialize completely (30 seconds)..."
+sleep 30
+
+# Check if MongoDB is ready with authentication
+echo "[INFO] Verifying MongoDB connection..."
+MAX_RETRY=5
+RETRY_COUNT=0
+CONNECTION_SUCCESS=false
+
+while [ $RETRY_COUNT -lt $MAX_RETRY ] && [ "$CONNECTION_SUCCESS" = false ]; do
+  if docker exec $CONTAINER_NAME mongosh --quiet --eval "db.adminCommand('ping')" -u "$MONGO_USER" -p "$MONGO_PASSWORD" --authenticationDatabase admin &>/dev/null; then
+    echo "[INFO] MongoDB connection verified successfully."
+    CONNECTION_SUCCESS=true
+  else
+    RETRY_COUNT=$((RETRY_COUNT+1))
+    if [ $RETRY_COUNT -lt $MAX_RETRY ]; then
+      echo "[INFO] Connection attempt $RETRY_COUNT failed. Waiting 5 seconds before retry..."
+      sleep 5
+    else
+      echo "[WARN] Could not verify MongoDB connection after $MAX_RETRY attempts."
+    fi
+  fi
+done
+
+# Restore dump if available and connection is successful
+if [ -n "$DUMP_VOLUME" ] && [ "$CONNECTION_SUCCESS" = true ]; then
+  echo "[INFO] Attempting to restore MongoDB dump with admin credentials..."
+  if docker exec $CONTAINER_NAME mongorestore --drop -u "$MONGO_USER" -p "$MONGO_PASSWORD" --authenticationDatabase admin /dump; then
+    echo "[INFO] MongoDB dump restored successfully."
+  else
+    echo "[WARN] Failed to restore MongoDB dump. You may need to restore manually using:"
+    echo "docker exec -it $CONTAINER_NAME mongorestore --drop -u \"$MONGO_USER\" -p \"$MONGO_PASSWORD\" --authenticationDatabase admin /dump"
+  fi
+elif [ -n "$DUMP_VOLUME" ]; then
+  echo "[WARN] Skipping dump restoration due to connection issues. You can restore manually using:"
+  echo "docker exec -it $CONTAINER_NAME mongorestore --drop -u \"$MONGO_USER\" -p \"$MONGO_PASSWORD\" --authenticationDatabase admin /dump"
+fi
 
 echo "[INFO] MongoDB deployed successfully!"
 echo "[INFO] Connection credentials saved to $CREDENTIALS_FILE"
