@@ -2549,6 +2549,14 @@
         "documentation": {}
     },
     {
+        "label": "WebProject",
+        "importPath": "autoppia_iwa.src.demo_webs.classes",
+        "description": "autoppia_iwa.src.demo_webs.classes",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.demo_webs.classes",
+        "documentation": {}
+    },
+    {
         "label": "initialize_demo_webs_projects",
         "importPath": "autoppia_iwa.src.demo_webs.config",
         "description": "autoppia_iwa.src.demo_webs.config",
