@@ -84,7 +84,7 @@ async def _evaluate_all_task_solutions(
 ) -> List[float]:
     start_time = time.time()
 
-    evaluator_config = EvaluatorConfig(current_url=task.url)
+    evaluator_config = EvaluatorConfig(starting_url=task.url)
     evaluator = ConcurrentEvaluator(web_project, evaluator_config)
 
     try:
