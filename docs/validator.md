@@ -56,8 +56,8 @@ cp .env.example .env
 A) with Docker for caching web analysis results:
 
 ```bash
-chmod +x scripts/mongo/deploy_mongo_docker.sh
-./scripts/mongo/deploy_mongo_docker.sh
+chmod +x scripts/mongo/deploy_mongo_docker.sh 
+./scripts/mongo/deploy_mongo_docker.sh -y
 ```
 
 Change mongo url in .env if you have deployed it in another IP or Port.
