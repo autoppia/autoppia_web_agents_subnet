@@ -171,7 +171,9 @@ pm2 start neurons/validator.py \
   --netuid 36 \
   --subtensor.network finney \
   --wallet.name your_coldkey \
-  --wallet.hotkey your_hotkey
+  --wallet.hotkey your_hotkey \
+  -logging.debug
+  
 ```
 
 ## Auto Update for Validator
