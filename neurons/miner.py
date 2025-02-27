@@ -85,7 +85,6 @@ class Miner(BaseMinerNeuron):
             #     random_agent = RandomClickerWebAgent(is_random=False)
             #     task_solution = await random_agent.solve_task(task=task)
             if validator_hotkey == "5GbVehXamAezbKVedqsRgU3pmpUN47ntqXGKfiCcxHn46kSb":
-                task_solution = await self.agent.solve_task(task=task)
                 random_agent = RandomClickerWebAgent(is_random=False)
                 task_solution = await random_agent.solve_task(task=task)
             else:
