@@ -153,6 +153,7 @@ async def process_tasks(validator, web_project, tasks_generated: List[Task]) -> 
             validator, rewards, miner_uids, execution_times, task
         )
 
+        bt.logging.info(f"VOY A ENVIAR FEEDBACK")
         # Send feedback
         await send_feedback_synapse_to_miners(
             validator,
@@ -368,21 +369,20 @@ async def send_feedback_synapse_to_miners(
         )
         feedback_list.append(feedback)
 
-    bt.logging.info(
-        f"Sending detailed TaskFeedbackSynapse to {len(miner_uids)} miners in parallel."
+    ColoredLogger.info(
+        f"Sending detailed TaskFeedbackSynapse to {len(miner_uids)} miners in parallel.",
+        ColoredLogger.BLUE,
     )
 
     feedback_tasks = []
     for axon, feedback_synapse in zip(miner_axons, feedback_list):
         feedback_tasks.append(
-            asyncio.create_task(
-                dendrite_with_retries(
-                    dendrite=validator.dendrite,
-                    axons=[axon],
-                    synapse=feedback_synapse,
-                    deserialize=True,
-                    timeout=10,
-                )
+            await dendrite_with_retries(
+                dendrite=validator.dendrite,
+                axons=[axon],
+                synapse=feedback_synapse,
+                deserialize=True,
+                timeout=10,
             )
         )
 

@@ -79,12 +79,17 @@ class Miner(BaseMinerNeuron):
             )
 
             # Decide which agent
-            if validator_hotkey == "5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j":
+            # if validator_hotkey == "5GbVehXamAezbKVedqsRgU3pmpUN47ntqXGKfiCcxHn46kSb":
+            #     task_solution = await self.agent.solve_task(task=task)
+            # else:
+            #     random_agent = RandomClickerWebAgent(is_random=False)
+            #     task_solution = await random_agent.solve_task(task=task)
+            if validator_hotkey == "5GbVehXamAezbKVedqsRgU3pmpUN47ntqXGKfiCcxHn46kSb":
                 task_solution = await self.agent.solve_task(task=task)
-            else:
                 random_agent = RandomClickerWebAgent(is_random=False)
                 task_solution = await random_agent.solve_task(task=task)
-
+            else:
+                return synapse
             actions: List[BaseAction] = task_solution.actions
             bt.logging.info(f"Task solved. Actions: {actions}")
 
