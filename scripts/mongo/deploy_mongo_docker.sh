@@ -139,6 +139,16 @@ start_mongo() {
     DUMP_VOLUME=""
   fi
   
+  # Check if dump folder permissions are correct
+  if [ -d "$DUMP_FOLDER" ]; then
+    echo "[INFO] Setting appropriate permissions on dump folder..."
+    chmod -R 755 "$DUMP_FOLDER" || echo "[WARNING] Could not change permissions on dump folder"
+  fi
+  
+  # Make sure the data volume has correct permissions
+  mkdir -p "$MONGO_VOLUME"
+  chmod -R 777 "$MONGO_VOLUME" || echo "[WARNING] Could not change permissions on data volume"
+  
   # Use 127.0.0.1 explicitly to bind only to localhost
   docker run --name "${CONTAINER_NAME}" -d \
     -p "127.0.0.1:$HOST_PORT:$CONTAINER_PORT" \
@@ -146,13 +156,15 @@ start_mongo() {
     -v "$MONGO_INIT_FOLDER":/docker-entrypoint-initdb.d \
     $DUMP_VOLUME \
     --env MONGO_INITDB_ROOT_USERNAME="${MONGO_USERNAME}" \
-    --env MONGO_INITDB_ROOT_PASSWORD="${MONGO_PASSWORD}" \
-    mongo:"${MONGO_VERSION}" \
-    --bind_ip 127.0.0.1 \
-    --auth || handle_error "Failed to deploy MongoDB container"
-}
+    --env MON
 
-me=^/${CONTAINER_NAME}$ || handle_error "MongoDB container is not running."
+verify_mongo() {
+  echo "[INFO] Verifying MongoDB container status..."
+  docker ps -f name=^/${CONTAINER_NAME}$ || handle_error "MongoDB container is not running."
+  
+  # Check container logs for any obvious errors
+  docker logs "${CONTAINER_NAME}" | grep -i "error\|warn" || true
+  
   echo "[INFO] MongoDB should be accessible at mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@localhost:$HOST_PORT"
 }
 
