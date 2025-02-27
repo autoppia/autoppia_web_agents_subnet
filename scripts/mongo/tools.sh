@@ -19,43 +19,10 @@ show_usage() {
   echo "  drop-collection <db_name> <collection_name>   Drop a specific collection"
   echo "  view <db_name> <collection_name> [num_docs]   View documents in a collection"
   echo "  test-connection            Test the MongoDB connection"
+  echo "  direct-connect             Connect directly to MongoDB shell"
   echo "  help, --help, -h           Show this help message"
   echo ""
   exit 1
-}
-
-# Extract authentication information from MONGODB_URL
-extract_mongo_auth() {
-  # Check if MONGODB_URL is set
-  if [ -z "$MONGODB_URL" ]; then
-    echo "Error: MONGODB_URL not defined in .env file"
-    exit 1
-  fi
-  
-  # Parse the MongoDB connection string
-  if [[ "$MONGODB_URL" =~ mongodb://([^:]+):([^@]+)@([^/]+)/(.+)(\?.+)? ]]; then
-    MONGO_USER="${BASH_REMATCH[1]}"
-    MONGO_PASS="${BASH_REMATCH[2]}"
-    MONGO_HOST="${BASH_REMATCH[3]}"
-    MONGO_DB="${BASH_REMATCH[4]%%\?*}"  # Remove query parameters if any
-    
-    # For security, mask the password in logs
-    echo "Parsed connection info:"
-    echo "- User: $MONGO_USER"
-    echo "- Host: $MONGO_HOST"
-    echo "- Database: $MONGO_DB"
-    echo "- Password: [HIDDEN]"
-    
-    # Export variables for mongosh to use
-    export MONGO_USER
-    export MONGO_PASS
-    export MONGO_HOST
-    export MONGO_DB
-  else
-    echo "Error: Could not parse MongoDB connection string"
-    echo "Expected format: mongodb://username:password@host/database"
-    exit 1
-  fi
 }
 
 # Find MongoDB container
@@ -73,55 +40,72 @@ find_mongo_container() {
   return 0
 }
 
-# Run MongoDB command with direct login credentials
-run_mongo_command() {
-  local DB="$1"
-  local QUERY="$2"
+# Run MongoDB command inside the container directly
+run_inside_container() {
+  local COMMAND="$1"
   find_mongo_container
-  extract_mongo_auth
   
-  echo "Executing MongoDB query..."
-  
-  # Try different auth methods, one at a time
-  
-  # Method 1: Using command line auth parameters
-  echo "Trying authentication method 1..."
-  docker exec -it "$MONGO_CONTAINER" mongosh --quiet \
-    --username "$MONGO_USER" \
-    --password "$MONGO_PASS" \
-    --authenticationDatabase admin \
-    --host "$MONGO_HOST" \
-    --db "$DB" \
-    --eval "$QUERY"
-  
-  # If the first method fails, try the second
-  if [ $? -ne 0 ]; then
-    echo "Method 1 failed, trying authentication method 2..."
-    docker exec -it "$MONGO_CONTAINER" bash -c "MONGO_USER='$MONGO_USER' MONGO_PASS='$MONGO_PASS' mongosh --quiet --host '$MONGO_HOST' --username '$MONGO_USER' --password '$MONGO_PASS' --authenticationDatabase admin --db '$DB' --eval '$QUERY'"
-  fi
-  
-  # If the second method fails, try the direct connection string
-  if [ $? -ne 0 ]; then
-    echo "Method 2 failed, trying authentication method 3..."
-    docker exec -it "$MONGO_CONTAINER" bash -c "mongosh '$MONGODB_URL' --quiet --eval '$QUERY'"
-  fi
+  echo "Executing command inside MongoDB container..."
+  docker exec -it "$MONGO_CONTAINER" bash -c "$COMMAND"
 }
 
-# List all databases and collections
+# List all databases and collections using direct mongo commands
 list_databases() {
-  QUERY='
-  db.adminCommand("listDatabases").databases.forEach(function(dbInfo) {
-    if (["admin", "config", "local"].indexOf(dbInfo.name) === -1) {
-      print("Database: " + dbInfo.name);
-      var dbInstance = db.getSiblingDB(dbInfo.name);
-      dbInstance.getCollectionNames().forEach(function(coll) {
-        var count = dbInstance.getCollection(coll).count();
-        print("  Collection: " + coll + " -> Count: " + count);
-      });
+  # First connect to mongo without authentication to see if that works
+  COMMAND="mongosh --quiet --eval '
+  try {
+    db.adminCommand(\"listDatabases\").databases.forEach(function(dbInfo) {
+      if ([\"admin\", \"config\", \"local\"].indexOf(dbInfo.name) === -1) {
+        print(\"Database: \" + dbInfo.name);
+        var dbInstance = db.getSiblingDB(dbInfo.name);
+        dbInstance.getCollectionNames().forEach(function(coll) {
+          var count = dbInstance.getCollection(coll).count();
+          print(\"  Collection: \" + coll + \" -> Count: \" + count);
+        });
+      }
+    });
+  } catch (e) {
+    print(\"Error: \" + e);
+    
+    // If authentication is required, try to use environment variables
+    if (e.message.includes(\"Authentication\")) {
+      print(\"Trying to use environment variables for authentication...\");
+      
+      // Try with explicit credentials that might be found in env vars
+      if (process.env.MONGO_INITDB_ROOT_USERNAME && process.env.MONGO_INITDB_ROOT_PASSWORD) {
+        print(\"Found MongoDB credentials in environment. Attempting login...\");
+        
+        // Try to authenticate using these credentials
+        var adminDB = db.getSiblingDB(\"admin\");
+        try {
+          adminDB.auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD);
+          print(\"Authentication successful with environment credentials!\");
+          
+          // Now list databases
+          db.adminCommand(\"listDatabases\").databases.forEach(function(dbInfo) {
+            if ([\"admin\", \"config\", \"local\"].indexOf(dbInfo.name) === -1) {
+              print(\"Database: \" + dbInfo.name);
+              var dbInstance = db.getSiblingDB(dbInfo.name);
+              dbInstance.getCollectionNames().forEach(function(coll) {
+                var count = dbInstance.getCollection(coll).count();
+                print(\"  Collection: \" + coll + \" -> Count: \" + count);
+              });
+            }
+          });
+        } catch (authError) {
+          print(\"Authentication failed with environment credentials: \" + authError);
+        }
+      } else {
+        print(\"No MongoDB credentials found in environment.\");
+        print(\"Please check if MongoDB is configured with authentication.\");
+        print(\"If so, you may need to set MONGO_INITDB_ROOT_USERNAME and MONGO_INITDB_ROOT_PASSWORD\");
+        print(\"in your Docker container or provide them in your connection string.\");
+      }
     }
-  });
-  '
-  run_mongo_command "admin" "$QUERY"
+  }
+  '"
+
+  run_inside_container "$COMMAND"
 }
 
 # Drop all collections in a database
@@ -141,15 +125,45 @@ drop_database() {
     exit 0
   fi
   
-  QUERY="
-  db.getCollectionNames().forEach(function(coll) {
-    print('Dropping collection: ' + coll);
-    db.getCollection(coll).drop();
-  });
-  "
-  run_mongo_command "$DB_NAME" "$QUERY"
+  COMMAND="mongosh --quiet --eval '
+  try {
+    db = db.getSiblingDB(\"$DB_NAME\");
+    db.getCollectionNames().forEach(function(coll) {
+      print(\"Dropping collection: \" + coll);
+      db.getCollection(coll).drop();
+    });
+  } catch (e) {
+    print(\"Error: \" + e);
+    
+    // If authentication is required, try to use environment variables
+    if (e.message.includes(\"Authentication\")) {
+      print(\"Trying to use environment variables for authentication...\");
+      
+      // Try with explicit credentials that might be found in env vars
+      if (process.env.MONGO_INITDB_ROOT_USERNAME && process.env.MONGO_INITDB_ROOT_PASSWORD) {
+        print(\"Found MongoDB credentials in environment. Attempting login...\");
+        
+        // Try to authenticate using these credentials
+        var adminDB = db.getSiblingDB(\"admin\");
+        try {
+          adminDB.auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD);
+          print(\"Authentication successful with environment credentials!\");
+          
+          // Now drop collections
+          db = db.getSiblingDB(\"$DB_NAME\");
+          db.getCollectionNames().forEach(function(coll) {
+            print(\"Dropping collection: \" + coll);
+            db.getCollection(coll).drop();
+          });
+        } catch (authError) {
+          print(\"Authentication failed with environment credentials: \" + authError);
+        }
+      }
+    }
+  }
+  '"
   
-  echo "All collections in database '$DB_NAME' have been dropped"
+  run_inside_container "$COMMAND"
 }
 
 # Drop a specific collection
@@ -170,13 +184,41 @@ drop_collection() {
     exit 0
   fi
   
-  QUERY="
-  print('Dropping collection: $COLLECTION');
-  db.getCollection('$COLLECTION').drop();
-  "
-  run_mongo_command "$DB_NAME" "$QUERY"
+  COMMAND="mongosh --quiet --eval '
+  try {
+    db = db.getSiblingDB(\"$DB_NAME\");
+    print(\"Dropping collection: $COLLECTION\");
+    db.getCollection(\"$COLLECTION\").drop();
+  } catch (e) {
+    print(\"Error: \" + e);
+    
+    // If authentication is required, try to use environment variables
+    if (e.message.includes(\"Authentication\")) {
+      print(\"Trying to use environment variables for authentication...\");
+      
+      // Try with explicit credentials that might be found in env vars
+      if (process.env.MONGO_INITDB_ROOT_USERNAME && process.env.MONGO_INITDB_ROOT_PASSWORD) {
+        print(\"Found MongoDB credentials in environment. Attempting login...\");
+        
+        // Try to authenticate using these credentials
+        var adminDB = db.getSiblingDB(\"admin\");
+        try {
+          adminDB.auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD);
+          print(\"Authentication successful with environment credentials!\");
+          
+          // Now drop the collection
+          db = db.getSiblingDB(\"$DB_NAME\");
+          print(\"Dropping collection: $COLLECTION\");
+          db.getCollection(\"$COLLECTION\").drop();
+        } catch (authError) {
+          print(\"Authentication failed with environment credentials: \" + authError);
+        }
+      }
+    }
+  }
+  '"
   
-  echo "Collection '$COLLECTION' has been dropped from database '$DB_NAME'"
+  run_inside_container "$COMMAND"
 }
 
 # View documents in a collection
@@ -193,53 +235,60 @@ view_collection() {
   
   echo "Viewing up to $N documents from collection '$COLLECTION' in database '$DB_NAME'..."
   
-  QUERY="
-  db.getCollection('$COLLECTION').find({}).limit($N).pretty();
-  "
-  run_mongo_command "$DB_NAME" "$QUERY"
+  COMMAND="mongosh --quiet --eval '
+  try {
+    db = db.getSiblingDB(\"$DB_NAME\");
+    db.getCollection(\"$COLLECTION\").find({}).limit($N).pretty();
+  } catch (e) {
+    print(\"Error: \" + e);
+    
+    // If authentication is required, try to use environment variables
+    if (e.message.includes(\"Authentication\")) {
+      print(\"Trying to use environment variables for authentication...\");
+      
+      // Try with explicit credentials that might be found in env vars
+      if (process.env.MONGO_INITDB_ROOT_USERNAME && process.env.MONGO_INITDB_ROOT_PASSWORD) {
+        print(\"Found MongoDB credentials in environment. Attempting login...\");
+        
+        // Try to authenticate using these credentials
+        var adminDB = db.getSiblingDB(\"admin\");
+        try {
+          adminDB.auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD);
+          print(\"Authentication successful with environment credentials!\");
+          
+          // Now view the collection
+          db = db.getSiblingDB(\"$DB_NAME\");
+          db.getCollection(\"$COLLECTION\").find({}).limit($N).pretty();
+        } catch (authError) {
+          print(\"Authentication failed with environment credentials: \" + authError);
+        }
+      }
+    }
+  }
+  '"
+  
+  run_inside_container "$COMMAND"
 }
 
-# Test connection
-test_connection() {
-  echo "Testing MongoDB connection..."
-  extract_mongo_auth
+# Direct connect to MongoDB shell
+direct_connect() {
   find_mongo_container
+  echo "Connecting directly to MongoDB shell..."
+  docker exec -it "$MONGO_CONTAINER" mongosh
+}
+
+# Test MongoDB container environment variables
+test_connection() {
+  find_mongo_container
+  echo "Testing MongoDB environment variables inside the container..."
   
-  echo "Trying to connect to MongoDB..."
+  COMMAND="bash -c 'echo \"MongoDB Environment Variables:\" && \
+    echo \"MONGO_INITDB_ROOT_USERNAME: \$MONGO_INITDB_ROOT_USERNAME\" && \
+    echo \"MONGO_INITDB_ROOT_PASSWORD: [Hidden for security]\" && \
+    echo \"Trying to connect with mongosh...\" && \
+    mongosh --eval \"try { db.adminCommand({ping: 1}); print(\\\"Connection successful!\\\"); } catch(e) { print(\\\"Connection failed: \\\" + e); }\"'"
   
-  # Try multiple connection methods
-  echo "Testing connection method 1..."
-  docker exec -it "$MONGO_CONTAINER" mongosh --quiet \
-    --username "$MONGO_USER" \
-    --password "$MONGO_PASS" \
-    --authenticationDatabase admin \
-    --host "$MONGO_HOST" \
-    --eval 'db.runCommand({ping: 1})'
-  
-  if [ $? -eq 0 ]; then
-    echo "Connection successful with method 1!"
-    return 0
-  fi
-  
-  echo "Testing connection method 2..."
-  docker exec -it "$MONGO_CONTAINER" bash -c "MONGO_USER='$MONGO_USER' MONGO_PASS='$MONGO_PASS' mongosh --quiet --host '$MONGO_HOST' --username '$MONGO_USER' --password '$MONGO_PASS' --authenticationDatabase admin --eval 'db.runCommand({ping: 1})'"
-  
-  if [ $? -eq 0 ]; then
-    echo "Connection successful with method 2!"
-    return 0
-  fi
-  
-  echo "Testing connection method 3..."
-  docker exec -it "$MONGO_CONTAINER" bash -c "mongosh '$MONGODB_URL' --quiet --eval 'db.runCommand({ping: 1})'"
-  
-  if [ $? -eq 0 ]; then
-    echo "Connection successful with method 3!"
-    return 0
-  fi
-  
-  echo "All connection methods failed."
-  echo "Please check your MongoDB credentials and connection string."
-  exit 1
+  run_inside_container "$COMMAND"
 }
 
 # Main script logic
@@ -262,6 +311,9 @@ case "$1" in
     ;;
   "test-connection")
     test_connection
+    ;;
+  "direct-connect")
+    direct_connect
     ;;
   "help"|"--help"|"-h")
     show_usage
