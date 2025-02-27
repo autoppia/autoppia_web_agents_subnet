@@ -41,33 +41,22 @@ from autoppia_iwa.config.config import (
 
 class Miner(BaseMinerNeuron):
     """
-    Your miner neuron class. It inherits from BaseMinerNeuron, which sets up much of the
-    underlying Bittensor machinery (wallet, subtensor, metagraph, logging, etc.). You
-    primarily need to override forward() and forward_feedback() to define how your miner
-    handles the "requests" (synapses) sent to it.
+    Miner neuron class. Inherits from BaseMinerNeuron. We override:
+      - forward(): handles TaskSynapse
+      - forward_feedback(): handles TaskFeedbackSynapse
+      - blacklist*/priority* if needed
     """
 
     def __init__(self, config=None):
         super(Miner, self).__init__(config=config)
-        # Decide which agent to use
         self.agent = (
             ApifiedWebAgent(name=AGENT_NAME, host=AGENT_HOST, port=AGENT_PORT)
             if USE_APIFIED_AGENT
             else RandomClickerWebAgent(is_random=False)
         )
-        # Load any local state if needed
         self.load_state()
 
     async def forward(self, synapse: TaskSynapse) -> TaskSynapse:
-        """
-        The main 'endpoint' for normal requests. Bittensor calls this method when a validator
-        sends a TaskSynapse to your miner.
-
-        1. We create a `Task` object from the synapse's fields (prompt, url, html, etc.).
-        2. We decide which agent will solve the task.
-        3. We run `agent.solve_task(task)` to get actions.
-        4. We attach those actions to the synapse and return it.
-        """
         try:
             start_time = time.time()
             validator_hotkey = getattr(synapse.dendrite, "hotkey", None)
@@ -89,18 +78,16 @@ class Miner(BaseMinerNeuron):
                 screenshot=synapse.screenshot,
             )
 
-            # Choose which agent solves the task
+            # Decide which agent
             if validator_hotkey == "5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j":
                 task_solution = await self.agent.solve_task(task=task)
             else:
-                # fallback to a random clicker
                 random_agent = RandomClickerWebAgent(is_random=False)
                 task_solution = await random_agent.solve_task(task=task)
 
             actions: List[BaseAction] = task_solution.actions
             bt.logging.info(f"Task solved. Actions: {actions}")
 
-            # Attach the actions back to the synapse
             synapse.actions = actions
 
             ColoredLogger.success(
@@ -110,20 +97,16 @@ class Miner(BaseMinerNeuron):
         except Exception as e:
             bt.logging.error(f"An error occurred on miner forward: {e}")
 
-        # Always return the synapse (including new actions)
         return synapse
 
     async def forward_feedback(
         self, synapse: TaskFeedbackSynapse
     ) -> TaskFeedbackSynapse:
         """
-        The 'endpoint' for feedback requests. Bittensor calls this if the validator
-        wants to send a TaskFeedbackSynapse back to your miner.
-
-        Here we simply call `synapse.print_in_terminal()` to visualize the feedback.
+        Endpoint for feedback requests from the validator.
+        We just call print_in_terminal() to see a summary.
         """
         try:
-            # Use the built-in method to print a rich visualization in the console
             synapse.print_in_terminal()
         except Exception as e:
             ColoredLogger.error(
@@ -133,17 +116,11 @@ class Miner(BaseMinerNeuron):
         return synapse
 
     async def blacklist(self, synapse: TaskSynapse) -> typing.Tuple[bool, str]:
-        """
-        Determines whether an incoming (forward) request should be blacklisted.
-        If so, return (True, "reason"), else (False, "reason").
-        """
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
             bt.logging.warning("Received a request without a dendrite or hotkey.")
             return True, "Missing dendrite or hotkey"
 
         uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
-
-        # Example: only allow registered hotkeys
         if (
             not self.config.blacklist.allow_non_registered
             and synapse.dendrite.hotkey not in self.metagraph.hotkeys
@@ -151,7 +128,6 @@ class Miner(BaseMinerNeuron):
             return True, "Unrecognized hotkey"
 
         if self.config.blacklist.force_validator_permit:
-            # Only allow if the caller is a validator
             if not self.metagraph.validator_permit[uid]:
                 return True, "Non-validator hotkey"
 
@@ -160,10 +136,6 @@ class Miner(BaseMinerNeuron):
     async def blacklist_feedback(
         self, synapse: TaskFeedbackSynapse
     ) -> typing.Tuple[bool, str]:
-        """
-        Determines whether an incoming feedback request should be blacklisted.
-        Similar logic as 'blacklist' but for feedback synapses.
-        """
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
             bt.logging.warning(
                 "Received a feedback request without a dendrite or hotkey."
@@ -171,7 +143,6 @@ class Miner(BaseMinerNeuron):
             return True, "Missing dendrite or hotkey"
 
         uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
-
         if (
             not self.config.blacklist.allow_non_registered
             and synapse.dendrite.hotkey not in self.metagraph.hotkeys
@@ -185,23 +156,14 @@ class Miner(BaseMinerNeuron):
         return False, "Hotkey recognized!"
 
     async def priority(self, synapse: TaskSynapse) -> float:
-        """
-        Returns a priority score for the request. Higher means more urgent.
-        By default, we use the stake S[uid] from the metagraph.
-        """
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
             bt.logging.warning("Received a request without a dendrite or hotkey.")
             return 0.0
 
         caller_uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
-        priority = float(self.metagraph.S[caller_uid])
-        return priority
+        return float(self.metagraph.S[caller_uid])
 
     async def priority_feedback(self, synapse: TaskFeedbackSynapse) -> float:
-        """
-        Returns a priority score for the feedback request. By default,
-        same approach as 'priority()'.
-        """
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
             bt.logging.warning(
                 "Received a feedback request without a dendrite or hotkey."
@@ -209,16 +171,12 @@ class Miner(BaseMinerNeuron):
             return 0.0
 
         caller_uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
-        priority = float(self.metagraph.S[caller_uid])
-        return priority
+        return float(self.metagraph.S[caller_uid])
 
 
 if __name__ == "__main__":
-    # Typical miner entrypoint for Bittensor.
-    # 1. Initialize your app or any dependency injection if needed.
+    # Typical miner entrypoint
     app = AppBootstrap()
-
-    # 2. Create a Miner instance and run in a loop.
     with Miner() as miner:
         while True:
             bt.logging.info(f"Miner running... {time.time()}")
