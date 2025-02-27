@@ -20,8 +20,8 @@ if [ -z "$MONGO_CONTAINER" ]; then
   exit 1
 fi
 
-# Ejecutar la consulta en MongoDB dentro del contenedor
-docker exec mongodb mongo "$MONGODB_URL" --quiet --eval '
+# Ejecutar la consulta en MongoDB dentro del contenedor usando mongosh
+docker exec "$MONGO_CONTAINER" mongosh "$MONGODB_URL" --quiet --eval '
 db.adminCommand("listDatabases").databases.forEach(function(dbInfo) {
   if (["admin", "config", "local"].indexOf(dbInfo.name) === -1) {
     print("Database: " + dbInfo.name);
