@@ -44,7 +44,14 @@ chmod +x scripts/validator/install_docker.sh
 ./scripts/validator/install_docker.sh
 ```
 
-4. Install **MongoDB**
+4. Set up .env
+
+```bash
+# Edit .env with your configuration
+cp .env.example .env
+```
+
+5. Install **MongoDB**
 
 A) with Docker for caching web analysis results:
 
@@ -56,14 +63,7 @@ chmod +x scripts/mongo/deploy_mongo_docker.sh
 Change mongo url in .env if you have deployed it in another IP or Port.
 
 ```bash
-MONGODB_URL="mongodb://localhost:27017"
-```
-
-5. Set up .env
-
-```bash
-# Edit .env with your configuration
-cp .env.example .env
+MONGODB_URL="mongodb://adminUser:password@localhost:27017/admin?authSource=admin"
 ```
 
 # VALIDATOR SETUP
