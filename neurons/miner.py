@@ -187,5 +187,5 @@ if __name__ == "__main__":
     app = AppBootstrap()
     with Miner() as miner:
         while True:
-            bt.logging.info(f"Miner running... {time.time()}")
+            # bt.logging.info(f"Miner running... {time.time()}")
             time.sleep(5)
