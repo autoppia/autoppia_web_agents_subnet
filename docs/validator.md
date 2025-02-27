@@ -53,13 +53,6 @@ chmod +x scripts/mongo/deploy_mongo_docker.sh
 ./scripts/mongo/deploy_mongo_docker.sh
 ```
 
-B) Install it natively without Docker:
-
-```bash
-chmod +x scripts/mongo/deploy_mongo.sh
-./scripts/mongo/deploy_mongo.sh
-```
-
 Change mongo url in .env if you have deployed it in another IP or Port.
 
 ```bash
