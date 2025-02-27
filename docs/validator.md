@@ -117,7 +117,7 @@ CUDA_VISIBLE_DEVICES=0 pm2 start autoppia_iwa_module/modules/llm_local/run_local
 To verify if your LLM is working correctly:
 
 ```bash
-python3 autoppia_iwa_module/modules/llm_local/test/test.py
+python3 autoppia_iwa_module/modules/llm_local/test/test_one_request.py
 ```
 
 # DEMO WEBS SETUP
