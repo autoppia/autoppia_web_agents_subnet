@@ -8717,7 +8717,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.config.config",
         "description": "autoppia_iwa_module.autoppia_iwa.config.config",
-        "peekOfCode": "OPENAI_MODEL = os.getenv(\"OPENAI_MODEL\", \"gpt-4-32k-0613\")\nOPENAI_MAX_TOKENS = int(os.getenv(\"LLM_CONTEXT_WINDOW\", 2000))\nOPENAI_TEMPERATURE = float(os.getenv(\"OPENAI_TEMPERATURE\", 0.8))\n# Validate critical environment variables\nif LLM_PROVIDER == \"openai\" and not OPENAI_API_KEY:\n    raise ValueError(\"OPENAI_API_KEY is required when LLM_PROVIDER is set to 'openai'.\")\n# ==================================\n# Database and File Configuration\n# ==================================\nMONGODB_URL = \"mongodb://localhost:27017\"",
+        "peekOfCode": "OPENAI_MODEL = os.getenv(\"OPENAI_MODEL\", \"gpt-4-32k-0613\")\nOPENAI_MAX_TOKENS = int(os.getenv(\"LLM_CONTEXT_WINDOW\", 2000))\nOPENAI_TEMPERATURE = float(os.getenv(\"OPENAI_TEMPERATURE\", 0.8))\n# Validate critical environment variables\nif LLM_PROVIDER == \"openai\" and not OPENAI_API_KEY:\n    raise ValueError(\"OPENAI_API_KEY is required when LLM_PROVIDER is set to 'openai'.\")\n# ==================================\n# Database and File Configuration\n# ==================================\nMONGODB_URL = os.getenv(\"MONGODB_URL\")",
         "detail": "autoppia_iwa_module.autoppia_iwa.config.config",
         "documentation": {}
     },
@@ -8726,7 +8726,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.config.config",
         "description": "autoppia_iwa_module.autoppia_iwa.config.config",
-        "peekOfCode": "OPENAI_MAX_TOKENS = int(os.getenv(\"LLM_CONTEXT_WINDOW\", 2000))\nOPENAI_TEMPERATURE = float(os.getenv(\"OPENAI_TEMPERATURE\", 0.8))\n# Validate critical environment variables\nif LLM_PROVIDER == \"openai\" and not OPENAI_API_KEY:\n    raise ValueError(\"OPENAI_API_KEY is required when LLM_PROVIDER is set to 'openai'.\")\n# ==================================\n# Database and File Configuration\n# ==================================\nMONGODB_URL = \"mongodb://localhost:27017\"\nMONGODB_NAME = \"workflow\"",
+        "peekOfCode": "OPENAI_MAX_TOKENS = int(os.getenv(\"LLM_CONTEXT_WINDOW\", 2000))\nOPENAI_TEMPERATURE = float(os.getenv(\"OPENAI_TEMPERATURE\", 0.8))\n# Validate critical environment variables\nif LLM_PROVIDER == \"openai\" and not OPENAI_API_KEY:\n    raise ValueError(\"OPENAI_API_KEY is required when LLM_PROVIDER is set to 'openai'.\")\n# ==================================\n# Database and File Configuration\n# ==================================\nMONGODB_URL = os.getenv(\"MONGODB_URL\")\nMONGODB_NAME = \"workflow\"",
         "detail": "autoppia_iwa_module.autoppia_iwa.config.config",
         "documentation": {}
     },
@@ -8735,7 +8735,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.config.config",
         "description": "autoppia_iwa_module.autoppia_iwa.config.config",
-        "peekOfCode": "OPENAI_TEMPERATURE = float(os.getenv(\"OPENAI_TEMPERATURE\", 0.8))\n# Validate critical environment variables\nif LLM_PROVIDER == \"openai\" and not OPENAI_API_KEY:\n    raise ValueError(\"OPENAI_API_KEY is required when LLM_PROVIDER is set to 'openai'.\")\n# ==================================\n# Database and File Configuration\n# ==================================\nMONGODB_URL = \"mongodb://localhost:27017\"\nMONGODB_NAME = \"workflow\"\nANALYSIS_COLLECTION = \"web_analysis\"",
+        "peekOfCode": "OPENAI_TEMPERATURE = float(os.getenv(\"OPENAI_TEMPERATURE\", 0.8))\n# Validate critical environment variables\nif LLM_PROVIDER == \"openai\" and not OPENAI_API_KEY:\n    raise ValueError(\"OPENAI_API_KEY is required when LLM_PROVIDER is set to 'openai'.\")\n# ==================================\n# Database and File Configuration\n# ==================================\nMONGODB_URL = os.getenv(\"MONGODB_URL\")\nMONGODB_NAME = \"workflow\"\nANALYSIS_COLLECTION = \"web_analysis\"",
         "detail": "autoppia_iwa_module.autoppia_iwa.config.config",
         "documentation": {}
     },
@@ -8744,7 +8744,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.config.config",
         "description": "autoppia_iwa_module.autoppia_iwa.config.config",
-        "peekOfCode": "MONGODB_URL = \"mongodb://localhost:27017\"\nMONGODB_NAME = \"workflow\"\nANALYSIS_COLLECTION = \"web_analysis\"\nTASKS_COLLECTION = \"tasks\"\nDOCUMENTS_DIR = \"data/web_analysis_files\"\n# ============================\n# Browser and Chrome Paths\n# ============================\nCHROMEDRIVER_PATH = os.getenv(\"CHROMEDRIVER_PATH\", \"/opt/chromedriver/chromedriver-linux64/chromedriver\")\nCHROME_PATH = os.getenv(\"CHROME_PATH\", \"/opt/chrome/chrome-linux64/chrome\")",
+        "peekOfCode": "MONGODB_URL = os.getenv(\"MONGODB_URL\")\nMONGODB_NAME = \"workflow\"\nANALYSIS_COLLECTION = \"web_analysis\"\nTASKS_COLLECTION = \"tasks\"\nDOCUMENTS_DIR = \"data/web_analysis_files\"\n# ============================\n# Browser and Chrome Paths\n# ============================\nCHROMEDRIVER_PATH = os.getenv(\"CHROMEDRIVER_PATH\", \"/opt/chromedriver/chromedriver-linux64/chromedriver\")\nCHROME_PATH = os.getenv(\"CHROME_PATH\", \"/opt/chrome/chrome-linux64/chrome\")",
         "detail": "autoppia_iwa_module.autoppia_iwa.config.config",
         "documentation": {}
     },

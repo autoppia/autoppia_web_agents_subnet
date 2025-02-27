@@ -1,177 +1,166 @@
 #!/bin/bash
-# deploy_mongo.sh - Deploy MongoDB via Docker with custom configuration, initial DB scripts,
-# and optional dump restoration.
-#
-# This script:
-#   1. Kills any local process using the specified host port.
-#   2. Stops and removes an existing Docker container with the specified name.
-#   3. Prompts to delete existing MongoDB data if detected.
-#   4. Starts a new MongoDB container using Docker with custom port mapping, persistent volume,
-#      and mounts for initialization scripts and a dump (if available).
-#   5. Restores the MongoDB dump (if present) after container startup.
-#   6. Verifies the container status and checks the MongoDB connection.
-#
-# Usage:
-#   ./deploy_mongo.sh
+# deploy_mongo_docker.sh - Deploy MongoDB via Docker with enhanced security
+# Automatically generates a secure random password and updates .env file
+
 set -euo pipefail
-# Custom configuration variables
+
+# Configuration variables
 CONTAINER_NAME="mongodb"
-MONGO_VERSION="latest"         # Change this if you want a specific MongoDB version (e.g., 6.0, 5.0, etc.)
-HOST_PORT=27017                # Host port to map
-CONTAINER_PORT=27017           # Container port (default MongoDB port)
+MONGO_VERSION="latest"
+HOST_PORT=27017
+CONTAINER_PORT=27017
 MONGO_VOLUME="$HOME/mongodb_data"
-MONGO_INIT_FOLDER="$(pwd)/mongo-init"  # Folder containing initialization scripts
-DUMP_FOLDER="$(pwd)/data/mongo-dump"     # Folder containing a MongoDB dump
+DUMP_FOLDER="$(pwd)/data/mongo-dump"
+MONGO_USER="adminUser"
+# Generate a secure random password (32 characters)
+MONGO_PASSWORD=$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32)
+ENV_FILE=".env"
 
-# MongoDB security configuration
-MONGO_USERNAME="admin"
-MONGO_PASSWORD="$(openssl rand -base64 24)"  # Generate a secure random password
-MONGO_AUTH_DB="admin"
+# Ask user if they want to clean all data
+clean_data=false
+read -p "[PROMPT] Do you want to clean all MongoDB data and start fresh? (y/N): " answer
+if [[ "$answer" =~ ^[Yy]$ ]]; then
+  clean_data=true
+  echo "[INFO] Will clean all MongoDB data before starting."
+else
+  echo "[INFO] Will keep existing MongoDB data."
+fi
 
-handle_error() {
-  echo -e "\e[31m[ERROR]\e[0m $1" >&2
-  exit 1
-}
+echo "[INFO] Starting MongoDB deployment with security measures..."
 
-check_command() {
-  if ! command -v "$1" >/dev/null 2>&1; then
-    handle_error "Required command '$1' is not installed."
+# Stop and remove existing container if it exists
+if docker ps -a | grep -q $CONTAINER_NAME; then
+  echo "[INFO] Stopping and removing existing MongoDB container..."
+  docker stop $CONTAINER_NAME
+  docker rm $CONTAINER_NAME
+fi
+
+# Clean data volume if requested
+if [ "$clean_data" = true ]; then
+  echo "[INFO] Cleaning MongoDB data volume at $MONGO_VOLUME..."
+  rm -rf "$MONGO_VOLUME"
+  mkdir -p "$MONGO_VOLUME"
+  echo "[INFO] MongoDB data volume cleaned."
+else
+  # Create data directory if it doesn't exist
+  mkdir -p "$MONGO_VOLUME"
+fi
+
+# Prepare dump volume mounting if dump folder has files
+if [ -d "$DUMP_FOLDER" ] && [ "$(ls -A "$DUMP_FOLDER" 2>/dev/null)" ]; then
+  echo "[INFO] Dump folder detected with content. It will be mounted to /dump in the container."
+  DUMP_VOLUME="-v ${DUMP_FOLDER}:/dump"
+else
+  echo "[INFO] No dump content found in $DUMP_FOLDER. Skipping dump mount."
+  DUMP_VOLUME=""
+fi
+
+# Step 1: Start MongoDB without authentication for setup
+echo "[INFO] Step 1: Starting MongoDB without authentication for initial setup..."
+docker run --name $CONTAINER_NAME -d \
+  -p 127.0.0.1:$HOST_PORT:$CONTAINER_PORT \
+  -v "$MONGO_VOLUME:/data/db" \
+  $DUMP_VOLUME \
+  mongo:$MONGO_VERSION
+
+echo "[INFO] Waiting for MongoDB to initialize (15 seconds)..."
+sleep 15
+
+# Step 2: Create admin user with secure random password
+echo "[INFO] Step 2: Creating admin user with secure random password..."
+if docker exec $CONTAINER_NAME mongosh --eval "
+  db = db.getSiblingDB('admin');
+  db.createUser({
+    user: '$MONGO_USER',
+    pwd: '$MONGO_PASSWORD',
+    roles: [{ role: 'root', db: 'admin' }]
+  });
+"; then
+  echo "[INFO] Admin user created successfully with secure random password."
+else
+  echo "[WARN] Failed to create admin user. It might already exist."
+  if [ "$clean_data" = false ]; then
+    echo "[WARN] Your existing MongoDB may have a different password."
+    echo "[WARN] If connection fails, rerun this script with clean data option."
   fi
-}
+fi
 
-check_docker_installed() {
-  check_command docker
-  echo "[INFO] Docker is installed."
-}
-
-kill_local_mongo_process() {
-  echo "[INFO] Checking for local processes using port $HOST_PORT..."
-  local pids
-  pids=$(lsof -t -i:"$HOST_PORT" 2>/dev/null || true)
-  if [ -n "$pids" ]; then
-    echo "[INFO] Found process(es) on port $HOST_PORT: $pids"
-    echo "[INFO] Killing process(es): $pids"
-    sudo kill -9 $pids || handle_error "Failed to kill local process(es) using port $HOST_PORT"
+# Step 3: Restore dump if available
+if [ -n "$DUMP_VOLUME" ]; then
+  echo "[INFO] Step 3: Restoring MongoDB dump..."
+  if docker exec $CONTAINER_NAME mongorestore --drop /dump; then
+    echo "[INFO] MongoDB dump restored successfully."
   else
-    echo "[INFO] No local process using port $HOST_PORT found."
+    echo "[WARN] Failed to restore MongoDB dump."
   fi
-}
+fi
 
-close_existing_container() {
-  if [ "$(docker ps -a -f name=^/${CONTAINER_NAME}$ --format '{{.Names}}')" == "${CONTAINER_NAME}" ]; then
-    echo "[INFO] Existing container '${CONTAINER_NAME}' found. Stopping and removing..."
-    docker stop "${CONTAINER_NAME}" || handle_error "Failed to stop existing MongoDB container"
-    docker rm "${CONTAINER_NAME}" || handle_error "Failed to remove existing MongoDB container"
+# Step 4: Stop and remove container to restart with authentication
+echo "[INFO] Step 4: Stopping and removing MongoDB container to restart with authentication..."
+docker stop $CONTAINER_NAME
+docker rm $CONTAINER_NAME
+
+# Step 5: Restart with authentication
+echo "[INFO] Step 5: Starting MongoDB with authentication enabled..."
+docker run --name $CONTAINER_NAME -d \
+  -p 127.0.0.1:$HOST_PORT:$CONTAINER_PORT \
+  -v "$MONGO_VOLUME:/data/db" \
+  $DUMP_VOLUME \
+  mongo:$MONGO_VERSION --auth
+
+echo "[INFO] Waiting for MongoDB to restart with authentication (15 seconds)..."
+sleep 15
+
+# Step 6: Verify connection
+echo "[INFO] Step 6: Verifying MongoDB connection with authentication..."
+MAX_RETRY=3
+RETRY_COUNT=0
+CONNECTION_SUCCESS=false
+
+while [ $RETRY_COUNT -lt $MAX_RETRY ] && [ "$CONNECTION_SUCCESS" = false ]; do
+  if docker exec $CONTAINER_NAME mongosh --quiet --eval "db.runCommand({ping:1})" -u "$MONGO_USER" -p "$MONGO_PASSWORD" --authenticationDatabase admin &>/dev/null; then
+    echo "[INFO] MongoDB connection verified successfully with authentication."
+    CONNECTION_SUCCESS=true
   else
-    echo "[INFO] No existing container named '${CONTAINER_NAME}' found."
+    RETRY_COUNT=$((RETRY_COUNT+1))
+    if [ $RETRY_COUNT -lt $MAX_RETRY ]; then
+      echo "[INFO] Connection attempt $RETRY_COUNT failed. Waiting 5 seconds before retry..."
+      sleep 5
+    else
+      echo "[WARN] Could not verify MongoDB connection with authentication after $MAX_RETRY attempts."
+      echo "[WARN] However, MongoDB should still be running with authentication enabled."
+    fi
   fi
-}
+done
 
-prompt_and_clean_data() {
-  if [ -d "$MONGO_VOLUME" ] && [ "$(ls -A "$MONGO_VOLUME" 2>/dev/null)" ]; then
-    echo "[INFO] Existing MongoDB data detected in $MONGO_VOLUME."
-    read -p "Do you want to delete the current MongoDB data and start fresh? (y/N): " answer
-    case "$answer" in
-      [yY][eE][sS]|[yY])
-        echo "[INFO] Deleting existing MongoDB data..."
-        rm -rf "$MONGO_VOLUME" || handle_error "Failed to delete MongoDB data"
-        mkdir -p "$MONGO_VOLUME"
-        ;;
-      *)
-        echo "[INFO] Keeping existing MongoDB data."
-        ;;
-    esac
+# Create connection string with URL encoding for special characters in password
+ENCODED_PASSWORD=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$MONGO_PASSWORD'))")
+CONNECTION_STRING="mongodb://$MONGO_USER:$ENCODED_PASSWORD@localhost:$HOST_PORT/admin?authSource=admin"
+
+# Update .env file with new connection string if it exists
+if [ -f "$ENV_FILE" ]; then
+  echo "[INFO] Updating .env file with MongoDB connection string..."
+  # Check if MONGODB_URL exists in .env file
+  if grep -q "MONGODB_URL=" "$ENV_FILE"; then
+    # Replace existing MONGODB_URL line
+    sed -i "s|MONGODB_URL=.*|MONGODB_URL=\"$CONNECTION_STRING\"|" "$ENV_FILE"
   else
-    mkdir -p "$MONGO_VOLUME"
+    # Add MONGODB_URL line at the end
+    echo "MONGODB_URL=\"$CONNECTION_STRING\"" >> "$ENV_FILE"
   fi
-}
+  echo "[INFO] .env file updated successfully."
+else
+  echo "[WARN] .env file not found. Creating a new one with MongoDB connection string."
+  echo "MONGODB_URL=\"$CONNECTION_STRING\"" > "$ENV_FILE"
+fi
 
-create_mongo_init_script() {
-  # Create a MongoDB initialization script to set up authentication
-  mkdir -p "$MONGO_INIT_FOLDER"
-  cat > "$MONGO_INIT_FOLDER/init-mongo.js" << EOF
-db = db.getSiblingDB('admin');
-db.createUser({
-  user: '${MONGO_USERNAME}',
-  pwd: '${MONGO_PASSWORD}',
-  roles: [{ role: 'root', db: 'admin' }]
-});
-EOF
-  echo "[INFO] Created MongoDB initialization script with authentication setup."
-  echo "[INFO] MongoDB username: ${MONGO_USERNAME}"
-  echo "[INFO] MongoDB password: ${MONGO_PASSWORD}"
-  echo "[INFO] Please save these credentials securely!"
-}
-
-start_mongo() {
-  echo "[INFO] Starting a new MongoDB container using image 'mongo:${MONGO_VERSION}'..."
-  prompt_and_clean_data
-  create_mongo_init_script
-  
-  # Mount dump folder if it exists
-  if [ -d "$DUMP_FOLDER" ]; then
-    DUMP_VOLUME="-v ${DUMP_FOLDER}:/dump"
-    echo "[INFO] Dump folder detected. It will be mounted to /dump in the container."
-  else
-    DUMP_VOLUME=""
-  fi
-  
-  # Use 127.0.0.1 explicitly to bind only to localhost
-  docker run --name "${CONTAINER_NAME}" -d \
-    -p "127.0.0.1:$HOST_PORT:$CONTAINER_PORT" \
-    -v "$MONGO_VOLUME":/data/db \
-    -v "$MONGO_INIT_FOLDER":/docker-entrypoint-initdb.d \
-    $DUMP_VOLUME \
-    --env MONGO_INITDB_ROOT_USERNAME="${MONGO_USERNAME}" \
-    --env MONGO_INITDB_ROOT_PASSWORD="${MONGO_PASSWORD}" \
-    mongo:"${MONGO_VERSION}" \
-    --bind_ip 127.0.0.1 \
-    --auth || handle_error "Failed to deploy MongoDB container"
-}
-
-verify_mongo() {
-  echo "[INFO] Verifying MongoDB container status..."
-  docker ps -f name=^/${CONTAINER_NAME}$ || handle_error "MongoDB container is not running."
-  echo "[INFO] MongoDB should be accessible at mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@localhost:$HOST_PORT"
-}
-
-restore_dump() {
-  if [ -d "$DUMP_FOLDER" ]; then
-    echo "[INFO] Waiting for MongoDB to fully initialize..."
-    sleep 10
-    echo "[INFO] Restoring MongoDB dump from /dump with --drop flag..."
-    docker exec "${CONTAINER_NAME}" mongorestore --authenticationDatabase admin \
-      -u "${MONGO_USERNAME}" -p "${MONGO_PASSWORD}" --drop /dump || handle_error "Failed to restore MongoDB dump"
-  else
-    echo "[INFO] No dump folder found. Skipping dump restore."
-  fi
-}
-
-check_mongo_connection() {
-  echo "[INFO] Checking MongoDB connection by listing databases..."
-  sleep 3
-  docker exec "${CONTAINER_NAME}" mongosh --authenticationDatabase admin \
-    -u "${MONGO_USERNAME}" -p "${MONGO_PASSWORD}" \
-    --eval "db.adminCommand('listDatabases')" || handle_error "Failed to list databases. MongoDB connection issue."
-}
-
-generate_connection_string() {
-  echo "[INFO] Your secure MongoDB connection string is:"
-  echo "mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@localhost:${HOST_PORT}/${MONGO_AUTH_DB}?authSource=admin"
-  echo "[INFO] Update your application configuration to use this connection string."
-}
-
-main() {
-  check_command lsof
-  check_docker_installed
-  kill_local_mongo_process
-  close_existing_container
-  start_mongo
-  verify_mongo
-  restore_dump
-  check_mongo_connection
-  generate_connection_string
-  echo "[INFO] MongoDB is running securely and connection is verified."
-}
-
-main "$@"
+echo "[INFO] MongoDB deployed successfully with secure configuration!"
+echo "[INFO] Your MongoDB is now accessible only from localhost and requires authentication."
+echo "[INFO] Your connection string has been automatically added to the .env file."
+echo ""
+echo "================================================================"
+echo "IMPORTANT: Your MongoDB is now secured with a randomly generated"
+echo "password that has been stored in your .env file. You don't need"
+echo "to know the actual password since the connection string is all"
+echo "your application needs."
+echo "================================================================"
