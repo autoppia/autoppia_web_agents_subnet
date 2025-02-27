@@ -152,16 +152,42 @@ start_mongo() {
     --auth || handle_error "Failed to deploy MongoDB container"
 }
 
-verify_mongo() {
-  echo "[INFO] Verifying MongoDB container status..."
-  docker ps -f name=^/${CONTAINER_NAME}$ || handle_error "MongoDB container is not running."
+me=^/${CONTAINER_NAME}$ || handle_error "MongoDB container is not running."
   echo "[INFO] MongoDB should be accessible at mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@localhost:$HOST_PORT"
+}
+
+wait_for_container_ready() {
+  local max_attempts=30
+  local attempt=1
+  
+  echo "[INFO] Waiting for MongoDB container to be fully ready..."
+  while [ $attempt -le $max_attempts ]; do
+    if docker ps | grep -q "${CONTAINER_NAME}"; then
+      # Container is running, check if it's ready to accept connections
+      if docker exec "${CONTAINER_NAME}" mongosh --quiet --eval "db.adminCommand('ping')" 2>/dev/null; then
+        echo "[INFO] MongoDB container is ready."
+        return 0
+      fi
+    else
+      echo "[WARNING] MongoDB container is not running. Checking logs..."
+      docker logs "${CONTAINER_NAME}"
+      handle_error "MongoDB container failed to start or stopped running."
+    fi
+    
+    echo "[INFO] Waiting for MongoDB to initialize (attempt $attempt/$max_attempts)..."
+    sleep 5
+    ((attempt++))
+  done
+  
+  echo "[WARNING] MongoDB container logs:"
+  docker logs "${CONTAINER_NAME}"
+  handle_error "MongoDB container did not become ready within the timeout period."
 }
 
 restore_dump() {
   if [ -d "$DUMP_FOLDER" ]; then
-    echo "[INFO] Waiting for MongoDB to fully initialize..."
-    sleep 10
+    wait_for_container_ready
+    
     echo "[INFO] Restoring MongoDB dump from /dump with --drop flag..."
     docker exec "${CONTAINER_NAME}" mongorestore --authenticationDatabase admin \
       -u "${MONGO_USERNAME}" -p "${MONGO_PASSWORD}" --drop /dump || handle_error "Failed to restore MongoDB dump"
