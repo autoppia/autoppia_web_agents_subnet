@@ -9068,7 +9068,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "USE_CACHED_TASKS = True  # Set to True to use cached tasks from JSON file\nTASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nOUTPUT_DIR = \"results\"  # Directory to store test results\nM = 1  # Set this to your desired number of copies\nNUMBER_OF_TASKS = 10\n# Initialize the app\napp = AppBootstrap()\n# Define agents for the stress test\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),",
+        "peekOfCode": "USE_CACHED_TASKS = True  # Set to True to use cached tasks from JSON file\nTASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nOUTPUT_DIR = \"results\"  # Directory to store test results\nM = 20  # Set this to your desired number of copies\nNUMBER_OF_TASKS = 1\n# Initialize the app\napp = AppBootstrap()\n# Define agents for the stress test\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -9077,7 +9077,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "TASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nOUTPUT_DIR = \"results\"  # Directory to store test results\nM = 1  # Set this to your desired number of copies\nNUMBER_OF_TASKS = 10\n# Initialize the app\napp = AppBootstrap()\n# Define agents for the stress test\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),\n    ApifiedWebAgent(name=\"browser-use\", host=\"localhost\", port=9000)",
+        "peekOfCode": "TASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nOUTPUT_DIR = \"results\"  # Directory to store test results\nM = 20  # Set this to your desired number of copies\nNUMBER_OF_TASKS = 1\n# Initialize the app\napp = AppBootstrap()\n# Define agents for the stress test\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),\n    ApifiedWebAgent(name=\"browser-use\", host=\"localhost\", port=9000)",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -9086,7 +9086,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "OUTPUT_DIR = \"results\"  # Directory to store test results\nM = 1  # Set this to your desired number of copies\nNUMBER_OF_TASKS = 10\n# Initialize the app\napp = AppBootstrap()\n# Define agents for the stress test\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),\n    ApifiedWebAgent(name=\"browser-use\", host=\"localhost\", port=9000)\n]",
+        "peekOfCode": "OUTPUT_DIR = \"results\"  # Directory to store test results\nM = 20  # Set this to your desired number of copies\nNUMBER_OF_TASKS = 1\n# Initialize the app\napp = AppBootstrap()\n# Define agents for the stress test\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),\n    ApifiedWebAgent(name=\"browser-use\", host=\"localhost\", port=9000)\n]",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -9095,7 +9095,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "M = 1  # Set this to your desired number of copies\nNUMBER_OF_TASKS = 10\n# Initialize the app\napp = AppBootstrap()\n# Define agents for the stress test\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),\n    ApifiedWebAgent(name=\"browser-use\", host=\"localhost\", port=9000)\n]\nclass TimingMetrics:",
+        "peekOfCode": "M = 20  # Set this to your desired number of copies\nNUMBER_OF_TASKS = 1\n# Initialize the app\napp = AppBootstrap()\n# Define agents for the stress test\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),\n    ApifiedWebAgent(name=\"browser-use\", host=\"localhost\", port=9000)\n]\nclass TimingMetrics:",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -9104,7 +9104,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "NUMBER_OF_TASKS = 10\n# Initialize the app\napp = AppBootstrap()\n# Define agents for the stress test\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),\n    ApifiedWebAgent(name=\"browser-use\", host=\"localhost\", port=9000)\n]\nclass TimingMetrics:\n    \"\"\"Track timing metrics for tasks and agents\"\"\"",
+        "peekOfCode": "NUMBER_OF_TASKS = 1\n# Initialize the app\napp = AppBootstrap()\n# Define agents for the stress test\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),\n    ApifiedWebAgent(name=\"browser-use\", host=\"localhost\", port=9000)\n]\nclass TimingMetrics:\n    \"\"\"Track timing metrics for tasks and agents\"\"\"",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -9527,7 +9527,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.evaluation.evaluator.evaluator",
         "description": "autoppia_iwa_module.autoppia_iwa.src.evaluation.evaluator.evaluator",
-        "peekOfCode": "class EvaluatorConfig(BaseModel):\n    save_results_in_db: bool = False\n    task_delay_in_seconds: float = Field(default=0.1, gt=0)\n    chunk_size: int = Field(default=5, gt=0)\n    browser_timeout: float = Field(default=10000, gt=0)\n    event_monitor_interval: float = Field(default=0.1, gt=0, le=0.5)\n    enable_grouping_tasks: bool = Field(default=True)\n    exclude_random_passed_tests: bool = Field(default=True)\n    cache_random_clicker_results: bool = Field(default=True)\n    normalize_scores: bool = Field(default=True)",
+        "peekOfCode": "class EvaluatorConfig(BaseModel):\n    save_results_in_db: bool = False\n    task_delay_in_seconds: float = Field(default=0.1, gt=0)\n    chunk_size: int = Field(default=20, gt=0)\n    browser_timeout: float = Field(default=10000, gt=0)\n    event_monitor_interval: float = Field(default=0.1, gt=0, le=0.5)\n    enable_grouping_tasks: bool = Field(default=True)\n    exclude_random_passed_tests: bool = Field(default=True)\n    cache_random_clicker_results: bool = Field(default=True)\n    normalize_scores: bool = Field(default=True)",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.evaluation.evaluator.evaluator",
         "documentation": {}
     },
