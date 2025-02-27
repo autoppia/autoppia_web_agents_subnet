@@ -106,6 +106,10 @@ class Miner(BaseMinerNeuron):
         Endpoint for feedback requests from the validator.
         We just call print_in_terminal() to see a summary.
         """
+        ColoredLogger.info(
+            f" Synapse Feedback received{synapse}. I am going to print in terminal"
+        )
+
         try:
             synapse.print_in_terminal()
         except Exception as e:
