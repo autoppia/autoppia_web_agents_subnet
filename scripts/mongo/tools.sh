@@ -38,68 +38,34 @@ find_mongo_container() {
   return 0
 }
 
-# Extract credentials from MongoDB URL if present
-extract_credentials() {
-  # Check if MONGODB_URL exists and has credentials
-  if [ -z "$MONGODB_URL" ]; then
-    echo "Warning: MONGODB_URL not set in .env file"
-    echo "Assuming connection doesn't require authentication"
-    MONGO_AUTH=""
-    return
-  fi
+# Directly pass the connection string
+run_mongo_command() {
+  local QUERY="$1"
+  find_mongo_container
   
-  # Print connection string information (without showing the actual password)
-  echo "Using connection string from environment"
+  # For debugging
+  echo "Executing MongoDB query..."
   
-  # Extract username and password if they exist
-  if [[ "$MONGODB_URL" =~ mongodb://([^:]+):([^@]+)@(.+) ]]; then
-    MONGO_USER="${BASH_REMATCH[1]}"
-    MONGO_PASS="${BASH_REMATCH[2]}"
-    MONGO_AUTH="--username $MONGO_USER --password $MONGO_PASS --authenticationDatabase admin"
-    echo "Authentication: Using credentials from connection string"
-  else
-    echo "Authentication: No credentials found in connection string"
-    MONGO_AUTH=""
-  fi
+  # Run command with direct connection string approach
+  # Using -it for interactive terminal to handle potential password prompts
+  docker exec -it "$MONGO_CONTAINER" bash -c "mongosh \"$MONGODB_URL\" --quiet --eval '$QUERY'"
 }
 
 # List all databases and collections
 list_databases() {
-  find_mongo_container
-  extract_credentials
-  
-  echo "Listing all databases and collections..."
-  
-  # First check if we're using authentication
-  if [ -n "$MONGO_AUTH" ]; then
-    # Use the extracted auth parameters
-    docker exec "$MONGO_CONTAINER" mongosh --quiet $MONGO_AUTH --eval '
-    db.adminCommand("listDatabases").databases.forEach(function(dbInfo) {
-      if (["admin", "config", "local"].indexOf(dbInfo.name) === -1) {
-        print("Database: " + dbInfo.name);
-        var dbInstance = db.getSiblingDB(dbInfo.name);
-        dbInstance.getCollectionNames().forEach(function(coll) {
-          var count = dbInstance.getCollection(coll).count();
-          print("  Collection: " + coll + " -> Count: " + count);
-        });
-      }
-    });
-    '
-  else
-    # Try using the full connection string directly
-    docker exec "$MONGO_CONTAINER" mongosh "$MONGODB_URL" --quiet --eval '
-    db.adminCommand("listDatabases").databases.forEach(function(dbInfo) {
-      if (["admin", "config", "local"].indexOf(dbInfo.name) === -1) {
-        print("Database: " + dbInfo.name);
-        var dbInstance = db.getSiblingDB(dbInfo.name);
-        dbInstance.getCollectionNames().forEach(function(coll) {
-          var count = dbInstance.getCollection(coll).count();
-          print("  Collection: " + coll + " -> Count: " + count);
-        });
-      }
-    });
-    '
-  fi
+  QUERY='
+  db.adminCommand("listDatabases").databases.forEach(function(dbInfo) {
+    if (["admin", "config", "local"].indexOf(dbInfo.name) === -1) {
+      print("Database: " + dbInfo.name);
+      var dbInstance = db.getSiblingDB(dbInfo.name);
+      dbInstance.getCollectionNames().forEach(function(coll) {
+        var count = dbInstance.getCollection(coll).count();
+        print("  Collection: " + coll + " -> Count: " + count);
+      });
+    }
+  });
+  '
+  run_mongo_command "$QUERY"
 }
 
 # Drop all collections in a database
@@ -111,8 +77,6 @@ drop_database() {
   fi
   
   DB_NAME=$1
-  find_mongo_container
-  extract_credentials
   
   echo "Warning: This will drop all collections in database '$DB_NAME'"
   read -p "Are you sure you want to continue? (y/n): " confirm
@@ -121,23 +85,14 @@ drop_database() {
     exit 0
   fi
   
-  if [ -n "$MONGO_AUTH" ]; then
-    docker exec "$MONGO_CONTAINER" mongosh $MONGO_AUTH --eval "
-    db = db.getSiblingDB('$DB_NAME');
-    db.getCollectionNames().forEach(function(coll) {
-      print('Dropping collection: ' + coll);
-      db.getCollection(coll).drop();
-    });
-    "
-  else
-    docker exec "$MONGO_CONTAINER" mongosh "$MONGODB_URL" --eval "
-    db = db.getSiblingDB('$DB_NAME');
-    db.getCollectionNames().forEach(function(coll) {
-      print('Dropping collection: ' + coll);
-      db.getCollection(coll).drop();
-    });
-    "
-  fi
+  QUERY="
+  db = db.getSiblingDB('$DB_NAME');
+  db.getCollectionNames().forEach(function(coll) {
+    print('Dropping collection: ' + coll);
+    db.getCollection(coll).drop();
+  });
+  "
+  run_mongo_command "$QUERY"
   
   echo "All collections in database '$DB_NAME' have been dropped"
 }
@@ -152,8 +107,6 @@ drop_collection() {
   
   DB_NAME=$1
   COLLECTION=$2
-  find_mongo_container
-  extract_credentials
   
   echo "Warning: This will drop collection '$COLLECTION' from database '$DB_NAME'"
   read -p "Are you sure you want to continue? (y/n): " confirm
@@ -162,19 +115,12 @@ drop_collection() {
     exit 0
   fi
   
-  if [ -n "$MONGO_AUTH" ]; then
-    docker exec "$MONGO_CONTAINER" mongosh $MONGO_AUTH --eval "
-    db = db.getSiblingDB('$DB_NAME');
-    print('Dropping collection: $COLLECTION');
-    db.getCollection('$COLLECTION').drop();
-    "
-  else
-    docker exec "$MONGO_CONTAINER" mongosh "$MONGODB_URL" --eval "
-    db = db.getSiblingDB('$DB_NAME');
-    print('Dropping collection: $COLLECTION');
-    db.getCollection('$COLLECTION').drop();
-    "
-  fi
+  QUERY="
+  db = db.getSiblingDB('$DB_NAME');
+  print('Dropping collection: $COLLECTION');
+  db.getCollection('$COLLECTION').drop();
+  "
+  run_mongo_command "$QUERY"
   
   echo "Collection '$COLLECTION' has been dropped from database '$DB_NAME'"
 }
@@ -190,21 +136,43 @@ view_collection() {
   DB_NAME=$1
   COLLECTION=$2
   N=${3:-10}  # Default to 10 documents if not specified
-  find_mongo_container
-  extract_credentials
   
   echo "Viewing up to $N documents from collection '$COLLECTION' in database '$DB_NAME'..."
   
-  if [ -n "$MONGO_AUTH" ]; then
-    docker exec "$MONGO_CONTAINER" mongosh $MONGO_AUTH --eval "
-    db = db.getSiblingDB('$DB_NAME');
-    db.getCollection('$COLLECTION').find({}).limit($N).pretty();
-    "
+  QUERY="
+  db = db.getSiblingDB('$DB_NAME');
+  db.getCollection('$COLLECTION').find({}).limit($N).pretty();
+  "
+  run_mongo_command "$QUERY"
+}
+
+# Test connection
+test_connection() {
+  echo "Testing MongoDB connection..."
+  
+  if [ -z "$MONGODB_URL" ]; then
+    echo "Error: MONGODB_URL not defined in .env file"
+    exit 1
+  fi
+  
+  # Show connection string without the password
+  if [[ "$MONGODB_URL" =~ mongodb://([^:]+):([^@]+)@(.+) ]]; then
+    echo "Connection string: mongodb://${BASH_REMATCH[1]}:****@${BASH_REMATCH[3]}"
   else
-    docker exec "$MONGO_CONTAINER" mongosh "$MONGODB_URL" --eval "
-    db = db.getSiblingDB('$DB_NAME');
-    db.getCollection('$COLLECTION').find({}).limit($N).pretty();
-    "
+    echo "Connection string: $MONGODB_URL"
+  fi
+  
+  find_mongo_container
+  
+  # Run simple test command
+  echo "Running test query..."
+  docker exec -it "$MONGO_CONTAINER" bash -c "mongosh \"$MONGODB_URL\" --quiet --eval 'db.runCommand({ ping: 1 })'"
+  
+  if [ $? -eq 0 ]; then
+    echo "Connection successful!"
+  else
+    echo "Connection failed. Please check your MongoDB URL and credentials."
+    exit 1
   fi
 }
 
@@ -225,6 +193,9 @@ case "$1" in
     ;;
   "view")
     view_collection "$2" "$3" "$4"
+    ;;
+  "test-connection")
+    test_connection
     ;;
   "help"|"--help"|"-h")
     show_usage
