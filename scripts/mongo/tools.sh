@@ -18,9 +18,44 @@ show_usage() {
   echo "  drop-db <db_name>          Drop all collections in a database"
   echo "  drop-collection <db_name> <collection_name>   Drop a specific collection"
   echo "  view <db_name> <collection_name> [num_docs]   View documents in a collection"
+  echo "  test-connection            Test the MongoDB connection"
   echo "  help, --help, -h           Show this help message"
   echo ""
   exit 1
+}
+
+# Extract authentication information from MONGODB_URL
+extract_mongo_auth() {
+  # Check if MONGODB_URL is set
+  if [ -z "$MONGODB_URL" ]; then
+    echo "Error: MONGODB_URL not defined in .env file"
+    exit 1
+  fi
+  
+  # Parse the MongoDB connection string
+  if [[ "$MONGODB_URL" =~ mongodb://([^:]+):([^@]+)@([^/]+)/(.+)(\?.+)? ]]; then
+    MONGO_USER="${BASH_REMATCH[1]}"
+    MONGO_PASS="${BASH_REMATCH[2]}"
+    MONGO_HOST="${BASH_REMATCH[3]}"
+    MONGO_DB="${BASH_REMATCH[4]%%\?*}"  # Remove query parameters if any
+    
+    # For security, mask the password in logs
+    echo "Parsed connection info:"
+    echo "- User: $MONGO_USER"
+    echo "- Host: $MONGO_HOST"
+    echo "- Database: $MONGO_DB"
+    echo "- Password: [HIDDEN]"
+    
+    # Export variables for mongosh to use
+    export MONGO_USER
+    export MONGO_PASS
+    export MONGO_HOST
+    export MONGO_DB
+  else
+    echo "Error: Could not parse MongoDB connection string"
+    echo "Expected format: mongodb://username:password@host/database"
+    exit 1
+  fi
 }
 
 # Find MongoDB container
@@ -38,17 +73,38 @@ find_mongo_container() {
   return 0
 }
 
-# Directly pass the connection string
+# Run MongoDB command with direct login credentials
 run_mongo_command() {
-  local QUERY="$1"
+  local DB="$1"
+  local QUERY="$2"
   find_mongo_container
+  extract_mongo_auth
   
-  # For debugging
   echo "Executing MongoDB query..."
   
-  # Run command with direct connection string approach
-  # Using -it for interactive terminal to handle potential password prompts
-  docker exec -it "$MONGO_CONTAINER" bash -c "mongosh \"$MONGODB_URL\" --quiet --eval '$QUERY'"
+  # Try different auth methods, one at a time
+  
+  # Method 1: Using command line auth parameters
+  echo "Trying authentication method 1..."
+  docker exec -it "$MONGO_CONTAINER" mongosh --quiet \
+    --username "$MONGO_USER" \
+    --password "$MONGO_PASS" \
+    --authenticationDatabase admin \
+    --host "$MONGO_HOST" \
+    --db "$DB" \
+    --eval "$QUERY"
+  
+  # If the first method fails, try the second
+  if [ $? -ne 0 ]; then
+    echo "Method 1 failed, trying authentication method 2..."
+    docker exec -it "$MONGO_CONTAINER" bash -c "MONGO_USER='$MONGO_USER' MONGO_PASS='$MONGO_PASS' mongosh --quiet --host '$MONGO_HOST' --username '$MONGO_USER' --password '$MONGO_PASS' --authenticationDatabase admin --db '$DB' --eval '$QUERY'"
+  fi
+  
+  # If the second method fails, try the direct connection string
+  if [ $? -ne 0 ]; then
+    echo "Method 2 failed, trying authentication method 3..."
+    docker exec -it "$MONGO_CONTAINER" bash -c "mongosh '$MONGODB_URL' --quiet --eval '$QUERY'"
+  fi
 }
 
 # List all databases and collections
@@ -65,7 +121,7 @@ list_databases() {
     }
   });
   '
-  run_mongo_command "$QUERY"
+  run_mongo_command "admin" "$QUERY"
 }
 
 # Drop all collections in a database
@@ -86,13 +142,12 @@ drop_database() {
   fi
   
   QUERY="
-  db = db.getSiblingDB('$DB_NAME');
   db.getCollectionNames().forEach(function(coll) {
     print('Dropping collection: ' + coll);
     db.getCollection(coll).drop();
   });
   "
-  run_mongo_command "$QUERY"
+  run_mongo_command "$DB_NAME" "$QUERY"
   
   echo "All collections in database '$DB_NAME' have been dropped"
 }
@@ -116,11 +171,10 @@ drop_collection() {
   fi
   
   QUERY="
-  db = db.getSiblingDB('$DB_NAME');
   print('Dropping collection: $COLLECTION');
   db.getCollection('$COLLECTION').drop();
   "
-  run_mongo_command "$QUERY"
+  run_mongo_command "$DB_NAME" "$QUERY"
   
   echo "Collection '$COLLECTION' has been dropped from database '$DB_NAME'"
 }
@@ -140,40 +194,52 @@ view_collection() {
   echo "Viewing up to $N documents from collection '$COLLECTION' in database '$DB_NAME'..."
   
   QUERY="
-  db = db.getSiblingDB('$DB_NAME');
   db.getCollection('$COLLECTION').find({}).limit($N).pretty();
   "
-  run_mongo_command "$QUERY"
+  run_mongo_command "$DB_NAME" "$QUERY"
 }
 
 # Test connection
 test_connection() {
   echo "Testing MongoDB connection..."
-  
-  if [ -z "$MONGODB_URL" ]; then
-    echo "Error: MONGODB_URL not defined in .env file"
-    exit 1
-  fi
-  
-  # Show connection string without the password
-  if [[ "$MONGODB_URL" =~ mongodb://([^:]+):([^@]+)@(.+) ]]; then
-    echo "Connection string: mongodb://${BASH_REMATCH[1]}:****@${BASH_REMATCH[3]}"
-  else
-    echo "Connection string: $MONGODB_URL"
-  fi
-  
+  extract_mongo_auth
   find_mongo_container
   
-  # Run simple test command
-  echo "Running test query..."
-  docker exec -it "$MONGO_CONTAINER" bash -c "mongosh \"$MONGODB_URL\" --quiet --eval 'db.runCommand({ ping: 1 })'"
+  echo "Trying to connect to MongoDB..."
+  
+  # Try multiple connection methods
+  echo "Testing connection method 1..."
+  docker exec -it "$MONGO_CONTAINER" mongosh --quiet \
+    --username "$MONGO_USER" \
+    --password "$MONGO_PASS" \
+    --authenticationDatabase admin \
+    --host "$MONGO_HOST" \
+    --eval 'db.runCommand({ping: 1})'
   
   if [ $? -eq 0 ]; then
-    echo "Connection successful!"
-  else
-    echo "Connection failed. Please check your MongoDB URL and credentials."
-    exit 1
+    echo "Connection successful with method 1!"
+    return 0
   fi
+  
+  echo "Testing connection method 2..."
+  docker exec -it "$MONGO_CONTAINER" bash -c "MONGO_USER='$MONGO_USER' MONGO_PASS='$MONGO_PASS' mongosh --quiet --host '$MONGO_HOST' --username '$MONGO_USER' --password '$MONGO_PASS' --authenticationDatabase admin --eval 'db.runCommand({ping: 1})'"
+  
+  if [ $? -eq 0 ]; then
+    echo "Connection successful with method 2!"
+    return 0
+  fi
+  
+  echo "Testing connection method 3..."
+  docker exec -it "$MONGO_CONTAINER" bash -c "mongosh '$MONGODB_URL' --quiet --eval 'db.runCommand({ping: 1})'"
+  
+  if [ $? -eq 0 ]; then
+    echo "Connection successful with method 3!"
+    return 0
+  fi
+  
+  echo "All connection methods failed."
+  echo "Please check your MongoDB credentials and connection string."
+  exit 1
 }
 
 # Main script logic
