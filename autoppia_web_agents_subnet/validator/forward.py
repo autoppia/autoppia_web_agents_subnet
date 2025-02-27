@@ -347,7 +347,7 @@ async def send_feedback_synapse_to_miners(
     task_solutions: List[TaskSolution],
     test_results_matrices: List[List[List[Any]]],
     evaluation_results: List[Dict[str, Any]],
-) -> None:
+) -> Any:
     """
     Sends a TaskFeedbackSynapse to each miner containing the detailed results.
     """
@@ -386,9 +386,9 @@ async def send_feedback_synapse_to_miners(
             )
         )
 
-    results = await asyncio.gather(*feedback_tasks)
     bt.logging.info("TaskFeedbackSynapse responses received.")
     bt.logging.success("Task step completed successfully.")
+    return feedback_tasks
 
 
 def get_task_solution_from_synapse(
