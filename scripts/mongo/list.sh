@@ -1,5 +1,17 @@
 #!/bin/bash
-sudo docker exec -it mongodb mongosh --eval 'db.getMongo().getDBNames().forEach(function(dbName) {
+
+# Load environment variables from .env file
+export $(grep -v '^#' .env | xargs)
+
+# Check if MONGODB_URL is set
+if [ -z "$MONGODB_URL" ]; then
+  echo "Error: MONGODB_URL is not set in the .env file"
+  exit 1
+fi
+
+# Execute the MongoDB command using MONGODB_URL
+mongosh "$MONGODB_URL" --eval '
+db.getMongo().getDBNames().forEach(function(dbName) {
   if (["admin", "config", "local"].indexOf(dbName) === -1) {
     print("Database: " + dbName);
     var dbInstance = db.getSiblingDB(dbName);
@@ -8,4 +20,5 @@ sudo docker exec -it mongodb mongosh --eval 'db.getMongo().getDBNames().forEach(
       print("  Collection: " + coll + " -> Count: " + count);
     });
   }
-});'
+});
+'
