@@ -182,7 +182,7 @@ Script for _automatic version control_ and _safe updates_ of your validator:
 
 ```bash
 chmod +x scripts/validator/auto_update_validator.sh
-pm2 start --name auto_update_validator --interpreter /bin/bash ./scripts/validator/auto_update_validator.sh
+pm2 start --name auto_update_validator --interpreter /bin/bash ./scripts/validator/auto_update_validator.sh -- subnet-36-validator your_actual_coldkey your_actual_hotkey
 ```
 
 _Note_: If you change something edit the script to match your PM2 configuration (process name, wallet keys) before running it.
