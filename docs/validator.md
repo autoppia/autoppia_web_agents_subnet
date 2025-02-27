@@ -172,7 +172,7 @@ pm2 start neurons/validator.py \
   --subtensor.network finney \
   --wallet.name your_coldkey \
   --wallet.hotkey your_hotkey \
-  -logging.debug
+  --logging.debug
   
 ```
 
