@@ -347,7 +347,7 @@ async def send_feedback_synapse_to_miners(
     task_solutions: List[TaskSolution],
     test_results_matrices: List[List[List[Any]]],
     evaluation_results: List[Dict[str, Any]],
-) -> Any:
+) -> None:
     """
     Sends a TaskFeedbackSynapse to each miner containing the detailed results.
     """
@@ -370,25 +370,30 @@ async def send_feedback_synapse_to_miners(
         feedback_list.append(feedback)
 
     ColoredLogger.info(
-        f"Sending detailed TaskFeedbackSynapse to {len(miner_uids)} miners in parallel.",
+        f"Sending detailed TaskFeedbackSynapse to {len(miner_uids)} miners in parallel",
         ColoredLogger.BLUE,
     )
 
     feedback_tasks = []
     for axon, feedback_synapse in zip(miner_axons, feedback_list):
         feedback_tasks.append(
-            await dendrite_with_retries(
-                dendrite=validator.dendrite,
-                axons=[axon],
-                synapse=feedback_synapse,
-                deserialize=True,
-                timeout=10,
+            asyncio.create_task(
+                dendrite_with_retries(
+                    dendrite=validator.dendrite,
+                    axons=[axon],
+                    synapse=feedback_synapse,
+                    deserialize=True,
+                    timeout=10,
+                )
             )
         )
-
+    ColoredLogger.info(
+        f"QUE VOY",
+        ColoredLogger.RED,
+    )
+    results = await asyncio.gather(*feedback_tasks)
     bt.logging.info("TaskFeedbackSynapse responses received.")
     bt.logging.success("Task step completed successfully.")
-    return feedback_tasks
 
 
 def get_task_solution_from_synapse(
