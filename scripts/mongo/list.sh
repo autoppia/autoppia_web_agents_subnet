@@ -1,13 +1,22 @@
 #!/bin/bash
 
-export $(grep -v '^#' .env | xargs)
+# Cargar variables de entorno ignorando comentarios y líneas vacías
+export $(grep -v '^#' .env | grep -v '^$' | xargs)
 
+# Verificar si MONGODB_URL está definido
 if [ -z "$MONGODB_URL" ]; then
-  echo "Error: MONGODB_URL is not set in the .env file"
+  echo "Error: MONGODB_URL no está configurado en el archivo .env"
   exit 1
 fi
 
-mongosh "$MONGODB_URL" --eval '
+# Verificar si el contenedor de MongoDB está corriendo
+if ! sudo docker ps --format '{{.Names}}' | grep -q '^mongodb$'; then
+  echo "Error: El contenedor 'mongodb' no está en ejecución."
+  exit 1
+fi
+
+# Ejecutar la consulta dentro del contenedor de Docker
+sudo docker exec -it mongodb mongosh --eval '
 db.getMongo().getDBNames().forEach(function(dbName) {
   if (["admin", "config", "local"].indexOf(dbName) === -1) {
     print("Database: " + dbName);
