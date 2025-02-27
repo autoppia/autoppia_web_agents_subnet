@@ -72,6 +72,18 @@ update_and_deploy() {
         redeploy_old_version
         return 1
     fi
+    
+    # Deploy MongoDB if script exists
+    if [ -f "./scripts/mongo/deploy_mongo_docker.sh" ]; then
+        echo "Deploying MongoDB via Docker..."
+        chmod +x ./scripts/mongo/deploy_mongo_docker.sh
+        if ! ./scripts/mongo/deploy_mongo_docker.sh -y; then
+            echo "MongoDB deployment failed."
+            redeploy_old_version
+            return 1
+        fi
+        echo "MongoDB deployment completed successfully."
+    fi
     cd autoppia_iwa
     if ! git pull origin main; then
         echo "Failed to pull autoppia_iwa."
