@@ -156,7 +156,22 @@ start_mongo() {
     -v "$MONGO_INIT_FOLDER":/docker-entrypoint-initdb.d \
     $DUMP_VOLUME \
     --env MONGO_INITDB_ROOT_USERNAME="${MONGO_USERNAME}" \
-    --env MON
+    --env MONGO_INITDB_ROOT_PASSWORD="${MONGO_PASSWORD}" \
+    --restart unless-stopped \
+    mongo:"${MONGO_VERSION}" \
+    --bind_ip 127.0.0.1 \
+    --auth || handle_error "Failed to deploy MongoDB container"
+    
+  # Give MongoDB a moment to start before proceeding
+  sleep 5
+  
+  # Check if container is running
+  if ! docker ps | grep -q "${CONTAINER_NAME}"; then
+    echo "[ERROR] MongoDB container failed to start. Container logs:"
+    docker logs "${CONTAINER_NAME}"
+    handle_error "MongoDB container failed to start properly"
+  fi
+}
 
 verify_mongo() {
   echo "[INFO] Verifying MongoDB container status..."
