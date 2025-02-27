@@ -4,7 +4,6 @@ from bittensor import Synapse
 from autoppia_iwa.src.execution.actions.actions import AllActionsUnion
 from autoppia_iwa.src.data_generation.domain.classes import Task
 
-# Added imports for rich
 from rich.console import Console
 from rich.table import Table
 
@@ -74,9 +73,9 @@ class TaskSynapse(Synapse):
 
     class Config:
         extra = "allow"
+        arbitrary_types_allowed = True
 
     def deserialize(self) -> "TaskSynapse":
-        # We can transform or sanitize fields here if needed
         return self
 
 
@@ -92,7 +91,7 @@ class TaskFeedbackSynapse(Synapse):
     actions: List[AllActionsUnion] = Field(default_factory=list)
     test_results_matrix: Optional[List[List[Any]]] = None
     evaluation_result: Optional[Dict[str, Any]] = None
-    stats: MinerStats = None
+    stats: Optional[MinerStats] = None
 
     class Config:
         extra = "allow"
@@ -102,9 +101,6 @@ class TaskFeedbackSynapse(Synapse):
         return self
 
     def print_in_terminal(self):
-        """
-        Show a detailed view of the results using the SubnetVisualizer
-        """
         from autoppia_iwa.src.shared.visualizator import SubnetVisualizer
 
         visualizer = SubnetVisualizer()
@@ -116,7 +112,6 @@ class TaskFeedbackSynapse(Synapse):
             and self.actions
             and self.test_results_matrix
         ):
-            # Show the full details
             visualizer.show_full_evaluation(
                 agent_id=self.miner_id,
                 task=self.task,
@@ -124,16 +119,13 @@ class TaskFeedbackSynapse(Synapse):
                 test_results_matrix=self.test_results_matrix,
                 evaluation_result=self.evaluation_result,
             )
-
-        # If we only have the task, at least show that
         elif self.task and hasattr(self.task, "id"):
+            # Partial data => just show the task
             visualizer.show_task_with_tests(self.task)
             console = Console()
             console.print(
                 f"\n[bold yellow]Insufficient actions or test results for {self.miner_id}[/bold yellow]"
             )
-
-        # Otherwise, just show minimal stats
         else:
             console = Console()
             table = Table(
@@ -157,11 +149,9 @@ class TaskFeedbackSynapse(Synapse):
                 )
                 table.add_row("Avg Score", f"{self.stats.avg_score:.2f}")
                 table.add_row("Avg Exec Time", f"{self.stats.avg_execution_time:.2f}s")
-
                 if self.stats.last_task:
                     table.add_row("Last Task ID", str(self.stats.last_task.id or "N/A"))
                     table.add_row(
                         "Last Task Score", f"{self.stats.last_task_score:.2f}"
                     )
-
             console.print(table)
