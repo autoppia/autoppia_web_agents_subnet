@@ -69,11 +69,11 @@ class Miner(BaseMinerNeuron):
             start_time = time.time()
             validator_hotkey = getattr(synapse.dendrite, "hotkey", None)
             ColoredLogger.info(
-                f"Request Received from validator: {validator_hotkey}. Task:{synapse.prompt}",
+                f"Request Received from validator: {validator_hotkey}",
                 ColoredLogger.YELLOW,
             )
             ColoredLogger.info(
-                f"Task:{synapse.prompt}",
+                f"Task Prompt: {synapse.prompt}",
                 ColoredLogger.YELLOW,
             )
 
@@ -84,7 +84,7 @@ class Miner(BaseMinerNeuron):
             if validator_hotkey == "5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j":
                 task_solution = await self.agent.solve_task(task=task)
             else:
-                task_solution = await RandomClickerWebAgent().solve_task(task=task)
+                task_solution = await RandomClickerWebAgent(is_random=False).solve_task(task=task)
 
             actions: List[BaseAction] = task_solution.actions
             bt.logging.info(f"Task Solved. Actions: {actions}")
