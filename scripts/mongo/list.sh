@@ -1,7 +1,9 @@
 #!/bin/bash
 
-# Cargar variables de entorno ignorando comentarios y líneas vacías
-export $(grep -v '^#' .env | grep -v '^$' | xargs)
+# Cargar variables de entorno de manera segura
+set -a
+source <(grep -v '^#' .env | grep -v '^$')
+set +a
 
 # Verificar si MONGODB_URL está definido
 if [ -z "$MONGODB_URL" ]; then
@@ -9,18 +11,18 @@ if [ -z "$MONGODB_URL" ]; then
   exit 1
 fi
 
-# Verificar si el contenedor de MongoDB está corriendo
-if ! sudo docker ps --format '{{.Names}}' | grep -q '^mongodb$'; then
-  echo "Error: El contenedor 'mongodb' no está en ejecución."
+# Verificar si mongosh está instalado
+if ! command -v mongosh &> /dev/null; then
+  echo "Error: mongosh no está instalado o no está en el PATH"
   exit 1
 fi
 
-# Ejecutar la consulta dentro del contenedor de Docker
-sudo docker exec -it mongodb mongosh --eval '
-db.getMongo().getDBNames().forEach(function(dbName) {
-  if (["admin", "config", "local"].indexOf(dbName) === -1) {
-    print("Database: " + dbName);
-    var dbInstance = db.getSiblingDB(dbName);
+# Ejecutar la consulta en MongoDB
+mongosh "$MONGODB_URL" --eval '
+db.adminCommand("listDatabases").databases.forEach(function(dbInfo) {
+  if (["admin", "config", "local"].indexOf(dbInfo.name) === -1) {
+    print("Database: " + dbInfo.name);
+    var dbInstance = db.getSiblingDB(dbInfo.name);
     dbInstance.getCollectionNames().forEach(function(coll) {
       var count = dbInstance.getCollection(coll).countDocuments();
       print("  Collection: " + coll + " -> Count: " + count);
