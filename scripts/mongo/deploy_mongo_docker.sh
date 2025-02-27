@@ -1,8 +1,16 @@
 #!/bin/bash
 # deploy_mongo_docker.sh - Deploy MongoDB via Docker with enhanced security
 # Automatically generates a secure random password and updates .env file
-
 set -euo pipefail
+
+# Check for -y flag for non-interactive/automated deployments
+AUTO_YES=false
+for arg in "$@"; do
+  if [ "$arg" = "-y" ]; then
+    AUTO_YES=true
+    break
+  fi
+done
 
 # Configuration variables
 CONTAINER_NAME="mongodb"
@@ -12,18 +20,23 @@ CONTAINER_PORT=27017
 MONGO_VOLUME="$HOME/mongodb_data"
 DUMP_FOLDER="$(pwd)/data/mongo-dump"
 MONGO_USER="adminUser"
+
 # Generate a secure random password (32 characters)
 MONGO_PASSWORD=$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | head -c 32)
 ENV_FILE=".env"
 
-# Ask user if they want to clean all data
+# Ask user if they want to clean all data, or use default if auto mode
 clean_data=false
-read -p "[PROMPT] Do you want to clean all MongoDB data and start fresh? (y/N): " answer
-if [[ "$answer" =~ ^[Yy]$ ]]; then
-  clean_data=true
-  echo "[INFO] Will clean all MongoDB data before starting."
+if [ "$AUTO_YES" = true ]; then
+  echo "[INFO] Auto mode: Using default settings (keeping existing data)."
 else
-  echo "[INFO] Will keep existing MongoDB data."
+  read -p "[PROMPT] Do you want to clean all MongoDB data and start fresh? (y/N): " answer
+  if [[ "$answer" =~ ^[Yy]$ ]]; then
+    clean_data=true
+    echo "[INFO] Will clean all MongoDB data before starting."
+  else
+    echo "[INFO] Will keep existing MongoDB data."
+  fi
 fi
 
 echo "[INFO] Starting MongoDB deployment with security measures..."
@@ -116,7 +129,6 @@ echo "[INFO] Step 6: Verifying MongoDB connection with authentication..."
 MAX_RETRY=3
 RETRY_COUNT=0
 CONNECTION_SUCCESS=false
-
 while [ $RETRY_COUNT -lt $MAX_RETRY ] && [ "$CONNECTION_SUCCESS" = false ]; do
   if docker exec $CONTAINER_NAME mongosh --quiet --eval "db.runCommand({ping:1})" -u "$MONGO_USER" -p "$MONGO_PASSWORD" --authenticationDatabase admin &>/dev/null; then
     echo "[INFO] MongoDB connection verified successfully with authentication."
@@ -163,4 +175,4 @@ echo "IMPORTANT: Your MongoDB is now secured with a randomly generated"
 echo "password that has been stored in your .env file. You don't need"
 echo "to know the actual password since the connection string is all"
 echo "your application needs."
-echo "================================================================"
+echo "==============================================================="
