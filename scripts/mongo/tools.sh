@@ -1,11 +1,17 @@
 #!/bin/bash
 
-# Load environment variables securely
+# Cargar variables de entorno de manera segura
 set -a
 if [ -f .env ]; then
   source <(grep -v '^#' .env | grep -v '^$')
 fi
 set +a
+
+# Verificar si MONGODB_URL está definido
+if [ -z "$MONGODB_URL" ]; then
+  echo "Error: MONGODB_URL no está configurado en el archivo .env"
+  exit 1
+fi
 
 # Function to show usage
 show_usage() {
@@ -37,19 +43,9 @@ find_mongo_container() {
   return 0
 }
 
-# Check MongoDB URL
-check_mongodb_url() {
-  if [ -z "$MONGODB_URL" ]; then
-    echo "Warning: MONGODB_URL not set in .env file"
-    # Default to localhost if not specified
-    MONGODB_URL="mongodb://localhost:27017"
-  fi
-}
-
 # List all databases and collections
 list_databases() {
   find_mongo_container
-  check_mongodb_url
   
   echo "Listing all databases and collections..."
   docker exec "$MONGO_CONTAINER" mongosh "$MONGODB_URL" --quiet --eval '
@@ -84,7 +80,7 @@ drop_database() {
     exit 0
   fi
   
-  docker exec "$MONGO_CONTAINER" mongosh --eval "
+  docker exec "$MONGO_CONTAINER" mongosh "$MONGODB_URL" --eval "
   db = db.getSiblingDB('$DB_NAME');
   db.getCollectionNames().forEach(function(coll) {
     print('Dropping collection: ' + coll);
@@ -114,7 +110,7 @@ drop_collection() {
     exit 0
   fi
   
-  docker exec "$MONGO_CONTAINER" mongosh --eval "
+  docker exec "$MONGO_CONTAINER" mongosh "$MONGODB_URL" --eval "
   db = db.getSiblingDB('$DB_NAME');
   print('Dropping collection: $COLLECTION');
   db.getCollection('$COLLECTION').drop();
@@ -137,7 +133,7 @@ view_collection() {
   find_mongo_container
   
   echo "Viewing up to $N documents from collection '$COLLECTION' in database '$DB_NAME'..."
-  docker exec "$MONGO_CONTAINER" mongosh --eval "
+  docker exec "$MONGO_CONTAINER" mongosh "$MONGODB_URL" --eval "
   db = db.getSiblingDB('$DB_NAME');
   db.getCollection('$COLLECTION').find({}).limit($N).pretty();
   "
