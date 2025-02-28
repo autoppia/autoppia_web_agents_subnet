@@ -20,7 +20,7 @@ fi
 
 CONFIG_FILE="autoppia_web_agents_subnet/__init__.py"
 VERSION_VARIABLE="__version__"
-SLEEP_INTERVAL=1800  # 30 minutes in seconds
+SLEEP_INTERVAL=900  # 15 minutes in seconds
 
 echo "Starting auto-update service for process: $PROCESS_NAME"
 
