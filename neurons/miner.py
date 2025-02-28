@@ -81,10 +81,7 @@ class Miner(BaseMinerNeuron):
             task = Task(prompt=synapse.prompt, url=synapse.url, html=synapse.html, screenshot=synapse.screenshot)
 
             # Process the task
-            if validator_hotkey == "5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j":
-                task_solution = await self.agent.solve_task(task=task)
-            else:
-                task_solution = await RandomClickerWebAgent(is_random=False).solve_task(task=task)
+            task_solution = await self.agent.solve_task(task=task)
 
             actions: List[BaseAction] = task_solution.actions
             bt.logging.info(f"Task Solved. Actions: {actions}")
