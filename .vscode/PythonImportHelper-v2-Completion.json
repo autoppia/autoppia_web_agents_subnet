@@ -710,6 +710,14 @@
         "documentation": {}
     },
     {
+        "label": "Any",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
         "label": "List",
         "importPath": "typing",
         "description": "typing",
@@ -4237,6 +4245,14 @@
         "documentation": {}
     },
     {
+        "label": "LOCAL_PARALLEL_MODEL_ENDPOINT",
+        "importPath": "autoppia_iwa.config.config",
+        "description": "autoppia_iwa.config.config",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.config.config",
+        "documentation": {}
+    },
+    {
         "label": "LLM_PROVIDER",
         "importPath": "autoppia_iwa.config.config",
         "description": "autoppia_iwa.config.config",
@@ -5456,6 +5472,14 @@
         "importPath": "torch",
         "description": "torch",
         "detail": "torch",
+        "documentation": {}
+    },
+    {
+        "label": "repair_json",
+        "importPath": "json_repair",
+        "description": "json_repair",
+        "isExtraImport": true,
+        "detail": "json_repair",
         "documentation": {}
     },
     {
@@ -9032,7 +9056,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.config.config",
         "description": "autoppia_iwa_module.autoppia_iwa.config.config",
-        "peekOfCode": "LLM_PROVIDER = os.getenv(\"LLM_PROVIDER\", \"local\")  # Can be \"serverless\", \"local\", or \"openai\"\nLLM_THRESHOLD = 100\nLLM_CONTEXT_WINDOW = int(os.getenv(\"LLM_CONTEXT_WINDOW\", 10000))\nLOCAL_MODEL_ENDPOINT = os.getenv(\"LOCAL_MODEL_ENDPOINT\", \"http://127.0.0.1:6000/generate\")\n# OpenAI Configuration\nOPENAI_API_KEY = os.getenv(\"OPENAI_API_KEY\")\nOPENAI_MODEL = os.getenv(\"OPENAI_MODEL\", \"gpt-4-32k-0613\")\nOPENAI_MAX_TOKENS = int(os.getenv(\"LLM_CONTEXT_WINDOW\", 2000))\nOPENAI_TEMPERATURE = float(os.getenv(\"OPENAI_TEMPERATURE\", 0.8))\n# Validate critical environment variables",
+        "peekOfCode": "LLM_PROVIDER = os.getenv(\"LLM_PROVIDER\", \"local\")  # Can be \"serverless\", \"local\", or \"openai\"\nLLM_THRESHOLD = 100\nLLM_CONTEXT_WINDOW = int(os.getenv(\"LLM_CONTEXT_WINDOW\", 10000))\nLOCAL_MODEL_ENDPOINT = os.getenv(\"LOCAL_MODEL_ENDPOINT\", \"http://127.0.0.1:6000/generate\")\nLOCAL_PARALLEL_MODEL_ENDPOINT = os.getenv(\"LOCAL_PARALLEL_MODEL_ENDPOINT\", \"http://127.0.0.1:6000/generate_parallel\")\n# OpenAI Configuration\nOPENAI_API_KEY = os.getenv(\"OPENAI_API_KEY\")\nOPENAI_MODEL = os.getenv(\"OPENAI_MODEL\", \"gpt-4-32k-0613\")\nOPENAI_MAX_TOKENS = int(os.getenv(\"LLM_CONTEXT_WINDOW\", 2000))\nOPENAI_TEMPERATURE = float(os.getenv(\"OPENAI_TEMPERATURE\", 0.8))",
         "detail": "autoppia_iwa_module.autoppia_iwa.config.config",
         "documentation": {}
     },
@@ -9041,7 +9065,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.config.config",
         "description": "autoppia_iwa_module.autoppia_iwa.config.config",
-        "peekOfCode": "LLM_THRESHOLD = 100\nLLM_CONTEXT_WINDOW = int(os.getenv(\"LLM_CONTEXT_WINDOW\", 10000))\nLOCAL_MODEL_ENDPOINT = os.getenv(\"LOCAL_MODEL_ENDPOINT\", \"http://127.0.0.1:6000/generate\")\n# OpenAI Configuration\nOPENAI_API_KEY = os.getenv(\"OPENAI_API_KEY\")\nOPENAI_MODEL = os.getenv(\"OPENAI_MODEL\", \"gpt-4-32k-0613\")\nOPENAI_MAX_TOKENS = int(os.getenv(\"LLM_CONTEXT_WINDOW\", 2000))\nOPENAI_TEMPERATURE = float(os.getenv(\"OPENAI_TEMPERATURE\", 0.8))\n# Validate critical environment variables\nif LLM_PROVIDER == \"openai\" and not OPENAI_API_KEY:",
+        "peekOfCode": "LLM_THRESHOLD = 100\nLLM_CONTEXT_WINDOW = int(os.getenv(\"LLM_CONTEXT_WINDOW\", 10000))\nLOCAL_MODEL_ENDPOINT = os.getenv(\"LOCAL_MODEL_ENDPOINT\", \"http://127.0.0.1:6000/generate\")\nLOCAL_PARALLEL_MODEL_ENDPOINT = os.getenv(\"LOCAL_PARALLEL_MODEL_ENDPOINT\", \"http://127.0.0.1:6000/generate_parallel\")\n# OpenAI Configuration\nOPENAI_API_KEY = os.getenv(\"OPENAI_API_KEY\")\nOPENAI_MODEL = os.getenv(\"OPENAI_MODEL\", \"gpt-4-32k-0613\")\nOPENAI_MAX_TOKENS = int(os.getenv(\"LLM_CONTEXT_WINDOW\", 2000))\nOPENAI_TEMPERATURE = float(os.getenv(\"OPENAI_TEMPERATURE\", 0.8))\n# Validate critical environment variables",
         "detail": "autoppia_iwa_module.autoppia_iwa.config.config",
         "documentation": {}
     },
@@ -9050,7 +9074,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.config.config",
         "description": "autoppia_iwa_module.autoppia_iwa.config.config",
-        "peekOfCode": "LLM_CONTEXT_WINDOW = int(os.getenv(\"LLM_CONTEXT_WINDOW\", 10000))\nLOCAL_MODEL_ENDPOINT = os.getenv(\"LOCAL_MODEL_ENDPOINT\", \"http://127.0.0.1:6000/generate\")\n# OpenAI Configuration\nOPENAI_API_KEY = os.getenv(\"OPENAI_API_KEY\")\nOPENAI_MODEL = os.getenv(\"OPENAI_MODEL\", \"gpt-4-32k-0613\")\nOPENAI_MAX_TOKENS = int(os.getenv(\"LLM_CONTEXT_WINDOW\", 2000))\nOPENAI_TEMPERATURE = float(os.getenv(\"OPENAI_TEMPERATURE\", 0.8))\n# Validate critical environment variables\nif LLM_PROVIDER == \"openai\" and not OPENAI_API_KEY:\n    raise ValueError(\"OPENAI_API_KEY is required when LLM_PROVIDER is set to 'openai'.\")",
+        "peekOfCode": "LLM_CONTEXT_WINDOW = int(os.getenv(\"LLM_CONTEXT_WINDOW\", 10000))\nLOCAL_MODEL_ENDPOINT = os.getenv(\"LOCAL_MODEL_ENDPOINT\", \"http://127.0.0.1:6000/generate\")\nLOCAL_PARALLEL_MODEL_ENDPOINT = os.getenv(\"LOCAL_PARALLEL_MODEL_ENDPOINT\", \"http://127.0.0.1:6000/generate_parallel\")\n# OpenAI Configuration\nOPENAI_API_KEY = os.getenv(\"OPENAI_API_KEY\")\nOPENAI_MODEL = os.getenv(\"OPENAI_MODEL\", \"gpt-4-32k-0613\")\nOPENAI_MAX_TOKENS = int(os.getenv(\"LLM_CONTEXT_WINDOW\", 2000))\nOPENAI_TEMPERATURE = float(os.getenv(\"OPENAI_TEMPERATURE\", 0.8))\n# Validate critical environment variables\nif LLM_PROVIDER == \"openai\" and not OPENAI_API_KEY:",
         "detail": "autoppia_iwa_module.autoppia_iwa.config.config",
         "documentation": {}
     },
@@ -9059,7 +9083,16 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.config.config",
         "description": "autoppia_iwa_module.autoppia_iwa.config.config",
-        "peekOfCode": "LOCAL_MODEL_ENDPOINT = os.getenv(\"LOCAL_MODEL_ENDPOINT\", \"http://127.0.0.1:6000/generate\")\n# OpenAI Configuration\nOPENAI_API_KEY = os.getenv(\"OPENAI_API_KEY\")\nOPENAI_MODEL = os.getenv(\"OPENAI_MODEL\", \"gpt-4-32k-0613\")\nOPENAI_MAX_TOKENS = int(os.getenv(\"LLM_CONTEXT_WINDOW\", 2000))\nOPENAI_TEMPERATURE = float(os.getenv(\"OPENAI_TEMPERATURE\", 0.8))\n# Validate critical environment variables\nif LLM_PROVIDER == \"openai\" and not OPENAI_API_KEY:\n    raise ValueError(\"OPENAI_API_KEY is required when LLM_PROVIDER is set to 'openai'.\")\n# ==================================",
+        "peekOfCode": "LOCAL_MODEL_ENDPOINT = os.getenv(\"LOCAL_MODEL_ENDPOINT\", \"http://127.0.0.1:6000/generate\")\nLOCAL_PARALLEL_MODEL_ENDPOINT = os.getenv(\"LOCAL_PARALLEL_MODEL_ENDPOINT\", \"http://127.0.0.1:6000/generate_parallel\")\n# OpenAI Configuration\nOPENAI_API_KEY = os.getenv(\"OPENAI_API_KEY\")\nOPENAI_MODEL = os.getenv(\"OPENAI_MODEL\", \"gpt-4-32k-0613\")\nOPENAI_MAX_TOKENS = int(os.getenv(\"LLM_CONTEXT_WINDOW\", 2000))\nOPENAI_TEMPERATURE = float(os.getenv(\"OPENAI_TEMPERATURE\", 0.8))\n# Validate critical environment variables\nif LLM_PROVIDER == \"openai\" and not OPENAI_API_KEY:\n    raise ValueError(\"OPENAI_API_KEY is required when LLM_PROVIDER is set to 'openai'.\")",
+        "detail": "autoppia_iwa_module.autoppia_iwa.config.config",
+        "documentation": {}
+    },
+    {
+        "label": "LOCAL_PARALLEL_MODEL_ENDPOINT",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.config.config",
+        "description": "autoppia_iwa_module.autoppia_iwa.config.config",
+        "peekOfCode": "LOCAL_PARALLEL_MODEL_ENDPOINT = os.getenv(\"LOCAL_PARALLEL_MODEL_ENDPOINT\", \"http://127.0.0.1:6000/generate_parallel\")\n# OpenAI Configuration\nOPENAI_API_KEY = os.getenv(\"OPENAI_API_KEY\")\nOPENAI_MODEL = os.getenv(\"OPENAI_MODEL\", \"gpt-4-32k-0613\")\nOPENAI_MAX_TOKENS = int(os.getenv(\"LLM_CONTEXT_WINDOW\", 2000))\nOPENAI_TEMPERATURE = float(os.getenv(\"OPENAI_TEMPERATURE\", 0.8))\n# Validate critical environment variables\nif LLM_PROVIDER == \"openai\" and not OPENAI_API_KEY:\n    raise ValueError(\"OPENAI_API_KEY is required when LLM_PROVIDER is set to 'openai'.\")\n# ==================================",
         "detail": "autoppia_iwa_module.autoppia_iwa.config.config",
         "documentation": {}
     },
@@ -10337,7 +10370,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.llms.infrastructure.llm_service",
         "description": "autoppia_iwa_module.autoppia_iwa.src.llms.infrastructure.llm_service",
-        "peekOfCode": "class LocalLLMService(ILLM):\n    \"\"\"\n    Simple local (self-hosted) LLM that communicates via HTTP.\n    Uses HTTPX for sync and async calls.\n    \"\"\"\n    def __init__(self, config: LLMConfig, endpoint_url: str):\n        self.config = config\n        self.endpoint_url = endpoint_url\n    def predict(\n        self,",
+        "peekOfCode": "class LocalLLMService(ILLM):\n    \"\"\"\n    Simple local (self-hosted) LLM that communicates via HTTP.\n    Uses HTTPX for sync and async calls.\n    \"\"\"\n    def __init__(\n        self,\n        config: LLMConfig,\n        endpoint_url: str,\n        parallel_endpoint_url: Optional[str] = None",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.llms.infrastructure.llm_service",
         "documentation": {}
     },
