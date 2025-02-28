@@ -81,12 +81,12 @@ async def generate_tasks_for_web_project(demo_web_project: WebProject) -> List[T
     pipeline = TaskGenerationPipeline(config=config, web_project=demo_web_project)
     start_time = time.time()
     output: TasksGenerationOutput = await pipeline.generate()
-    tasks_generated = output.tasks
-
     ColoredLogger.info(
-        f"Generated {len(tasks_generated)} tasks in {time.time() - start_time:.2f}s",
+        f"Generated {output} tasks in {time.time() - start_time:.2f}s",
         ColoredLogger.YELLOW,
     )
+    tasks_generated = output.tasks
+
     for t in tasks_generated:
         bt.logging.info(t.prompt)
 
