@@ -5218,6 +5218,30 @@
         "documentation": {}
     },
     {
+        "label": "repair_json",
+        "importPath": "json_repair",
+        "description": "json_repair",
+        "isExtraImport": true,
+        "detail": "json_repair",
+        "documentation": {}
+    },
+    {
+        "label": "Flask",
+        "importPath": "flask",
+        "description": "flask",
+        "isExtraImport": true,
+        "detail": "flask",
+        "documentation": {}
+    },
+    {
+        "label": "request",
+        "importPath": "flask",
+        "description": "flask",
+        "isExtraImport": true,
+        "detail": "flask",
+        "documentation": {}
+    },
+    {
         "label": "Flask",
         "importPath": "flask",
         "description": "flask",
@@ -5239,6 +5263,30 @@
         "description": "flask_cors",
         "isExtraImport": true,
         "detail": "flask_cors",
+        "documentation": {}
+    },
+    {
+        "label": "CORS",
+        "importPath": "flask_cors",
+        "description": "flask_cors",
+        "isExtraImport": true,
+        "detail": "flask_cors",
+        "documentation": {}
+    },
+    {
+        "label": "AutoModelForCausalLM",
+        "importPath": "transformers",
+        "description": "transformers",
+        "isExtraImport": true,
+        "detail": "transformers",
+        "documentation": {}
+    },
+    {
+        "label": "AutoTokenizer",
+        "importPath": "transformers",
+        "description": "transformers",
+        "isExtraImport": true,
+        "detail": "transformers",
         "documentation": {}
     },
     {
@@ -10530,19 +10578,37 @@
     {
         "label": "make_request",
         "kind": 2,
-        "importPath": "autoppia_iwa_module.modules.llm_local.test.test_request_time",
-        "description": "autoppia_iwa_module.modules.llm_local.test.test_request_time",
-        "peekOfCode": "def make_request():\n    url = \"http://127.0.0.1:6000/generate\"\n    headers = {\"Content-Type\": \"application/json\"}\n    data = {\n        \"input\": {\n            \"text\": [\n                {\"role\": \"system\", \"content\": \"You are Qwen, created by Alibaba Cloud. You are a helpful assistant.\"},\n                {\"role\": \"user\", \"content\": \"Give me a short introduction to large language model.\"}\n            ],\n            \"ctx\": 256,",
-        "detail": "autoppia_iwa_module.modules.llm_local.test.test_request_time",
+        "importPath": "autoppia_iwa_module.modules.llm_local.test.test_one_request_time",
+        "description": "autoppia_iwa_module.modules.llm_local.test.test_one_request_time",
+        "peekOfCode": "def make_request():\n    url = \"http://127.0.0.1:6000/generate\"\n    headers = {\"Content-Type\": \"application/json\"}\n    data = {\n        \"messages\": [\n            {\n                \"role\": \"system\",\n                \"content\": \"You are Qwen, created by Alibaba Cloud. You are a helpful assistant.\"\n            },\n            {",
+        "detail": "autoppia_iwa_module.modules.llm_local.test.test_one_request_time",
         "documentation": {}
     },
     {
         "label": "main",
         "kind": 2,
-        "importPath": "autoppia_iwa_module.modules.llm_local.test.test_request_time",
-        "description": "autoppia_iwa_module.modules.llm_local.test.test_request_time",
-        "peekOfCode": "def main():\n    for i in range(1, 101):\n        req_time = make_request()\n        print(f\"Request {i} - {req_time:.2f}s\")\nif __name__ == \"__main__\":\n    main()",
-        "detail": "autoppia_iwa_module.modules.llm_local.test.test_request_time",
+        "importPath": "autoppia_iwa_module.modules.llm_local.test.test_one_request_time",
+        "description": "autoppia_iwa_module.modules.llm_local.test.test_one_request_time",
+        "peekOfCode": "def main():\n    for i in range(1, 101):\n        req_time, result = make_request()\n        print(f\"Request {i} - {req_time:.2f}s\")\n        # Optionally print the LLM output\n        print(\"Output:\", result.get(\"output\", \"No output found\"), \"\\n\")\nif __name__ == \"__main__\":\n    main()",
+        "detail": "autoppia_iwa_module.modules.llm_local.test.test_one_request_time",
+        "documentation": {}
+    },
+    {
+        "label": "make_parallel_request",
+        "kind": 2,
+        "importPath": "autoppia_iwa_module.modules.llm_local.test.test_parallel_request",
+        "description": "autoppia_iwa_module.modules.llm_local.test.test_parallel_request",
+        "peekOfCode": "def make_parallel_request(N=5):\n    \"\"\"\n    Sends a batch of N sub-requests to the /generate_parallel endpoint.\n    Each sub-request has its own set of messages.\n    \"\"\"\n    url = \"http://127.0.0.1:6000/generate_parallel\"\n    headers = {\"Content-Type\": \"application/json\"}\n    # Build the \"requests\" array with N copies (or variations) of the messages\n    requests_list = []\n    for i in range(N):",
+        "detail": "autoppia_iwa_module.modules.llm_local.test.test_parallel_request",
+        "documentation": {}
+    },
+    {
+        "label": "main",
+        "kind": 2,
+        "importPath": "autoppia_iwa_module.modules.llm_local.test.test_parallel_request",
+        "description": "autoppia_iwa_module.modules.llm_local.test.test_parallel_request",
+        "peekOfCode": "def main():\n    parser = argparse.ArgumentParser(description=\"Test parallel requests to /generate_parallel.\")\n    parser.add_argument(\n        \"--number_request\",\n        type=int,\n        default=5,\n        help=\"Number of sub-requests to batch in one call\"\n    )\n    args = parser.parse_args()\n    # Number of sub-requests to batch in one call",
+        "detail": "autoppia_iwa_module.modules.llm_local.test.test_parallel_request",
         "documentation": {}
     },
     {
@@ -10606,6 +10672,87 @@
         "description": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "peekOfCode": "counters = {\n    \"total_requests\": 0,\n    \"json_requests\": 0,\n    \"json_correctly_formatted\": 0,\n    \"json_repair_succeeded\": 0\n}\ndef generate_data(messages, temperature, max_tokens, json_format=False, schema=None):\n    \"\"\"\n    Generate text using Qwen with the given parameters.\n    If json_format=True, attempts to repair and return valid JSON.",
         "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm",
+        "documentation": {}
+    },
+    {
+        "label": "generate_data",
+        "kind": 2,
+        "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
+        "description": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
+        "peekOfCode": "def generate_data(messages, temperature, max_tokens, json_format=False, schema=None):\n    \"\"\"\n    Generate text using Qwen with the given parameters (single sequence).\n    If json_format=True, attempts to repair and return valid JSON.\n    If schema is provided, instruct the model to follow it strictly.\n    Returns (response_text, tokens_in, tokens_out).\n    \"\"\"\n    try:\n        # If we have a JSON schema, prepend an instruction to produce valid JSON\n        if json_format and schema:",
+        "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
+        "documentation": {}
+    },
+    {
+        "label": "generate_data_batch",
+        "kind": 2,
+        "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
+        "description": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
+        "peekOfCode": "def generate_data_batch(requests, temperature, max_tokens):\n    \"\"\"\n    Generate text for multiple conversation \"requests\" in *one* batch.\n    Each element of `requests` is expected to be a dict containing:\n      - \"messages\": list of messages\n      - optionally \"json_format\": bool\n      - optionally \"schema\": dict\n    Returns:\n      outputs (list of response_texts),\n      total_tokens_in (int),",
+        "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
+        "documentation": {}
+    },
+    {
+        "label": "handler",
+        "kind": 2,
+        "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
+        "description": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
+        "peekOfCode": "def handler():\n    \"\"\"\n    Single-request endpoint: processes exactly one list-of-messages.\n    \"\"\"\n    counters[\"total_requests\"] += 1\n    request_number = counters[\"total_requests\"]\n    try:\n        data = request.json or {}\n        messages = data.get(\"messages\", [])\n        temperature = float(data.get(\"temperature\", 0.1))",
+        "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
+        "documentation": {}
+    },
+    {
+        "label": "handler_parallel",
+        "kind": 2,
+        "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
+        "description": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
+        "peekOfCode": "def handler_parallel():\n    \"\"\"\n    Batch-request endpoint: can process multiple sets of messages (requests) in one shot.\n    This is useful to compare throughput (tokens/second) vs many single requests.\n    Expected JSON format:\n    {\n      \"requests\": [\n        {\"messages\": [...], \"json_format\": false, \"schema\": null},\n        {\"messages\": [...], \"json_format\": true,  \"schema\": {...}},\n        ...",
+        "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
+        "documentation": {}
+    },
+    {
+        "label": "app",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
+        "description": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
+        "peekOfCode": "app = Flask(__name__)\nCORS(app, resources={r\"/*\": {\"origins\": \"*\"}})\n# ---------------------------------------------------------------------------\n# The model name as per Qwen docs (Adjust if you prefer Qwen2-7B-Instruct, etc.)\n# ---------------------------------------------------------------------------\nMODEL_NAME = \"Qwen/Qwen2.5-14B-Instruct\"\n# Load tokenizer & model\ntokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)\nmodel = AutoModelForCausalLM.from_pretrained(\n    MODEL_NAME,",
+        "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
+        "documentation": {}
+    },
+    {
+        "label": "MODEL_NAME",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
+        "description": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
+        "peekOfCode": "MODEL_NAME = \"Qwen/Qwen2.5-14B-Instruct\"\n# Load tokenizer & model\ntokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)\nmodel = AutoModelForCausalLM.from_pretrained(\n    MODEL_NAME,\n    torch_dtype=\"auto\",\n    device_map=\"auto\"\n)\nmodel.eval()\n# ---------------------------------------------------------------------------",
+        "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
+        "documentation": {}
+    },
+    {
+        "label": "tokenizer",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
+        "description": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
+        "peekOfCode": "tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)\nmodel = AutoModelForCausalLM.from_pretrained(\n    MODEL_NAME,\n    torch_dtype=\"auto\",\n    device_map=\"auto\"\n)\nmodel.eval()\n# ---------------------------------------------------------------------------\n# Global counters (optional)\n# ---------------------------------------------------------------------------",
+        "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
+        "documentation": {}
+    },
+    {
+        "label": "model",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
+        "description": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
+        "peekOfCode": "model = AutoModelForCausalLM.from_pretrained(\n    MODEL_NAME,\n    torch_dtype=\"auto\",\n    device_map=\"auto\"\n)\nmodel.eval()\n# ---------------------------------------------------------------------------\n# Global counters (optional)\n# ---------------------------------------------------------------------------\ncounters = {",
+        "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
+        "documentation": {}
+    },
+    {
+        "label": "counters",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
+        "description": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
+        "peekOfCode": "counters = {\n    \"total_requests\": 0,\n    \"json_requests\": 0,\n    \"json_correctly_formatted\": 0,\n    \"json_repair_succeeded\": 0\n}\ndef generate_data(messages, temperature, max_tokens, json_format=False, schema=None):\n    \"\"\"\n    Generate text using Qwen with the given parameters (single sequence).\n    If json_format=True, attempts to repair and return valid JSON.",
+        "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm_parallel",
         "documentation": {}
     },
     {
