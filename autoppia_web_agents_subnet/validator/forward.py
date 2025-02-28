@@ -8,7 +8,6 @@ from autoppia_iwa.src.web_agents.classes import TaskSolution
 from autoppia_iwa.src.data_generation.domain.classes import (
     Task,
     TaskGenerationConfig,
-    TasksGenerationOutput,
 )
 from autoppia_iwa.src.demo_webs.classes import WebProject
 from autoppia_iwa.src.demo_webs.config import initialize_demo_webs_projects
@@ -16,7 +15,6 @@ from autoppia_iwa.src.data_generation.application.tasks_generation_pipeline impo
     TaskGenerationPipeline,
 )
 from autoppia_web_agents_subnet.validator.reward import (
-    get_rewards,
     get_rewards_with_details,
 )
 from autoppia_web_agents_subnet.utils.uids import get_random_uids
@@ -80,12 +78,11 @@ async def generate_tasks_for_web_project(demo_web_project: WebProject) -> List[T
     )
     pipeline = TaskGenerationPipeline(config=config, web_project=demo_web_project)
     start_time = time.time()
-    output: List[Task] = await pipeline.generate()
+    tasks_generated: List[Task] = await pipeline.generate()
     ColoredLogger.info(
-        f"Generated {output} tasks in {time.time() - start_time:.2f}s",
+        f"Generated {tasks_generated} tasks in {time.time() - start_time:.2f}s",
         ColoredLogger.YELLOW,
     )
-    tasks_generated = output
 
     for t in tasks_generated:
         bt.logging.info(t.prompt)
