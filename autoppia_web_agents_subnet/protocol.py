@@ -102,6 +102,13 @@ class TaskFeedbackSynapse(Synapse):
     def deserialize(self) -> "TaskFeedbackSynapse":
         return self
 
+    def model_dump(self, *args, **kwargs):
+        base = super().model_dump(*args, **kwargs)
+        # Asegúrate manualmente de serializar self.task con un anidado que preserve subcampos
+        if base.get("task") and hasattr(self.task, "nested_model_dump"):
+            base["task"] = self.task.nested_model_dump()
+        return base
+
     def print_in_terminal(self):
         from autoppia_iwa.src.shared.visualizator import SubnetVisualizer
 
