@@ -5028,6 +5028,14 @@
         "documentation": {}
     },
     {
+        "label": "Image",
+        "importPath": "PIL",
+        "description": "PIL",
+        "isExtraImport": true,
+        "detail": "PIL",
+        "documentation": {}
+    },
+    {
         "label": "string",
         "kind": 6,
         "isExtraImport": true,
@@ -5377,6 +5385,71 @@
         "documentation": {}
     },
     {
+        "label": "torch",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "torch",
+        "description": "torch",
+        "detail": "torch",
+        "documentation": {}
+    },
+    {
+        "label": "CLIPProcessor",
+        "importPath": "transformers",
+        "description": "transformers",
+        "isExtraImport": true,
+        "detail": "transformers",
+        "documentation": {}
+    },
+    {
+        "label": "CLIPModel",
+        "importPath": "transformers",
+        "description": "transformers",
+        "isExtraImport": true,
+        "detail": "transformers",
+        "documentation": {}
+    },
+    {
+        "label": "AutoModelForCausalLM",
+        "importPath": "transformers",
+        "description": "transformers",
+        "isExtraImport": true,
+        "detail": "transformers",
+        "documentation": {}
+    },
+    {
+        "label": "AutoTokenizer",
+        "importPath": "transformers",
+        "description": "transformers",
+        "isExtraImport": true,
+        "detail": "transformers",
+        "documentation": {}
+    },
+    {
+        "label": "AutoModelForCausalLM",
+        "importPath": "transformers",
+        "description": "transformers",
+        "isExtraImport": true,
+        "detail": "transformers",
+        "documentation": {}
+    },
+    {
+        "label": "AutoTokenizer",
+        "importPath": "transformers",
+        "description": "transformers",
+        "isExtraImport": true,
+        "detail": "transformers",
+        "documentation": {}
+    },
+    {
+        "label": "pipeline",
+        "importPath": "transformers",
+        "description": "transformers",
+        "isExtraImport": true,
+        "detail": "transformers",
+        "documentation": {}
+    },
+    {
         "label": "gc",
         "kind": 6,
         "isExtraImport": true,
@@ -5431,55 +5504,6 @@
         "description": "flask_cors",
         "isExtraImport": true,
         "detail": "flask_cors",
-        "documentation": {}
-    },
-    {
-        "label": "AutoModelForCausalLM",
-        "importPath": "transformers",
-        "description": "transformers",
-        "isExtraImport": true,
-        "detail": "transformers",
-        "documentation": {}
-    },
-    {
-        "label": "AutoTokenizer",
-        "importPath": "transformers",
-        "description": "transformers",
-        "isExtraImport": true,
-        "detail": "transformers",
-        "documentation": {}
-    },
-    {
-        "label": "AutoModelForCausalLM",
-        "importPath": "transformers",
-        "description": "transformers",
-        "isExtraImport": true,
-        "detail": "transformers",
-        "documentation": {}
-    },
-    {
-        "label": "AutoTokenizer",
-        "importPath": "transformers",
-        "description": "transformers",
-        "isExtraImport": true,
-        "detail": "transformers",
-        "documentation": {}
-    },
-    {
-        "label": "pipeline",
-        "importPath": "transformers",
-        "description": "transformers",
-        "isExtraImport": true,
-        "detail": "transformers",
-        "documentation": {}
-    },
-    {
-        "label": "torch",
-        "kind": 6,
-        "isExtraImport": true,
-        "importPath": "torch",
-        "description": "torch",
-        "detail": "torch",
         "documentation": {}
     },
     {
@@ -10884,6 +10908,96 @@
         "description": "autoppia_iwa_module.modules.llm_local.test.test_parallel_request",
         "peekOfCode": "def main():\n    parser = argparse.ArgumentParser(description=\"Test parallel requests to /generate_parallel.\")\n    parser.add_argument(\n        \"--number_request\",\n        type=int,\n        default=5,\n        help=\"Number of sub-requests to batch in one call\"\n    )\n    args = parser.parse_args()\n    # Number of sub-requests to batch in one call",
         "detail": "autoppia_iwa_module.modules.llm_local.test.test_parallel_request",
+        "documentation": {}
+    },
+    {
+        "label": "model_name",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "description": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "peekOfCode": "model_name = \"openai/clip-vit-base-patch32\"\nmodel = CLIPModel.from_pretrained(model_name)\nprocessor = CLIPProcessor.from_pretrained(model_name)\n# 2. Load your screenshot (replace with your local file path or URL)\nimage_path = \"screenshot.png\"\nimage = Image.open(image_path).convert(\"RGB\")\n# 3. Define text labels for your use case\nlabels = [\n    \"The user is logged in\",\n    \"The user is not logged in\"",
+        "detail": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "documentation": {}
+    },
+    {
+        "label": "model",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "description": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "peekOfCode": "model = CLIPModel.from_pretrained(model_name)\nprocessor = CLIPProcessor.from_pretrained(model_name)\n# 2. Load your screenshot (replace with your local file path or URL)\nimage_path = \"screenshot.png\"\nimage = Image.open(image_path).convert(\"RGB\")\n# 3. Define text labels for your use case\nlabels = [\n    \"The user is logged in\",\n    \"The user is not logged in\"\n]",
+        "detail": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "documentation": {}
+    },
+    {
+        "label": "processor",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "description": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "peekOfCode": "processor = CLIPProcessor.from_pretrained(model_name)\n# 2. Load your screenshot (replace with your local file path or URL)\nimage_path = \"screenshot.png\"\nimage = Image.open(image_path).convert(\"RGB\")\n# 3. Define text labels for your use case\nlabels = [\n    \"The user is logged in\",\n    \"The user is not logged in\"\n]\n# 4. Process inputs for CLIP",
+        "detail": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "documentation": {}
+    },
+    {
+        "label": "image_path",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "description": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "peekOfCode": "image_path = \"screenshot.png\"\nimage = Image.open(image_path).convert(\"RGB\")\n# 3. Define text labels for your use case\nlabels = [\n    \"The user is logged in\",\n    \"The user is not logged in\"\n]\n# 4. Process inputs for CLIP\ninputs = processor(\n    text=labels,",
+        "detail": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "documentation": {}
+    },
+    {
+        "label": "image",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "description": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "peekOfCode": "image = Image.open(image_path).convert(\"RGB\")\n# 3. Define text labels for your use case\nlabels = [\n    \"The user is logged in\",\n    \"The user is not logged in\"\n]\n# 4. Process inputs for CLIP\ninputs = processor(\n    text=labels,\n    images=image,",
+        "detail": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "documentation": {}
+    },
+    {
+        "label": "labels",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "description": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "peekOfCode": "labels = [\n    \"The user is logged in\",\n    \"The user is not logged in\"\n]\n# 4. Process inputs for CLIP\ninputs = processor(\n    text=labels,\n    images=image,\n    return_tensors=\"pt\",\n    padding=True",
+        "detail": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "documentation": {}
+    },
+    {
+        "label": "inputs",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "description": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "peekOfCode": "inputs = processor(\n    text=labels,\n    images=image,\n    return_tensors=\"pt\",\n    padding=True\n)\n# 5. Forward pass: get similarity logits for image-text pairs\nwith torch.no_grad():\n    outputs = model(**inputs)\n    logits_per_image = outputs.logits_per_image  # shape: [batch_size, num_labels]",
+        "detail": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "documentation": {}
+    },
+    {
+        "label": "probs",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "description": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "peekOfCode": "probs = logits_per_image.softmax(dim=1)  # shape: [1, num_labels]\n# 7. Print out probabilities for each label\nfor label, prob in zip(labels, probs[0].tolist()):\n    print(f\"{label}: {prob:.4f}\")\n# Optionally, pick the label with the highest probability\npredicted_idx = logits_per_image.argmax(dim=1).item()\npredicted_label = labels[predicted_idx]\nprint(f\"\\nPredicted: {predicted_label}\")",
+        "detail": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "documentation": {}
+    },
+    {
+        "label": "predicted_idx",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "description": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "peekOfCode": "predicted_idx = logits_per_image.argmax(dim=1).item()\npredicted_label = labels[predicted_idx]\nprint(f\"\\nPredicted: {predicted_label}\")",
+        "detail": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "documentation": {}
+    },
+    {
+        "label": "predicted_label",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "description": "autoppia_iwa_module.modules.llm_local.run_local_clip",
+        "peekOfCode": "predicted_label = labels[predicted_idx]\nprint(f\"\\nPredicted: {predicted_label}\")",
+        "detail": "autoppia_iwa_module.modules.llm_local.run_local_clip",
         "documentation": {}
     },
     {
