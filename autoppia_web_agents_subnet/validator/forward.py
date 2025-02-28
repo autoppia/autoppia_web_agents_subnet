@@ -370,16 +370,15 @@ async def send_feedback_synapse_to_miners(
     (if you don't want to send the screenshot or heavy fields).
     """
     feedback_list = []
-    feedback_task = copy.deepcopy(task)
-    # Eliminar o dejar en None el screenshot en el feedback
-    feedback_task.screenshot = ""
-    feedback_task.html = ""
-    # (Opcional) limpiar HTML también si deseas: feedback_task.html = ""
-    ColoredLogger.info(
-        f"{feedback_task}",
-        ColoredLogger.BLUE,
-    )
     for i, miner_uid in enumerate(miner_uids):
+        feedback_task = copy.deepcopy(task)
+        # Eliminar o dejar en None el screenshot en el feedback
+        feedback_task.screenshot = ""
+        feedback_task.html = ""
+        ColoredLogger.info(
+            f"{feedback_task}",
+            ColoredLogger.BLUE,
+        )
         # Crear una copia para no modificar el 'Task' original:
 
         # Construir el TaskFeedbackSynapse con el 'Task' ya sin screenshot
