@@ -1,11 +1,28 @@
 #!/bin/bash
-# check_updates.sh - Check for updates and redeploy if a new version is available
+# auto_update_validator.sh - Check for updates and redeploy if a new version is available
 # If deployment fails, revert to the previous codebase and redeploy the old version.
 
+# Set default values or use arguments if provided
 PROCESS_NAME="subnet-36-validator"
+WALLET_NAME="your_coldkey"
+WALLET_HOTKEY="your_hotkey"
+
+# Parse command line arguments
+if [ $# -ge 1 ]; then
+    PROCESS_NAME="$1"
+fi
+if [ $# -ge 2 ]; then
+    WALLET_NAME="$2"
+fi
+if [ $# -ge 3 ]; then
+    WALLET_HOTKEY="$3"
+fi
+
 CONFIG_FILE="autoppia_web_agents_subnet/__init__.py"
 VERSION_VARIABLE="__version__"
-SLEEP_INTERVAL=5  # 30 minutes
+SLEEP_INTERVAL=900  # 15 minutes in seconds
+
+echo "Starting auto-update service for process: $PROCESS_NAME"
 
 get_local_version() {
     grep "$VERSION_VARIABLE" "$CONFIG_FILE" | head -n1 | sed -E 's/.*=[[:space:]]*["'\''"]?([^"'\'' ]+)["'\''"]?.*/\1/'
@@ -30,15 +47,12 @@ redeploy_old_version() {
     cd autoppia_iwa
     git reset --hard "$PREV_IWA_HEAD"
     cd ..
-
     # Revert main repo
     git reset --hard "$PREV_MAIN_HEAD"
-
     echo "Reinstalling old version..."
     source validator_env/bin/activate
     pip install -e .
     pip install -e autoppia_iwa
-
     echo "Restarting old version in PM2..."
     pm2 restart "$PROCESS_NAME" || pm2 start neurons/validator.py \
         --name "$PROCESS_NAME" \
@@ -46,9 +60,8 @@ redeploy_old_version() {
         -- \
         --netuid 36 \
         --subtensor.network finney \
-        --wallet.name your_coldkey \
-        --wallet.hotkey your_hotkey
-
+        --wallet.name "$WALLET_NAME" \
+        --wallet.hotkey "$WALLET_HOTKEY"
     echo "Old version redeployed."
 }
 
@@ -59,7 +72,18 @@ update_and_deploy() {
         redeploy_old_version
         return 1
     fi
-
+    
+    # Deploy MongoDB if script exists
+    if [ -f "./scripts/mongo/deploy_mongo_docker.sh" ]; then
+        echo "Deploying MongoDB via Docker..."
+        chmod +x ./scripts/mongo/deploy_mongo_docker.sh
+        if ! ./scripts/mongo/deploy_mongo_docker.sh -y; then
+            echo "MongoDB deployment failed."
+            redeploy_old_version
+            return 1
+        fi
+        echo "MongoDB deployment completed successfully."
+    fi
     cd autoppia_iwa
     if ! git pull origin main; then
         echo "Failed to pull autoppia_iwa."
@@ -68,22 +92,18 @@ update_and_deploy() {
         return 1
     fi
     cd ..
-
     echo "Installing new code..."
     source validator_env/bin/activate
-
     if ! pip install -e .; then
         echo "pip install -e . failed"
         redeploy_old_version
         return 1
     fi
-
     if ! pip install -e autoppia_iwa; then
         echo "pip install -e autoppia_iwa failed"
         redeploy_old_version
         return 1
     fi
-
     echo "Restarting PM2 process..."
     if ! pm2 restart "$PROCESS_NAME"; then
         echo "PM2 restart failed"
@@ -101,7 +121,6 @@ update_and_deploy() {
             return 1
         fi
     fi
-
     echo "Deployment completed successfully."
     return 0
 }
@@ -109,17 +128,16 @@ update_and_deploy() {
 while true; do
     LOCAL_VERSION=$(get_local_version)
     REMOTE_VERSION=$(get_remote_version)
-
+    
     if [ -z "$REMOTE_VERSION" ]; then
         echo "Unable to retrieve remote version."
     else
         if version_greater "$REMOTE_VERSION" "$LOCAL_VERSION"; then
             echo "New version detected: $REMOTE_VERSION (local: $LOCAL_VERSION)"
-
             # Capture current commits before updating
             PREV_MAIN_HEAD=$(git rev-parse HEAD)
             PREV_IWA_HEAD=$(cd autoppia_iwa && git rev-parse HEAD)
-
+            
             if update_and_deploy; then
                 echo "Update successful: now at version $REMOTE_VERSION."
             else
@@ -129,6 +147,7 @@ while true; do
             echo "No update available (local: $LOCAL_VERSION, remote: $REMOTE_VERSION)."
         fi
     fi
-
+    
+    echo "Sleeping for $(($SLEEP_INTERVAL/60)) minutes before next check..."
     sleep $SLEEP_INTERVAL
 done
