@@ -105,7 +105,10 @@ async def process_tasks(validator, web_project, tasks_generated: List[Task]) -> 
     total_time_start = time.time()
     tasks_count = 0
     tasks_total_time = 0.0
-
+    ColoredLogger.info(
+        f"VOY A PROCESAR LAS TAREAS",
+        ColoredLogger.YELLOW,
+    )
     for index, task in enumerate(tasks_generated):
         task_start_time = time.time()
         bt.logging.debug(
@@ -117,7 +120,10 @@ async def process_tasks(validator, web_project, tasks_generated: List[Task]) -> 
 
         # Choose random subset of miners
         miner_uids = get_random_uids(validator, k=SAMPLE_SIZE)
-        bt.logging.info(f"Miner UIDs chosen: {miner_uids}")
+        ColoredLogger.info(
+            f"Miner UIDs chosen: {miner_uids}",
+            ColoredLogger.RED,
+        )
         miner_axons = [validator.metagraph.axons[uid] for uid in miner_uids]
 
         # Prepare synapse
