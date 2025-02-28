@@ -51,13 +51,11 @@ chmod +x scripts/validator/install_docker.sh
 cp .env.example .env
 ```
 
-5. Install **MongoDB**
-
-A) with Docker for caching web analysis results:
+5. Install **MongoDB** (Docker)
 
 ```bash
-chmod +x scripts/mongo/deploy_mongo_docker.sh
-./scripts/mongo/deploy_mongo_docker.sh
+chmod +x scripts/mongo/deploy_mongo_docker.sh 
+./scripts/mongo/deploy_mongo_docker.sh -y
 ```
 
 Change mongo url in .env if you have deployed it in another IP or Port.
@@ -117,7 +115,7 @@ CUDA_VISIBLE_DEVICES=0 pm2 start autoppia_iwa_module/modules/llm_local/run_local
 To verify if your LLM is working correctly:
 
 ```bash
-python3 autoppia_iwa_module/modules/llm_local/test/test.py
+python3 autoppia_iwa_module/modules/llm_local/test/test_one_request.py
 ```
 
 # DEMO WEBS SETUP
@@ -172,7 +170,7 @@ pm2 start neurons/validator.py \
   --subtensor.network finney \
   --wallet.name your_coldkey \
   --wallet.hotkey your_hotkey \
-  -logging.debug
+  --logging.debug
   
 ```
 
@@ -182,7 +180,7 @@ Script for _automatic version control_ and _safe updates_ of your validator:
 
 ```bash
 chmod +x scripts/validator/auto_update_validator.sh
-pm2 start --name auto_update_validator --interpreter /bin/bash ./scripts/validator/auto_update_validator.sh
+pm2 start --name auto_update_validator --interpreter /bin/bash ./scripts/validator/auto_update_validator.sh -- subnet-36-validator your_actual_coldkey your_actual_hotkey
 ```
 
 _Note_: If you change something edit the script to match your PM2 configuration (process name, wallet keys) before running it.

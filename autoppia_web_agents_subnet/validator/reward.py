@@ -123,11 +123,12 @@ async def get_rewards(
     for i, solution in enumerate(task_solutions):
         if not solution.actions:
             final_rewards[i] = 0.0
+        elif final_rewards[i] >= 0.25:
+            final_rewards[i] = 1.0
+        elif final_rewards[i] <= 0.0:
+            final_rewards[i] = min_response_reward
         else:
-            if final_rewards[i] <= 0.0:
-                final_rewards[i] = min_response_reward
-            else:
-                final_rewards[i] = max(final_rewards[i], min_correct_format_score)
+            final_rewards[i] = max(final_rewards[i], min_correct_format_score)
 
     bt.logging.debug(f"Final Rewards after format checks: {final_rewards}")
     return np.array(final_rewards)
