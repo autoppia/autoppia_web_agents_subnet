@@ -7,6 +7,8 @@ from autoppia_iwa.src.data_generation.domain.classes import Task
 from rich.console import Console
 from rich.table import Table
 
+from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+
 
 class MinerStats(BaseModel):
     """
@@ -104,6 +106,10 @@ class TaskFeedbackSynapse(Synapse):
         from autoppia_iwa.src.shared.visualizator import SubnetVisualizer
 
         visualizer = SubnetVisualizer()
+        ColoredLogger.info(
+            f" PRINTEANDO EN TERMINAL",
+            ColoredLogger.GREEN,
+        )
 
         # If we have enough data for a full evaluation
         if (
@@ -112,6 +118,11 @@ class TaskFeedbackSynapse(Synapse):
             and self.actions
             and self.test_results_matrix
         ):
+            ColoredLogger.info(
+                f" 1er if",
+                ColoredLogger.GREEN,
+            )
+
             visualizer.show_full_evaluation(
                 agent_id=self.miner_id,
                 task=self.task,
@@ -120,6 +131,10 @@ class TaskFeedbackSynapse(Synapse):
                 evaluation_result=self.evaluation_result,
             )
         elif self.task and hasattr(self.task, "id"):
+            ColoredLogger.info(
+                f" 2 if",
+                ColoredLogger.GREEN,
+            )
             # Partial data => just show the task
             visualizer.show_task_with_tests(self.task)
             console = Console()
@@ -127,6 +142,10 @@ class TaskFeedbackSynapse(Synapse):
                 f"\n[bold yellow]Insufficient actions or test results for {self.miner_id}[/bold yellow]"
             )
         else:
+            ColoredLogger.info(
+                f" 3 if",
+                ColoredLogger.GREEN,
+            )
             console = Console()
             table = Table(
                 title=f"Miner Feedback Stats for {self.miner_id}",

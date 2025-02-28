@@ -339,6 +339,17 @@ async def update_miner_stats_and_scores(
     return evaluation_time
 
 
+import copy
+import asyncio
+import bittensor as bt
+from typing import List, Dict, Any
+from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+from autoppia_web_agents_subnet.protocol import TaskFeedbackSynapse, MinerStats
+from autoppia_web_agents_subnet.utils.dendrite import dendrite_with_retries
+from autoppia_iwa.src.data_generation.domain.classes import Task
+from autoppia_iwa.src.web_agents.classes import TaskSolution
+
+
 async def send_feedback_synapse_to_miners(
     validator,
     miner_axons: List[bt.axon],
@@ -349,15 +360,24 @@ async def send_feedback_synapse_to_miners(
     evaluation_results: List[Dict[str, Any]],
 ) -> None:
     """
-    Sends a TaskFeedbackSynapse to each miner containing the detailed results.
+    Sends a TaskFeedbackSynapse to each miner, removing the screenshot
+    (if you don't want to send the screenshot or heavy fields).
     """
     feedback_list = []
 
     for i, miner_uid in enumerate(miner_uids):
+        # Crear una copia para no modificar el 'Task' original:
+        feedback_task = copy.deepcopy(task)
+        # Eliminar o dejar en None el screenshot en el feedback
+        feedback_task.screenshot = None
+        feedback_task.html = None
+        # (Opcional) limpiar HTML también si deseas: feedback_task.html = ""
+
+        # Construir el TaskFeedbackSynapse con el 'Task' ya sin screenshot
         feedback = TaskFeedbackSynapse(
             version="v1",
             miner_id=str(miner_uid),
-            task=task,
+            task=feedback_task,
             actions=task_solutions[i].actions if i < len(task_solutions) else [],
             test_results_matrix=(
                 test_results_matrices[i] if i < len(test_results_matrices) else None
@@ -370,7 +390,7 @@ async def send_feedback_synapse_to_miners(
         feedback_list.append(feedback)
 
     ColoredLogger.info(
-        f"Sending detailed TaskFeedbackSynapse to {len(miner_uids)} miners in parallel",
+        f"Sending TaskFeedbackSynapse to {len(miner_uids)} miners in parallel",
         ColoredLogger.BLUE,
     )
 
@@ -387,10 +407,7 @@ async def send_feedback_synapse_to_miners(
                 )
             )
         )
-    ColoredLogger.info(
-        f"QUE VOY",
-        ColoredLogger.RED,
-    )
+
     results = await asyncio.gather(*feedback_tasks)
     bt.logging.info("TaskFeedbackSynapse responses received.")
     bt.logging.success("Task step completed successfully.")
