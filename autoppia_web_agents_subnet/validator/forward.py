@@ -377,11 +377,6 @@ async def forward(self) -> None:
             bt.logging.warning("No tasks generated, skipping forward step.")
             return
 
-        bt.logging.info("Prompts: ")
-        for task in tasks_generated:
-            bt.logging.info(task.prompt)
-        bt.logging.info("")
-
         # 3. Process each task
         await process_tasks(self, demo_web_project, tasks_generated)
         bt.logging.success("Forward step completed successfully.")
