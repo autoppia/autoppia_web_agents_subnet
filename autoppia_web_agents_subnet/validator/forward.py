@@ -391,7 +391,7 @@ async def send_feedback_synapse_to_miners(
             evaluation_result=(
                 evaluation_results[i] if i < len(evaluation_results) else None
             ),
-            stats=validator.miner_stats[miner_uid],
+            stats=None,
         )
         feedback_list.append(feedback)
 
