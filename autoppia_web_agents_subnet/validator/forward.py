@@ -77,8 +77,7 @@ async def generate_tasks_for_web_project(demo_web_project: WebProject) -> List[T
     )
     pipeline = TaskGenerationPipeline(config=config, web_project=demo_web_project)
     start_time = time.time()
-    output: TasksGenerationOutput = await pipeline.generate()
-    tasks_generated = output.tasks
+    tasks_generated: List[Task] = await pipeline.generate()
     ColoredLogger.info(
         f"Generated {len(tasks_generated)} tasks in {time.time() - start_time:.2f}s",
         ColoredLogger.YELLOW,
