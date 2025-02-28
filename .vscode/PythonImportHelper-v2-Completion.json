@@ -10870,7 +10870,7 @@
         "kind": 2,
         "importPath": "autoppia_iwa_module.modules.llm_local.test.test_one_request",
         "description": "autoppia_iwa_module.modules.llm_local.test.test_one_request",
-        "peekOfCode": "def make_request():\n    url = \"http://127.0.0.1:6000/generate\"\n    headers = {\"Content-Type\": \"application/json\"}\n    # Instead of putting everything under \"input\": {...},\n    # we send messages/temperature/max_tokens at the top level.\n    data = {\n        \"messages\": [\n            {\n                \"role\": \"system\",\n                \"content\": \"You are Qwen, created by Alibaba Cloud. You are a helpful assistant.\"",
+        "peekOfCode": "def make_request():\n    url = \"http://194.68.245.61:22185/generate\"\n    headers = {\"Content-Type\": \"application/json\"}\n    # Instead of putting everything under \"input\": {...},\n    # we send messages/temperature/max_tokens at the top level.\n    data = {\n        \"messages\": [\n            {\n                \"role\": \"system\",\n                \"content\": \"You are Qwen, created by Alibaba Cloud. You are a helpful assistant.\"",
         "detail": "autoppia_iwa_module.modules.llm_local.test.test_one_request",
         "documentation": {}
     },
