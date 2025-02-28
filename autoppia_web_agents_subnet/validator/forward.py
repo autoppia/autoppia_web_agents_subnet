@@ -396,6 +396,10 @@ async def send_feedback_synapse_to_miners(
             f"{feedback.model_dump()}",
             ColoredLogger.BLUE,
         )
+        ColoredLogger.info(
+            f"{feedback_task.tests}",
+            ColoredLogger.RED,
+        )
         feedback_list.append(feedback)
 
     ColoredLogger.info(
