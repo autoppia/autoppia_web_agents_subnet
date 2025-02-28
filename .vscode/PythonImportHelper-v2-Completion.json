@@ -286,6 +286,14 @@
         "documentation": {}
     },
     {
+        "label": "Optional",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
         "label": "List",
         "importPath": "typing",
         "description": "typing",
@@ -1464,14 +1472,6 @@
         "documentation": {}
     },
     {
-        "label": "TaskGenerationPipeline",
-        "importPath": "autoppia_iwa.src.data_generation.application.tasks_generation_pipeline",
-        "description": "autoppia_iwa.src.data_generation.application.tasks_generation_pipeline",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.data_generation.application.tasks_generation_pipeline",
-        "documentation": {}
-    },
-    {
         "label": "TaskGenerationConfig",
         "importPath": "autoppia_iwa.src.data_generation.domain.classes",
         "description": "autoppia_iwa.src.data_generation.domain.classes",
@@ -1497,14 +1497,6 @@
     },
     {
         "label": "TasksGenerationOutput",
-        "importPath": "autoppia_iwa.src.data_generation.domain.classes",
-        "description": "autoppia_iwa.src.data_generation.domain.classes",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.data_generation.domain.classes",
-        "documentation": {}
-    },
-    {
-        "label": "TaskGenerationConfig",
         "importPath": "autoppia_iwa.src.data_generation.domain.classes",
         "description": "autoppia_iwa.src.data_generation.domain.classes",
         "isExtraImport": true,
@@ -2128,6 +2120,22 @@
         "documentation": {}
     },
     {
+        "label": "ConcurrentEvaluator",
+        "importPath": "autoppia_iwa.src.evaluation.evaluator.evaluator",
+        "description": "autoppia_iwa.src.evaluation.evaluator.evaluator",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.evaluation.evaluator.evaluator",
+        "documentation": {}
+    },
+    {
+        "label": "EvaluatorConfig",
+        "importPath": "autoppia_iwa.src.evaluation.evaluator.evaluator",
+        "description": "autoppia_iwa.src.evaluation.evaluator.evaluator",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.evaluation.evaluator.evaluator",
+        "documentation": {}
+    },
+    {
         "label": "BaseAction",
         "importPath": "autoppia_iwa.src.execution.actions.base",
         "description": "autoppia_iwa.src.execution.actions.base",
@@ -2320,6 +2328,14 @@
         "documentation": {}
     },
     {
+        "label": "BaseAgent",
+        "importPath": "autoppia_iwa.src.web_agents.base",
+        "description": "autoppia_iwa.src.web_agents.base",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.web_agents.base",
+        "documentation": {}
+    },
+    {
         "label": "IWebAgent",
         "importPath": "autoppia_iwa.src.web_agents.base",
         "description": "autoppia_iwa.src.web_agents.base",
@@ -2464,11 +2480,11 @@
         "documentation": {}
     },
     {
-        "label": "ApifiedWebAgent",
-        "importPath": "autoppia_iwa.src.web_agents.apified_agent",
-        "description": "autoppia_iwa.src.web_agents.apified_agent",
+        "label": "TaskSolution",
+        "importPath": "autoppia_iwa.src.web_agents.classes",
+        "description": "autoppia_iwa.src.web_agents.classes",
         "isExtraImport": true,
-        "detail": "autoppia_iwa.src.web_agents.apified_agent",
+        "detail": "autoppia_iwa.src.web_agents.classes",
         "documentation": {}
     },
     {
@@ -2552,11 +2568,19 @@
         "documentation": {}
     },
     {
-        "label": "AppBootstrap",
-        "importPath": "autoppia_iwa.src.bootstrap",
-        "description": "autoppia_iwa.src.bootstrap",
+        "label": "ApifiedWebAgent",
+        "importPath": "autoppia_iwa.src.web_agents.apified_agent",
+        "description": "autoppia_iwa.src.web_agents.apified_agent",
         "isExtraImport": true,
-        "detail": "autoppia_iwa.src.bootstrap",
+        "detail": "autoppia_iwa.src.web_agents.apified_agent",
+        "documentation": {}
+    },
+    {
+        "label": "ApifiedWebAgent",
+        "importPath": "autoppia_iwa.src.web_agents.apified_agent",
+        "description": "autoppia_iwa.src.web_agents.apified_agent",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.web_agents.apified_agent",
         "documentation": {}
     },
     {
@@ -2720,11 +2744,11 @@
         "documentation": {}
     },
     {
-        "label": "WebProject",
-        "importPath": "autoppia_iwa.src.demo_webs.classes",
-        "description": "autoppia_iwa.src.demo_webs.classes",
+        "label": "AppBootstrap",
+        "importPath": "autoppia_iwa.src.bootstrap",
+        "description": "autoppia_iwa.src.bootstrap",
         "isExtraImport": true,
-        "detail": "autoppia_iwa.src.demo_webs.classes",
+        "detail": "autoppia_iwa.src.bootstrap",
         "documentation": {}
     },
     {
@@ -2864,14 +2888,6 @@
         "documentation": {}
     },
     {
-        "label": "initialize_test_demo_web_projects",
-        "importPath": "autoppia_iwa.src.demo_webs.config",
-        "description": "autoppia_iwa.src.demo_webs.config",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.demo_webs.config",
-        "documentation": {}
-    },
-    {
         "label": "initialize_demo_webs_projects",
         "importPath": "autoppia_iwa.src.demo_webs.config",
         "description": "autoppia_iwa.src.demo_webs.config",
@@ -2973,22 +2989,6 @@
         "description": "autoppia_iwa.src.di_container",
         "isExtraImport": true,
         "detail": "autoppia_iwa.src.di_container",
-        "documentation": {}
-    },
-    {
-        "label": "DIContainer",
-        "importPath": "autoppia_iwa.src.di_container",
-        "description": "autoppia_iwa.src.di_container",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.di_container",
-        "documentation": {}
-    },
-    {
-        "label": "TestGenerationPipeline",
-        "importPath": "autoppia_iwa.src.data_generation.application.tests.test_generation_pipeline",
-        "description": "autoppia_iwa.src.data_generation.application.tests.test_generation_pipeline",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.data_generation.application.tests.test_generation_pipeline",
         "documentation": {}
     },
     {
@@ -3088,6 +3088,14 @@
         "documentation": {}
     },
     {
+        "label": "RandomClickerWebAgent",
+        "importPath": "autoppia_iwa.src.web_agents.random.agent",
+        "description": "autoppia_iwa.src.web_agents.random.agent",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.web_agents.random.agent",
+        "documentation": {}
+    },
+    {
         "label": "logging",
         "kind": 6,
         "isExtraImport": true,
@@ -3102,6 +3110,22 @@
         "description": "autoppia_iwa.src.shared.entrypoints.tasks",
         "isExtraImport": true,
         "detail": "autoppia_iwa.src.shared.entrypoints.tasks",
+        "documentation": {}
+    },
+    {
+        "label": "generate_tasks_for_project",
+        "importPath": "autoppia_iwa.src.shared.entrypoints.tasks",
+        "description": "autoppia_iwa.src.shared.entrypoints.tasks",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.shared.entrypoints.tasks",
+        "documentation": {}
+    },
+    {
+        "label": "TimingMetrics",
+        "importPath": "autoppia_iwa.src.shared.entrypoints.metrics",
+        "description": "autoppia_iwa.src.shared.entrypoints.metrics",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.shared.entrypoints.metrics",
         "documentation": {}
     },
     {
@@ -3145,6 +3169,38 @@
         "documentation": {}
     },
     {
+        "label": "print_performance_statistics",
+        "importPath": "autoppia_iwa.src.shared.entrypoints.results",
+        "description": "autoppia_iwa.src.shared.entrypoints.results",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.shared.entrypoints.results",
+        "documentation": {}
+    },
+    {
+        "label": "plot_results",
+        "importPath": "autoppia_iwa.src.shared.entrypoints.results",
+        "description": "autoppia_iwa.src.shared.entrypoints.results",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.shared.entrypoints.results",
+        "documentation": {}
+    },
+    {
+        "label": "plot_task_comparison",
+        "importPath": "autoppia_iwa.src.shared.entrypoints.results",
+        "description": "autoppia_iwa.src.shared.entrypoints.results",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.shared.entrypoints.results",
+        "documentation": {}
+    },
+    {
+        "label": "save_results_to_json",
+        "importPath": "autoppia_iwa.src.shared.entrypoints.results",
+        "description": "autoppia_iwa.src.shared.entrypoints.results",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.shared.entrypoints.results",
+        "documentation": {}
+    },
+    {
         "label": "ConsolidatedSolutionCache",
         "importPath": "autoppia_iwa.src.shared.entrypoints.solutions",
         "description": "autoppia_iwa.src.shared.entrypoints.solutions",
@@ -3153,20 +3209,11 @@
         "documentation": {}
     },
     {
-        "label": "traceback",
-        "kind": 6,
+        "label": "ConsolidatedSolutionCache",
+        "importPath": "autoppia_iwa.src.shared.entrypoints.solutions",
+        "description": "autoppia_iwa.src.shared.entrypoints.solutions",
         "isExtraImport": true,
-        "importPath": "traceback",
-        "description": "traceback",
-        "detail": "traceback",
-        "documentation": {}
-    },
-    {
-        "label": "print_exception",
-        "importPath": "traceback",
-        "description": "traceback",
-        "isExtraImport": true,
-        "detail": "traceback",
+        "detail": "autoppia_iwa.src.shared.entrypoints.solutions",
         "documentation": {}
     },
     {
@@ -3929,6 +3976,23 @@
         "description": "autoppia_iwa.src.data_generation.application.tests.logic.logic_function_generator",
         "isExtraImport": true,
         "detail": "autoppia_iwa.src.data_generation.application.tests.logic.logic_function_generator",
+        "documentation": {}
+    },
+    {
+        "label": "traceback",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "traceback",
+        "description": "traceback",
+        "detail": "traceback",
+        "documentation": {}
+    },
+    {
+        "label": "print_exception",
+        "importPath": "traceback",
+        "description": "traceback",
+        "isExtraImport": true,
+        "detail": "traceback",
         "documentation": {}
     },
     {
@@ -9601,16 +9665,97 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
-        "peekOfCode": "logger = logging.getLogger(__name__)\napp = AppBootstrap()\nasync def main():\n    try:\n        # Create a WebProject (with its web analysis populated)\n        demo_web_projects: List[WebProject] = await initialize_demo_webs_projects()\n        web_project: WebProject = demo_web_projects[0]\n        # Create TaskGenerationConfig if needed by TaskGenerationPipeline\n        config = TaskGenerationConfig(\n            save_task_in_db=False,",
+        "peekOfCode": "logger = logging.getLogger(\"stress_test\")\n# -----------------------------------------------------------------------------\n# Configuration for the stress test\n# -----------------------------------------------------------------------------\nUSE_CACHED_TASKS = False    # Set to True to use cached tasks from JSON file\nUSE_CACHED_SOLUTIONS = False  # Set to True to use cached solutions when available\nTASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nSOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
         "documentation": {}
     },
     {
-        "label": "app",
+        "label": "USE_CACHED_TASKS",
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
-        "peekOfCode": "app = AppBootstrap()\nasync def main():\n    try:\n        # Create a WebProject (with its web analysis populated)\n        demo_web_projects: List[WebProject] = await initialize_demo_webs_projects()\n        web_project: WebProject = demo_web_projects[0]\n        # Create TaskGenerationConfig if needed by TaskGenerationPipeline\n        config = TaskGenerationConfig(\n            save_task_in_db=False,\n            save_web_analysis_in_db=False,",
+        "peekOfCode": "USE_CACHED_TASKS = False    # Set to True to use cached tasks from JSON file\nUSE_CACHED_SOLUTIONS = False  # Set to True to use cached solutions when available\nTASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nSOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 15\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)",
+        "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "documentation": {}
+    },
+    {
+        "label": "USE_CACHED_SOLUTIONS",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "peekOfCode": "USE_CACHED_SOLUTIONS = False  # Set to True to use cached solutions when available\nTASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nSOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 15\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)",
+        "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "documentation": {}
+    },
+    {
+        "label": "TASKS_CACHE_DIR",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "peekOfCode": "TASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nSOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 15\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)",
+        "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "documentation": {}
+    },
+    {
+        "label": "SOLUTIONS_CACHE_DIR",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "peekOfCode": "SOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 15\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)",
+        "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "documentation": {}
+    },
+    {
+        "label": "OUTPUT_DIR",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "peekOfCode": "OUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 15\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)",
+        "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "documentation": {}
+    },
+    {
+        "label": "M",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "peekOfCode": "M = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 15\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)\n# -----------------------------------------------------------------------------",
+        "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "documentation": {}
+    },
+    {
+        "label": "PROMPTS_PER_URL",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "peekOfCode": "PROMPTS_PER_URL = 15\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)\n# -----------------------------------------------------------------------------\n# Define the agents for the stress test",
+        "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "documentation": {}
+    },
+    {
+        "label": "NUM_OF_URLS",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "peekOfCode": "NUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)\n# -----------------------------------------------------------------------------\n# Define the agents for the stress test\n# -----------------------------------------------------------------------------",
+        "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "documentation": {}
+    },
+    {
+        "label": "solution_cache",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "peekOfCode": "solution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)\n# -----------------------------------------------------------------------------\n# Define the agents for the stress test\n# -----------------------------------------------------------------------------\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),\n    ApifiedWebAgent(name=\"browser-use\", host=\"localhost\", port=9000)\n]\n# Identifier for the browser-use agent\nBROWSER_USE_AGENT_ID = \"ApifiedWebAgent-browser-use\"",
+        "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "documentation": {}
+    },
+    {
+        "label": "BROWSER_USE_AGENT_ID",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
+        "peekOfCode": "BROWSER_USE_AGENT_ID = \"ApifiedWebAgent-browser-use\"\nasync def main():\n    \"\"\"Main function to run the multi-task agent evaluation (stress test).\"\"\"\n    logger.info(\"Starting comprehensive multi-task agent evaluation with batch processing...\")\n    # Initialize the application\n    AppBootstrap()\n    # Initialize timing metrics\n    timing_metrics = TimingMetrics()\n    timing_metrics.start()\n    # Container to store results: { agent_id: { task_id: {\"score\": ...} } }",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
         "documentation": {}
     },
@@ -9633,47 +9778,11 @@
         "documentation": {}
     },
     {
-        "label": "LOCAL_TASKS_CONTEXT_PROMPT",
-        "kind": 5,
-        "importPath": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.prompts",
-        "description": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.prompts",
-        "peekOfCode": "LOCAL_TASKS_CONTEXT_PROMPT = \"\"\"\nContext: \nYou are responsible for generating, refining, and validating single-page user tasks for a website through a structured, multi-phase process. This process is inspired by advanced autonomous evaluation frameworks like Infinite Web Arena (IWA) and consists of the following phases:\n1. Draft Generation\n   - **What:** Create initial task drafts using generative AI techniques to simulate realistic user interactions (e.g., navigation, search, filtering, and transactions) on a single-page interface.\n   - **Why:** To generate a diverse set of scenarios that challenge web agents by mimicking dynamic, real-world website behaviors.\n   - **How:** Leverage meta-programming and LLMs to produce a broad range of tasks that cover both common and edge-case interactions.\n2. Feasibility & Success Criteria Filtering\n   - **What:** Evaluate each task draft against predefined feasibility metrics and success criteria.\n   - **Why:** To ensure that every task is executable within a real browser environment and that success can be objectively measured through both frontend (DOM analysis, network monitoring, visual verification) and backend (event tracking, state validation) tests.",
-        "detail": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.prompts",
-        "documentation": {}
-    },
-    {
         "label": "PHASE1_GENERATION_SYSTEM_PROMPT",
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.prompts",
         "description": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.prompts",
         "peekOfCode": "PHASE1_GENERATION_SYSTEM_PROMPT = \"\"\"\nYou are a Task Example Generator that creates realistic examples of tasks a Web Agent could perform on websites.\nStart by identifying the type of task and the core use case that a user may want to do in this website. \nIdentify variations of that core use case. \nIf needed fill remaining task with simpler tasks like clicking, navigating, or using more structural items and elements. \nDIFFICULTY LEVEL: HARD (Create specially hard and not obvious tasks)\n**Input Provided**:\n- Website URL\n- Clean HTML snippet \n- Screenshot description (text-based UI representation)",
-        "detail": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.prompts",
-        "documentation": {}
-    },
-    {
-        "label": "PHASE2_FEASIBILITY_FILTER_PROMPT",
-        "kind": 5,
-        "importPath": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.prompts",
-        "description": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.prompts",
-        "peekOfCode": "PHASE2_FEASIBILITY_FILTER_PROMPT = \"\"\"\nWe are in Phase 2: Feasibility Filter.\nRemove tasks referencing elements that definitely do not exist \nin 'clean_html' or the 'interactive_elements'.\nIf a task might be referencing something that partially matches \n(e.g., a form with name 'search_form' vs 'searchForm'), keep it.\n#Output format:\nReturn JSON:\n[\n  {\"prompt\": \"...\",\"success_criteria\": \"...\",\"decision\":\"keep\" or \"remove\",\"reason\":\"...\"},",
-        "detail": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.prompts",
-        "documentation": {}
-    },
-    {
-        "label": "PHASE2_SUCCESS_CRITERIA_FILTER_PROMPT",
-        "kind": 5,
-        "importPath": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.prompts",
-        "description": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.prompts",
-        "peekOfCode": "PHASE2_SUCCESS_CRITERIA_FILTER_PROMPT = \"\"\"\nWe Are in Phase 2: Success Criteria Filtering. \nRemove tasks with vague or missing success criteria.\nSuccess Criterial should be enough to verify if the Web Agent who will be in charge of completing this charge has actually completed it. \nSo it cant be abstract or subjective. \n#Output format:\nReturn JSON:\n[\n  {\"prompt\": \"...\",\"success_criteria\": \"...\",\"decision\":\"keep\" or \"remove\"},\n  ...",
-        "detail": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.prompts",
-        "documentation": {}
-    },
-    {
-        "label": "PHASE2_CONCEPT_FILTER_PROMPT",
-        "kind": 5,
-        "importPath": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.prompts",
-        "description": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.prompts",
-        "peekOfCode": "PHASE2_CONCEPT_FILTER_PROMPT = \"\"\"\nWe Are in Phase 2: Contextual and concept Filtering\nYou need to Remove off-topic, dev-oriented task, task unrelated to what the website is about tasks. \nFor example, if the task is about buying a product but we are in Wikipedia.com its unrelated and should be removed.\n#Output format:\nReturn JSON:\n[\n  {\"prompt\": \"...\",\"success_criteria\": \"...\",\"decision\":\"keep\" or \"remove\"},\n  ...\n]",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks.local.prompts",
         "documentation": {}
     },
