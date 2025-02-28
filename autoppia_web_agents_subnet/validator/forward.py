@@ -80,12 +80,15 @@ async def generate_tasks_for_web_project(demo_web_project: WebProject) -> List[T
     start_time = time.time()
     tasks_generated: List[Task] = await pipeline.generate()
     ColoredLogger.info(
-        f"Generated {tasks_generated} tasks in {time.time() - start_time:.2f}s",
+        f"Generated {len(tasks_generated)} tasks in {time.time() - start_time:.2f}s",
         ColoredLogger.YELLOW,
     )
 
     for t in tasks_generated:
-        bt.logging.info(t.prompt)
+        ColoredLogger.info(
+            f"Task {t.prompt}",
+            ColoredLogger.BLUE,
+        )
 
     return tasks_generated
 
@@ -373,10 +376,6 @@ async def send_feedback_synapse_to_miners(
         feedback_task.screenshot = ""
         feedback_task.html = ""
         feedback_task.clean_html = ""
-        ColoredLogger.info(
-            f"{feedback_task}",
-            ColoredLogger.BLUE,
-        )
         # Crear una copia para no modificar el 'Task' original:
 
         # Construir el TaskFeedbackSynapse con el 'Task' ya sin screenshot
@@ -392,6 +391,10 @@ async def send_feedback_synapse_to_miners(
                 evaluation_results[i] if i < len(evaluation_results) else None
             ),
             stats=None,
+        )
+        ColoredLogger.info(
+            f"{feedback}",
+            ColoredLogger.BLUE,
         )
         feedback_list.append(feedback)
 
