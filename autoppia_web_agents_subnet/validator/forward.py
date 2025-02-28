@@ -372,6 +372,7 @@ async def send_feedback_synapse_to_miners(
         # Eliminar o dejar en None el screenshot en el feedback
         feedback_task.screenshot = ""
         feedback_task.html = ""
+        feedback_task.clean_html = ""
         ColoredLogger.info(
             f"{feedback_task}",
             ColoredLogger.BLUE,

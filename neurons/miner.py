@@ -111,7 +111,8 @@ class Miner(BaseMinerNeuron):
         We just call print_in_terminal() to see a summary.
         """
         ColoredLogger.info(
-            f" Synapse Feedback received{synapse}. I am going to print in terminal"
+            f" Synapse Feedback received{synapse}. I am going to print in terminal",
+            ColoredLogger.RED,
         )
 
         try:
