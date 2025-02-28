@@ -3153,14 +3153,6 @@
         "documentation": {}
     },
     {
-        "label": "deserialize_actions",
-        "importPath": "autoppia_iwa.src.shared.entrypoints.solutions",
-        "description": "autoppia_iwa.src.shared.entrypoints.solutions",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.shared.entrypoints.solutions",
-        "documentation": {}
-    },
-    {
         "label": "traceback",
         "kind": 6,
         "isExtraImport": true,
@@ -3411,6 +3403,14 @@
     },
     {
         "label": "Field",
+        "importPath": "pydantic",
+        "description": "pydantic",
+        "isExtraImport": true,
+        "detail": "pydantic",
+        "documentation": {}
+    },
+    {
+        "label": "RootModel",
         "importPath": "pydantic",
         "description": "pydantic",
         "isExtraImport": true,
@@ -5276,6 +5276,14 @@
         "isExtraImport": true,
         "importPath": "copy",
         "description": "copy",
+        "detail": "copy",
+        "documentation": {}
+    },
+    {
+        "label": "deepcopy",
+        "importPath": "copy",
+        "description": "copy",
+        "isExtraImport": true,
         "detail": "copy",
         "documentation": {}
     },
@@ -9470,7 +9478,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "logger = logging.getLogger(\"stress_test\")\n# -----------------------------------------------------------------------------\n# Configuration for the stress test\n# -----------------------------------------------------------------------------\nUSE_CACHED_TASKS = True    # Set to True to use cached tasks from JSON file\nUSE_CACHED_SOLUTIONS = True  # Set to True to use cached solutions when available\nTASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nSOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate",
+        "peekOfCode": "logger = logging.getLogger(\"stress_test\")\n# -----------------------------------------------------------------------------\n# Configuration for the stress test\n# -----------------------------------------------------------------------------\nUSE_CACHED_TASKS = False    # Set to True to use cached tasks from JSON file\nUSE_CACHED_SOLUTIONS = False  # Set to True to use cached solutions when available\nTASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nSOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -9479,7 +9487,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "USE_CACHED_TASKS = True    # Set to True to use cached tasks from JSON file\nUSE_CACHED_SOLUTIONS = True  # Set to True to use cached solutions when available\nTASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nSOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 1\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)",
+        "peekOfCode": "USE_CACHED_TASKS = False    # Set to True to use cached tasks from JSON file\nUSE_CACHED_SOLUTIONS = False  # Set to True to use cached solutions when available\nTASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nSOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 5\nNUM_OF_URLS = 5\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -9488,7 +9496,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "USE_CACHED_SOLUTIONS = True  # Set to True to use cached solutions when available\nTASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nSOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 1\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)",
+        "peekOfCode": "USE_CACHED_SOLUTIONS = False  # Set to True to use cached solutions when available\nTASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nSOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 5\nNUM_OF_URLS = 5\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -9497,7 +9505,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "TASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nSOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 1\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)",
+        "peekOfCode": "TASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nSOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 5\nNUM_OF_URLS = 5\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -9506,7 +9514,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "SOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 1\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)",
+        "peekOfCode": "SOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 5\nNUM_OF_URLS = 5\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -9515,7 +9523,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "OUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 1\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)",
+        "peekOfCode": "OUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 5\nNUM_OF_URLS = 5\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -9524,7 +9532,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "M = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 1\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)\n# -----------------------------------------------------------------------------",
+        "peekOfCode": "M = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 5\nNUM_OF_URLS = 5\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)\n# -----------------------------------------------------------------------------",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -9533,7 +9541,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "PROMPTS_PER_URL = 1\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)\n# -----------------------------------------------------------------------------\n# Define the agents for the stress test",
+        "peekOfCode": "PROMPTS_PER_URL = 5\nNUM_OF_URLS = 5\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)\n# -----------------------------------------------------------------------------\n# Define the agents for the stress test",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -9542,7 +9550,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "NUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)\n# -----------------------------------------------------------------------------\n# Define the agents for the stress test\n# -----------------------------------------------------------------------------",
+        "peekOfCode": "NUM_OF_URLS = 5\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)\n# -----------------------------------------------------------------------------\n# Define the agents for the stress test\n# -----------------------------------------------------------------------------",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -9560,7 +9568,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "BROWSER_USE_AGENT_ID = \"ApifiedWebAgent-browser-use\"\nasync def main():\n    \"\"\"Main function to run the multi-task agent evaluation (stress test).\"\"\"\n    logger.info(\"Starting comprehensive multi-task agent evaluation with batch processing...\")\n    # Initialize the application\n    app = AppBootstrap()\n    # Initialize timing metrics\n    timing_metrics = TimingMetrics()\n    timing_metrics.start()\n    # Container to store results: { agent_id: { task_id: {\"score\": ...} } }",
+        "peekOfCode": "BROWSER_USE_AGENT_ID = \"ApifiedWebAgent-browser-use\"\nasync def main():\n    \"\"\"Main function to run the multi-task agent evaluation (stress test).\"\"\"\n    logger.info(\"Starting comprehensive multi-task agent evaluation with batch processing...\")\n    # Initialize the application\n    AppBootstrap()\n    # Initialize timing metrics\n    timing_metrics = TimingMetrics()\n    timing_metrics.start()\n    # Container to store results: { agent_id: { task_id: {\"score\": ...} } }",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -9704,16 +9712,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tests.prompts",
         "description": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tests.prompts",
-        "peekOfCode": "TEST_GENERATION_PROMPT = \"\"\"\nYou are a specialized test engineer tasked with generating validation tests for our web agent benchmark framework. These tests will execute after each agent action, examining browser snapshots to determine if the agent has successfully completed the required task.\n## Task Information\n- Task Description: {task_prompt}\n- Success Requirements: {success_criteria}\n## Context\n- Current Page HTML (truncated): {truncated_html}\n- Visual State Description: {screenshot_desc}\n- Available Interactive Elements: {interactive_elements}\n- Domain/Project Context: {domain_analysis}",
-        "detail": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tests.prompts",
-        "documentation": {}
-    },
-    {
-        "label": "TEST_FILTERING_PROMPT",
-        "kind": 5,
-        "importPath": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tests.prompts",
-        "description": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tests.prompts",
-        "peekOfCode": "TEST_FILTERING_PROMPT = \"\"\"\nYou are a test analyzer for web automation testing. Review the tests below and decide which ones to keep.\nTASK CONTEXT:\n- Task Prompt: {task_prompt}\n- Success Criteria: {success_criteria}\nTESTS TO REVIEW:\n{tests_json}\nGUIDELINES:\n1. Backend tests (CheckEventTest, CheckPageViewEventTest) are preferred over frontend tests or checkUrl tests as they are more reliable. Only in case they try to validate the same thing.\n2. Intelligent judgment tests (JudgeBaseOnHTML, JudgeBaseOnScreenshot) are useful for complex criteria",
+        "peekOfCode": "TEST_GENERATION_PROMPT = \"\"\"\nYou are a specialized test engineer tasked with generating validation tests for our web agent benchmark framework. These tests will execute after each agent action, examining browser snapshots to determine if the agent has successfully completed the required task.\n## Task Information\n- Task Description: {task_prompt}\n- Success Requirements: {success_criteria}\n## Context\n- Current Page URL: {current_url}\n- Current Page HTML (truncated): {truncated_html}\n- Visual State Description: {screenshot_desc}\n- Available Interactive Elements: {interactive_elements}",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tests.prompts",
         "documentation": {}
     },
@@ -10451,7 +10450,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.shared.entrypoints.solutions",
         "description": "autoppia_iwa_module.autoppia_iwa.src.shared.entrypoints.solutions",
-        "peekOfCode": "class SolutionData(BaseModel):\n    \"\"\"Model for caching solution data\"\"\"\n    agent_id: str\n    agent_name: str\n    timestamp: float = Field(default_factory=time.time)\n    actions: List[Dict[str, Any]] = []\nclass TaskCache(BaseModel):\n    \"\"\"Model for task cache entries\"\"\"\n    __root__: Dict[str, SolutionData] = {}\n    def __getitem__(self, key):",
+        "peekOfCode": "class SolutionData(BaseModel):\n    \"\"\"Model for caching solution data\"\"\"\n    agent_id: str\n    agent_name: str\n    timestamp: float = Field(default_factory=time.time)\n    solution: TaskSolution\nclass TaskCache(RootModel):\n    \"\"\"Model for task cache entries\"\"\"\n    root: Dict[str, SolutionData] = {}\n    def __getitem__(self, key):",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.shared.entrypoints.solutions",
         "documentation": {}
     },
@@ -10460,7 +10459,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.shared.entrypoints.solutions",
         "description": "autoppia_iwa_module.autoppia_iwa.src.shared.entrypoints.solutions",
-        "peekOfCode": "class TaskCache(BaseModel):\n    \"\"\"Model for task cache entries\"\"\"\n    __root__: Dict[str, SolutionData] = {}\n    def __getitem__(self, key):\n        return self.__root__[key]\n    def __setitem__(self, key, value):\n        self.__root__[key] = value\n    def __contains__(self, key):\n        return key in self.__root__\n    def keys(self):",
+        "peekOfCode": "class TaskCache(RootModel):\n    \"\"\"Model for task cache entries\"\"\"\n    root: Dict[str, SolutionData] = {}\n    def __getitem__(self, key):\n        return self.root[key]\n    def __setitem__(self, key, value):\n        self.root[key] = value\n    def __contains__(self, key):\n        return key in self.root\n    def keys(self):",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.shared.entrypoints.solutions",
         "documentation": {}
     },
@@ -10469,7 +10468,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.shared.entrypoints.solutions",
         "description": "autoppia_iwa_module.autoppia_iwa.src.shared.entrypoints.solutions",
-        "peekOfCode": "class SolutionsCache(BaseModel):\n    \"\"\"Model for the entire solutions cache\"\"\"\n    __root__: Dict[str, TaskCache] = {}\n    def __getitem__(self, key):\n        return self.__root__[key]\n    def __setitem__(self, key, value):\n        self.__root__[key] = value\n    def __contains__(self, key):\n        return key in self.__root__\n    def keys(self):",
+        "peekOfCode": "class SolutionsCache(RootModel):\n    \"\"\"Model for the entire solutions cache\"\"\"\n    root: Dict[str, TaskCache] = {}\n    def __getitem__(self, key):\n        return self.root[key]\n    def __setitem__(self, key, value):\n        self.root[key] = value\n    def __contains__(self, key):\n        return key in self.root\n    def keys(self):",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.shared.entrypoints.solutions",
         "documentation": {}
     },
@@ -10483,20 +10482,11 @@
         "documentation": {}
     },
     {
-        "label": "ActionModel",
-        "kind": 6,
-        "importPath": "autoppia_iwa_module.autoppia_iwa.src.shared.entrypoints.solutions",
-        "description": "autoppia_iwa_module.autoppia_iwa.src.shared.entrypoints.solutions",
-        "peekOfCode": "class ActionModel(BaseModel):\n    \"\"\"Model for deserializing action data\"\"\"\n    type: str\n    selector: Optional[Dict[str, Any]] = None\nasync def deserialize_actions(action_data_list: List[Dict[str, Any]]) -> List[BaseAction]:\n    \"\"\"\n    Deserialize a list of action dictionaries back into BaseAction objects.\n    Args:\n        action_data_list: List of serialized action dictionaries\n    Returns:",
-        "detail": "autoppia_iwa_module.autoppia_iwa.src.shared.entrypoints.solutions",
-        "documentation": {}
-    },
-    {
         "label": "logger",
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.shared.entrypoints.solutions",
         "description": "autoppia_iwa_module.autoppia_iwa.src.shared.entrypoints.solutions",
-        "peekOfCode": "logger = logging.getLogger(__name__)\nclass SolutionData(BaseModel):\n    \"\"\"Model for caching solution data\"\"\"\n    agent_id: str\n    agent_name: str\n    timestamp: float = Field(default_factory=time.time)\n    actions: List[Dict[str, Any]] = []\nclass TaskCache(BaseModel):\n    \"\"\"Model for task cache entries\"\"\"\n    __root__: Dict[str, SolutionData] = {}",
+        "peekOfCode": "logger = logging.getLogger(__name__)\nclass SolutionData(BaseModel):\n    \"\"\"Model for caching solution data\"\"\"\n    agent_id: str\n    agent_name: str\n    timestamp: float = Field(default_factory=time.time)\n    solution: TaskSolution\nclass TaskCache(RootModel):\n    \"\"\"Model for task cache entries\"\"\"\n    root: Dict[str, SolutionData] = {}",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.shared.entrypoints.solutions",
         "documentation": {}
     },
@@ -10838,7 +10828,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.bootstrap",
         "description": "autoppia_iwa_module.autoppia_iwa.src.bootstrap",
-        "peekOfCode": "class AppBootstrap:\n    def __init__(self):\n        self.configure_dependency_injection()\n    def configure_dependency_injection(self):\n        self.container = DIContainer()",
+        "peekOfCode": "class AppBootstrap:\n    \"\"\"\n    In charge of initializing Dependency Injection\n    \"\"\"\n    def __init__(self):\n        self.configure_dependency_injection()\n    def configure_dependency_injection(self):\n        self.container = DIContainer()",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.bootstrap",
         "documentation": {}
     },
