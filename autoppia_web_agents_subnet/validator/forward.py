@@ -369,8 +369,8 @@ async def send_feedback_synapse_to_miners(
         # Crear una copia para no modificar el 'Task' original:
         feedback_task = copy.deepcopy(task)
         # Eliminar o dejar en None el screenshot en el feedback
-        feedback_task.screenshot = None
-        feedback_task.html = None
+        feedback_task.screenshot = ""
+        feedback_task.html = ""
         # (Opcional) limpiar HTML también si deseas: feedback_task.html = ""
 
         # Construir el TaskFeedbackSynapse con el 'Task' ya sin screenshot
