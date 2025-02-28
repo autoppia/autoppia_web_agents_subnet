@@ -51,9 +51,7 @@ chmod +x scripts/validator/install_docker.sh
 cp .env.example .env
 ```
 
-5. Install **MongoDB**
-
-A) with Docker for caching web analysis results:
+5. Install **MongoDB** (Docker)
 
 ```bash
 chmod +x scripts/mongo/deploy_mongo_docker.sh 
