@@ -393,7 +393,7 @@ async def send_feedback_synapse_to_miners(
             stats=None,
         )
         ColoredLogger.info(
-            f"{feedback}",
+            f"{feedback.model_dump()}",
             ColoredLogger.BLUE,
         )
         feedback_list.append(feedback)
