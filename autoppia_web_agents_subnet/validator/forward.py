@@ -208,7 +208,9 @@ async def send_task_synapse_to_miners(
     """
     Sends a TaskSynapse to multiple miners, returns their responses.
     """
-    bt.logging.info(f"Sending TaskSynapse to {len(miner_uids)} miners. Miner Timeout : {TIMEOUT}s")
+    bt.logging.info(
+        f"Sending TaskSynapse to {len(miner_uids)} miners. Miner Timeout : {TIMEOUT}s"
+    )
     responses: List[TaskSynapse] = await dendrite_with_retries(
         dendrite=validator.dendrite,
         axons=miner_axons,
@@ -392,14 +394,16 @@ async def send_feedback_synapse_to_miners(
             ),
             stats=None,
         )
-        ColoredLogger.info(
-            f"{feedback.model_dump()}",
-            ColoredLogger.BLUE,
-        )
-        ColoredLogger.info(
-            f"{feedback_task.tests}",
-            ColoredLogger.RED,
-        )
+
+        if miner_uid == 6:
+            ColoredLogger.info(
+                f"{feedback.model_dump()}",
+                ColoredLogger.BLUE,
+            )
+            ColoredLogger.info(
+                f"{feedback_task.tests}",
+                ColoredLogger.RED,
+            )
         feedback_list.append(feedback)
 
     ColoredLogger.info(
