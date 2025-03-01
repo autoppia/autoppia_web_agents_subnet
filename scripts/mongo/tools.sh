@@ -1,14 +1,31 @@
 #!/bin/bash
-# Cargar variables de entorno de manera segura
-set -a
-source <(grep -v '^#' .env | grep -v '^$')
-set +a
+# MongoDB Tools Script - Using the .env file from project root
 
-# Verificar si MONGODB_URL está definido
-if [ -z "$MONGODB_URL" ]; then
-  echo "Error: MONGODB_URL no está configurado en el archivo .env"
+# Find project root path - ensures we're using the correct .env file
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+ENV_FILE="$PROJECT_ROOT/.env"
+
+echo "[INFO] Using .env file at: $ENV_FILE"
+
+# Check if .env file exists
+if [ ! -f "$ENV_FILE" ]; then
+  echo "Error: .env file not found at $ENV_FILE"
   exit 1
 fi
+
+# Extract MongoDB URL directly from root .env file - handling quotes properly
+MONGODB_URL=$(grep -E "^MONGODB_URL=" "$ENV_FILE" | sed 's/^MONGODB_URL=//;s/^"//;s/"$//' || true)
+
+# Verify if MONGODB_URL is defined
+if [ -z "$MONGODB_URL" ]; then
+  echo "Error: MONGODB_URL is not set in the .env file at $ENV_FILE"
+  exit 1
+fi
+
+# Show first part of connection string for debugging (hide password)
+CONNECTION_PREFIX=$(echo "$MONGODB_URL" | grep -o 'mongodb://[^:]*' || echo "Connection string extraction failed")
+echo "[DEBUG] Connection string starts with: $CONNECTION_PREFIX"
 
 # Function to show usage
 show_usage() {
@@ -27,16 +44,15 @@ show_usage() {
   exit 1
 }
 
-# Obtener el ID o nombre del contenedor de MongoDB
+# Find MongoDB container
 find_mongo_container() {
-  MONGO_CONTAINER=$(docker ps --filter "ancestor=mongo:latest" --format "{{.ID}}")
+  MONGO_CONTAINER=$(docker ps --filter "ancestor=mongo:latest" --format "{{.ID}}" 2>/dev/null || true)
   
-  # Verificar si se encontró un contenedor en ejecución
+  # Verify if container was found, try alternative method
   if [ -z "$MONGO_CONTAINER" ]; then
-    # Try alternative way to find mongo container
-    MONGO_CONTAINER=$(docker ps --filter "name=mongodb" --format "{{.ID}}")
+    MONGO_CONTAINER=$(docker ps --filter "name=mongodb" --format "{{.ID}}" 2>/dev/null || true)
     if [ -z "$MONGO_CONTAINER" ]; then
-      echo "Error: No se encontró un contenedor en ejecución con la imagen mongo:latest"
+      echo "Error: No MongoDB container found"
       exit 1
     fi
   fi
@@ -195,7 +211,7 @@ interactive_review() {
     DOC_ID=$(docker exec "$MONGO_CONTAINER" mongosh "$MONGODB_URL" --quiet --eval "
       db = db.getSiblingDB('$DB_NAME');
       var doc = db.getCollection('$COLLECTION').find({}).skip($((COUNTER - 1))).limit(1).toArray()[0];
-      doc._id;
+      printjson(doc._id);
     ")
     
     # Display the document (only first 10 lines)

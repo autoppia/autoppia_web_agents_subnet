@@ -286,14 +286,6 @@
         "documentation": {}
     },
     {
-        "label": "Optional",
-        "importPath": "typing",
-        "description": "typing",
-        "isExtraImport": true,
-        "detail": "typing",
-        "documentation": {}
-    },
-    {
         "label": "List",
         "importPath": "typing",
         "description": "typing",
@@ -2120,22 +2112,6 @@
         "documentation": {}
     },
     {
-        "label": "ConcurrentEvaluator",
-        "importPath": "autoppia_iwa.src.evaluation.evaluator.evaluator",
-        "description": "autoppia_iwa.src.evaluation.evaluator.evaluator",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.evaluation.evaluator.evaluator",
-        "documentation": {}
-    },
-    {
-        "label": "EvaluatorConfig",
-        "importPath": "autoppia_iwa.src.evaluation.evaluator.evaluator",
-        "description": "autoppia_iwa.src.evaluation.evaluator.evaluator",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.evaluation.evaluator.evaluator",
-        "documentation": {}
-    },
-    {
         "label": "BaseAction",
         "importPath": "autoppia_iwa.src.execution.actions.base",
         "description": "autoppia_iwa.src.execution.actions.base",
@@ -2341,14 +2317,6 @@
         "description": "autoppia_iwa.src.web_agents.base",
         "isExtraImport": true,
         "detail": "autoppia_iwa.src.web_agents.base",
-        "documentation": {}
-    },
-    {
-        "label": "TaskSolution",
-        "importPath": "autoppia_iwa.src.web_agents.classes",
-        "description": "autoppia_iwa.src.web_agents.classes",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.web_agents.classes",
         "documentation": {}
     },
     {
@@ -3134,38 +3102,6 @@
         "description": "autoppia_iwa.src.shared.entrypoints.metrics",
         "isExtraImport": true,
         "detail": "autoppia_iwa.src.shared.entrypoints.metrics",
-        "documentation": {}
-    },
-    {
-        "label": "print_performance_statistics",
-        "importPath": "autoppia_iwa.src.shared.entrypoints.results",
-        "description": "autoppia_iwa.src.shared.entrypoints.results",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.shared.entrypoints.results",
-        "documentation": {}
-    },
-    {
-        "label": "plot_results",
-        "importPath": "autoppia_iwa.src.shared.entrypoints.results",
-        "description": "autoppia_iwa.src.shared.entrypoints.results",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.shared.entrypoints.results",
-        "documentation": {}
-    },
-    {
-        "label": "plot_task_comparison",
-        "importPath": "autoppia_iwa.src.shared.entrypoints.results",
-        "description": "autoppia_iwa.src.shared.entrypoints.results",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.shared.entrypoints.results",
-        "documentation": {}
-    },
-    {
-        "label": "save_results_to_json",
-        "importPath": "autoppia_iwa.src.shared.entrypoints.results",
-        "description": "autoppia_iwa.src.shared.entrypoints.results",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.shared.entrypoints.results",
         "documentation": {}
     },
     {
@@ -5100,6 +5036,14 @@
         "documentation": {}
     },
     {
+        "label": "Image",
+        "importPath": "PIL",
+        "description": "PIL",
+        "isExtraImport": true,
+        "detail": "PIL",
+        "documentation": {}
+    },
+    {
         "label": "string",
         "kind": 6,
         "isExtraImport": true,
@@ -5455,6 +5399,22 @@
         "importPath": "torch",
         "description": "torch",
         "detail": "torch",
+        "documentation": {}
+    },
+    {
+        "label": "Blip2Processor",
+        "importPath": "transformers",
+        "description": "transformers",
+        "isExtraImport": true,
+        "detail": "transformers",
+        "documentation": {}
+    },
+    {
+        "label": "Blip2ForConditionalGeneration",
+        "importPath": "transformers",
+        "description": "transformers",
+        "isExtraImport": true,
+        "detail": "transformers",
         "documentation": {}
     },
     {
@@ -9674,7 +9634,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
-        "peekOfCode": "USE_CACHED_TASKS = False    # Set to True to use cached tasks from JSON file\nUSE_CACHED_SOLUTIONS = False  # Set to True to use cached solutions when available\nTASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nSOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 15\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)",
+        "peekOfCode": "USE_CACHED_TASKS = False    # Set to True to use cached tasks from JSON file\nUSE_CACHED_SOLUTIONS = False  # Set to True to use cached solutions when available\nTASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nSOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 15\nNUM_OF_URLS = 10\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
         "documentation": {}
     },
@@ -9683,7 +9643,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
-        "peekOfCode": "USE_CACHED_SOLUTIONS = False  # Set to True to use cached solutions when available\nTASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nSOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 15\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)",
+        "peekOfCode": "USE_CACHED_SOLUTIONS = False  # Set to True to use cached solutions when available\nTASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nSOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 15\nNUM_OF_URLS = 10\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
         "documentation": {}
     },
@@ -9692,7 +9652,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
-        "peekOfCode": "TASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nSOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 15\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)",
+        "peekOfCode": "TASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nSOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 15\nNUM_OF_URLS = 10\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
         "documentation": {}
     },
@@ -9701,7 +9661,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
-        "peekOfCode": "SOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 15\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)",
+        "peekOfCode": "SOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 15\nNUM_OF_URLS = 10\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
         "documentation": {}
     },
@@ -9710,7 +9670,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
-        "peekOfCode": "OUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 15\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)",
+        "peekOfCode": "OUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 15\nNUM_OF_URLS = 10\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
         "documentation": {}
     },
@@ -9719,7 +9679,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
-        "peekOfCode": "M = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 15\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)\n# -----------------------------------------------------------------------------",
+        "peekOfCode": "M = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 15\nNUM_OF_URLS = 10\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)\n# -----------------------------------------------------------------------------",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
         "documentation": {}
     },
@@ -9728,7 +9688,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
-        "peekOfCode": "PROMPTS_PER_URL = 15\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)\n# -----------------------------------------------------------------------------\n# Define the agents for the stress test",
+        "peekOfCode": "PROMPTS_PER_URL = 15\nNUM_OF_URLS = 10\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)\n# -----------------------------------------------------------------------------\n# Define the agents for the stress test",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
         "documentation": {}
     },
@@ -9737,7 +9697,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
-        "peekOfCode": "NUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)\n# -----------------------------------------------------------------------------\n# Define the agents for the stress test\n# -----------------------------------------------------------------------------",
+        "peekOfCode": "NUM_OF_URLS = 10\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)\n# -----------------------------------------------------------------------------\n# Define the agents for the stress test\n# -----------------------------------------------------------------------------",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.tasks",
         "documentation": {}
     },
@@ -11017,6 +10977,15 @@
         "description": "autoppia_iwa_module.modules.llm_local.test.test_parallel_request",
         "peekOfCode": "def main():\n    parser = argparse.ArgumentParser(description=\"Test parallel requests to /generate_parallel.\")\n    parser.add_argument(\n        \"--number_request\",\n        type=int,\n        default=5,\n        help=\"Number of sub-requests to batch in one call\"\n    )\n    args = parser.parse_args()\n    # Number of sub-requests to batch in one call",
         "detail": "autoppia_iwa_module.modules.llm_local.test.test_parallel_request",
+        "documentation": {}
+    },
+    {
+        "label": "main",
+        "kind": 2,
+        "importPath": "autoppia_iwa_module.modules.llm_local.run_local_blip2",
+        "description": "autoppia_iwa_module.modules.llm_local.run_local_blip2",
+        "peekOfCode": "def main():\n    # 1. Parse command-line arguments\n    parser = argparse.ArgumentParser(description=\"Use BLIP-2 to classify screenshot content.\")\n    parser.add_argument(\"--filename\", required=True, help=\"Path to the screenshot image file.\")\n    args = parser.parse_args()\n    # 2. Load the BLIP-2 model and processor\n    processor = Blip2Processor.from_pretrained(\"Salesforce/blip2-opt-2.7b\")\n    model = Blip2ForConditionalGeneration.from_pretrained(\"Salesforce/blip2-opt-2.7b\")\n    # 3. Load your screenshot\n    image = Image.open(args.filename).convert(\"RGB\")",
+        "detail": "autoppia_iwa_module.modules.llm_local.run_local_blip2",
         "documentation": {}
     },
     {
