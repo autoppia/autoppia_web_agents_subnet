@@ -710,6 +710,30 @@
         "documentation": {}
     },
     {
+        "label": "Dict",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "List",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Optional",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
         "label": "Any",
         "importPath": "typing",
         "description": "typing",
@@ -3537,6 +3561,22 @@
         "documentation": {}
     },
     {
+        "label": "LLMConfig",
+        "importPath": "autoppia_iwa.src.llms.domain.interfaces",
+        "description": "autoppia_iwa.src.llms.domain.interfaces",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.llms.domain.interfaces",
+        "documentation": {}
+    },
+    {
+        "label": "ILLM",
+        "importPath": "autoppia_iwa.src.llms.domain.interfaces",
+        "description": "autoppia_iwa.src.llms.domain.interfaces",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.llms.domain.interfaces",
+        "documentation": {}
+    },
+    {
         "label": "ILLM",
         "importPath": "autoppia_iwa.src.llms.domain.interfaces",
         "description": "autoppia_iwa.src.llms.domain.interfaces",
@@ -4931,6 +4971,22 @@
         "documentation": {}
     },
     {
+        "label": "OpenAI",
+        "importPath": "openai",
+        "description": "openai",
+        "isExtraImport": true,
+        "detail": "openai",
+        "documentation": {}
+    },
+    {
+        "label": "AsyncOpenAI",
+        "importPath": "openai",
+        "description": "openai",
+        "isExtraImport": true,
+        "detail": "openai",
+        "documentation": {}
+    },
+    {
         "label": "MongoClient",
         "importPath": "pymongo",
         "description": "pymongo",
@@ -5483,6 +5539,22 @@
         "documentation": {}
     },
     {
+        "label": "repair_json",
+        "importPath": "json_repair",
+        "description": "json_repair",
+        "isExtraImport": true,
+        "detail": "json_repair",
+        "documentation": {}
+    },
+    {
+        "label": "repair_json",
+        "importPath": "json_repair",
+        "description": "json_repair",
+        "isExtraImport": true,
+        "detail": "json_repair",
+        "documentation": {}
+    },
+    {
         "label": "Flask",
         "importPath": "flask",
         "description": "flask",
@@ -5528,22 +5600,6 @@
         "description": "flask_cors",
         "isExtraImport": true,
         "detail": "flask_cors",
-        "documentation": {}
-    },
-    {
-        "label": "repair_json",
-        "importPath": "json_repair",
-        "description": "json_repair",
-        "isExtraImport": true,
-        "detail": "json_repair",
-        "documentation": {}
-    },
-    {
-        "label": "repair_json",
-        "importPath": "json_repair",
-        "description": "json_repair",
-        "isExtraImport": true,
-        "detail": "json_repair",
         "documentation": {}
     },
     {
@@ -9535,7 +9591,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "USE_CACHED_TASKS = False    # Set to True to use cached tasks from JSON file\nUSE_CACHED_SOLUTIONS = False  # Set to True to use cached solutions when available\nTASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nSOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 1\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)",
+        "peekOfCode": "USE_CACHED_TASKS = False    # Set to True to use cached tasks from JSON file\nUSE_CACHED_SOLUTIONS = False  # Set to True to use cached solutions when available\nTASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nSOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 3\nNUM_OF_URLS = 5\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -9544,7 +9600,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "USE_CACHED_SOLUTIONS = False  # Set to True to use cached solutions when available\nTASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nSOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 1\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)",
+        "peekOfCode": "USE_CACHED_SOLUTIONS = False  # Set to True to use cached solutions when available\nTASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nSOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 3\nNUM_OF_URLS = 5\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -9553,7 +9609,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "TASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nSOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 1\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)",
+        "peekOfCode": "TASKS_CACHE_DIR = \"data/tasks_cache\"  # Directory to store task cache files\nSOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 3\nNUM_OF_URLS = 5\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -9562,7 +9618,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "SOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 1\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)",
+        "peekOfCode": "SOLUTIONS_CACHE_DIR = \"data/solutions_cache\"  # Directory to store solution cache files\nOUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 3\nNUM_OF_URLS = 5\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -9571,7 +9627,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "OUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 1\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)",
+        "peekOfCode": "OUTPUT_DIR = \"results\"     # Directory to store test results\nM = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 3\nNUM_OF_URLS = 5\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -9580,7 +9636,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "M = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 1\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)\n# -----------------------------------------------------------------------------",
+        "peekOfCode": "M = 1   # Number of copies of each solution to evaluate\nPROMPTS_PER_URL = 3\nNUM_OF_URLS = 5\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)\n# -----------------------------------------------------------------------------",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -9589,7 +9645,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "PROMPTS_PER_URL = 1\nNUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)\n# -----------------------------------------------------------------------------\n# Define the agents for the stress test",
+        "peekOfCode": "PROMPTS_PER_URL = 3\nNUM_OF_URLS = 5\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)\n# -----------------------------------------------------------------------------\n# Define the agents for the stress test",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -9598,7 +9654,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
-        "peekOfCode": "NUM_OF_URLS = 1\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)\n# -----------------------------------------------------------------------------\n# Define the agents for the stress test\n# -----------------------------------------------------------------------------",
+        "peekOfCode": "NUM_OF_URLS = 5\n# Create output/cache directories if needed\nos.makedirs(OUTPUT_DIR, exist_ok=True)\nos.makedirs(TASKS_CACHE_DIR, exist_ok=True)\nos.makedirs(SOLUTIONS_CACHE_DIR, exist_ok=True)\n# Initialize the solution cache manager (single file for all solutions)\nsolution_cache = ConsolidatedSolutionCache(SOLUTIONS_CACHE_DIR)\n# -----------------------------------------------------------------------------\n# Define the agents for the stress test\n# -----------------------------------------------------------------------------",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.stress",
         "documentation": {}
     },
@@ -10462,7 +10518,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.llms.infrastructure.llm_service",
         "description": "autoppia_iwa_module.autoppia_iwa.src.llms.infrastructure.llm_service",
-        "peekOfCode": "class LocalLLMService(ILLM):\n    \"\"\"\n    Simple local (self-hosted) LLM that communicates via HTTP.\n    Uses HTTPX for sync and async calls.\n    \"\"\"\n    def __init__(\n        self,\n        config: LLMConfig,\n        endpoint_url: str,\n        parallel_endpoint_url: Optional[str] = None",
+        "peekOfCode": "class LocalLLMService(ILLM):\n    \"\"\"\n    Simple local (self-hosted) LLM that communicates via HTTP.\n    Uses HTTPX for sync and async calls.\n    \"\"\"\n    def __init__(self, config: LLMConfig, endpoint_url: str):\n        self.config = config\n        self.endpoint_url = endpoint_url\n    def predict(\n        self,",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.llms.infrastructure.llm_service",
         "documentation": {}
     },
@@ -10473,6 +10529,33 @@
         "description": "autoppia_iwa_module.autoppia_iwa.src.llms.infrastructure.llm_service",
         "peekOfCode": "class LLMFactory:\n    \"\"\"\n    Simple factory to build the right LLM implementation\n    based on the llm_type.\n    \"\"\"\n    @staticmethod\n    def create_llm(\n        llm_type: str,\n        config: LLMConfig,\n        **kwargs",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.llms.infrastructure.llm_service",
+        "documentation": {}
+    },
+    {
+        "label": "OpenAIService",
+        "kind": 6,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.src.llms.infrastructure.llm_service_parallel",
+        "description": "autoppia_iwa_module.autoppia_iwa.src.llms.infrastructure.llm_service_parallel",
+        "peekOfCode": "class OpenAIService(ILLM):\n    \"\"\"\n    Simple OpenAI-based LLM.\n    Uses OpenAI (sync) and AsyncOpenAI (async) clients.\n    \"\"\"\n    def __init__(self, config: LLMConfig, api_key: str):\n        self.config = config\n        self.sync_client = OpenAI(api_key=api_key)\n        self.async_client = AsyncOpenAI(api_key=api_key)\n    def _prepare_json_schema(self, schema: Dict) -> Dict:",
+        "detail": "autoppia_iwa_module.autoppia_iwa.src.llms.infrastructure.llm_service_parallel",
+        "documentation": {}
+    },
+    {
+        "label": "LocalLLMService",
+        "kind": 6,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.src.llms.infrastructure.llm_service_parallel",
+        "description": "autoppia_iwa_module.autoppia_iwa.src.llms.infrastructure.llm_service_parallel",
+        "peekOfCode": "class LocalLLMService(ILLM):\n    \"\"\"\n    Simple local (self-hosted) LLM that communicates via HTTP.\n    Uses HTTPX for sync and async calls.\n    \"\"\"\n    def __init__(\n        self,\n        config: LLMConfig,\n        endpoint_url: str,\n        parallel_endpoint_url: Optional[str] = None",
+        "detail": "autoppia_iwa_module.autoppia_iwa.src.llms.infrastructure.llm_service_parallel",
+        "documentation": {}
+    },
+    {
+        "label": "LLMFactory",
+        "kind": 6,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.src.llms.infrastructure.llm_service_parallel",
+        "description": "autoppia_iwa_module.autoppia_iwa.src.llms.infrastructure.llm_service_parallel",
+        "peekOfCode": "class LLMFactory:\n    \"\"\"\n    Simple factory to build the right LLM implementation\n    based on the llm_type.\n    \"\"\"\n    @staticmethod\n    def create_llm(\n        llm_type: str,\n        config: LLMConfig,\n        **kwargs",
+        "detail": "autoppia_iwa_module.autoppia_iwa.src.llms.infrastructure.llm_service_parallel",
         "documentation": {}
     },
     {
@@ -10948,7 +11031,7 @@
         "kind": 2,
         "importPath": "autoppia_iwa_module.modules.llm_local.test.test_one_request_time",
         "description": "autoppia_iwa_module.modules.llm_local.test.test_one_request_time",
-        "peekOfCode": "def make_request():\n    url = \"http://127.0.0.1:6000/generate\"\n    headers = {\"Content-Type\": \"application/json\"}\n    data = {\n        \"messages\": [\n            {\n                \"role\": \"system\",\n                \"content\": \"You are Qwen, created by Alibaba Cloud. You are a helpful assistant.\"\n            },\n            {",
+        "peekOfCode": "def make_request():\n    url = \"http://127.0.0.1:22185/generate\"\n    headers = {\"Content-Type\": \"application/json\"}\n    data = {\n        \"messages\": [\n            {\n                \"role\": \"system\",\n                \"content\": \"You are Qwen, created by Alibaba Cloud. You are a helpful assistant.\"\n            },\n            {",
         "detail": "autoppia_iwa_module.modules.llm_local.test.test_one_request_time",
         "documentation": {}
     },
@@ -10998,11 +11081,20 @@
         "documentation": {}
     },
     {
+        "label": "append_to_file",
+        "kind": 2,
+        "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm",
+        "description": "autoppia_iwa_module.modules.llm_local.run_local_llm",
+        "peekOfCode": "def append_to_file(filepath, data_obj):\n    \"\"\"\n    Append a single JSON object to a file as a new line.\n    \"\"\"\n    with open(filepath, 'a', encoding='utf-8') as f:\n        json.dump(data_obj, f, ensure_ascii=False)\n        f.write(\"\\n\")\ndef generate_data(messages, temperature, max_tokens, json_format=False, schema=None):\n    \"\"\"\n    Generate text using Qwen with the given parameters.",
+        "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm",
+        "documentation": {}
+    },
+    {
         "label": "generate_data",
         "kind": 2,
         "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "description": "autoppia_iwa_module.modules.llm_local.run_local_llm",
-        "peekOfCode": "def generate_data(messages, temperature, max_tokens, json_format=False, schema=None):\n    \"\"\"\n    Generate text using Qwen with the given parameters.\n    If json_format=True, attempts to repair and return valid JSON.\n    If schema is provided, instruct the model to strictly follow it.\n    Returns (response_text, tokens_in, tokens_out).\n    \"\"\"\n    try:\n        # If we have a JSON schema, prepend an instruction to produce valid JSON\n        if json_format and schema:",
+        "peekOfCode": "def generate_data(messages, temperature, max_tokens, json_format=False, schema=None):\n    \"\"\"\n    Generate text using Qwen with the given parameters.\n    If json_format=True, attempts to repair and return valid JSON.\n    If schema is provided, instruct the model to strictly follow it.\n    Returns (response_text, tokens_in, tokens_out, text_prompt).\n    \"\"\"\n    text_prompt = None\n    try:\n        # If we have a JSON schema, prepend an instruction to produce valid JSON",
         "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "documentation": {}
     },
@@ -11011,7 +11103,7 @@
         "kind": 2,
         "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "description": "autoppia_iwa_module.modules.llm_local.run_local_llm",
-        "peekOfCode": "def handler():\n    # Increase total request count\n    counters[\"total_requests\"] += 1\n    request_number = counters[\"total_requests\"]  # This is our per-request number\n    try:\n        data = request.json or {}\n        # Extract the fields\n        messages = data.get(\"messages\", [])\n        temperature = float(data.get(\"temperature\", 0.1))\n        max_tokens = int(data.get(\"max_tokens\", 256))",
+        "peekOfCode": "def handler():\n    counters[\"total_requests\"] += 1\n    request_number = counters[\"total_requests\"]\n    # Prepare a dict to record everything about the request (and eventually response)\n    log_data = {\n        \"request_number\": request_number,\n        \"timestamp\": time.time()  # Or use time.ctime() if you want a human-readable string\n    }\n    try:\n        data = request.json or {}",
         "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "documentation": {}
     },
@@ -11020,7 +11112,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "description": "autoppia_iwa_module.modules.llm_local.run_local_llm",
-        "peekOfCode": "app = Flask(__name__)\nCORS(app, resources={r\"/*\": {\"origins\": \"*\"}})\n# ---------------------------------------------------------------------------\n# The model name as per Qwen docs (Adjust if you prefer Qwen2-7B-Instruct, etc.)\n# ---------------------------------------------------------------------------\nMODEL_NAME = \"Qwen/Qwen2.5-14B-Instruct\"\n# Load tokenizer & model\ntokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)\nmodel = AutoModelForCausalLM.from_pretrained(\n    MODEL_NAME,",
+        "peekOfCode": "app = Flask(__name__)\nCORS(app, resources={r\"/*\": {\"origins\": \"*\"}})\nMODEL_NAME = \"Qwen/Qwen2.5-14B-Instruct\"\n# Load tokenizer & model\ntokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)\nmodel = AutoModelForCausalLM.from_pretrained(\n    MODEL_NAME,\n    torch_dtype=\"auto\",\n    device_map=\"auto\"\n)",
         "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "documentation": {}
     },
@@ -11029,7 +11121,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "description": "autoppia_iwa_module.modules.llm_local.run_local_llm",
-        "peekOfCode": "MODEL_NAME = \"Qwen/Qwen2.5-14B-Instruct\"\n# Load tokenizer & model\ntokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)\nmodel = AutoModelForCausalLM.from_pretrained(\n    MODEL_NAME,\n    torch_dtype=\"auto\",\n    device_map=\"auto\"\n)\nmodel.eval()\n# ---------------------------------------------------------------------------",
+        "peekOfCode": "MODEL_NAME = \"Qwen/Qwen2.5-14B-Instruct\"\n# Load tokenizer & model\ntokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)\nmodel = AutoModelForCausalLM.from_pretrained(\n    MODEL_NAME,\n    torch_dtype=\"auto\",\n    device_map=\"auto\"\n)\nmodel.eval()\n# Global counters (optional)",
         "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "documentation": {}
     },
@@ -11038,7 +11130,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "description": "autoppia_iwa_module.modules.llm_local.run_local_llm",
-        "peekOfCode": "tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)\nmodel = AutoModelForCausalLM.from_pretrained(\n    MODEL_NAME,\n    torch_dtype=\"auto\",\n    device_map=\"auto\"\n)\nmodel.eval()\n# ---------------------------------------------------------------------------\n# Global counters (optional)\n# ---------------------------------------------------------------------------",
+        "peekOfCode": "tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)\nmodel = AutoModelForCausalLM.from_pretrained(\n    MODEL_NAME,\n    torch_dtype=\"auto\",\n    device_map=\"auto\"\n)\nmodel.eval()\n# Global counters (optional)\ncounters = {\n    \"total_requests\": 0,",
         "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "documentation": {}
     },
@@ -11047,7 +11139,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "description": "autoppia_iwa_module.modules.llm_local.run_local_llm",
-        "peekOfCode": "model = AutoModelForCausalLM.from_pretrained(\n    MODEL_NAME,\n    torch_dtype=\"auto\",\n    device_map=\"auto\"\n)\nmodel.eval()\n# ---------------------------------------------------------------------------\n# Global counters (optional)\n# ---------------------------------------------------------------------------\ncounters = {",
+        "peekOfCode": "model = AutoModelForCausalLM.from_pretrained(\n    MODEL_NAME,\n    torch_dtype=\"auto\",\n    device_map=\"auto\"\n)\nmodel.eval()\n# Global counters (optional)\ncounters = {\n    \"total_requests\": 0,\n    \"json_requests\": 0,",
         "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "documentation": {}
     },
@@ -11056,7 +11148,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "description": "autoppia_iwa_module.modules.llm_local.run_local_llm",
-        "peekOfCode": "counters = {\n    \"total_requests\": 0,\n    \"json_requests\": 0,\n    \"json_correctly_formatted\": 0,\n    \"json_repair_succeeded\": 0\n}\ndef generate_data(messages, temperature, max_tokens, json_format=False, schema=None):\n    \"\"\"\n    Generate text using Qwen with the given parameters.\n    If json_format=True, attempts to repair and return valid JSON.",
+        "peekOfCode": "counters = {\n    \"total_requests\": 0,\n    \"json_requests\": 0,\n    \"json_correctly_formatted\": 0,\n    \"json_repair_succeeded\": 0\n}\ndef append_to_file(filepath, data_obj):\n    \"\"\"\n    Append a single JSON object to a file as a new line.\n    \"\"\"",
         "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "documentation": {}
     },
