@@ -239,7 +239,11 @@ async def get_rewards_with_details(
             evaluation_results.append(eval_dict)
 
     except Exception as e:
-        bt.logging.error(f"Error evaluating task solutions with details: {e}")
+        # bt.logging.error(f"Error evaluating task solutions with details: {e}")
+        ColoredLogger.error(
+            f"Error evaluating task solutions with details: {e}",
+            ColoredLogger.RED,
+        )
         for i in range(len(task_solutions)):
             rewards[i] = 0.0
             test_results_matrices.append([])
