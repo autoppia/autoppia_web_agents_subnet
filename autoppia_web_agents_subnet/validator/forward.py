@@ -295,6 +295,9 @@ async def compute_rewards_with_details(
     bt.logging.info(
         f"Rewards computed in {evaluation_end_time - evaluation_start_time:.2f}s."
     )
+    ColoredLogger.info(
+        f" COMPUTA_REWARDS_WITH_DETAILS{test_results_matrices}", ColoredLogger.CYAN
+    )
     return rewards, test_results_matrices, evaluation_results
 
 
