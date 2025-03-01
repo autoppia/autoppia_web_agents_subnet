@@ -401,8 +401,12 @@ async def send_feedback_synapse_to_miners(
                 ColoredLogger.BLUE,
             )
             ColoredLogger.info(
-                f"{feedback_task.tests}",
+                f"{feedback_task}",
                 ColoredLogger.RED,
+            )
+            ColoredLogger.info(
+                f"MI MATRIZ{test_results_matrices[i]}, LAS MATRICES {test_results_matrices}",
+                ColoredLogger.YELLOW,
             )
         feedback_list.append(feedback)
 
