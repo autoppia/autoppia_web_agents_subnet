@@ -208,7 +208,7 @@ async def send_task_synapse_to_miners(
     """
     Sends a TaskSynapse to multiple miners, returns their responses.
     """
-    bt.logging.info(f"Sending TaskSynapse to {len(miner_uids)} miners.")
+    bt.logging.info(f"Sending TaskSynapse to {len(miner_uids)} miners. Miner Timeout : {TIMEOUT}s")
     responses: List[TaskSynapse] = await dendrite_with_retries(
         dendrite=validator.dendrite,
         axons=miner_axons,

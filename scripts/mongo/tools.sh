@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # Cargar variables de entorno de manera segura
 set -a
 source <(grep -v '^#' .env | grep -v '^$')
@@ -22,6 +21,7 @@ show_usage() {
   echo "  drop-db <db_name>          Drop all collections in a database"
   echo "  drop-collection <db_name> <collection_name>   Drop a specific collection"
   echo "  view <db_name> <collection_name> [num_docs]   View documents in a collection"
+  echo "  interactive <db_name> <collection_name>       Interactively review and delete documents"
   echo "  help, --help, -h           Show this help message"
   echo ""
   exit 1
@@ -30,6 +30,7 @@ show_usage() {
 # Obtener el ID o nombre del contenedor de MongoDB
 find_mongo_container() {
   MONGO_CONTAINER=$(docker ps --filter "ancestor=mongo:latest" --format "{{.ID}}")
+  
   # Verificar si se encontró un contenedor en ejecución
   if [ -z "$MONGO_CONTAINER" ]; then
     # Try alternative way to find mongo container
@@ -39,6 +40,7 @@ find_mongo_container() {
       exit 1
     fi
   fi
+  
   echo "Using MongoDB container: $MONGO_CONTAINER"
   return 0
 }
@@ -140,6 +142,93 @@ view_collection() {
   "
 }
 
+# Interactively review and delete documents
+interactive_review() {
+  if [ -z "$1" ] || [ -z "$2" ]; then
+    echo "Error: Database name and collection name required"
+    echo "Usage: $0 interactive <db_name> <collection_name>"
+    exit 1
+  fi
+  
+  DB_NAME=$1
+  COLLECTION=$2
+  find_mongo_container
+  
+  echo "Starting interactive review for collection '$COLLECTION' in database '$DB_NAME'..."
+  echo "For each document, you'll be asked if you want to delete it."
+  echo "----------------------------------------"
+  
+  # First, get the total count of documents
+  TOTAL_DOCS=$(docker exec "$MONGO_CONTAINER" mongosh "$MONGODB_URL" --quiet --eval "
+    db = db.getSiblingDB('$DB_NAME');
+    db.getCollection('$COLLECTION').countDocuments({});
+  ")
+  
+  if [ "$TOTAL_DOCS" -eq 0 ]; then
+    echo "Collection is empty. Nothing to review."
+    return
+  fi
+  
+  echo "Total documents: $TOTAL_DOCS"
+  
+  # Process documents in batches for better performance
+  BATCH_SIZE=1
+  COUNTER=0
+  DELETED=0
+  KEPT=0
+  
+  while [ $COUNTER -lt $TOTAL_DOCS ] && [ $COUNTER -lt 1000 ]; do  # Limit to 1000 for safety
+    # Get a single document
+    DOCUMENT=$(docker exec "$MONGO_CONTAINER" mongosh "$MONGODB_URL" --quiet --eval "
+      db = db.getSiblingDB('$DB_NAME');
+      db.getCollection('$COLLECTION').find({}).skip($COUNTER).limit(1).pretty();
+    ")
+    
+    if [ -z "$DOCUMENT" ]; then
+      echo "No more documents found."
+      break
+    fi
+    
+    COUNTER=$((COUNTER + 1))
+    
+    # Get document ID for deletion
+    DOC_ID=$(docker exec "$MONGO_CONTAINER" mongosh "$MONGODB_URL" --quiet --eval "
+      db = db.getSiblingDB('$DB_NAME');
+      var doc = db.getCollection('$COLLECTION').find({}).skip($((COUNTER - 1))).limit(1).toArray()[0];
+      doc._id;
+    ")
+    
+    # Display the document (only first 10 lines)
+    echo -e "\nDocument $COUNTER of $TOTAL_DOCS:"
+    echo "$DOCUMENT" | head -n 10
+    echo "... (truncated, showing first 10 lines only)"
+    
+    # Ask for user input
+    read -p "Delete this document? (y/n/q to quit): " USER_RESPONSE
+    
+    if [ "$USER_RESPONSE" = "y" ]; then
+      # Delete the document
+      docker exec "$MONGO_CONTAINER" mongosh "$MONGODB_URL" --quiet --eval "
+        db = db.getSiblingDB('$DB_NAME');
+        db.getCollection('$COLLECTION').deleteOne({ _id: $DOC_ID });
+      "
+      echo "Document deleted."
+      DELETED=$((DELETED + 1))
+      # Don't increment counter when deleting, as the next document will shift into this position
+      COUNTER=$((COUNTER - 1))
+    elif [ "$USER_RESPONSE" = "q" ]; then
+      echo "Review aborted by user."
+      break
+    else
+      echo "Document kept."
+      KEPT=$((KEPT + 1))
+    fi
+  done
+  
+  echo -e "\n----------------------------------------"
+  echo "Review summary: $COUNTER documents processed, $DELETED deleted, $KEPT kept."
+}
+
 # Main script logic
 if [ $# -lt 1 ]; then
   show_usage
@@ -157,6 +246,9 @@ case "$1" in
     ;;
   "view")
     view_collection "$2" "$3" "$4"
+    ;;
+  "interactive")
+    interactive_review "$2" "$3"
     ;;
   "help"|"--help"|"-h")
     show_usage
