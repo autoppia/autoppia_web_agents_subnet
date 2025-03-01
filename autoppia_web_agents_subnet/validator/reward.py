@@ -181,10 +181,11 @@ async def get_rewards_with_details(
             #    result.test_results_matrix might be something like
             #    List[List[TestResult]] or similar
             matrix_converted = []
-            ColoredLogger.info(
-                f"ESTOY EN GET REWARDS_WITH DETAILS DESPUES DE EVALUAR {i}, MATRIz: {result.test_results_matrix}",
-                ColoredLogger.GRAY,
-            )
+            if len(result.test_results_matrix) == 0:
+                ColoredLogger.info(
+                    f"ESTOY EN GET REWARDS_WITH DETAILS DESPUES DE EVALUAR {i}, MATRIz: {result}",
+                    ColoredLogger.GRAY,
+                )
             if result.test_results_matrix:
                 for action_list in result.test_results_matrix:
                     # convert each test result to dict
