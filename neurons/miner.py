@@ -148,7 +148,7 @@ class Miner(BaseMinerNeuron):
         ):
             return True, "Feedback from unknown hotkey"
         ColoredLogger.info(
-            f"Request Received from our validator",
+            f"Request Received from our validator {synapse.dendrite.hotkey}",
             ColoredLogger.BLUE,
         )
         return False, "Hotkey recognized!"

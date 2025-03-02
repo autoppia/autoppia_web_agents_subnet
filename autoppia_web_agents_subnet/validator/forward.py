@@ -427,7 +427,7 @@ async def send_feedback_synapse_to_miners(
                     axons=[axon],
                     synapse=feedback_synapse,
                     deserialize=True,
-                    timeout=30,
+                    timeout=50,
                 )
             )
         )
