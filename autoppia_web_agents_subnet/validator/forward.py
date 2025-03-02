@@ -398,7 +398,7 @@ async def send_feedback_synapse_to_miners(
             stats=None,
         )
 
-        if miner_uid == 6:
+        if miner_uid == 119:
             ColoredLogger.info(
                 f"{feedback.model_dump()}",
                 ColoredLogger.BLUE,
