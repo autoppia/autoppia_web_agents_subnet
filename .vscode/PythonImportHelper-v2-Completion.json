@@ -5449,6 +5449,15 @@
         "documentation": {}
     },
     {
+        "label": "concurrent.futures",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "concurrent.futures",
+        "description": "concurrent.futures",
+        "detail": "concurrent.futures",
+        "documentation": {}
+    },
+    {
         "label": "torch",
         "kind": 6,
         "isExtraImport": true,
@@ -5536,6 +5545,15 @@
         "importPath": "gc",
         "description": "gc",
         "detail": "gc",
+        "documentation": {}
+    },
+    {
+        "label": "threading",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "threading",
+        "description": "threading",
+        "detail": "threading",
         "documentation": {}
     },
     {
@@ -8888,15 +8906,6 @@
         "documentation": {}
     },
     {
-        "label": "threading",
-        "kind": 6,
-        "isExtraImport": true,
-        "importPath": "threading",
-        "description": "threading",
-        "detail": "threading",
-        "documentation": {}
-    },
-    {
         "label": "BaseNeuron",
         "importPath": "autoppia_web_agents_subnet.base.neuron",
         "description": "autoppia_web_agents_subnet.base.neuron",
@@ -11026,6 +11035,51 @@
         "documentation": {}
     },
     {
+        "label": "send_request",
+        "kind": 2,
+        "importPath": "autoppia_iwa_module.modules.llm_local.test.stress_test",
+        "description": "autoppia_iwa_module.modules.llm_local.test.stress_test",
+        "peekOfCode": "def send_request(url, request_data, request_id):\n    \"\"\"\n    Sends a single request to the given URL with the JSON payload.\n    Returns a tuple: (request_id, success_bool, response_time, error_message, response_text)\n      - request_id: identifier of the request\n      - success_bool: True if the request got a 200 and the output is presumably valid\n      - response_time: how many seconds the request took\n      - error_message: a string describing any error encountered (or None if success_bool is True)\n      - response_text: the 'output' field from the JSON response if present\n    \"\"\"",
+        "detail": "autoppia_iwa_module.modules.llm_local.test.stress_test",
+        "documentation": {}
+    },
+    {
+        "label": "generate_random_request",
+        "kind": 2,
+        "importPath": "autoppia_iwa_module.modules.llm_local.test.stress_test",
+        "description": "autoppia_iwa_module.modules.llm_local.test.stress_test",
+        "peekOfCode": "def generate_random_request():\n    \"\"\"\n    Picks one of the EXAMPLE_REQUESTS at random.\n    Could be extended to randomize temperature/max_tokens, etc.\n    \"\"\"\n    base = random.choice(EXAMPLE_REQUESTS)\n    # Create a shallow copy so as not to mutate the original example\n    data = dict(base)\n    # Slight random variations on temperature or max_tokens if desired\n    data[\"temperature\"] = round(random.uniform(0.1, 1.0), 2)",
+        "detail": "autoppia_iwa_module.modules.llm_local.test.stress_test",
+        "documentation": {}
+    },
+    {
+        "label": "main",
+        "kind": 2,
+        "importPath": "autoppia_iwa_module.modules.llm_local.test.stress_test",
+        "description": "autoppia_iwa_module.modules.llm_local.test.stress_test",
+        "peekOfCode": "def main():\n    parser = argparse.ArgumentParser(description=\"Stress test a Qwen inference endpoint.\")\n    parser.add_argument(\"--url\", type=str, default=\"http://localhost:6000/generate\",\n                        help=\"Full URL of the /generate endpoint.\")\n    parser.add_argument(\"--concurrency\", type=int, default=5,\n                        help=\"Number of concurrent threads.\")\n    parser.add_argument(\"--total_requests\", type=int, default=20,\n                        help=\"Total number of requests to send.\")\n    args = parser.parse_args()\n    url = args.url",
+        "detail": "autoppia_iwa_module.modules.llm_local.test.stress_test",
+        "documentation": {}
+    },
+    {
+        "label": "summarize_results",
+        "kind": 2,
+        "importPath": "autoppia_iwa_module.modules.llm_local.test.stress_test",
+        "description": "autoppia_iwa_module.modules.llm_local.test.stress_test",
+        "peekOfCode": "def summarize_results(results):\n    \"\"\"\n    Prints a summary of test outcomes, including average time, success/failure counts, etc.\n    \"\"\"\n    total = len(results)\n    failures = [r for r in results if not r[1]]\n    successes = [r for r in results if r[1]]\n    avg_time = sum(r[2] for r in results) / total if total > 0 else 0.0\n    print(\"\\n=== Test Summary ===\")\n    print(f\"Total Requests: {total}\")",
+        "detail": "autoppia_iwa_module.modules.llm_local.test.stress_test",
+        "documentation": {}
+    },
+    {
+        "label": "EXAMPLE_REQUESTS",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.modules.llm_local.test.stress_test",
+        "description": "autoppia_iwa_module.modules.llm_local.test.stress_test",
+        "peekOfCode": "EXAMPLE_REQUESTS = [\n    # Simple request: short question\n    {\n        \"messages\": [\n            {\n                \"role\": \"system\",\n                \"content\": \"You are Qwen, created by Alibaba Cloud. You are a helpful assistant.\"\n            },\n            {\n                \"role\": \"user\",",
+        "detail": "autoppia_iwa_module.modules.llm_local.test.stress_test",
+        "documentation": {}
+    },
+    {
         "label": "make_request",
         "kind": 2,
         "importPath": "autoppia_iwa_module.modules.llm_local.test.test_one_request",
@@ -11037,19 +11091,28 @@
     {
         "label": "make_request",
         "kind": 2,
-        "importPath": "autoppia_iwa_module.modules.llm_local.test.test_one_request_time",
-        "description": "autoppia_iwa_module.modules.llm_local.test.test_one_request_time",
+        "importPath": "autoppia_iwa_module.modules.llm_local.test.test_one_request_large",
+        "description": "autoppia_iwa_module.modules.llm_local.test.test_one_request_large",
+        "peekOfCode": "def make_request():\n    url = \"http://194.68.245.61:22185/generate\"\n    headers = {\"Content-Type\": \"application/json\"}\n    data = {\n        \"request_number\": 381,\n        \"timestamp\": 1740840474.1822062,\n        \"messages\": [\n            {\n                \"role\": \"system\",\n                \"content\": (",
+        "detail": "autoppia_iwa_module.modules.llm_local.test.test_one_request_large",
+        "documentation": {}
+    },
+    {
+        "label": "make_request",
+        "kind": 2,
+        "importPath": "autoppia_iwa_module.modules.llm_local.test.test_one_request_speed",
+        "description": "autoppia_iwa_module.modules.llm_local.test.test_one_request_speed",
         "peekOfCode": "def make_request():\n    url = \"http://127.0.0.1:22185/generate\"\n    headers = {\"Content-Type\": \"application/json\"}\n    data = {\n        \"messages\": [\n            {\n                \"role\": \"system\",\n                \"content\": \"You are Qwen, created by Alibaba Cloud. You are a helpful assistant.\"\n            },\n            {",
-        "detail": "autoppia_iwa_module.modules.llm_local.test.test_one_request_time",
+        "detail": "autoppia_iwa_module.modules.llm_local.test.test_one_request_speed",
         "documentation": {}
     },
     {
         "label": "main",
         "kind": 2,
-        "importPath": "autoppia_iwa_module.modules.llm_local.test.test_one_request_time",
-        "description": "autoppia_iwa_module.modules.llm_local.test.test_one_request_time",
-        "peekOfCode": "def main():\n    for i in range(1, 101):\n        req_time, result = make_request()\n        print(f\"Request {i} - {req_time:.2f}s\")\n        # Optionally print the LLM output\n        print(\"Output:\", result.get(\"output\", \"No output found\"), \"\\n\")\nif __name__ == \"__main__\":\n    main()",
-        "detail": "autoppia_iwa_module.modules.llm_local.test.test_one_request_time",
+        "importPath": "autoppia_iwa_module.modules.llm_local.test.test_one_request_speed",
+        "description": "autoppia_iwa_module.modules.llm_local.test.test_one_request_speed",
+        "peekOfCode": "def main():\n    for i in range(1, 1001):\n        req_time, result = make_request()\n        print(f\"Request {i} - {req_time:.2f}s\")\n        # Optionally print the LLM output\n        print(\"Output:\", result.get(\"output\", \"No output found\"), \"\\n\")\nif __name__ == \"__main__\":\n    main()",
+        "detail": "autoppia_iwa_module.modules.llm_local.test.test_one_request_speed",
         "documentation": {}
     },
     {
@@ -11111,7 +11174,7 @@
         "kind": 2,
         "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "description": "autoppia_iwa_module.modules.llm_local.run_local_llm",
-        "peekOfCode": "def handler():\n    counters[\"total_requests\"] += 1\n    request_number = counters[\"total_requests\"]\n    # Prepare a dict to record everything about the request (and eventually response)\n    log_data = {\n        \"request_number\": request_number,\n        \"timestamp\": time.time()  # Or use time.ctime() if you want a human-readable string\n    }\n    try:\n        data = request.json or {}",
+        "peekOfCode": "def handler():\n    # Ensure only one request is processed at a time\n    with lock:\n        counters[\"total_requests\"] += 1\n        request_number = counters[\"total_requests\"]\n        # Prepare a dict to record everything about the request (and eventually response)\n        log_data = {\n            \"request_number\": request_number,\n            \"timestamp\": time.time()  # Or use time.ctime() if you want a human-readable string\n        }",
         "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "documentation": {}
     },
@@ -11120,7 +11183,16 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "description": "autoppia_iwa_module.modules.llm_local.run_local_llm",
-        "peekOfCode": "app = Flask(__name__)\nCORS(app, resources={r\"/*\": {\"origins\": \"*\"}})\nMODEL_NAME = \"Qwen/Qwen2.5-14B-Instruct\"\n# Load tokenizer & model\ntokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)\nmodel = AutoModelForCausalLM.from_pretrained(\n    MODEL_NAME,\n    torch_dtype=\"auto\",\n    device_map=\"auto\"\n)",
+        "peekOfCode": "app = Flask(__name__)\nCORS(app, resources={r\"/*\": {\"origins\": \"*\"}})\n# A global lock to ensure only one request is processed at a time.\nlock = threading.Lock()\nMODEL_NAME = \"Qwen/Qwen2.5-14B-Instruct\"\n# Load tokenizer & model\ntokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)\nmodel = AutoModelForCausalLM.from_pretrained(\n    MODEL_NAME,\n    torch_dtype=\"auto\",",
+        "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm",
+        "documentation": {}
+    },
+    {
+        "label": "lock",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm",
+        "description": "autoppia_iwa_module.modules.llm_local.run_local_llm",
+        "peekOfCode": "lock = threading.Lock()\nMODEL_NAME = \"Qwen/Qwen2.5-14B-Instruct\"\n# Load tokenizer & model\ntokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)\nmodel = AutoModelForCausalLM.from_pretrained(\n    MODEL_NAME,\n    torch_dtype=\"auto\",\n    device_map={\"\": 0}\n)\nmodel.eval()",
         "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "documentation": {}
     },
@@ -11129,7 +11201,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "description": "autoppia_iwa_module.modules.llm_local.run_local_llm",
-        "peekOfCode": "MODEL_NAME = \"Qwen/Qwen2.5-14B-Instruct\"\n# Load tokenizer & model\ntokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)\nmodel = AutoModelForCausalLM.from_pretrained(\n    MODEL_NAME,\n    torch_dtype=\"auto\",\n    device_map=\"auto\"\n)\nmodel.eval()\n# Global counters (optional)",
+        "peekOfCode": "MODEL_NAME = \"Qwen/Qwen2.5-14B-Instruct\"\n# Load tokenizer & model\ntokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)\nmodel = AutoModelForCausalLM.from_pretrained(\n    MODEL_NAME,\n    torch_dtype=\"auto\",\n    device_map={\"\": 0}\n)\nmodel.eval()\n# Global counters (optional)",
         "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "documentation": {}
     },
@@ -11138,7 +11210,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "description": "autoppia_iwa_module.modules.llm_local.run_local_llm",
-        "peekOfCode": "tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)\nmodel = AutoModelForCausalLM.from_pretrained(\n    MODEL_NAME,\n    torch_dtype=\"auto\",\n    device_map=\"auto\"\n)\nmodel.eval()\n# Global counters (optional)\ncounters = {\n    \"total_requests\": 0,",
+        "peekOfCode": "tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)\nmodel = AutoModelForCausalLM.from_pretrained(\n    MODEL_NAME,\n    torch_dtype=\"auto\",\n    device_map={\"\": 0}\n)\nmodel.eval()\n# Global counters (optional)\ncounters = {\n    \"total_requests\": 0,",
         "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "documentation": {}
     },
@@ -11147,7 +11219,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "description": "autoppia_iwa_module.modules.llm_local.run_local_llm",
-        "peekOfCode": "model = AutoModelForCausalLM.from_pretrained(\n    MODEL_NAME,\n    torch_dtype=\"auto\",\n    device_map=\"auto\"\n)\nmodel.eval()\n# Global counters (optional)\ncounters = {\n    \"total_requests\": 0,\n    \"json_requests\": 0,",
+        "peekOfCode": "model = AutoModelForCausalLM.from_pretrained(\n    MODEL_NAME,\n    torch_dtype=\"auto\",\n    device_map={\"\": 0}\n)\nmodel.eval()\n# Global counters (optional)\ncounters = {\n    \"total_requests\": 0,\n    \"json_requests\": 0,",
         "detail": "autoppia_iwa_module.modules.llm_local.run_local_llm",
         "documentation": {}
     },
