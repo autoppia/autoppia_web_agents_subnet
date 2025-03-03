@@ -15085,6 +15085,33 @@
         "documentation": {}
     },
     {
+        "label": "version_to_tuple",
+        "kind": 2,
+        "importPath": "autoppia_web_agents_subnet.utils.weights_version",
+        "description": "autoppia_web_agents_subnet.utils.weights_version",
+        "peekOfCode": "def version_to_tuple(version):\n    return tuple(map(int, version.split('.')))\ndef is_valid_version_format(version):\n    return bool(re.match(r'^\\d+\\.\\d+\\.\\d+$', version))\ndef is_version_in_range(version, version1, version2):\n    if not is_valid_version_format(version):\n        return False\n    v = version_to_tuple(version)\n    v1 = version_to_tuple(version1)\n    v2 = version_to_tuple(version2)",
+        "detail": "autoppia_web_agents_subnet.utils.weights_version",
+        "documentation": {}
+    },
+    {
+        "label": "is_valid_version_format",
+        "kind": 2,
+        "importPath": "autoppia_web_agents_subnet.utils.weights_version",
+        "description": "autoppia_web_agents_subnet.utils.weights_version",
+        "peekOfCode": "def is_valid_version_format(version):\n    return bool(re.match(r'^\\d+\\.\\d+\\.\\d+$', version))\ndef is_version_in_range(version, version1, version2):\n    if not is_valid_version_format(version):\n        return False\n    v = version_to_tuple(version)\n    v1 = version_to_tuple(version1)\n    v2 = version_to_tuple(version2)\n    if v1 > v2:\n        v1, v2 = v2, v1",
+        "detail": "autoppia_web_agents_subnet.utils.weights_version",
+        "documentation": {}
+    },
+    {
+        "label": "is_version_in_range",
+        "kind": 2,
+        "importPath": "autoppia_web_agents_subnet.utils.weights_version",
+        "description": "autoppia_web_agents_subnet.utils.weights_version",
+        "peekOfCode": "def is_version_in_range(version, version1, version2):\n    if not is_valid_version_format(version):\n        return False\n    v = version_to_tuple(version)\n    v1 = version_to_tuple(version1)\n    v2 = version_to_tuple(version2)\n    if v1 > v2:\n        v1, v2 = v2, v1\n    return v1 <= v <= v2",
+        "detail": "autoppia_web_agents_subnet.utils.weights_version",
+        "documentation": {}
+    },
+    {
         "label": "read_config",
         "kind": 2,
         "importPath": "autoppia_web_agents_subnet.validator.config",
