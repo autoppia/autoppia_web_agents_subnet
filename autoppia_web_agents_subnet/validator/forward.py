@@ -26,7 +26,7 @@ from autoppia_web_agents_subnet.protocol import (
 from autoppia_web_agents_subnet.utils.dendrite import dendrite_with_retries
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 import asyncio
-
+from autoppia_web_agents_subnet import __version__
 
 TIMEOUT = 60 * 2  # 2 min
 FORWARD_SLEEP_SECONDS = 60 * 1  # 1 min
@@ -482,13 +482,13 @@ async def forward(self) -> None:
     """
     try:
         init_miner_stats(self)
-        bt.logging.info("Starting forward step.")
-
+        bt.logging.info(f"Starting forward step with __version__ {__version__}")
+        # 1. Retrieve a random demo web project
         demo_web_project: WebProject = await retrieve_random_demo_web_project()
         bt.logging.info(
             f"Selected demo web project with URL: {demo_web_project.frontend_url}"
         )
-
+        # 2. Generate tasks
         tasks_generated = await generate_tasks_for_web_project(demo_web_project)
         if not tasks_generated:
             bt.logging.warning("No tasks generated, skipping forward step.")
