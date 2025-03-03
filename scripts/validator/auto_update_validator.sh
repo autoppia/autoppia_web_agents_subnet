@@ -20,7 +20,7 @@ fi
 
 CONFIG_FILE="autoppia_web_agents_subnet/__init__.py"
 VERSION_VARIABLE="__version__"
-SLEEP_INTERVAL=900  # 15 minutes in seconds
+SLEEP_INTERVAL=120  # 2 minutes in seconds
 
 echo "Starting auto-update service for process: $PROCESS_NAME"
 
@@ -44,7 +44,7 @@ version_greater() {
 redeploy_old_version() {
     echo "Reverting to previous commits..."
     # Revert autoppia_iwa
-    cd autoppia_iwa
+    cd autoppia_iwa_module
     git reset --hard "$PREV_IWA_HEAD"
     cd ..
     # Revert main repo
@@ -52,7 +52,7 @@ redeploy_old_version() {
     echo "Reinstalling old version..."
     source validator_env/bin/activate
     pip install -e .
-    pip install -e autoppia_iwa
+    pip install -e autoppia_iwa_module
     echo "Restarting old version in PM2..."
     pm2 restart "$PROCESS_NAME" || pm2 start neurons/validator.py \
         --name "$PROCESS_NAME" \
@@ -84,9 +84,9 @@ update_and_deploy() {
         fi
         echo "MongoDB deployment completed successfully."
     fi
-    cd autoppia_iwa
+    cd autoppia_iwa_module
     if ! git pull origin main; then
-        echo "Failed to pull autoppia_iwa."
+        echo "Failed to pull autoppia_iwa_module."
         cd ..
         redeploy_old_version
         return 1
@@ -99,8 +99,8 @@ update_and_deploy() {
         redeploy_old_version
         return 1
     fi
-    if ! pip install -e autoppia_iwa; then
-        echo "pip install -e autoppia_iwa failed"
+    if ! pip install -e autoppia_iwa_module; then
+        echo "pip install -e autoppia_iwa_module failed"
         redeploy_old_version
         return 1
     fi
@@ -136,7 +136,7 @@ while true; do
             echo "New version detected: $REMOTE_VERSION (local: $LOCAL_VERSION)"
             # Capture current commits before updating
             PREV_MAIN_HEAD=$(git rev-parse HEAD)
-            PREV_IWA_HEAD=$(cd autoppia_iwa && git rev-parse HEAD)
+            PREV_IWA_HEAD=$(cd autoppia_iwa_module && git rev-parse HEAD)
             
             if update_and_deploy; then
                 echo "Update successful: now at version $REMOTE_VERSION."
