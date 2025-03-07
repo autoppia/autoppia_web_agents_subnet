@@ -1,6 +1,16 @@
 import argparse
 import bittensor as bt
 
+TIMEOUT = 60 * 2  # 2 Min
+FORWARD_SLEEP_SECONDS = 60 * 1  # 1 Minutes
+TASK_SLEEP = 60 * 1  # 1 Minute
+TIME_WEIGHT = 0.2
+MIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%
+MIN_RESPONSE_REWARD = 0
+SAMPLE_SIZE = 256  # Number of Miners
+MAX_ACTIONS_LENGTH = 15
+NUM_URLS = 1
+
 
 def read_config() -> bt.config:
     parser = argparse.ArgumentParser()
