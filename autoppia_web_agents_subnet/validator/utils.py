@@ -26,6 +26,8 @@ from autoppia_web_agents_subnet.validator.config import (
     TIMEOUT
 )
 from autoppia_web_agents_subnet import __version__
+from copy import deepcopy
+
 
 # --------------------------------------------------------------------
 # MINER STATS INIT
