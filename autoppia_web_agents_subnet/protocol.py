@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.table import Table
 
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+from autoppia_iwa_module.autoppia_iwa.src.shared.web_utils import clean_html
 
 
 class MinerStats(BaseModel):
@@ -104,11 +105,10 @@ class TaskFeedbackSynapse(Synapse):
         return self
 
     def model_dump(self, *args, **kwargs):
-        base = super().model_dump(*args, **kwargs)
-        # Asegúrate manualmente de serializar self.task con un anidado que preserve subcampos
-        if base.get("task") and hasattr(self.task, "nested_model_dump"):
-            base["task"] = self.task.nested_model_dump()
-            base["test_results_matrix"] = self.test_results_matrix
+
+        base = self.clean_task()
+        base["task"] = self.task.clean_
+        base["test_results_matrix"] = self.test_results_matrix
 
         return base
 
