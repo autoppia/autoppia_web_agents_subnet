@@ -4,12 +4,9 @@ from bittensor import Synapse
 from autoppia_iwa.src.execution.actions.actions import AllActionsUnion
 from autoppia_iwa.src.data_generation.domain.classes import Task
 from autoppia_iwa.src.shared.visualizator import SubnetVisualizer
-
 from rich.console import Console
 from rich.table import Table
-
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
-from autoppia_iwa_module.autoppia_iwa.src.shared.web_utils import clean_html
 
 
 class MinerStats(BaseModel):
@@ -105,8 +102,8 @@ class TaskFeedbackSynapse(Synapse):
         return self
 
     def model_dump(self, *args, **kwargs):
-
-        json_dict = self.clean_task()
+        json_dict = super().model_dump()
+        json_dict["task"] = self.task.clean_task()
         json_dict["test_results_matrix"] = self.test_results_matrix
 
         return json_dict
