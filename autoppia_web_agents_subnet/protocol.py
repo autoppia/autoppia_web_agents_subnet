@@ -3,6 +3,7 @@ from typing import List, Optional, Any, Dict
 from bittensor import Synapse
 from autoppia_iwa.src.execution.actions.actions import AllActionsUnion
 from autoppia_iwa.src.data_generation.domain.classes import Task
+from autoppia_iwa.src.shared.visualizator import SubnetVisualizer
 
 from rich.console import Console
 from rich.table import Table
@@ -112,7 +113,6 @@ class TaskFeedbackSynapse(Synapse):
         return base
 
     def print_in_terminal(self):
-        from autoppia_iwa.src.shared.visualizator import SubnetVisualizer
 
         visualizer = SubnetVisualizer()
         ColoredLogger.info(
