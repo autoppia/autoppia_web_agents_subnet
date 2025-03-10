@@ -77,9 +77,9 @@ class Miner(BaseMinerNeuron):
                 html=synapse.html,
                 screenshot=synapse.screenshot,
             )
-
+            task_for_agent = task.prepare_for_agent(self.uid)
             # Process the task
-            task_solution = await self.agent.solve_task(task=task)
+            task_solution = await self.agent.solve_task(task=task_for_agent)
 
             actions: List[BaseAction] = task_solution.actions
             bt.logging.info(f"Task solved. Actions: {actions}")
