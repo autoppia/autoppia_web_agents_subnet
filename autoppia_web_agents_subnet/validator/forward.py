@@ -266,8 +266,13 @@ async def forward(self) -> None:
             bt.logging.warning("No tasks generated, skipping forward step.")
             return
 
-        # 3. Process each task
+        # 3. Process each task — this was missing!
         tasks_processed_start_time = time.time()
+        await process_tasks(self, demo_web_project, tasks_generated)
+        tasks_processed_end_time = time.time()
+        tasks_processed_time = tasks_processed_end_time - tasks_processed_start_time
+
+        # Update stats about tasks processing
         self.validator_performance_stats["total_processing_tasks_time"] += tasks_processed_time
 
         # 4. This forward step is done; track the time
