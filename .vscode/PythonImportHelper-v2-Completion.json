@@ -2912,14 +2912,6 @@
         "documentation": {}
     },
     {
-        "label": "initialize_demo_webs_projects",
-        "importPath": "autoppia_iwa.src.demo_webs.config",
-        "description": "autoppia_iwa.src.demo_webs.config",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.demo_webs.config",
-        "documentation": {}
-    },
-    {
         "label": "demo_web_projects",
         "importPath": "autoppia_iwa.src.demo_webs.config",
         "description": "autoppia_iwa.src.demo_webs.config",
@@ -9329,6 +9321,14 @@
         "description": "autoppia_web_agents_subnet.validator.utils",
         "isExtraImport": true,
         "detail": "autoppia_web_agents_subnet.validator.utils",
+        "documentation": {}
+    },
+    {
+        "label": "initialize_demo_webs_projects",
+        "importPath": "autoppia_iwa.src.demo_webs.utils",
+        "description": "autoppia_iwa.src.demo_webs.utils",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.demo_webs.utils",
         "documentation": {}
     },
     {
