@@ -1,30 +1,34 @@
 from pydantic import Field, BaseModel
-from typing import List, Optional
+from typing import List, Optional, Any, Dict
 from bittensor import Synapse
 from autoppia_iwa.src.execution.actions.actions import AllActionsUnion
 from autoppia_iwa.src.data_generation.domain.classes import Task
 
-# Added imports for rich
 from rich.console import Console
 from rich.table import Table
 
+from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+
 
 class MinerStats(BaseModel):
+    """
+    Stores basic stats about a miner, updated after each task.
+    """
+
     avg_score: float = 0.0
     avg_execution_time: float = 0.0
     avg_evaluation_time: float = 0.0
     total_tasks: int = 0
     total_successful_tasks: int = 0
-    last_task: Optional["Task"] = None
+    last_task: Optional[Task] = None
     sum_score: float = 0.0
     sum_execution_time: float = 0.0
     sum_evaluation_time: float = 0.0
 
-    # New fields
+    # Additional fields
     last_task_score: float = 0.0
     last_execution_time: float = 0.0
 
-    # Allow extra fields to avoid strict validation on nested objects
     class Config:
         extra = "allow"
         arbitrary_types_allowed = True
@@ -34,13 +38,14 @@ class MinerStats(BaseModel):
         score: float,
         execution_time: float,
         evaluation_time: float,
-        last_task: "Task",
-        success: bool = False
+        last_task: Task,
+        success: bool = False,
     ):
         self.total_tasks += 1
         self.sum_score += score
         self.sum_execution_time += execution_time
         self.sum_evaluation_time += evaluation_time
+
         if success:
             self.total_successful_tasks += 1
 
@@ -54,6 +59,10 @@ class MinerStats(BaseModel):
 
 
 class TaskSynapse(Synapse):
+    """
+    Synapse carrying the Task prompt & data from validator to miners.
+    """
+
     version: str = ""
     prompt: str
     url: str
@@ -61,20 +70,30 @@ class TaskSynapse(Synapse):
     screenshot: Optional[str] = None
 
     actions: List[AllActionsUnion] = Field(
-        default_factory=list,
-        description="The actions that solve the task"
+        default_factory=list, description="The actions that solve the task"
     )
 
     class Config:
         extra = "allow"
+        arbitrary_types_allowed = True
 
     def deserialize(self) -> "TaskSynapse":
         return self
 
 
 class TaskFeedbackSynapse(Synapse):
+    """
+    Synapse carrying feedback from validator back to miner,
+    including test_results, evaluation scores, and stats.
+    """
+
     version: str = ""
-    stats: MinerStats
+    miner_id: str
+    task: Optional[Task] = None
+    actions: List[AllActionsUnion] = Field(default_factory=list)
+    test_results_matrix: Optional[List[List[Any]]] = None
+    evaluation_result: Optional[Dict[str, Any]] = None
+    stats: Optional[MinerStats] = None
 
     class Config:
         extra = "allow"
@@ -83,36 +102,84 @@ class TaskFeedbackSynapse(Synapse):
     def deserialize(self) -> "TaskFeedbackSynapse":
         return self
 
+    def model_dump(self, *args, **kwargs):
+        base = super().model_dump(*args, **kwargs)
+        # Asegúrate manualmente de serializar self.task con un anidado que preserve subcampos
+        if base.get("task") and hasattr(self.task, "nested_model_dump"):
+            base["task"] = self.task.nested_model_dump()
+            base["test_results_matrix"] = self.test_results_matrix
+
+        return base
+
     def print_in_terminal(self):
-        validator_hotkey = getattr(self.dendrite, "hotkey", None)  
+        from autoppia_iwa.src.shared.visualizator import SubnetVisualizer
 
-        console = Console()
-        table = Table(title="Miner Feedback Stats", show_header=True, header_style="bold magenta")
-        table.add_column("Metric", style="dim")
-        table.add_column("Value", justify="right")
+        visualizer = SubnetVisualizer()
+        ColoredLogger.info(
+            f" PRINTEANDO EN TERMINAL",
+            ColoredLogger.GREEN,
+        )
 
-        table.add_row("Validator Hotkey", validator_hotkey if validator_hotkey else "None")
-        table.add_row("Synapse Version", self.version)
-        table.add_row("Total Tasks", str(self.stats.total_tasks))
-        table.add_row("Successful Tasks", str(self.stats.total_successful_tasks))
-        table.add_row("Avg Score", f"{self.stats.avg_score:.2f}")
-        table.add_row("Avg Exec Time", f"{self.stats.avg_execution_time:.2f}s")
-        table.add_row("Avg Eval Time", f"{self.stats.avg_evaluation_time:.2f}s")
+        # If we have enough data for a full evaluation
+        if (
+            self.task
+            and hasattr(self.task, "id")
+            and self.actions
+            and self.test_results_matrix
+        ):
+            ColoredLogger.info(
+                f" 1er if",
+                ColoredLogger.GREEN,
+            )
 
-        # Add empty row between global stats and last task stats
-        table.add_row("", "")
-
-        if self.stats.last_task:
-            last_task_id = self.stats.last_task.id or "N/A"
-            last_task_prompt = self.stats.last_task.prompt or "N/A"
-            table.add_row("Last Task ID", str(last_task_id))
-            table.add_row("Last Task Prompt", last_task_prompt)
+            visualizer.show_full_evaluation(
+                agent_id=self.miner_id,
+                task=self.task,
+                actions=self.actions,
+                test_results_matrix=self.test_results_matrix,
+                evaluation_result=self.evaluation_result,
+            )
+        elif self.task and hasattr(self.task, "id"):
+            ColoredLogger.info(
+                f" 2 if",
+                ColoredLogger.GREEN,
+            )
+            # Partial data => just show the task
+            visualizer.show_task_with_tests(self.task)
+            console = Console()
+            console.print(
+                f"\n[bold yellow]Insufficient actions or test results for {self.miner_id}[/bold yellow]"
+            )
         else:
-            table.add_row("Last Task ID", "None")
-            table.add_row("Last Task Prompt", "None")
+            ColoredLogger.info(
+                f" 3 if",
+                ColoredLogger.GREEN,
+            )
+            console = Console()
+            table = Table(
+                title=f"Miner Feedback Stats for {self.miner_id}",
+                show_header=True,
+                header_style="bold magenta",
+            )
+            table.add_column("Metric", style="dim")
+            table.add_column("Value", justify="right")
 
-        # Display new fields for the last task
-        table.add_row("Last Task Score", f"{self.stats.last_task_score:.2f}")
-        table.add_row("Last Exec Time", f"{self.stats.last_execution_time:.2f}s")
+            validator_hotkey = getattr(self.dendrite, "hotkey", None)
+            table.add_row(
+                "Validator Hotkey", validator_hotkey if validator_hotkey else "None"
+            )
+            table.add_row("Miner ID", self.miner_id)
 
-        console.print(table)
+            if self.stats:
+                table.add_row("Total Tasks", str(self.stats.total_tasks))
+                table.add_row(
+                    "Successful Tasks", str(self.stats.total_successful_tasks)
+                )
+                table.add_row("Avg Score", f"{self.stats.avg_score:.2f}")
+                table.add_row("Avg Exec Time", f"{self.stats.avg_execution_time:.2f}s")
+                if self.stats.last_task:
+                    table.add_row("Last Task ID", str(self.stats.last_task.id or "N/A"))
+                    table.add_row(
+                        "Last Task Score", f"{self.stats.last_task_score:.2f}"
+                    )
+            console.print(table)
