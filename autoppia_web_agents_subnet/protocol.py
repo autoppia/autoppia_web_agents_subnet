@@ -106,11 +106,10 @@ class TaskFeedbackSynapse(Synapse):
 
     def model_dump(self, *args, **kwargs):
 
-        base = self.clean_task()
-        base["task"] = self.task.clean_
-        base["test_results_matrix"] = self.test_results_matrix
+        json_dict = self.clean_task()
+        json_dict["test_results_matrix"] = self.test_results_matrix
 
-        return base
+        return json_dict
 
     def print_in_terminal(self):
 
