@@ -138,32 +138,21 @@ class Miner(BaseMinerNeuron):
         self, synapse: TaskFeedbackSynapse
     ) -> typing.Tuple[bool, str]:
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
-            bt.logging.warning(
-                "Received a feedback request without a dendrite or hotkey."
-            )
+            bt.logging.warning("Received a request without a dendrite or hotkey.")
             return True, "Missing dendrite or hotkey"
+
+        uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
         if (
-            synapse.dendrite.hotkey
-            != "5GbVehXamAezbKVedqsRgU3pmpUN47ntqXGKfiCcxHn46kSb"
+            not self.config.blacklist.allow_non_registered
+            and synapse.dendrite.hotkey not in self.metagraph.hotkeys
         ):
-            return True, "Feedback from unknown hotkey"
-        ColoredLogger.info(
-            f"Request Received from our validator {synapse.dendrite.hotkey}",
-            ColoredLogger.BLUE,
-        )
+            return True, "Unrecognized hotkey"
+
+        if self.config.blacklist.force_validator_permit:
+            if not self.metagraph.validator_permit[uid]:
+                return True, "Non-validator hotkey"
+
         return False, "Hotkey recognized!"
-        # uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
-        # if (
-        #     not self.config.blacklist.allow_non_registered
-        #     and synapse.dendrite.hotkey not in self.metagraph.hotkeys
-        # ):
-        #     return True, "Unrecognized hotkey"
-
-        # if self.config.blacklist.force_validator_permit:
-        #     if not self.metagraph.validator_permit[uid]:
-        #         return True, "Non-validator hotkey"
-
-        # return False, "Hotkey recognized!"
 
     async def priority(self, synapse: TaskSynapse) -> float:
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
