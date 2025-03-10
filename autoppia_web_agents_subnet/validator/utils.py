@@ -10,6 +10,7 @@ from autoppia_iwa.src.web_agents.classes import TaskSolution
 from autoppia_iwa.src.data_generation.domain.classes import Task
 from autoppia_iwa.src.demo_webs.classes import WebProject
 from autoppia_iwa.src.demo_webs.config import initialize_demo_webs_projects
+from autoppia_iwa.src.demo_webs.config import demo_web_projects
 
 from autoppia_web_agents_subnet.protocol import (
     TaskSynapse,
@@ -370,11 +371,11 @@ async def retrieve_random_demo_web_project() -> WebProject:
     Retrieves a random demo web project from the available ones.
     Raises an Exception if none are available.
     """
-    demo_web_projects = await initialize_demo_webs_projects()
-    bt.logging.debug(f"Retrieved {len(demo_web_projects)} demo web projects.")
-    if not demo_web_projects:
+    web_projects = await initialize_demo_webs_projects(demo_web_projects)
+    bt.logging.debug(f"Retrieved {len(web_projects)} demo web projects.")
+    if not web_projects:
         raise Exception("No demo web projects available.")
-    project = random.choice(demo_web_projects)
+    project = random.choice(web_projects)
     ColoredLogger.info(
         f"Generating tasks for Web Project: '{project.name}'",
         ColoredLogger.YELLOW,
