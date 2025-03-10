@@ -1621,6 +1621,30 @@
         "documentation": {}
     },
     {
+        "label": "Dict",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Any",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Tuple",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
         "label": "List",
         "importPath": "typing",
         "description": "typing",
@@ -1638,6 +1662,22 @@
     },
     {
         "label": "Optional",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Any",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Dict",
         "importPath": "typing",
         "description": "typing",
         "isExtraImport": true,
@@ -2997,6 +3037,14 @@
         "documentation": {}
     },
     {
+        "label": "TestResult",
+        "importPath": "autoppia_iwa.src.evaluation.classes",
+        "description": "autoppia_iwa.src.evaluation.classes",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.evaluation.classes",
+        "documentation": {}
+    },
+    {
         "label": "ConcurrentEvaluator",
         "importPath": "autoppia_iwa.src.evaluation.evaluator.evaluator",
         "description": "autoppia_iwa.src.evaluation.evaluator.evaluator",
@@ -3450,14 +3498,6 @@
         "description": "autoppia_iwa.src.web_agents.base",
         "isExtraImport": true,
         "detail": "autoppia_iwa.src.web_agents.base",
-        "documentation": {}
-    },
-    {
-        "label": "TaskSolution",
-        "importPath": "autoppia_iwa.src.web_agents.classes",
-        "description": "autoppia_iwa.src.web_agents.classes",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.web_agents.classes",
         "documentation": {}
     },
     {
@@ -10430,7 +10470,7 @@
         "documentation": {}
     },
     {
-        "label": "get_rewards",
+        "label": "get_rewards_with_details",
         "importPath": "autoppia_web_agents_subnet.validator.reward",
         "description": "autoppia_web_agents_subnet.validator.reward",
         "isExtraImport": true,
@@ -10443,6 +10483,14 @@
         "description": "autoppia_web_agents_subnet.utils.uids",
         "isExtraImport": true,
         "detail": "autoppia_web_agents_subnet.utils.uids",
+        "documentation": {}
+    },
+    {
+        "label": "ColoredLogger",
+        "importPath": "autoppia_web_agents_subnet.utils.logging",
+        "description": "autoppia_web_agents_subnet.utils.logging",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.utils.logging",
         "documentation": {}
     },
     {
@@ -10614,7 +10662,7 @@
         "documentation": {}
     },
     {
-        "label": "# NEW IMPORTS FOR VALIDATOR TRACKING\n    init_validator_performance_stats",
+        "label": "init_validator_performance_stats",
         "importPath": "autoppia_web_agents_subnet.validator.utils",
         "description": "autoppia_web_agents_subnet.validator.utils",
         "isExtraImport": true,
@@ -10646,6 +10694,22 @@
         "documentation": {}
     },
     {
+        "label": "__version__",
+        "importPath": "autoppia_web_agents_subnet.validator",
+        "description": "autoppia_web_agents_subnet.validator",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.validator",
+        "documentation": {}
+    },
+    {
+        "label": "forward",
+        "importPath": "autoppia_web_agents_subnet.validator",
+        "description": "autoppia_web_agents_subnet.validator",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.validator",
+        "documentation": {}
+    },
+    {
         "label": "BaseMinerNeuron",
         "importPath": "autoppia_web_agents_subnet.base.miner",
         "description": "autoppia_web_agents_subnet.base.miner",
@@ -10659,14 +10723,6 @@
         "description": "autoppia_web_agents_subnet.base.validator",
         "isExtraImport": true,
         "detail": "autoppia_web_agents_subnet.base.validator",
-        "documentation": {}
-    },
-    {
-        "label": "forward",
-        "importPath": "autoppia_web_agents_subnet.validator",
-        "description": "autoppia_web_agents_subnet.validator",
-        "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet.validator",
         "documentation": {}
     },
     {
@@ -17980,7 +18036,7 @@
         "kind": 6,
         "importPath": "autoppia_web_agents_subnet.utils.logging",
         "description": "autoppia_web_agents_subnet.utils.logging",
-        "peekOfCode": "class ColoredLogger:\n    \"\"\"A simple logger that uses ANSI colors when calling bt.logging methods.\"\"\"\n    BLUE = \"blue\"\n    YELLOW = \"yellow\"\n    RED = \"red\"\n    GREEN = \"green\"\n    RESET = \"reset\"\n    _COLORS = {\n        \"blue\": \"\\033[94m\",\n        \"yellow\": \"\\033[93m\",",
+        "peekOfCode": "class ColoredLogger:\n    \"\"\"A simple logger that uses ANSI colors when calling bt.logging methods.\"\"\"\n    BLUE = \"blue\"\n    YELLOW = \"yellow\"\n    RED = \"red\"\n    GREEN = \"green\"\n    CYAN = \"cyan\"\n    MAGENTA = \"magenta\"\n    WHITE = \"white\"\n    PURPLE = \"purple\"",
         "detail": "autoppia_web_agents_subnet.utils.logging",
         "documentation": {}
     },
@@ -18169,16 +18225,7 @@
         "kind": 2,
         "importPath": "autoppia_web_agents_subnet.validator.reward",
         "description": "autoppia_web_agents_subnet.validator.reward",
-        "peekOfCode": "def normalize_execution_times(times: List[Optional[float]]) -> List[float]:\n    if not times:\n        return []\n    valid_times = [t for t in times if t is not None]\n    if not valid_times:\n        return [0.0] * len(times)\n    min_time = min(valid_times)\n    max_time = max(valid_times)\n    if max_time == min_time:\n        return [1.0 if t is not None else 0.0 for t in times]",
-        "detail": "autoppia_web_agents_subnet.validator.reward",
-        "documentation": {}
-    },
-    {
-        "label": "get_score_from_evaluation_result",
-        "kind": 2,
-        "importPath": "autoppia_web_agents_subnet.validator.reward",
-        "description": "autoppia_web_agents_subnet.validator.reward",
-        "peekOfCode": "def get_score_from_evaluation_result(result: EvaluationResult) -> float:\n    if result.final_score is None:\n        return 0.0\n    return result.final_score",
+        "peekOfCode": "def normalize_execution_times(times: List[Optional[float]]) -> List[float]:\n    \"\"\"\n    Normalizes execution times to a [0..1] range (1 = fastest, 0 = slowest).\n    If all times are equal, returns 1.0 for those not None.\n    \"\"\"\n    if not times:\n        return []\n    valid_times = [t for t in times if t is not None]\n    if not valid_times:\n        return [0.0] * len(times)",
         "detail": "autoppia_web_agents_subnet.validator.reward",
         "documentation": {}
     },
@@ -18250,7 +18297,7 @@
         "kind": 6,
         "importPath": "autoppia_web_agents_subnet.protocol",
         "description": "autoppia_web_agents_subnet.protocol",
-        "peekOfCode": "class MinerStats(BaseModel):\n    avg_score: float = 0.0\n    avg_execution_time: float = 0.0\n    avg_evaluation_time: float = 0.0\n    total_tasks: int = 0\n    total_successful_tasks: int = 0\n    last_task: Optional[\"Task\"] = None\n    sum_score: float = 0.0\n    sum_execution_time: float = 0.0\n    sum_evaluation_time: float = 0.0",
+        "peekOfCode": "class MinerStats(BaseModel):\n    \"\"\"\n    Stores basic stats about a miner, updated after each task.\n    \"\"\"\n    avg_score: float = 0.0\n    avg_execution_time: float = 0.0\n    avg_evaluation_time: float = 0.0\n    total_tasks: int = 0\n    total_successful_tasks: int = 0\n    last_task: Optional[Task] = None",
         "detail": "autoppia_web_agents_subnet.protocol",
         "documentation": {}
     },
@@ -18259,7 +18306,7 @@
         "kind": 6,
         "importPath": "autoppia_web_agents_subnet.protocol",
         "description": "autoppia_web_agents_subnet.protocol",
-        "peekOfCode": "class TaskSynapse(Synapse):\n    version: str = \"\"\n    prompt: str\n    url: str\n    html: Optional[str] = None\n    screenshot: Optional[str] = None\n    actions: List[AllActionsUnion] = Field(\n        default_factory=list,\n        description=\"The actions that solve the task\"\n    )",
+        "peekOfCode": "class TaskSynapse(Synapse):\n    \"\"\"\n    Synapse carrying the Task prompt & data from validator to miners.\n    \"\"\"\n    version: str = \"\"\n    prompt: str\n    url: str\n    html: Optional[str] = None\n    screenshot: Optional[str] = None\n    actions: List[AllActionsUnion] = Field(",
         "detail": "autoppia_web_agents_subnet.protocol",
         "documentation": {}
     },
@@ -18268,7 +18315,7 @@
         "kind": 6,
         "importPath": "autoppia_web_agents_subnet.protocol",
         "description": "autoppia_web_agents_subnet.protocol",
-        "peekOfCode": "class TaskFeedbackSynapse(Synapse):\n    version: str = \"\"\n    stats: MinerStats\n    class Config:\n        extra = \"allow\"\n        arbitrary_types_allowed = True\n    def deserialize(self) -> \"TaskFeedbackSynapse\":\n        return self\n    def print_in_terminal(self):\n        validator_hotkey = getattr(self.dendrite, \"hotkey\", None)  ",
+        "peekOfCode": "class TaskFeedbackSynapse(Synapse):\n    \"\"\"\n    Synapse carrying feedback from validator back to miner,\n    including test_results, evaluation scores, and stats.\n    \"\"\"\n    version: str = \"\"\n    miner_id: str\n    task: Optional[Task] = None\n    actions: List[AllActionsUnion] = Field(default_factory=list)\n    test_results_matrix: Optional[List[List[Any]]] = None",
         "detail": "autoppia_web_agents_subnet.protocol",
         "documentation": {}
     },
@@ -18277,7 +18324,7 @@
         "kind": 6,
         "importPath": "neurons.miner",
         "description": "neurons.miner",
-        "peekOfCode": "class Miner(BaseMinerNeuron):\n    \"\"\"\n    Your miner neuron class. You should use this class to define your miner's behavior. In particular, you should replace the forward function with your own logic. You may also want to override the blacklist and priority functions according to your needs.\n    This class inherits from the BaseMinerNeuron class, which in turn inherits from BaseNeuron. The BaseNeuron class takes care of routine tasks such as setting up wallet, subtensor, metagraph, logging directory, parsing config, etc. You can override any of the methods in BaseNeuron if you need to customize the behavior.\n    This class provides reasonable default behavior for a miner such as blacklisting unrecognized hotkeys, prioritizing requests based on stake, and forwarding requests to the forward function. If you need to define custom\n    \"\"\"\n    def __init__(self, config=None):\n        super(Miner, self).__init__(config=config)\n        self.agent = (\n            ApifiedWebAgent(name=AGENT_NAME, host=AGENT_HOST, port=AGENT_PORT)",
+        "peekOfCode": "class Miner(BaseMinerNeuron):\n    \"\"\"\n    Miner neuron class. Inherits from BaseMinerNeuron. We override:\n      - forward(): handles TaskSynapse\n      - forward_feedback(): handles TaskFeedbackSynapse\n      - blacklist*/priority* if needed\n    \"\"\"\n    def __init__(self, config=None):\n        super(Miner, self).__init__(config=config)\n        self.agent = (",
         "detail": "neurons.miner",
         "documentation": {}
     },

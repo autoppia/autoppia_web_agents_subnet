@@ -38,10 +38,16 @@ def setup_events_logger(full_path, events_retention_size):
 
 class ColoredLogger:
     """A simple logger that uses ANSI colors when calling bt.logging methods."""
+
     BLUE = "blue"
     YELLOW = "yellow"
     RED = "red"
     GREEN = "green"
+    CYAN = "cyan"
+    MAGENTA = "magenta"
+    WHITE = "white"
+    PURPLE = "purple"
+    GRAY = "gray"
     RESET = "reset"
 
     _COLORS = {
@@ -49,7 +55,12 @@ class ColoredLogger:
         "yellow": "\033[93m",
         "red": "\033[91m",
         "green": "\033[92m",
-        "reset": "\033[0m"
+        "cyan": "\033[96m",
+        "magenta": "\033[95m",
+        "white": "\033[97m",
+        "gray": "\033[90m",
+        "reset": "\033[0m",
+        "purple": "\033[35m",
     }
 
     @staticmethod
@@ -58,7 +69,9 @@ class ColoredLogger:
         if color not in ColoredLogger._COLORS:
             # Default to no color if unsupported color is provided
             return message
-        return f"{ColoredLogger._COLORS[color]}{message}{ColoredLogger._COLORS['reset']}"
+        return (
+            f"{ColoredLogger._COLORS[color]}{message}{ColoredLogger._COLORS['reset']}"
+        )
 
     @staticmethod
     def info(message: str, color: str = "blue") -> None:

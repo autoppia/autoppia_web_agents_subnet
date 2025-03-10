@@ -25,6 +25,7 @@ from autoppia_web_agents_subnet.validator.config import (
     TIME_WEIGHT,
     TIMEOUT
 )
+from autoppia_web_agents_subnet.validator import __version__
 
 # --------------------------------------------------------------------
 # MINER STATS INIT
@@ -296,7 +297,7 @@ async def send_feedback_synapse_to_miners(
     Sends TaskFeedbackSynapse to each miner in parallel.
     """
     feedback_list = [
-        TaskFeedbackSynapse(version="v1", stats=validator.miner_stats[miner_uid])
+        TaskFeedbackSynapse(version=__version__, stats=validator.miner_stats[miner_uid])
         for miner_uid in miner_uids
         if miner_uid in validator.miner_stats
     ]
