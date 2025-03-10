@@ -318,17 +318,17 @@ async def send_feedback_synapse_to_miners(
         # Make a shallow copy so we can strip out large fields
         feedback_task = copy.copy(task)
 
-        # Remove or strip heavy fields if screenshot_policy is "remove"
-        if screenshot_policy == "remove":
-            feedback_task.screenshot = ""
-            feedback_task.html = ""
-            feedback_task.clean_html = ""
+        # # Remove or strip heavy fields if screenshot_policy is "remove"
+        # if screenshot_policy == "remove":
+        #     feedback_task.screenshot = ""
+        #     feedback_task.html = ""
+        #     feedback_task.clean_html = ""
 
         # Build the feedback synapse
         feedback = TaskFeedbackSynapse(
             version=__version__,
             miner_id=str(miner_uid),
-            task=feedback_task,
+            task=task,
             actions=task_solutions[i].actions if i < len(task_solutions) else [],
             test_results_matrix=test_results_matrices[i] if i < len(test_results_matrices) else None,
             evaluation_result=evaluation_results[i] if i < len(evaluation_results) else None,
