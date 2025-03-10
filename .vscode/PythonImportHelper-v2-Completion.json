@@ -10662,14 +10662,6 @@
         "documentation": {}
     },
     {
-        "label": "clean_html",
-        "importPath": "autoppia_iwa_module.autoppia_iwa.src.shared.web_utils",
-        "description": "autoppia_iwa_module.autoppia_iwa.src.shared.web_utils",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa_module.autoppia_iwa.src.shared.web_utils",
-        "documentation": {}
-    },
-    {
         "label": "BaseMinerNeuron",
         "importPath": "autoppia_web_agents_subnet.base.miner",
         "description": "autoppia_web_agents_subnet.base.miner",
