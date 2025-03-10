@@ -23,12 +23,12 @@ from autoppia_web_agents_subnet import __version__
 # Imports from your validator config and utils
 from autoppia_web_agents_subnet.validator.config import (
     FORWARD_SLEEP_SECONDS,
-    NUM_URLS,
     SAMPLE_SIZE,
     TASK_SLEEP,
     TIME_WEIGHT,
     MIN_SCORE_FOR_CORRECT_FORMAT,
-    MIN_RESPONSE_REWARD
+    MIN_RESPONSE_REWARD,
+    PROMPTS_PER_ITERATION
 )
 from autoppia_web_agents_subnet.validator.utils import (
     clean_miner_task,
@@ -44,7 +44,7 @@ from autoppia_web_agents_subnet.validator.utils import (
 )
 
 
-async def generate_tasks_for_web_project(demo_web_project: WebProject) -> List[Task]:
+async def generate_tasks_for_web_project(demo_web_project: WebProject, prompts_per_use_case:int) -> List[Task]:
     """
     Creates tasks for the specified web project using the TaskGenerationPipeline.
     """
@@ -52,7 +52,7 @@ async def generate_tasks_for_web_project(demo_web_project: WebProject) -> List[T
         web_project=demo_web_project,
         save_domain_analysis_in_db=True,
         save_task_in_db=False,
-        num_or_urls=NUM_URLS
+        prompts_per_use_case=prompts_per_use_case
     )
     pipeline = TaskGenerationPipeline(config=config, web_project=demo_web_project)
     start_time = time.time()
@@ -271,7 +271,7 @@ async def forward(self) -> None:
 
         # 2. Generate tasks
         tasks_generated_start_time = time.time()
-        tasks_generated = await generate_tasks_for_web_project(demo_web_project)
+        tasks_generated = await generate_tasks_for_web_project(demo_web_project, PROMPTS_PER_ITERATION)
         tasks_generated_end_time = time.time()
         tasks_generated_time = tasks_generated_end_time - tasks_generated_start_time
         self.validator_performance_stats["total_tasks_generated"] += len(tasks_generated)
