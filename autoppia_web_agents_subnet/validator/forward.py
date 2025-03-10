@@ -268,9 +268,6 @@ async def forward(self) -> None:
 
         # 3. Process each task
         tasks_processed_start_time = time.time()
-        await process_tasks(self, demo_web_project, tasks_generated)
-        tasks_processed_end_time = time.time()
-        tasks_processed_time = tasks_processed_end_time - tasks_processed_start_time
         self.validator_performance_stats["total_processing_tasks_time"] += tasks_processed_time
 
         # 4. This forward step is done; track the time
