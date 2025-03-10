@@ -10,7 +10,7 @@ MIN_RESPONSE_REWARD = 0
 SAMPLE_SIZE = 256  # Number of Miners
 MAX_ACTIONS_LENGTH = 15
 NUM_URLS = 1
-PROMPTS_PER_ITERATION = 10
+PROMPTS_PER_ITERATION = 1
 
 
 def read_config() -> bt.config:
