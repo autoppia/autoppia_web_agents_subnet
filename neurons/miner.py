@@ -77,7 +77,7 @@ class Miner(BaseMinerNeuron):
                 html=synapse.html,
                 screenshot=synapse.screenshot,
             )
-            task_for_agent = task.prepare_for_agent(self.uid)
+            task_for_agent = task.prepare_for_agent(str(self.uid))
             # Process the task
             task_solution = await self.agent.solve_task(task=task_for_agent)
 
@@ -117,8 +117,11 @@ class Miner(BaseMinerNeuron):
         return synapse
 
     async def blacklist(self, synapse: TaskSynapse) -> typing.Tuple[bool, str]:
-        print("Hotkey", synapse.dendrite.hotkey)
-        print(synapse)
+        ColoredLogger.info(
+            f"Processing Blacklist from validator: {synapse.dendrite.hotkey}",
+            ColoredLogger.YELLOW,
+        )
+
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
             bt.logging.warning("Received a request without a dendrite or hotkey.")
             return True, "Missing dendrite or hotkey"
