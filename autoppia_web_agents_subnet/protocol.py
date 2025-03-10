@@ -104,13 +104,10 @@ class TaskFeedbackSynapse(Synapse):
     def model_dump(self, *args, **kwargs):
         print("********")
         json_dict = super().model_dump()
-        json_dict["task"] = None
-        json_dict["test_results_matrix"] = None
-        json_dict["evaluation_result"] = None
-        json_dict["stats"] = None
-        # json_dict["task"] = self.task.clean_task()
-        # json_dict["test_results_matrix"] = self.test_results_matrix
-        print(json_dict)
+
+        json_dict["task"] = self.task.clean_task()
+        json_dict["test_results_matrix"] = self.test_results_matrix
+
         return json_dict
 
     def print_in_terminal(self):
