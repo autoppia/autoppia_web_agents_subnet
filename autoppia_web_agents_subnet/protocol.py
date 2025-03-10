@@ -110,7 +110,7 @@ class TaskFeedbackSynapse(Synapse):
         json_dict["stats"] = None
         # json_dict["task"] = self.task.clean_task()
         # json_dict["test_results_matrix"] = self.test_results_matrix
-
+        print(json_dict)
         return json_dict
 
     def print_in_terminal(self):
