@@ -25,7 +25,7 @@ from autoppia_web_agents_subnet.validator.config import (
     TIME_WEIGHT,
     TIMEOUT
 )
-from autoppia_web_agents_subnet.validator import __version__
+from autoppia_web_agents_subnet import __version__
 
 # --------------------------------------------------------------------
 # MINER STATS INIT
