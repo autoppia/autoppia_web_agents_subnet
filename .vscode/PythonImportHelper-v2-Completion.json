@@ -10373,6 +10373,14 @@
         "documentation": {}
     },
     {
+        "label": "__version__",
+        "importPath": "autoppia_web_agents_subnet",
+        "description": "autoppia_web_agents_subnet",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet",
+        "documentation": {}
+    },
+    {
         "label": "process_weights_for_netuid",
         "importPath": "autoppia_web_agents_subnet.base.utils.weight_utils",
         "description": "autoppia_web_agents_subnet.base.utils.weight_utils",
@@ -10694,22 +10702,6 @@
         "documentation": {}
     },
     {
-        "label": "__version__",
-        "importPath": "autoppia_web_agents_subnet.validator",
-        "description": "autoppia_web_agents_subnet.validator",
-        "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet.validator",
-        "documentation": {}
-    },
-    {
-        "label": "forward",
-        "importPath": "autoppia_web_agents_subnet.validator",
-        "description": "autoppia_web_agents_subnet.validator",
-        "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet.validator",
-        "documentation": {}
-    },
-    {
         "label": "BaseMinerNeuron",
         "importPath": "autoppia_web_agents_subnet.base.miner",
         "description": "autoppia_web_agents_subnet.base.miner",
@@ -10723,6 +10715,14 @@
         "description": "autoppia_web_agents_subnet.base.validator",
         "isExtraImport": true,
         "detail": "autoppia_web_agents_subnet.base.validator",
+        "documentation": {}
+    },
+    {
+        "label": "forward",
+        "importPath": "autoppia_web_agents_subnet.validator",
+        "description": "autoppia_web_agents_subnet.validator",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.validator",
         "documentation": {}
     },
     {
