@@ -68,10 +68,77 @@ async def generate_tasks_for_web_project(demo_web_project: WebProject) -> List[T
     return tasks_generated
 
 
+async def handle_feedback_and_stats(
+    validator,
+    web_project: WebProject,
+    task: Task,
+    responses: List[TaskSynapse],
+    miner_uids: List[int],
+    execution_times: List[float],
+    task_solutions,
+    rewards: np.ndarray,
+    test_results_matrices,
+    evaluation_results
+) -> dict:
+    """
+    Handles post-evaluation steps:
+      1) Collecting stats about responses (success, no-response, etc.).
+      2) Updating miner stats and scores.
+      3) Sending feedback synapse to miners.
+      4) Returning computed statistics for this specific task iteration.
+    """
+    # Count valid (non-None) responses
+    valid_responses_count = sum(resp is not None for resp in responses)
+    num_no_response = 0
+    num_success = 0
+    num_wrong = 0
+
+    if valid_responses_count == 0:
+        num_no_response += 1
+
+    if np.any(rewards > 0):
+        num_success += 1
+    else:
+        if valid_responses_count > 0:
+            num_wrong += 1
+
+    # Miner request time average
+    avg_miner_time = (sum(execution_times) / len(execution_times)) if execution_times else 0.0
+
+    # Update miner stats and get evaluation time
+    evaluation_time = await update_miner_stats_and_scores(
+        validator, rewards, miner_uids, execution_times, task
+    )
+
+    # Average reward across miners
+    avg_score_for_task = float(np.mean(rewards)) if len(rewards) > 0 else 0.0
+
+    # Send feedback (includes test matrices & evaluation dict)
+    miner_axons = [validator.metagraph.axons[uid] for uid in miner_uids]
+    await send_feedback_synapse_to_miners(
+        validator,
+        miner_axons,
+        miner_uids,
+        task,
+        task_solutions,
+        test_results_matrices,
+        evaluation_results
+    )
+
+    return {
+        "num_no_response": num_no_response,
+        "num_success": num_success,
+        "num_wrong": num_wrong,
+        "avg_miner_time": avg_miner_time,
+        "avg_score_for_task": avg_score_for_task,
+        "evaluation_time": evaluation_time
+    }
+
+
 async def process_tasks(validator, web_project: WebProject, tasks_generated: List[Task]) -> None:
     """
-    Sends tasks to sampled miners, gathers responses, evaluates them, updates miner scores,
-    and delivers feedback with detailed test results. Also updates validator performance metrics.
+    Sends tasks to sampled miners, gathers responses, evaluates them, and delegates
+    feedback/stats logic to a separate helper method. Also aggregates task-level stats.
     """
     total_time_start = time.time()
     tasks_count = 0
@@ -89,15 +156,15 @@ async def process_tasks(validator, web_project: WebProject, tasks_generated: Lis
         bt.logging.debug(f"Task #{index} (URL: {task.url}, ID: {task.id}): {task.prompt}")
         bt.logging.debug(f"Task tests: {task.tests}")
 
-        # Prepare task for miners
+        # Prepare a stripped-down version of the task for miners
         miner_task = clean_miner_task(task=task)
 
-        # Random miner selection
+        # Choose a random subset of miners
         miner_uids = get_random_uids(validator, k=SAMPLE_SIZE)
         bt.logging.info(f"Miner UIDs chosen: {miner_uids}")
         miner_axons = [validator.metagraph.axons[uid] for uid in miner_uids]
 
-        # Build synapse and send to miners
+        # Build synapse and send
         task_synapse = TaskSynapse(
             prompt=miner_task.prompt,
             url=miner_task.url,
@@ -109,10 +176,10 @@ async def process_tasks(validator, web_project: WebProject, tasks_generated: Lis
             validator, miner_axons, task_synapse, miner_uids
         )
 
-        # Convert responses to TaskSolutions, gather execution times
+        # Convert responses into TaskSolutions
         task_solutions, execution_times = collect_task_solutions(task, responses, miner_uids)
 
-        # Evaluate with details
+        # Evaluate solutions
         start_eval = time.time()
         rewards, test_results_matrices, evaluation_results = await get_rewards_with_details(
             validator,
@@ -128,56 +195,41 @@ async def process_tasks(validator, web_project: WebProject, tasks_generated: Lis
         bt.logging.info(f"Miners final rewards: {rewards}")
         bt.logging.info(f"Rewards computed in {end_eval - start_eval:.2f}s.")
 
-        # Collect stats
-        valid_responses_count = sum(resp is not None for resp in responses)
-        if valid_responses_count == 0:
-            num_no_response += 1
-
-        if np.any(rewards > 0):
-            num_success += 1
-        else:
-            if valid_responses_count > 0:
-                num_wrong += 1
-
-        # Calculate average miner response time
-        avg_miner_time = (sum(execution_times) / len(execution_times)) if execution_times else 0.0
-        sum_of_avg_response_times += avg_miner_time
-
-        # Update miner scores
-        evaluation_time = await update_miner_stats_and_scores(
-            validator, rewards, miner_uids, execution_times, task
-        )
-        sum_of_evaluation_times += evaluation_time
-
-        # Average final score across miners
-        avg_score_for_task = float(np.mean(rewards)) if len(rewards) > 0 else 0.0
-        sum_of_avg_scores += avg_score_for_task
-
-        # Send feedback synapse to miners (includes test matrices & evaluation results)
-        await send_feedback_synapse_to_miners(
-            validator,
-            miner_axons,
-            miner_uids,
-            task,
-            task_solutions,
-            test_results_matrices,
-            evaluation_results
+        # Handle feedback & stats in a separate helper
+        feedback_data = await handle_feedback_and_stats(
+            validator=validator,
+            web_project=web_project,
+            task=task,
+            responses=responses,
+            miner_uids=miner_uids,
+            execution_times=execution_times,
+            task_solutions=task_solutions,
+            rewards=rewards,
+            test_results_matrices=test_results_matrices,
+            evaluation_results=evaluation_results
         )
 
-        # Timing log
+        # Aggregate the returned stats
+        num_no_response += feedback_data["num_no_response"]
+        num_success += feedback_data["num_success"]
+        num_wrong += feedback_data["num_wrong"]
+        sum_of_avg_response_times += feedback_data["avg_miner_time"]
+        sum_of_evaluation_times += feedback_data["evaluation_time"]
+        sum_of_avg_scores += feedback_data["avg_score_for_task"]
+
+        # Log iteration timing
         task_end_time = time.time()
         task_duration = task_end_time - task_start_time
         tasks_count += 1
         tasks_total_time += task_duration
 
         ColoredLogger.info(
-            f"Task iteration time: {task_duration:.2f}s, avg miner request: {avg_miner_time:.2f}s.",
+            f"Task iteration time: {task_duration:.2f}s, avg miner request: {feedback_data['avg_miner_time']:.2f}s.",
             ColoredLogger.YELLOW
         )
         bt.logging.info(f"Sleeping for {TASK_SLEEP}s....")
         await asyncio.sleep(TASK_SLEEP)
 
-    # Summaries
     end_time = time.time()
     total_duration = end_time - total_time_start
     avg_task_time = tasks_total_time / tasks_count if tasks_count else 0.0
