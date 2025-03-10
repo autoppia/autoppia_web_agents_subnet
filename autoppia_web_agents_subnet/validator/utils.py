@@ -2,8 +2,8 @@ import random
 import time
 import numpy as np
 import bittensor as bt
-from copy import deepcopy
-from typing import List
+import copy
+from typing import List, Dict, Any
 import asyncio
 
 from autoppia_iwa.src.web_agents.classes import TaskSolution
@@ -292,18 +292,54 @@ async def send_feedback_synapse_to_miners(
     validator,
     miner_axons: List[bt.axon],
     miner_uids: List[int],
+    task: Task,
+    task_solutions: List[TaskSolution],
+    test_results_matrices: List[List[List[Any]]],
+    evaluation_results: List[Dict[str, Any]],
+    screenshot_policy: str = "remove"
 ) -> None:
     """
-    Sends TaskFeedbackSynapse to each miner in parallel.
+    Sends a TaskFeedbackSynapse to each miner with the relevant evaluation details.
+
+    :param validator: The validator instance, which holds the dendrite and other context.
+    :param miner_axons: List of miner axons corresponding to the chosen miner_uids.
+    :param miner_uids: The UIDs of the miners to send feedback to.
+    :param task: The original Task object.
+    :param task_solutions: List of TaskSolution objects from each miner.
+    :param test_results_matrices: List of test-result matrices returned by the reward function.
+    :param evaluation_results: List of evaluation details for each miner (scores, etc.).
+    :param screenshot_policy: Either "remove" or "keep". If "remove", the screenshot is cleared.
     """
-    feedback_list = [
-        TaskFeedbackSynapse(version=__version__, stats=validator.miner_stats[miner_uid])
-        for miner_uid in miner_uids
-        if miner_uid in validator.miner_stats
-    ]
-    bt.logging.info(
-        f"Sending TaskFeedbackSynapse to {len(feedback_list)} miners in parallel."
+    feedback_list = []
+
+    for i, miner_uid in enumerate(miner_uids):
+        # Make a shallow copy so we can strip out large fields
+        feedback_task = copy.copy(task)
+
+        # Remove or strip heavy fields if screenshot_policy is "remove"
+        if screenshot_policy == "remove":
+            feedback_task.screenshot = ""
+            feedback_task.html = ""
+            feedback_task.clean_html = ""
+
+        # Build the feedback synapse
+        feedback = TaskFeedbackSynapse(
+            version=__version__,
+            miner_id=str(miner_uid),
+            task=feedback_task,
+            actions=task_solutions[i].actions if i < len(task_solutions) else [],
+            test_results_matrix=test_results_matrices[i] if i < len(test_results_matrices) else None,
+            evaluation_result=evaluation_results[i] if i < len(evaluation_results) else None,
+            stats=None, 
+        )
+
+        feedback_list.append(feedback)
+
+    ColoredLogger.info(
+        f"Sending TaskFeedbackSynapse to {len(miner_axons)} miners in parallel",
+        ColoredLogger.BLUE,
     )
+
     feedback_tasks = []
     for axon, feedback_synapse in zip(miner_axons, feedback_list):
         feedback_tasks.append(
@@ -313,13 +349,14 @@ async def send_feedback_synapse_to_miners(
                     axons=[axon],
                     synapse=feedback_synapse,
                     deserialize=True,
-                    timeout=10,
+                    timeout=60,  # adjust as needed
                 )
             )
         )
+
+    # Wait for all feedback requests to complete
     results = await asyncio.gather(*feedback_tasks)
-    bt.logging.info("TaskFeedbackSynapse responses received.")
-    bt.logging.success("Task step completed successfully.")
+    bt.logging.info("Feedback responses received from miners.")
     return results
 
 
