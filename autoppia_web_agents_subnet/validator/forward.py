@@ -245,7 +245,7 @@ async def handle_feedback_and_stats(
 
     # Update per-miner stats in the validator
     for i, uid in enumerate(miner_uids):
-        miner_stats = validator.miner_stats[uid]
+        miner_stats = validator.miner_stats[int(uid)]
         success_bool = i in successful_idx
         miner_stats.update(
             score=float(rewards[i]),
@@ -471,5 +471,4 @@ async def forward(self) -> None:
         await asyncio.sleep(FORWARD_SLEEP_SECONDS)
 
     except Exception as e:
-        raise e
         bt.logging.error(f"Error in validation forward: {e}")
