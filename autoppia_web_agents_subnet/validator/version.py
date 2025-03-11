@@ -6,7 +6,7 @@ from autoppia_web_agents_subnet.protocol import TaskSynapse
 from autoppia_web_agents_subnet.utils.dendrite import dendrite_with_retries
 
 
-async def check_miner_not_respond_to_invalid_version(self, miner_axons, timeout):
+async def check_miner_not_responding_to_invalid_version(self, miner_axons, timeout):
     CHECK_VERSION_PROBABILITY = 0.2
     do_check_versions = random.random() < CHECK_VERSION_PROBABILITY
 
