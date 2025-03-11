@@ -188,7 +188,6 @@ async def update_miner_stats_and_scores(
     evaluation_time = 0.0
     if rewards is not None:
         evaluation_time_start = time.time()
-        validator.update_scores(rewards, miner_uids)
         bt.logging.info("Scores updated for miners")
 
         for i, miner_uid in enumerate(miner_uids):

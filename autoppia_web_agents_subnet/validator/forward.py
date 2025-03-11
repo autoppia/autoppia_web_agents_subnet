@@ -256,7 +256,7 @@ async def handle_feedback_and_stats(
         task_solutions=task_solutions,
         test_results_matrices=test_results_matrices,
         evaluation_results=evaluation_results,
-        screenshot_policy="remove",  # or "keep", depending on your preference
+        screenshot_policy="remove",  
     )
 
     ColoredLogger.info(
@@ -355,6 +355,9 @@ async def process_tasks(
         end_eval = time.time()
         bt.logging.info(f"Miners final rewards: {rewards}")
         bt.logging.info(f"Rewards computed in {end_eval - start_eval:.2f}s.")
+
+        # Update Validator Scores
+        validator.update_scores(rewards, miner_uids)
 
         # 8) Handle feedback & stats
         feedback_data = await handle_feedback_and_stats(
