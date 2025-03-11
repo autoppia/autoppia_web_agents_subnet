@@ -10469,14 +10469,6 @@
         "documentation": {}
     },
     {
-        "label": "MinerStats",
-        "importPath": "autoppia_web_agents_subnet.protocol",
-        "description": "autoppia_web_agents_subnet.protocol",
-        "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet.protocol",
-        "documentation": {}
-    },
-    {
         "label": "TaskSynapse",
         "importPath": "autoppia_web_agents_subnet.protocol",
         "description": "autoppia_web_agents_subnet.protocol",
