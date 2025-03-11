@@ -1,9 +1,11 @@
+
+<div align="center">
 <picture>
     <source srcset="icon48.png"  media="(prefers-color-scheme: dark)">
     <source srcset="icon48.png"  media="(prefers-color-scheme: light)">
     <img src="icon48.png">
 </picture>
-<div align="center">
+
 
 
 # **Web Agents Subnet (SN 36)** <!-- omit in toc -->
