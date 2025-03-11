@@ -59,44 +59,21 @@ class Miner(BaseMinerNeuron):
     def show_actions(self, actions: List[BaseAction]) -> None:
         """
         Pretty-prints the list of actions in a more readable format.
-
         Args:
             actions: List of BaseAction objects to be logged.
         """
         if not actions:
-            ColoredLogger.warning("No actions to log.", ColoredLogger.YELLOW)
+            bt.logging.warning("No actions to log.")
             return
 
-        ColoredLogger.info("Actions sent:", ColoredLogger.GREEN)
-
+        bt.logging.info("Actions sent:")
         for i, action in enumerate(actions, 1):
-            action_type = action.type
+            action_attrs = {}
 
-            if action_type == "NavigateAction":
-                ColoredLogger.info(
-                    f"  {i}. Navigate to: {action.url}",
-                    ColoredLogger.BLUE,
-                )
-            elif action_type == "ClickAction":
-                selector_info = f"{action.selector.type}='{action.selector.value}'"
-                ColoredLogger.info(
-                    f"  {i}. Click on element: {selector_info}",
-                    ColoredLogger.BLUE,
-                )
-            elif action_type == "TypeAction":
-                selector_info = f"{action.selector.type}='{action.selector.value}'"
-                # Mask passwords for security
-                text_to_show = "********" if "password" in action.selector.value.lower() else action.text
-                ColoredLogger.info(
-                    f"  {i}. Type '{text_to_show}' into: {selector_info}",
-                    ColoredLogger.BLUE,
-                )
-            else:
-                # Handle other action types
-                ColoredLogger.info(
-                    f"  {i}. {action_type}: {action}",
-                    ColoredLogger.BLUE,
-                )
+            action_attrs = vars(action)
+
+            # Log with consistent format
+            bt.logging.info(f"  {i}. {action.type}: {action_attrs}")
 
     async def forward(self, synapse: TaskSynapse) -> TaskSynapse:
 
