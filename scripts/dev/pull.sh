@@ -4,7 +4,7 @@ set -e
 # Actualizar el submódulo webs_demo
 SUBMODULE_PATH="autoppia_iwa_module/modules/webs_demo"
 cd "$SUBMODULE_PATH" || { echo "El directorio $SUBMODULE_PATH no existe"; exit 1; }
-git pull
+git pull origin main
 
 # Volver al directorio del submódulo principal y actualizarlo
 cd ../..
