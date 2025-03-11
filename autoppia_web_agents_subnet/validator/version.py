@@ -26,5 +26,5 @@ async def check_miner_not_responding_to_invalid_version(self, task_synapse:TaskS
         )
         version_responses.extend(responses)
     else:
-        version_responses.extend([TaskSynapse(predictions=[], texts=[]) for _ in range(len(miner_axons))])
+        version_responses.extend([TaskSynapse(prompt="", url="", actions=[]) for _ in range(len(miner_axons))])
     return version_responses

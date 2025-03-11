@@ -357,7 +357,7 @@ async def process_tasks(
                 time_weight=TIME_WEIGHT,
                 min_correct_format_score=MIN_SCORE_FOR_CORRECT_FORMAT,
                 min_response_reward=MIN_RESPONSE_REWARD,
-                invalid_version_responders=invalid_version_responders,  # <-- pass the penalized set
+                invalid_version_responders=invalid_version_responders, 
             )
         )
         end_eval = time.time()
