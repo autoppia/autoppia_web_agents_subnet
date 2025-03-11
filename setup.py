@@ -55,7 +55,7 @@ with codecs.open(os.path.join(here, "autoppia_web_agents_subnet/__init__.py"), e
 setup(
     name="autoppia_web_agents_subnet",
     version=version_string,
-    description="Autoppia Web Agents Subnet for Bittensor",
+    description="Autoppia Web Agents Subnet 36 for Bittensor",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/autoppia/autoppia_web_agents_subnet", 

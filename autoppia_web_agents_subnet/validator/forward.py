@@ -27,6 +27,7 @@ from autoppia_web_agents_subnet.validator.config import (
     TIMEOUT,
     CHECK_VERSION_PROBABILITY,
     FEEDBACK_TIMEOUT,
+    CHECK_VERSION_SYNAPSE
 )
 from autoppia_web_agents_subnet.validator.utils import (
     init_miner_stats,
@@ -190,10 +191,9 @@ async def send_feedback_synapse_to_miners(
             miner_id=str(miner_uid),
             prompt="",
             # tests=None,
-            actions=None,
-            test_results_matrix=None,
-            evaluation_result=None,
-            stats=None,
+            # actions=None,
+            # test_results_matrix=None,
+            # evaluation_result=None,
         )
 
         feedback_list.append(feedback)
@@ -325,7 +325,7 @@ async def process_tasks(
             task_synapse=copy.deepcopy(task_synapse),
             miner_axons=miner_axons,
             probability=CHECK_VERSION_PROBABILITY,
-            timeout=10,
+            timeout=CHECK_VERSION_SYNAPSE,
         )
 
         # 4) Figure out which miners responded incorrectly (non-empty actions to invalid version)
