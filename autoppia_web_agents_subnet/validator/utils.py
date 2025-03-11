@@ -2,8 +2,7 @@ from autoppia_iwa.src.data_generation.domain.classes import Task
 from autoppia_iwa.src.demo_webs.classes import WebProject
 from autoppia_iwa.src.demo_webs.utils import initialize_demo_webs_projects
 from autoppia_iwa.src.demo_webs.config import demo_web_projects
-
-from autoppia_web_agents_subnet.protocol import MinerStats, TaskSynapse
+from autoppia_web_agents_subnet.protocol import TaskSynapse
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.validator.config import (
     TIME_WEIGHT,
