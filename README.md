@@ -1,8 +1,12 @@
-<picture>
+# Autoppia
+
+<div align="center">
+  <picture>
     <source srcset="autoppia_logo_black.png" media="(prefers-color-scheme: dark)">
     <source srcset="autoppia_logo_black.png" media="(prefers-color-scheme: light)">
-    <img src="autoppia_logo_black.png">
-</picture>
+    <img src="autoppia_logo_black.png" alt="Autoppia Logo">
+  </picture>
+</div>
 
 ## 🔍 Overview
 
