@@ -172,12 +172,8 @@ async def send_feedback_synapse_to_miners(
             miner_id=str(miner_uid),
             task=None,
             actions=None,
-            test_results_matrix=(
-                test_results_matrices[i] if i < len(test_results_matrices) else None
-            ),
-            evaluation_result=(
-                evaluation_results[i] if i < len(evaluation_results) else None
-            ),
+            test_results_matrix=None,
+            evaluation_result=None,
             stats=None,
         )
 
