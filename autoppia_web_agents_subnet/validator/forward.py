@@ -26,7 +26,7 @@ from autoppia_web_agents_subnet.validator.config import (
     MAX_ACTIONS_LENGTH,
     TIMEOUT,
     CHECK_VERSION_PROBABILITY,
-    FEEDBACK_TIMEOUT
+    FEEDBACK_TIMEOUT,
 )
 from autoppia_web_agents_subnet.validator.utils import (
     init_miner_stats,
@@ -36,11 +36,13 @@ from autoppia_web_agents_subnet.validator.utils import (
     print_validator_performance_stats,
     dendrite_with_retries,
     update_miner_stats_and_scores,
-    prepare_for_feedback
+    prepare_for_feedback,
 )
 from autoppia_web_agents_subnet.validator.reward import get_rewards_with_details
 from autoppia_web_agents_subnet.utils.uids import get_random_uids
-from autoppia_web_agents_subnet.validator.version import check_miner_not_responding_to_invalid_version
+from autoppia_web_agents_subnet.validator.version import (
+    check_miner_not_responding_to_invalid_version,
+)
 
 
 async def generate_tasks_for_web_project(
@@ -119,7 +121,7 @@ def collect_task_solutions(
 
 
 async def send_task_synapse_to_miners(
-    validator, miner_axons, task_synapse: TaskSynapse, timeout:int
+    validator, miner_axons, task_synapse: TaskSynapse, timeout: int
 ) -> List[TaskSynapse]:
     """
     Send the (correct-version) synapse to the given miners and retrieve their responses.
@@ -133,8 +135,8 @@ async def send_task_synapse_to_miners(
         axons=miner_axons,
         synapse=task_synapse,
         deserialize=True,
-        timeout=timeout,  
-        retries=1
+        timeout=timeout,
+        retries=1,
     )
 
     bt.logging.info(f"Received responses from {len(responses)} miners.")
@@ -165,7 +167,11 @@ async def send_feedback_synapse_to_miners(
     feedback_list = []
     feedback_task = prepare_for_feedback(task)
 
-    for i, miner_uid in enumerate(miner_uids):        
+    ColoredLogger.info(
+        f"Sending TaskFeedbackSynapse to {feedback_task} miners in parallel",
+        ColoredLogger.GREEN,
+    )
+    for i, miner_uid in enumerate(miner_uids):
         # feedback = TaskFeedbackSynapse(
         #     version=__version__,
         #     miner_id=str(miner_uid),
@@ -204,7 +210,7 @@ async def send_feedback_synapse_to_miners(
                     axons=[axon],
                     synapse=feedback_synapse,
                     deserialize=True,
-                    timeout=FEEDBACK_TIMEOUT
+                    timeout=FEEDBACK_TIMEOUT,
                 )
             )
         )
@@ -218,7 +224,7 @@ async def send_feedback_synapse_to_miners(
 async def handle_feedback_and_miner_stats(
     validator,
     task: Task,
-    miner_axons: List[bt.axon],                 
+    miner_axons: List[bt.axon],
     miner_uids: List[int],
     execution_times: List[float],
     task_solutions: List[TaskSolution],
@@ -237,7 +243,9 @@ async def handle_feedback_and_miner_stats(
     num_success = len(successful_idx)
     num_wrong = len([r for r in rewards if 0.0 < r < 1.0])
 
-    avg_miner_time = sum(execution_times) / len(execution_times) if execution_times else 0
+    avg_miner_time = (
+        sum(execution_times) / len(execution_times) if execution_times else 0
+    )
     evaluation_time = 0.0  # If you measure your evaluator time, assign it here
     avg_score_for_task = float(sum(rewards) / len(rewards)) if len(rewards) > 0 else 0.0
 
@@ -311,8 +319,12 @@ async def process_tasks(
         )
 
         # 3) Test the version check by sending an intentionally WRONG version
-        version_responses = await check_miner_not_responding_to_invalid_version(    
-            validator, task_synapse=copy.deepcopy(task_synapse), miner_axons=miner_axons, probability=CHECK_VERSION_PROBABILITY, timeout=10
+        version_responses = await check_miner_not_responding_to_invalid_version(
+            validator,
+            task_synapse=copy.deepcopy(task_synapse),
+            miner_axons=miner_axons,
+            probability=CHECK_VERSION_PROBABILITY,
+            timeout=10,
         )
 
         # 4) Figure out which miners responded incorrectly (non-empty actions to invalid version)
@@ -325,7 +337,10 @@ async def process_tasks(
         # 5) Now actually send the correct version
         bt.logging.info("Sending Task Synapses To Miners")
         responses = await send_task_synapse_to_miners(
-            validator, miner_axons=miner_axons, task_synapse=task_synapse, timeout=TIMEOUT
+            validator,
+            miner_axons=miner_axons,
+            task_synapse=task_synapse,
+            timeout=TIMEOUT,
         )
 
         # 6) Convert responses into TaskSolutions
@@ -345,7 +360,7 @@ async def process_tasks(
                 time_weight=TIME_WEIGHT,
                 min_correct_format_score=MIN_SCORE_FOR_CORRECT_FORMAT,
                 min_response_reward=MIN_RESPONSE_REWARD,
-                invalid_version_responders=invalid_version_responders, 
+                invalid_version_responders=invalid_version_responders,
             )
         )
         end_eval = time.time()
@@ -435,8 +450,12 @@ async def forward(self) -> None:
         )
         tasks_generated_end_time = time.time()
         tasks_generated_time = tasks_generated_end_time - tasks_generated_start_time
-        self.validator_performance_stats["total_tasks_generated"] += len(tasks_generated)
-        self.validator_performance_stats["total_generated_tasks_time"] += tasks_generated_time
+        self.validator_performance_stats["total_tasks_generated"] += len(
+            tasks_generated
+        )
+        self.validator_performance_stats[
+            "total_generated_tasks_time"
+        ] += tasks_generated_time
 
         if not tasks_generated:
             bt.logging.warning("No tasks generated, skipping forward step.")
@@ -447,7 +466,9 @@ async def forward(self) -> None:
         await process_tasks(self, demo_web_project, tasks_generated)
         tasks_processed_end_time = time.time()
         tasks_processed_time = tasks_processed_end_time - tasks_processed_start_time
-        self.validator_performance_stats["total_processing_tasks_time"] += tasks_processed_time
+        self.validator_performance_stats[
+            "total_processing_tasks_time"
+        ] += tasks_processed_time
 
         # Finalize
         forward_end_time = time.time()
