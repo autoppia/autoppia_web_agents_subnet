@@ -1,34 +1,21 @@
-import random
-import time
-import numpy as np
-import bittensor as bt
-import copy
-from typing import List, Dict, Any
-import asyncio
-
-from autoppia_iwa.src.web_agents.classes import TaskSolution
 from autoppia_iwa.src.data_generation.domain.classes import Task
 from autoppia_iwa.src.demo_webs.classes import WebProject
 from autoppia_iwa.src.demo_webs.utils import initialize_demo_webs_projects
 from autoppia_iwa.src.demo_webs.config import demo_web_projects
 
 from autoppia_web_agents_subnet.protocol import (
-    TaskSynapse,
     MinerStats,
 )
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
-
 from autoppia_web_agents_subnet.validator.config import (
-    MAX_ACTIONS_LENGTH,
     TIME_WEIGHT,
-    TIMEOUT
+    TIMEOUT,
 )
-from copy import deepcopy
-
-
-# --------------------------------------------------------------------
-# MINER STATS INIT
-# --------------------------------------------------------------------
+import random
+import time
+import numpy as np
+import bittensor as bt
+from typing import List
 
 
 def init_miner_stats(validator) -> None:
@@ -41,10 +28,6 @@ def init_miner_stats(validator) -> None:
         validator.miner_stats["aggregated"] = MinerStats()
 
 
-# --------------------------------------------------------------------
-# VALIDATOR-LEVEL PERFORMANCE STATS
-# --------------------------------------------------------------------
-
 def init_validator_performance_stats(validator) -> None:
     """
     Initialize a performance statistics dictionary on the validator if not present.
@@ -52,24 +35,19 @@ def init_validator_performance_stats(validator) -> None:
     """
     if not hasattr(validator, "validator_performance_stats"):
         validator.validator_performance_stats = {
-            "total_forwards_count": 0,           # how many forward passes occurred
-            "total_forwards_time": 0.0,          # sum of all forward iteration times
-
-            "total_tasks_generated": 0,          # how many tasks have been generated in total
-            "total_generated_tasks_time": 0.0,   # total time spent generating tasks
-
+            "total_forwards_count": 0,  # how many forward passes occurred
+            "total_forwards_time": 0.0,  # sum of all forward iteration times
+            "total_tasks_generated": 0,  # how many tasks have been generated in total
+            "total_generated_tasks_time": 0.0,  # total time spent generating tasks
             "total_processing_tasks_time": 0.0,  # total time spent in process_tasks
-
-            "total_tasks_sent": 0,               # how many tasks have been sent overall (accum. from all forwards)
-            "total_tasks_success": 0,            # tasks with at least one reward>0
-            "total_tasks_wrong": 0,              # tasks with responses but no reward>0
-            "total_tasks_no_response": 0,        # tasks with 0 valid responses
-
+            "total_tasks_sent": 0,  # how many tasks have been sent overall (accum. from all forwards)
+            "total_tasks_success": 0,  # tasks with at least one reward>0
+            "total_tasks_wrong": 0,  # tasks with responses but no reward>0
+            "total_tasks_no_response": 0,  # tasks with 0 valid responses
             "total_sum_of_avg_response_times": 0.0,  # sum of average miner solve times per task
-            "total_sum_of_evaluation_times": 0.0,     # sum of times spent evaluating (score updates)
-            "total_sum_of_avg_scores": 0.0,           # sum of average rewards per task
-
-            "overall_tasks_processed": 0,             # total tasks processed for stats
+            "total_sum_of_evaluation_times": 0.0,  # sum of times spent evaluating (score updates)
+            "total_sum_of_avg_scores": 0.0,  # sum of average rewards per task
+            "overall_tasks_processed": 0,  # total tasks processed for stats
         }
 
 
@@ -81,7 +59,7 @@ def update_validator_performance_stats(
     num_no_response: int,
     sum_of_avg_response_times: float,
     sum_of_evaluation_times: float,
-    sum_of_avg_scores: float
+    sum_of_avg_scores: float,
 ) -> None:
     """
     Accumulates stats from a single batch of processed tasks into
@@ -127,7 +105,9 @@ def print_validator_performance_stats(validator) -> None:
 
     total_gen_tasks = vps["total_tasks_generated"]
     avg_task_gen_time = (
-        vps["total_generated_tasks_time"] / total_gen_tasks if total_gen_tasks > 0 else 0.0
+        vps["total_generated_tasks_time"] / total_gen_tasks
+        if total_gen_tasks > 0
+        else 0.0
     )
 
     overall_tasks = vps["overall_tasks_processed"]
@@ -143,10 +123,14 @@ def print_validator_performance_stats(validator) -> None:
     success_rate = (tasks_success / tasks_sent) if tasks_sent > 0 else 0.0
 
     avg_response_time = (
-        vps["total_sum_of_avg_response_times"] / overall_tasks if overall_tasks > 0 else 0.0
+        vps["total_sum_of_avg_response_times"] / overall_tasks
+        if overall_tasks > 0
+        else 0.0
     )
     avg_evaluation_time = (
-        vps["total_sum_of_evaluation_times"] / overall_tasks if overall_tasks > 0 else 0.0
+        vps["total_sum_of_evaluation_times"] / overall_tasks
+        if overall_tasks > 0
+        else 0.0
     )
     avg_score = (
         vps["total_sum_of_avg_scores"] / overall_tasks if overall_tasks > 0 else 0.0
@@ -165,7 +149,9 @@ def print_validator_performance_stats(validator) -> None:
     table.add_row("Average Forward Time (s)", f"{avg_forward_time:.2f}")
 
     table.add_row("Tasks Generated (total)", str(total_gen_tasks))
-    table.add_row("Total Time Generating Tasks (s)", f"{vps['total_generated_tasks_time']:.2f}")
+    table.add_row(
+        "Total Time Generating Tasks (s)", f"{vps['total_generated_tasks_time']:.2f}"
+    )
     table.add_row("Average Time per Generated Task (s)", f"{avg_task_gen_time:.2f}")
 
     table.add_row("Tasks Processed (total)", str(tasks_sent))
@@ -178,16 +164,15 @@ def print_validator_performance_stats(validator) -> None:
     table.add_row("Avg Evaluation Time per Task (s)", f"{avg_evaluation_time:.4f}")
     table.add_row("Avg Score per Task", f"{avg_score:.4f}")
 
-    table.add_row("Total Time Processing Tasks (s)", f"{vps['total_processing_tasks_time']:.2f}")
-    table.add_row("Average Processing Time per Task (s)", f"{avg_processing_time_per_task:.2f}")
+    table.add_row(
+        "Total Time Processing Tasks (s)", f"{vps['total_processing_tasks_time']:.2f}"
+    )
+    table.add_row(
+        "Average Processing Time per Task (s)", f"{avg_processing_time_per_task:.2f}"
+    )
 
     console.print(table)
     console.print()  # extra newline
-
-
-# --------------------------------------------------------------------
-# TASK / RESPONSE UTILITIES
-# --------------------------------------------------------------------
 
 
 async def update_miner_stats_and_scores(

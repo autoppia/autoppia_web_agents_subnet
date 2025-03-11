@@ -8,9 +8,9 @@ from autoppia_iwa.src.evaluation.evaluator.evaluator import (
 )
 from autoppia_iwa.src.data_generation.domain.classes import Task
 from autoppia_iwa.src.web_agents.classes import TaskSolution
-from autoppia_iwa.src.evaluation.classes import EvaluationResult, TestResult
-from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+from autoppia_iwa.src.evaluation.classes import EvaluationResult
 from autoppia_iwa.src.demo_webs.classes import WebProject
+from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
 
 def normalize_execution_times(times: List[Optional[float]]) -> List[float]:
