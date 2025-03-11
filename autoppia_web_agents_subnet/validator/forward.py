@@ -133,6 +133,7 @@ async def send_task_synapse_to_miners(
         synapse=task_synapse,
         deserialize=True,
         timeout=timeout,  
+        retries=1
     )
 
     bt.logging.info(f"Received responses from {len(responses)} miners.")
