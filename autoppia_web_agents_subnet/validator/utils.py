@@ -291,13 +291,13 @@ async def dendrite_with_retries(
 
 
 def prepare_for_feedback(task) -> Task:
-    copied_task = copy.deepcopy(task)
-    copied_task.use_case = None
-    copied_task.milestones = None
-    copied_task.interactive_elements = None
-    copied_task.screenshot = None
-    copied_task.screenshot_description = None
-    copied_task.html = None
-    copied_task.clean_html = None
+    cleaned_task = copy.deepcopy(task)
+    cleaned_task.use_case = None
+    cleaned_task.milestones = None
+    cleaned_task.interactive_elements = None
+    cleaned_task.screenshot = None
+    cleaned_task.screenshot_description = None
+    cleaned_task.html = None
+    cleaned_task.clean_html = None
 
-    return copied_task
+    return cleaned_task

@@ -18243,7 +18243,16 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "TIMEOUT = 60 * 2  # 2 Min\nFEEDBACK_TIMEOUT = 30\nFORWARD_SLEEP_SECONDS = 60 * 1  # 1 Minutes\nTASK_SLEEP = 60 * 1  # 1 Minute\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1",
+        "peekOfCode": "TIMEOUT = 60 * 2  # 2 Min\nCHECK_VERSIONS_SYNAPSE = 30\nFEEDBACK_TIMEOUT = 30\nFORWARD_SLEEP_SECONDS = 60 * 1  # 1 Minutes\nTASK_SLEEP = 60 * 1  # 1 Minute\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15",
+        "detail": "autoppia_web_agents_subnet.validator.config",
+        "documentation": {}
+    },
+    {
+        "label": "CHECK_VERSIONS_SYNAPSE",
+        "kind": 5,
+        "importPath": "autoppia_web_agents_subnet.validator.config",
+        "description": "autoppia_web_agents_subnet.validator.config",
+        "peekOfCode": "CHECK_VERSIONS_SYNAPSE = 30\nFEEDBACK_TIMEOUT = 30\nFORWARD_SLEEP_SECONDS = 60 * 1  # 1 Minutes\nTASK_SLEEP = 60 * 1  # 1 Minute\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },
@@ -18405,7 +18414,7 @@
         "kind": 2,
         "importPath": "autoppia_web_agents_subnet.validator.utils",
         "description": "autoppia_web_agents_subnet.validator.utils",
-        "peekOfCode": "def prepare_for_feedback(task) -> Task:\n    copied_task = copy.deepcopy(task)\n    copied_task.use_case = None\n    copied_task.milestones = None\n    copied_task.interactive_elements = None\n    copied_task.screenshot = None\n    copied_task.screenshot_description = None\n    copied_task.html = None\n    copied_task.clean_html = None\n    return copied_task",
+        "peekOfCode": "def prepare_for_feedback(task) -> Task:\n    cleaned_task = copy.deepcopy(task)\n    cleaned_task.use_case = None\n    cleaned_task.milestones = None\n    cleaned_task.interactive_elements = None\n    cleaned_task.screenshot = None\n    cleaned_task.screenshot_description = None\n    cleaned_task.html = None\n    cleaned_task.clean_html = None\n    return cleaned_task",
         "detail": "autoppia_web_agents_subnet.validator.utils",
         "documentation": {}
     },
