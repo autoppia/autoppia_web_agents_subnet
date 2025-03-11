@@ -61,11 +61,11 @@ class Miner(BaseMinerNeuron):
 
         # Checking Weights Versio
         version_check = is_version_in_range(synapse.version, self.version, self.least_acceptable_version)
-        ColoredLogger.info(f"Version check: {synapse.version} | { self.version} | {self.least_acceptable_version}. Check: {version_check}",
-                           ColoredLogger.RED,
-                           )
 
         if not version_check:
+            ColoredLogger.info(f"Not reponding due to version check failed: {synapse.version} not between {self.least_acceptable_version} - { self.version}",
+                               ColoredLogger.RED,
+                               )
             return synapse
 
         try:
