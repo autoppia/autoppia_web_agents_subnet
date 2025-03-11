@@ -8,11 +8,11 @@ git pull
 
 # Volver al directorio del submódulo principal y actualizarlo
 cd ../..
-git pull
+git pull origin main
 
 # Volver al directorio raíz del proyecto
 cd ..
 
-git pull
+git pull origin main
 
 echo "Actualización completada para webs_demo, autoppia_iwa_module y el repositorio raíz."
