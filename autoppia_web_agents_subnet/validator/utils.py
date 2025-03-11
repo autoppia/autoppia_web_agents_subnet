@@ -1,30 +1,15 @@
-from autoppia_iwa.src.data_generation.domain.classes import Task
 from autoppia_iwa.src.demo_webs.classes import WebProject
 from autoppia_iwa.src.demo_webs.utils import initialize_demo_webs_projects
 from autoppia_iwa.src.demo_webs.config import demo_web_projects
 from autoppia_web_agents_subnet.protocol import TaskSynapse
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
-from autoppia_web_agents_subnet.validator.config import (
-    TIME_WEIGHT,
-    TIMEOUT,
-)
+
 import copy
 import random
-import time
-import numpy as np
 import bittensor as bt
 from typing import List
 
-
-def init_miner_stats(validator) -> None:
-    """
-    Ensure `validator.miner_stats` is initialized.
-    """
-    if not hasattr(validator, "miner_stats"):
-        validator.miner_stats = {}
-
-    if "aggregated" not in validator.miner_stats:
-        validator.miner_stats["aggregated"] = MinerStats()
+# Removed MinerStats references and imports
 
 
 def init_validator_performance_stats(validator) -> None:
@@ -34,19 +19,19 @@ def init_validator_performance_stats(validator) -> None:
     """
     if not hasattr(validator, "validator_performance_stats"):
         validator.validator_performance_stats = {
-            "total_forwards_count": 0,  # how many forward passes occurred
-            "total_forwards_time": 0.0,  # sum of all forward iteration times
-            "total_tasks_generated": 0,  # how many tasks have been generated in total
+            "total_forwards_count": 0,      # how many forward passes occurred
+            "total_forwards_time": 0.0,     # sum of all forward iteration times
+            "total_tasks_generated": 0,     # how many tasks have been generated in total
             "total_generated_tasks_time": 0.0,  # total time spent generating tasks
             "total_processing_tasks_time": 0.0,  # total time spent in process_tasks
-            "total_tasks_sent": 0,  # how many tasks have been sent overall (accum. from all forwards)
-            "total_tasks_success": 0,  # tasks with at least one reward>0
-            "total_tasks_wrong": 0,  # tasks with responses but no reward>0
-            "total_tasks_no_response": 0,  # tasks with 0 valid responses
-            "total_sum_of_avg_response_times": 0.0,  # sum of average miner solve times per task
-            "total_sum_of_evaluation_times": 0.0,  # sum of times spent evaluating (score updates)
-            "total_sum_of_avg_scores": 0.0,  # sum of average rewards per task
-            "overall_tasks_processed": 0,  # total tasks processed for stats
+            "total_tasks_sent": 0,          # how many tasks have been sent overall
+            "total_tasks_success": 0,       # tasks with at least one reward>0
+            "total_tasks_wrong": 0,         # tasks with responses but no reward>0
+            "total_tasks_no_response": 0,   # tasks with 0 valid responses
+            "total_sum_of_avg_response_times": 0.0,
+            "total_sum_of_evaluation_times": 0.0,
+            "total_sum_of_avg_scores": 0.0,
+            "overall_tasks_processed": 0,    # total tasks processed for stats
         }
 
 
@@ -114,7 +99,6 @@ def print_validator_performance_stats(validator) -> None:
         vps["total_processing_tasks_time"] / overall_tasks if overall_tasks > 0 else 0.0
     )
 
-    # success rate, etc
     tasks_sent = vps["total_tasks_sent"]
     tasks_success = vps["total_tasks_success"]
     tasks_wrong = vps["total_tasks_wrong"]
@@ -146,10 +130,10 @@ def print_validator_performance_stats(validator) -> None:
 
     table.add_row("Total Forwards", str(total_forwards))
     table.add_row("Average Forward Time (s)", f"{avg_forward_time:.2f}")
-
     table.add_row("Tasks Generated (total)", str(total_gen_tasks))
     table.add_row(
-        "Total Time Generating Tasks (s)", f"{vps['total_generated_tasks_time']:.2f}"
+        "Total Time Generating Tasks (s)",
+        f"{vps['total_generated_tasks_time']:.2f}"
     )
     table.add_row("Average Time per Generated Task (s)", f"{avg_task_gen_time:.2f}")
 
@@ -164,59 +148,16 @@ def print_validator_performance_stats(validator) -> None:
     table.add_row("Avg Score per Task", f"{avg_score:.4f}")
 
     table.add_row(
-        "Total Time Processing Tasks (s)", f"{vps['total_processing_tasks_time']:.2f}"
+        "Total Time Processing Tasks (s)",
+        f"{vps['total_processing_tasks_time']:.2f}"
     )
     table.add_row(
-        "Average Processing Time per Task (s)", f"{avg_processing_time_per_task:.2f}"
+        "Average Processing Time per Task (s)",
+        f"{avg_processing_time_per_task:.2f}"
     )
 
     console.print(table)
     console.print()  # extra newline
-
-
-async def update_miner_stats_and_scores(
-    validator,
-    rewards: np.ndarray,
-    miner_uids: List[int],
-    execution_times: List[float],
-    task: Task,
-) -> float:
-    """
-    Updates scores for miners based on computed rewards, updates local miner_stats,
-    and returns the time it took to evaluate miners.
-    """
-    evaluation_time = 0.0
-    if rewards is not None:
-        evaluation_time_start = time.time()
-        bt.logging.info("Scores updated for miners")
-
-        for i, miner_uid in enumerate(miner_uids):
-            miner_uid = int(miner_uid)
-            score_value = rewards[i] if rewards[i] is not None else 0.0
-            exec_time_value = (
-                execution_times[i] if execution_times[i] is not None else TIMEOUT
-            )
-            success = score_value >= TIME_WEIGHT
-            if miner_uid not in validator.miner_stats:
-                validator.miner_stats[miner_uid] = MinerStats()
-
-            validator.miner_stats[miner_uid].update(
-                score=float(score_value),
-                execution_time=float(exec_time_value),
-                evaluation_time=(time.time() - evaluation_time_start),
-                last_task=task,
-                success=success,
-            )
-            validator.miner_stats["aggregated"].update(
-                score=float(score_value),
-                execution_time=float(exec_time_value),
-                evaluation_time=(time.time() - evaluation_time_start),
-                last_task=task,
-                success=success,
-            )
-        evaluation_time_end = time.time()
-        evaluation_time = evaluation_time_end - evaluation_time_start
-    return evaluation_time
 
 
 async def retrieve_random_demo_web_project() -> WebProject:
@@ -244,6 +185,9 @@ async def dendrite_with_retries(
     timeout: float,
     retries=1
 ) -> List[TaskSynapse]:
+    """
+    Retries sending the same TaskSynapse up to `retries` times if we get 422 errors.
+    """
     res: List[TaskSynapse | None] = [None] * len(axons)
     idx = list(range(len(axons)))
     axons = axons.copy()
@@ -274,7 +218,7 @@ async def dendrite_with_retries(
 
             if len(new_idx):
                 bt.logging.info(
-                    'Found {} synapses with broken pipe, retrying them'.format(len(new_idx))
+                    f'Found {len(new_idx)} synapses with broken pipe, retrying them'
                 )
             else:
                 break
@@ -286,10 +230,13 @@ async def dendrite_with_retries(
         return res
 
     except Exception as e:
-        bt.logging.error(f"Error while sending synapse with dendrite with retries {e}")
+        bt.logging.error(f"Error while sending synapse with dendrite and retries: {e}")
 
 
-def prepare_for_feedback(task) -> Task:
+def prepare_for_feedback(task):
+    """
+    Returns a copy of the task with non-essential fields cleared out before feedback.
+    """
     cleaned_task = copy.deepcopy(task)
     cleaned_task.use_case = None
     cleaned_task.milestones = None
@@ -298,5 +245,4 @@ def prepare_for_feedback(task) -> Task:
     cleaned_task.screenshot_description = None
     cleaned_task.html = None
     cleaned_task.clean_html = None
-
     return cleaned_task

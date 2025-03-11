@@ -45,7 +45,6 @@ class Miner(BaseMinerNeuron):
     Miner neuron class. Inherits from BaseMinerNeuron. We override:
       - forward(): handles TaskSynapse
       - forward_feedback(): handles TaskFeedbackSynapse
-      - blacklist*/priority* if needed
     """
 
     def __init__(self, config=None):
@@ -60,19 +59,19 @@ class Miner(BaseMinerNeuron):
     def show_actions(self, actions: List[BaseAction]) -> None:
         """
         Pretty-prints the list of actions in a more readable format.
-        
+
         Args:
             actions: List of BaseAction objects to be logged.
         """
         if not actions:
             ColoredLogger.info("No actions to log.", ColoredLogger.YELLOW)
             return
-        
+
         ColoredLogger.info("Task solved. Actions summary:", ColoredLogger.GREEN)
-        
+
         for i, action in enumerate(actions, 1):
             action_type = action.type
-            
+
             if action_type == "NavigateAction":
                 ColoredLogger.info(
                     f"  {i}. Navigate to: {action.url}",
