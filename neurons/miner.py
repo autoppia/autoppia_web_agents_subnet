@@ -64,10 +64,10 @@ class Miner(BaseMinerNeuron):
             actions: List of BaseAction objects to be logged.
         """
         if not actions:
-            ColoredLogger.info("No actions to log.", ColoredLogger.YELLOW)
+            ColoredLogger.warning("No actions to log.", ColoredLogger.YELLOW)
             return
 
-        ColoredLogger.info("Task solved. Actions summary:", ColoredLogger.GREEN)
+        ColoredLogger.info("Actions sent:", ColoredLogger.GREEN)
 
         for i, action in enumerate(actions, 1):
             action_type = action.type
@@ -117,7 +117,7 @@ class Miner(BaseMinerNeuron):
             )
             ColoredLogger.info(
                 f"Task Prompt: {synapse.prompt}",
-                ColoredLogger.YELLOW,
+                ColoredLogger.WHITE,
             )
 
             # Create Task object
