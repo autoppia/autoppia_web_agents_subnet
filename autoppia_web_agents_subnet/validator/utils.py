@@ -284,5 +284,6 @@ async def dendrite_with_retries(
 
         assert all(el is not None for el in res)
         return res
-    except Exception:
-        bt.logging.error("Error while sending synapse with dendrite with retries")
+    
+    except Exception as e:
+        bt.logging.error("Error while sending synapse with dendrite with retries {e}")
