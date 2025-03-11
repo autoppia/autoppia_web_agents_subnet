@@ -220,7 +220,7 @@ async def handle_feedback_and_stats(
     web_project: WebProject,
     task: Task,
     responses: List[TaskSynapse],
-    miner_axons: List[bt.axon],                 # <-- Add the miner_axons
+    miner_axons: List[bt.axon],                 
     miner_uids: List[int],
     execution_times: List[float],
     task_solutions: List[TaskSolution],
@@ -256,7 +256,6 @@ async def handle_feedback_and_stats(
             success=success_bool,
         )
 
-    # -- Now send the TaskFeedbackSynapse to each miner so they have the evaluation details --
     feedback_responses = await send_feedback_synapse_to_miners(
         validator=validator,
         miner_axons=miner_axons,
@@ -473,4 +472,5 @@ async def forward(self) -> None:
         await asyncio.sleep(FORWARD_SLEEP_SECONDS)
 
     except Exception as e:
+        raise e
         bt.logging.error(f"Error in validation forward: {e}")
