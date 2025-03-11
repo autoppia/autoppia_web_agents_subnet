@@ -57,15 +57,55 @@ class Miner(BaseMinerNeuron):
         )
         self.load_state()
 
+    def show_actions(actions: List[BaseAction]) -> None:
+        """
+        Pretty-prints the list of actions in a more readable format.
+        
+        Args:
+            actions: List of BaseAction objects to be logged.
+        """
+        if not actions:
+            ColoredLogger.info("No actions to log.", ColoredLogger.YELLOW)
+            return
+        
+        ColoredLogger.info("Task solved. Actions summary:", ColoredLogger.GREEN)
+        
+        for i, action in enumerate(actions, 1):
+            action_type = action.type
+            
+            if action_type == "NavigateAction":
+                ColoredLogger.info(
+                    f"  {i}. Navigate to: {action.url}",
+                    ColoredLogger.BLUE,
+                )
+            elif action_type == "ClickAction":
+                selector_info = f"{action.selector.type}='{action.selector.value}'"
+                ColoredLogger.info(
+                    f"  {i}. Click on element: {selector_info}",
+                    ColoredLogger.BLUE,
+                )
+            elif action_type == "TypeAction":
+                selector_info = f"{action.selector.type}='{action.selector.value}'"
+                # Mask passwords for security
+                text_to_show = "********" if "password" in action.selector.value.lower() else action.text
+                ColoredLogger.info(
+                    f"  {i}. Type '{text_to_show}' into: {selector_info}",
+                    ColoredLogger.BLUE,
+                )
+            else:
+                # Handle other action types
+                ColoredLogger.info(
+                    f"  {i}. {action_type}: {action}",
+                    ColoredLogger.BLUE,
+                )
+
     async def forward(self, synapse: TaskSynapse) -> TaskSynapse:
 
         # Checking Weights Versio
         version_check = is_version_in_range(synapse.version, self.version, self.least_acceptable_version)
 
         if not version_check:
-            ColoredLogger.info(f"Not reponding due to version check failed: {synapse.version} not between {self.least_acceptable_version} - { self.version}",
-                               ColoredLogger.RED,
-                               )
+            ColoredLogger.info(f"Not reponding due to version check: {synapse.version} not between {self.least_acceptable_version} - { self.version}. This is intended behavoiour")
             return synapse
 
         try:
@@ -94,6 +134,9 @@ class Miner(BaseMinerNeuron):
 
             actions: List[BaseAction] = task_solution.actions
             bt.logging.info(f"Task solved. Actions: {actions}")
+
+            # Show actions
+            self.show_actions(actions)
 
             synapse.actions = actions
 
