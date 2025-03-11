@@ -1589,6 +1589,14 @@
         "documentation": {}
     },
     {
+        "label": "Set",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
         "label": "Dict",
         "importPath": "typing",
         "description": "typing",
@@ -1598,22 +1606,6 @@
     },
     {
         "label": "Any",
-        "importPath": "typing",
-        "description": "typing",
-        "isExtraImport": true,
-        "detail": "typing",
-        "documentation": {}
-    },
-    {
-        "label": "List",
-        "importPath": "typing",
-        "description": "typing",
-        "isExtraImport": true,
-        "detail": "typing",
-        "documentation": {}
-    },
-    {
-        "label": "Set",
         "importPath": "typing",
         "description": "typing",
         "isExtraImport": true,
@@ -2397,14 +2389,6 @@
         "documentation": {}
     },
     {
-        "label": "Task",
-        "importPath": "autoppia_iwa.src.data_generation.domain.classes",
-        "description": "autoppia_iwa.src.data_generation.domain.classes",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.data_generation.domain.classes",
-        "documentation": {}
-    },
-    {
         "label": "TaskGenerationConfig",
         "importPath": "autoppia_iwa.src.data_generation.domain.classes",
         "description": "autoppia_iwa.src.data_generation.domain.classes",
@@ -2614,14 +2598,6 @@
     },
     {
         "label": "BackendEvent",
-        "importPath": "autoppia_iwa.src.demo_webs.classes",
-        "description": "autoppia_iwa.src.demo_webs.classes",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.demo_webs.classes",
-        "documentation": {}
-    },
-    {
-        "label": "WebProject",
         "importPath": "autoppia_iwa.src.demo_webs.classes",
         "description": "autoppia_iwa.src.demo_webs.classes",
         "isExtraImport": true,
@@ -3474,14 +3450,6 @@
         "description": "autoppia_iwa.src.web_agents.base",
         "isExtraImport": true,
         "detail": "autoppia_iwa.src.web_agents.base",
-        "documentation": {}
-    },
-    {
-        "label": "TaskSolution",
-        "importPath": "autoppia_iwa.src.web_agents.classes",
-        "description": "autoppia_iwa.src.web_agents.classes",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.web_agents.classes",
         "documentation": {}
     },
     {
@@ -10445,14 +10413,6 @@
         "documentation": {}
     },
     {
-        "label": "__version__",
-        "importPath": "autoppia_web_agents_subnet",
-        "description": "autoppia_web_agents_subnet",
-        "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet",
-        "documentation": {}
-    },
-    {
         "label": "process_weights_for_netuid",
         "importPath": "autoppia_web_agents_subnet.base.utils.weight_utils",
         "description": "autoppia_web_agents_subnet.base.utils.weight_utils",
@@ -10493,7 +10453,7 @@
         "documentation": {}
     },
     {
-        "label": "TaskSynapse",
+        "label": "MinerStats",
         "importPath": "autoppia_web_agents_subnet.protocol",
         "description": "autoppia_web_agents_subnet.protocol",
         "isExtraImport": true,
@@ -10501,7 +10461,7 @@
         "documentation": {}
     },
     {
-        "label": "MinerStats",
+        "label": "TaskSynapse",
         "importPath": "autoppia_web_agents_subnet.protocol",
         "description": "autoppia_web_agents_subnet.protocol",
         "isExtraImport": true,
@@ -10555,30 +10515,6 @@
         "description": "math",
         "isExtraImport": true,
         "detail": "math",
-        "documentation": {}
-    },
-    {
-        "label": "dendrite_with_retries",
-        "importPath": "autoppia_web_agents_subnet.utils.dendrite",
-        "description": "autoppia_web_agents_subnet.utils.dendrite",
-        "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet.utils.dendrite",
-        "documentation": {}
-    },
-    {
-        "label": "dendrite_with_retries",
-        "importPath": "autoppia_web_agents_subnet.utils.dendrite",
-        "description": "autoppia_web_agents_subnet.utils.dendrite",
-        "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet.utils.dendrite",
-        "documentation": {}
-    },
-    {
-        "label": "ColoredLogger",
-        "importPath": "autoppia_web_agents_subnet.utils.logging",
-        "description": "autoppia_web_agents_subnet.utils.logging",
-        "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet.utils.logging",
         "documentation": {}
     },
     {
@@ -10750,6 +10686,14 @@
         "documentation": {}
     },
     {
+        "label": "dendrite_with_retries",
+        "importPath": "autoppia_web_agents_subnet.validator.utils",
+        "description": "autoppia_web_agents_subnet.validator.utils",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.validator.utils",
+        "documentation": {}
+    },
+    {
         "label": "get_rewards_with_details",
         "importPath": "autoppia_web_agents_subnet.validator.reward",
         "description": "autoppia_web_agents_subnet.validator.reward",
@@ -10774,14 +10718,6 @@
         "documentation": {}
     },
     {
-        "label": "handle_feedback_and_stats",
-        "importPath": "autoppia_web_agents_subnet.validator.feedback",
-        "description": "autoppia_web_agents_subnet.validator.feedback",
-        "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet.validator.feedback",
-        "documentation": {}
-    },
-    {
         "label": "generate_random_version",
         "importPath": "autoppia_web_agents_subnet.utils.weights_version",
         "description": "autoppia_web_agents_subnet.utils.weights_version",
@@ -10795,6 +10731,14 @@
         "description": "autoppia_web_agents_subnet.utils.weights_version",
         "isExtraImport": true,
         "detail": "autoppia_web_agents_subnet.utils.weights_version",
+        "documentation": {}
+    },
+    {
+        "label": "dendrite_with_retries",
+        "importPath": "autoppia_web_agents_subnet.utils.dendrite",
+        "description": "autoppia_web_agents_subnet.utils.dendrite",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.utils.dendrite",
         "documentation": {}
     },
     {
