@@ -110,12 +110,12 @@ class Miner(BaseMinerNeuron):
         Endpoint for feedback requests from the validator.
         We just call print_in_terminal() to see a summary.
         """
-        ColoredLogger.info(
-            f"Synapse Feedback received {synapse}. Printing in terminal...",
-            ColoredLogger.RED,
-        )
 
         try:
+            ColoredLogger.info(
+                f"Synapse Feedback received {synapse}. Printing in terminal...",
+                ColoredLogger.RED,
+            )
             synapse.print_in_terminal()
         except Exception as e:
             ColoredLogger.error("Error occurred while printing in terminal TaskFeedback")
