@@ -101,12 +101,6 @@ class TaskFeedbackSynapse(Synapse):
     def deserialize(self) -> "TaskFeedbackSynapse":
         return self
 
-    def model_dump(self, *args, **kwargs):
-        json_dict = super().model_dump()
-        json_dict["test_results_matrix"] = self.test_results_matrix
-
-        return json_dict
-
     def print_in_terminal(self):
 
         visualizer = SubnetVisualizer()
