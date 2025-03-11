@@ -90,7 +90,7 @@ class TaskFeedbackSynapse(Synapse):
     version: str = ""
     miner_id: str
     prompt:str
-    # tests: Optional[List[TestUnion]] = None
+    tests: Optional[List[TestUnion]] = None
     # actions: Optional[List[AllActionsUnion]] = Field(default_factory=list)
     # test_results_matrix: Optional[List[List[Any]]] = None
     # evaluation_result: Optional[Dict[str, Any]] = None
