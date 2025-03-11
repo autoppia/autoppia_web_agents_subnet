@@ -57,7 +57,7 @@ class Miner(BaseMinerNeuron):
         )
         self.load_state()
 
-    def show_actions(actions: List[BaseAction]) -> None:
+    def show_actions(self, actions: List[BaseAction]) -> None:
         """
         Pretty-prints the list of actions in a more readable format.
         
