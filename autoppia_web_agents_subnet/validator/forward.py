@@ -202,7 +202,7 @@ async def send_feedback_synapse_to_miners(
                     axons=[axon],
                     synapse=feedback_synapse,
                     deserialize=True,
-                    timeout=60,  # adjust as needed
+                    timeout=FEEDBACK_TIMEOUT,
                 )
             )
         )
@@ -213,7 +213,7 @@ async def send_feedback_synapse_to_miners(
     return results
 
 
-async def handle_feedback_and_stats(
+async def handle_feedback_and_miner_stats(
     validator,
     task: Task,
     miner_axons: List[bt.axon],                 
@@ -228,7 +228,6 @@ async def handle_feedback_and_stats(
     Given all the data about a single task evaluation, update stats, store feedback
     if necessary, and return a dictionary with aggregated metrics for logging.
     """
-    # -- Basic aggregator logic (unchanged) --
     num_no_response = sum(
         1 for sol in task_solutions if not sol.actions or len(sol.actions) == 0
     )
@@ -252,7 +251,6 @@ async def handle_feedback_and_stats(
         task_solutions=task_solutions,
         test_results_matrices=test_results_matrices,
         evaluation_results=evaluation_results,
-        screenshot_policy="remove",  
     )
 
     ColoredLogger.info(
@@ -356,7 +354,7 @@ async def process_tasks(
         validator.update_scores(rewards, miner_uids)
 
         # 8) Handle feedback & stats
-        feedback_data = await handle_feedback_and_stats(
+        feedback_data = await handle_feedback_and_miner_stats(
             validator=validator,
             task=task,
             miner_uids=miner_uids,
