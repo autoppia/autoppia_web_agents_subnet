@@ -146,6 +146,7 @@ def _process_evaluation_results(
 
 
 async def get_rewards_with_details(
+    validator,
     web_project: WebProject,
     task: Task,
     task_solutions: List[TaskSolution],
