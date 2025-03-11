@@ -170,7 +170,7 @@ async def send_feedback_synapse_to_miners(
         feedback = TaskFeedbackSynapse(
             version=__version__,
             miner_id=str(miner_uid),
-            task=feedback_task,
+            task=None,
             actions=task_solutions[i].actions if i < len(task_solutions) else [],
             test_results_matrix=(
                 test_results_matrices[i] if i < len(test_results_matrices) else None

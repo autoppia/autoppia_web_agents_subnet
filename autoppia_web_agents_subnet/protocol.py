@@ -89,7 +89,7 @@ class TaskFeedbackSynapse(Synapse):
     version: str = ""
     miner_id: str
     task: Optional[Task] = None
-    actions: List[AllActionsUnion] = Field(default_factory=list)
+    actions: Optional[List[AllActionsUnion]] = Field(default_factory=list)
     test_results_matrix: Optional[List[List[Any]]] = None
     evaluation_result: Optional[Dict[str, Any]] = None
     stats: Optional[MinerStats] = None
