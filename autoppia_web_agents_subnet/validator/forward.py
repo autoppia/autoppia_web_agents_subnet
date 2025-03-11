@@ -25,6 +25,7 @@ from autoppia_web_agents_subnet.validator.config import (
     PROMPTS_PER_ITERATION,
     MAX_ACTIONS_LENGTH,
     TIMEOUT,
+    CHECK_VERSION_PROBABILITY
 )
 from autoppia_web_agents_subnet.validator.utils import (
     init_miner_stats,
@@ -323,8 +324,8 @@ async def process_tasks(
         )
 
         # 3) Test the version check by sending an intentionally WRONG version
-        version_responses = await check_miner_not_responding_to_invalid_version(
-            validator, task_synapse=copy.deepcopy(task_synapse), miner_axons=miner_axons, timeout=10
+        version_responses = await check_miner_not_responding_to_invalid_version(    
+            validator, task_synapse=copy.deepcopy(task_synapse), miner_axons=miner_axons, probability=CHECK_VERSION_PROBABILITY, timeout=10
         )
 
         # 4) Figure out which miners responded incorrectly (non-empty actions to invalid version)

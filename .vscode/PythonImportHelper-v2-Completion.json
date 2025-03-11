@@ -10630,6 +10630,14 @@
         "documentation": {}
     },
     {
+        "label": "CHECK_VERSION_PROBABILITY",
+        "importPath": "autoppia_web_agents_subnet.validator.config",
+        "description": "autoppia_web_agents_subnet.validator.config",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.validator.config",
+        "documentation": {}
+    },
+    {
         "label": "TIME_WEIGHT",
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
@@ -18220,7 +18228,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "FORWARD_SLEEP_SECONDS = 60 * 1  # 1 Minutes\nTASK_SLEEP = 60 * 1  # 1 Minute\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\ndef read_config() -> bt.config:",
+        "peekOfCode": "FORWARD_SLEEP_SECONDS = 60 * 1  # 1 Minutes\nTASK_SLEEP = 60 * 1  # 1 Minute\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\nCHECK_VERSION_PROBABILITY = 0.25",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },
@@ -18229,7 +18237,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "TASK_SLEEP = 60 * 1  # 1 Minute\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()",
+        "peekOfCode": "TASK_SLEEP = 60 * 1  # 1 Minute\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\nCHECK_VERSION_PROBABILITY = 0.25\ndef read_config() -> bt.config:",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },
@@ -18238,7 +18246,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "TIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)",
+        "peekOfCode": "TIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\nCHECK_VERSION_PROBABILITY = 0.25\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },
@@ -18247,7 +18255,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "MIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)\n    bt.wallet.add_args(parser)",
+        "peekOfCode": "MIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\nCHECK_VERSION_PROBABILITY = 0.25\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },
@@ -18256,7 +18264,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "MIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)\n    bt.wallet.add_args(parser)\n    bt.subtensor.add_args(parser)",
+        "peekOfCode": "MIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\nCHECK_VERSION_PROBABILITY = 0.25\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)\n    bt.wallet.add_args(parser)",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },
@@ -18265,7 +18273,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "SAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)\n    bt.wallet.add_args(parser)\n    bt.subtensor.add_args(parser)\n    bt.axon.add_args(parser)",
+        "peekOfCode": "SAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\nCHECK_VERSION_PROBABILITY = 0.25\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)\n    bt.wallet.add_args(parser)\n    bt.subtensor.add_args(parser)",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },
@@ -18274,7 +18282,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "MAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)\n    bt.wallet.add_args(parser)\n    bt.subtensor.add_args(parser)\n    bt.axon.add_args(parser)\n    parser.add_argument(\"--netuid\", type=int, help=\"Subnet netuid\", default=36)",
+        "peekOfCode": "MAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\nCHECK_VERSION_PROBABILITY = 0.25\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)\n    bt.wallet.add_args(parser)\n    bt.subtensor.add_args(parser)\n    bt.axon.add_args(parser)",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },
@@ -18283,7 +18291,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "NUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)\n    bt.wallet.add_args(parser)\n    bt.subtensor.add_args(parser)\n    bt.axon.add_args(parser)\n    parser.add_argument(\"--netuid\", type=int, help=\"Subnet netuid\", default=36)\n    parser.add_argument(",
+        "peekOfCode": "NUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\nCHECK_VERSION_PROBABILITY = 0.25\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)\n    bt.wallet.add_args(parser)\n    bt.subtensor.add_args(parser)\n    bt.axon.add_args(parser)\n    parser.add_argument(\"--netuid\", type=int, help=\"Subnet netuid\", default=36)",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },
@@ -18292,7 +18300,16 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "PROMPTS_PER_ITERATION = 1\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)\n    bt.wallet.add_args(parser)\n    bt.subtensor.add_args(parser)\n    bt.axon.add_args(parser)\n    parser.add_argument(\"--netuid\", type=int, help=\"Subnet netuid\", default=36)\n    parser.add_argument(\n        \"--neuron.name\",",
+        "peekOfCode": "PROMPTS_PER_ITERATION = 1\nCHECK_VERSION_PROBABILITY = 0.25\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)\n    bt.wallet.add_args(parser)\n    bt.subtensor.add_args(parser)\n    bt.axon.add_args(parser)\n    parser.add_argument(\"--netuid\", type=int, help=\"Subnet netuid\", default=36)\n    parser.add_argument(",
+        "detail": "autoppia_web_agents_subnet.validator.config",
+        "documentation": {}
+    },
+    {
+        "label": "CHECK_VERSION_PROBABILITY",
+        "kind": 5,
+        "importPath": "autoppia_web_agents_subnet.validator.config",
+        "description": "autoppia_web_agents_subnet.validator.config",
+        "peekOfCode": "CHECK_VERSION_PROBABILITY = 0.25\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)\n    bt.wallet.add_args(parser)\n    bt.subtensor.add_args(parser)\n    bt.axon.add_args(parser)\n    parser.add_argument(\"--netuid\", type=int, help=\"Subnet netuid\", default=36)\n    parser.add_argument(\n        \"--neuron.name\",",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },

@@ -11,6 +11,7 @@ SAMPLE_SIZE = 256  # Number of Miners
 MAX_ACTIONS_LENGTH = 15
 NUM_URLS = 1
 PROMPTS_PER_ITERATION = 1
+CHECK_VERSION_PROBABILITY = 0.25
 
 
 def read_config() -> bt.config:
