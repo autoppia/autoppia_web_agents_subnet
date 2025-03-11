@@ -335,6 +335,7 @@ async def process_tasks(
                 invalid_version_responders.add(miner_uids[i])
 
         # 5) Now actually send the correct version
+        bt.logging.info("Sending Task Synapses To Miners")
         responses = await send_task_synapse_to_miners(
             validator, miner_axons=miner_axons, task_synapse=task_synapse, timeout=TIMEOUT
         )
