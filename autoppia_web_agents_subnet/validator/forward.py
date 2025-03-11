@@ -191,7 +191,7 @@ async def send_feedback_synapse_to_miners(
             miner_id=str(miner_uid),
             prompt="",
             tests=None,
-            # actions=None,
+            actions=None,
             # test_results_matrix=None,
             # evaluation_result=None,
         )
