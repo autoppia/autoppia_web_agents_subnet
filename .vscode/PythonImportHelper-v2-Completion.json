@@ -1549,6 +1549,14 @@
         "documentation": {}
     },
     {
+        "label": "Optional",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
         "label": "List",
         "importPath": "typing",
         "description": "typing",
@@ -2350,6 +2358,14 @@
     },
     {
         "label": "TaskGenerationConfig",
+        "importPath": "autoppia_iwa.src.data_generation.domain.classes",
+        "description": "autoppia_iwa.src.data_generation.domain.classes",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.data_generation.domain.classes",
+        "documentation": {}
+    },
+    {
+        "label": "Task",
         "importPath": "autoppia_iwa.src.data_generation.domain.classes",
         "description": "autoppia_iwa.src.data_generation.domain.classes",
         "isExtraImport": true,
@@ -4738,7 +4754,7 @@
         "documentation": {}
     },
     {
-        "label": "Field",
+        "label": "BaseModel",
         "importPath": "pydantic",
         "description": "pydantic",
         "isExtraImport": true,
@@ -4746,7 +4762,7 @@
         "documentation": {}
     },
     {
-        "label": "BaseModel",
+        "label": "Field",
         "importPath": "pydantic",
         "description": "pydantic",
         "isExtraImport": true,
@@ -5842,14 +5858,6 @@
         "description": "rich.panel",
         "isExtraImport": true,
         "detail": "rich.panel",
-        "documentation": {}
-    },
-    {
-        "label": "Table",
-        "importPath": "rich.table",
-        "description": "rich.table",
-        "isExtraImport": true,
-        "detail": "rich.table",
         "documentation": {}
     },
     {
@@ -10523,14 +10531,6 @@
         "description": "math",
         "isExtraImport": true,
         "detail": "math",
-        "documentation": {}
-    },
-    {
-        "label": "ColoredLogger",
-        "importPath": "autoppia_web_agents_subnet.utils.logging",
-        "description": "autoppia_web_agents_subnet.utils.logging",
-        "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet.utils.logging",
         "documentation": {}
     },
     {
@@ -18083,6 +18083,15 @@
         "documentation": {}
     },
     {
+        "label": "MinerStats",
+        "kind": 6,
+        "importPath": "autoppia_web_agents_subnet.miner.stats",
+        "description": "autoppia_web_agents_subnet.miner.stats",
+        "peekOfCode": "class MinerStats(BaseModel):\n    \"\"\"\n    Stores basic stats about a miner, updated after each task.\n    \"\"\"\n    avg_score: float = 0.0\n    avg_execution_time: float = 0.0\n    avg_evaluation_time: float = 0.0\n    total_tasks: int = 0\n    total_successful_tasks: int = 0\n    last_task: Optional[Task] = None",
+        "detail": "autoppia_web_agents_subnet.miner.stats",
+        "documentation": {}
+    },
+    {
         "label": "is_cuda_available",
         "kind": 2,
         "importPath": "autoppia_web_agents_subnet.utils.config",
@@ -18440,15 +18449,6 @@
         "description": "autoppia_web_agents_subnet.validator.utils",
         "peekOfCode": "def prepare_for_feedback(task) -> Task:\n    cleaned_task = copy.deepcopy(task)\n    cleaned_task.use_case = None\n    cleaned_task.milestones = None\n    cleaned_task.interactive_elements = None\n    cleaned_task.screenshot = None\n    cleaned_task.screenshot_description = None\n    cleaned_task.html = None\n    cleaned_task.clean_html = None\n    return cleaned_task",
         "detail": "autoppia_web_agents_subnet.validator.utils",
-        "documentation": {}
-    },
-    {
-        "label": "MinerStats",
-        "kind": 6,
-        "importPath": "autoppia_web_agents_subnet.protocol",
-        "description": "autoppia_web_agents_subnet.protocol",
-        "peekOfCode": "class MinerStats(BaseModel):\n    \"\"\"\n    Stores basic stats about a miner, updated after each task.\n    \"\"\"\n    avg_score: float = 0.0\n    avg_execution_time: float = 0.0\n    avg_evaluation_time: float = 0.0\n    total_tasks: int = 0\n    total_successful_tasks: int = 0\n    last_task: Optional[Task] = None",
-        "detail": "autoppia_web_agents_subnet.protocol",
         "documentation": {}
     },
     {
