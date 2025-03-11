@@ -12,7 +12,7 @@ async def check_miner_not_responding_to_invalid_version(self, task_synapse:TaskS
 
     version_responses = []
     if do_check_versions:
-        bt.logging.info("Quering random_version")
+        bt.logging.info("Sending Check Version Synapses To Miners")
         random_version = generate_random_version(
             self.version, self.least_acceptable_version)
         task_synapse.version = random_version
