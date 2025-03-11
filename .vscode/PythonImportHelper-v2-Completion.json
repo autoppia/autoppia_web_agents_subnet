@@ -10638,6 +10638,14 @@
         "documentation": {}
     },
     {
+        "label": "FEEDBACK_TIMEOUT",
+        "importPath": "autoppia_web_agents_subnet.validator.config",
+        "description": "autoppia_web_agents_subnet.validator.config",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.validator.config",
+        "documentation": {}
+    },
+    {
         "label": "TIME_WEIGHT",
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
@@ -18227,7 +18235,16 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "TIMEOUT = 60 * 2  # 2 Min\nFORWARD_SLEEP_SECONDS = 60 * 1  # 1 Minutes\nTASK_SLEEP = 60 * 1  # 1 Minute\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1",
+        "peekOfCode": "TIMEOUT = 60 * 2  # 2 Min\nFEEDBACK_TIMEOUT = 10\nFORWARD_SLEEP_SECONDS = 60 * 1  # 1 Minutes\nTASK_SLEEP = 60 * 1  # 1 Minute\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1",
+        "detail": "autoppia_web_agents_subnet.validator.config",
+        "documentation": {}
+    },
+    {
+        "label": "FEEDBACK_TIMEOUT",
+        "kind": 5,
+        "importPath": "autoppia_web_agents_subnet.validator.config",
+        "description": "autoppia_web_agents_subnet.validator.config",
+        "peekOfCode": "FEEDBACK_TIMEOUT = 10\nFORWARD_SLEEP_SECONDS = 60 * 1  # 1 Minutes\nTASK_SLEEP = 60 * 1  # 1 Minute\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1  # 10%\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  # Number of Miners\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },

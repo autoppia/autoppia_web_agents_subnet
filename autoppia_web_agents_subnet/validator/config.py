@@ -2,6 +2,7 @@ import argparse
 import bittensor as bt
 
 TIMEOUT = 60 * 2  # 2 Min
+FEEDBACK_TIMEOUT = 10
 FORWARD_SLEEP_SECONDS = 60 * 1  # 1 Minutes
 TASK_SLEEP = 60 * 1  # 1 Minute
 TIME_WEIGHT = 0.2
