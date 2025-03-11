@@ -25,7 +25,8 @@ from autoppia_web_agents_subnet.validator.config import (
     PROMPTS_PER_ITERATION,
     MAX_ACTIONS_LENGTH,
     TIMEOUT,
-    CHECK_VERSION_PROBABILITY
+    CHECK_VERSION_PROBABILITY,
+    FEEDBACK_TIMEOUT
 )
 from autoppia_web_agents_subnet.validator.utils import (
     init_miner_stats,
@@ -146,8 +147,7 @@ async def send_feedback_synapse_to_miners(
     task_solutions: List[TaskSolution],
     test_results_matrices: List[List[List[Any]]],
     evaluation_results: List[Dict[str, Any]],
-    screenshot_policy: str = "remove"
-) -> List[List[TaskFeedbackSynapse]]:
+) -> None:
     """
     Sends a TaskFeedbackSynapse to each miner with the relevant evaluation details.
 
@@ -159,27 +159,24 @@ async def send_feedback_synapse_to_miners(
     :param test_results_matrices: List of test-result matrices returned by the reward function.
     :param evaluation_results: List of evaluation details for each miner (scores, etc.).
     :param screenshot_policy: Either "remove" or "keep". If "remove", the screenshot is cleared.
-    :return: A list of responses from each miner (each response is typically a list of TaskFeedbackSynapse).
     """
-
     feedback_list = []
 
     for i, miner_uid in enumerate(miner_uids):
-        # Optionally strip out large fields from the Task
-        # if screenshot_policy == "remove":
-        #     task.screenshot = ""
-        #     task.html = ""
-        #     if hasattr(task, "clean_html"):
-        #         task.clean_html = ""
+        # Make a shallow copy so we can strip out large fields
+        feedback_task = copy.copy(task)
+
+        feedback_task.screenshot = ""
+        feedback_task.screenshot_description = ""
+        feedback_task.html = ""
+        feedback_task.clean_html = ""
 
         # Build the feedback synapse
         feedback = TaskFeedbackSynapse(
             version=__version__,
             miner_id=str(miner_uid),
-            task=task,
-            actions=(
-                task_solutions[i].actions if i < len(task_solutions) else []
-            ),
+            task=feedback_task,
+            actions=task_solutions[i].actions if i < len(task_solutions) else [],
             test_results_matrix=(
                 test_results_matrices[i] if i < len(test_results_matrices) else None
             ),
@@ -196,7 +193,6 @@ async def send_feedback_synapse_to_miners(
         ColoredLogger.BLUE,
     )
 
-    # Create tasks to send each feedback synapse (in parallel) via dendrite
     feedback_tasks = []
     for axon, feedback_synapse in zip(miner_axons, feedback_list):
         feedback_tasks.append(
