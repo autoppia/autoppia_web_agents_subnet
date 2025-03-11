@@ -10389,7 +10389,7 @@
         "documentation": {}
     },
     {
-        "label": "__spec_version__",
+        "label": "version_url",
         "importPath": "autoppia_web_agents_subnet",
         "description": "autoppia_web_agents_subnet",
         "isExtraImport": true,
@@ -10397,7 +10397,15 @@
         "documentation": {}
     },
     {
-        "label": "version_url",
+        "label": "__version__",
+        "importPath": "autoppia_web_agents_subnet",
+        "description": "autoppia_web_agents_subnet",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet",
+        "documentation": {}
+    },
+    {
+        "label": "__least_acceptable_version__",
         "importPath": "autoppia_web_agents_subnet",
         "description": "autoppia_web_agents_subnet",
         "isExtraImport": true,

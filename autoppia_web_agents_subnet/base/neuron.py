@@ -16,21 +16,18 @@
 # DEALINGS IN THE SOFTWARE.
 
 import copy
-import typing
-
 import bittensor as bt
-
 from abc import ABC, abstractmethod
 
 # Sync calls set weights and also resyncs the metagraph.
 from autoppia_web_agents_subnet.utils.config import check_config, add_args, config
 from autoppia_web_agents_subnet.utils.misc import ttl_get_block
-from autoppia_web_agents_subnet import __spec_version__ as spec_version
 import time
 import traceback
 import requests
-from autoppia_web_agents_subnet import version_url
 import re
+from autoppia_web_agents_subnet import version_url
+from autoppia_web_agents_subnet import __version__, __least_acceptable_version__, __spec_version__
 
 
 class BaseNeuron(ABC):
@@ -57,7 +54,7 @@ class BaseNeuron(ABC):
     subtensor: "bt.subtensor"
     wallet: "bt.wallet"
     metagraph: "bt.metagraph"
-    spec_version: int = spec_version
+    spec_version: int = __spec_version__
 
     @property
     def block(self):
@@ -67,7 +64,10 @@ class BaseNeuron(ABC):
         base_config = copy.deepcopy(config or BaseNeuron.config())
         self.config = self.config()
         self.config.merge(base_config)
-        self.check_config(self.config)
+        self.check_config(self.config) 
+
+        # Version check
+        self.parse_versions()
 
         # Set up logging with the provided configuration.
         bt.logging.set_config(config=self.config.logging)
@@ -210,10 +210,10 @@ class BaseNeuron(ABC):
         )
 
     def parse_versions(self):
-        self.version = "10.0.0"
-        self.least_acceptable_version = "0.0.0"
+        self.version = __version__
+        self.least_acceptable_version = __least_acceptable_version__
 
-        bt.logging.info(f"Parsing versions...")
+        bt.logging.info("Parsing versions...")
         response = requests.get(version_url)
         bt.logging.info(f"Response: {response.status_code}")
         if response.status_code == 200:
