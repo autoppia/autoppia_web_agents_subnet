@@ -1,6 +1,5 @@
 import numpy as np
-from typing import List, Optional, Dict, Any, Tuple
-import time
+from typing import List, Optional, Dict, Any, Tuple, Set
 import bittensor as bt
 from autoppia_iwa.src.evaluation.evaluator.evaluator import (
     ConcurrentEvaluator,
@@ -13,34 +12,10 @@ from autoppia_iwa.src.demo_webs.classes import WebProject
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
 
-def normalize_execution_times(times: List[Optional[float]]) -> List[float]:
-    """
-    Normalizes execution times to a [0..1] range (1 = fastest, 0 = slowest).
-    If all times are equal, returns 1.0 for those not None.
-    """
-    if not times:
-        return []
-    valid_times = [t for t in times if t is not None]
-    if not valid_times:
-        return [0.0] * len(times)
-    min_time = min(valid_times)
-    max_time = max(valid_times)
-
-    if max_time == min_time:
-        return [1.0 if t is not None else 0.0 for t in times]
-
-    normalized = [
-        (max_time - t) / (max_time - min_time) if t is not None else 0.0 for t in times
-    ]
-    bt.logging.debug(f"Execution times: {times}, normalized times: {normalized}")
-    return normalized
-
-
 def _test_result_to_dict(tr: Any) -> Dict[str, Any]:
     """
     Converts a TestResult-like object to a dictionary that's JSON-serializable.
     We only keep attributes like 'success', 'message', etc.
-    If 'tr' is not recognized, we fallback to a minimal dict.
     """
     if hasattr(tr, "success"):
         return {
@@ -55,85 +30,6 @@ def _test_result_to_dict(tr: Any) -> Dict[str, Any]:
         return {"success": False, "message": f"Unknown object {str(tr)}"}
 
 
-async def _evaluate_all_task_solutions(
-    web_project: WebProject, task: Task, task_solutions: List[TaskSolution]
-) -> List[float]:
-    """
-    A utility that fetches a 'base' numeric final_score from each solution
-    using the concurrency evaluator.
-    """
-    start_time = time.time()
-    evaluator_config = EvaluatorConfig(starting_url=task.url)
-    evaluator = ConcurrentEvaluator(web_project, evaluator_config)
-
-    try:
-        results: List[EvaluationResult] = await evaluator.evaluate_task_solutions(
-            task=task, task_solutions=task_solutions
-        )
-        # Just extract final_score or 0
-        scores = [r.final_score if r.final_score is not None else 0.0 for r in results]
-    except Exception as exc:
-        bt.logging.error(f"Error evaluating task solutions: {exc}")
-        scores = [0.0] * len(task_solutions)
-
-    end_time = time.time()
-    total_time = end_time - start_time
-    avg_time = total_time / len(task_solutions) if task_solutions else 0.0
-    ColoredLogger.info(
-        f"Evaluation took {total_time:.3f}s total, average {avg_time:.3f}s per miner",
-        ColoredLogger.YELLOW,
-    )
-    return scores
-
-
-async def get_rewards(
-    self,
-    web_project: WebProject,
-    task: Task,
-    task_solutions: List[TaskSolution],
-    execution_times: List[float],
-    time_weight: float = 0.2,
-    min_correct_format_score: float = 0.1,
-    min_response_reward: float = 0.01,
-) -> np.ndarray:
-    """
-    Computes final reward for each solution, with:
-      - base score
-      - time factor
-      - ensures min reward if solution is non-empty
-    """
-    evaluation_scores: List[float] = await _evaluate_all_task_solutions(
-        web_project=web_project, task=task, task_solutions=task_solutions
-    )
-    bt.logging.debug(f"Evaluation Scores: {evaluation_scores}")
-
-    normalized_times = normalize_execution_times(execution_times)
-    final_rewards = []
-    eval_weight = 1.0 - time_weight
-
-    for eval_score, time_score in zip(evaluation_scores, normalized_times):
-        if eval_score <= 0.0:
-            final_rewards.append(eval_score)
-        else:
-            combined = eval_weight * eval_score + time_weight * time_score
-            final_rewards.append(combined)
-
-    # If solution has no actions => reward=0
-    # If reward <=0 but has actions => min_response_reward or min_correct_format_score
-    for i, solution in enumerate(task_solutions):
-        if not solution.actions:
-            final_rewards[i] = 0.0
-        elif final_rewards[i] >= 0.25:
-            final_rewards[i] = 1.0
-        elif final_rewards[i] <= 0.0:
-            final_rewards[i] = min_response_reward
-        else:
-            final_rewards[i] = max(final_rewards[i], min_correct_format_score)
-
-    bt.logging.debug(f"Final Rewards after format checks: {final_rewards}")
-    return np.array(final_rewards)
-
-
 async def get_rewards_with_details(
     self,
     web_project: WebProject,
@@ -143,17 +39,19 @@ async def get_rewards_with_details(
     time_weight: float = 0.2,
     min_correct_format_score: float = 0.1,
     min_response_reward: float = 0.0,
+    invalid_version_responders: Optional[Set[int]] = None,
 ) -> Tuple[np.ndarray, List[List[List[Any]]], List[Dict[str, Any]]]:
     """
     Extended version returning:
       - rewards array
       - test_results_matrices (JSON-friendly)
-      - evaluation_results (dictionaries with raw_score, final_score, reward_score, etc.)
-    """
-    bt.logging.info(
-        f"Evaluating {len(task_solutions)} task solutions with detailed results"
-    )
+      - evaluation_results (dictionaries with raw_score, final_score, etc.)
 
+    If a miner is in the 'invalid_version_responders' set, we set that miner's reward to 0.
+    """
+    bt.logging.info(f"Evaluating {len(task_solutions)} task solutions with detailed results")
+
+    # Create the evaluator and config
     evaluator_config = EvaluatorConfig(
         save_results_in_db=False,
         exclude_random_passed_tests=True,
@@ -177,23 +75,14 @@ async def get_rewards_with_details(
         max_time = 60.0  # threshold for time penalty
 
         for i, result in enumerate(detailed_results):
-            # 1) Convert test results to a JSON-friendly shape
-            #    result.test_results_matrix might be something like
-            #    List[List[TestResult]] or similar
+            # 1) Convert test results to JSON-friendly shape
             matrix_converted = []
-            if len(result.test_results_matrix) == 0:
-                ColoredLogger.info(
-                    f"ESTOY EN GET REWARDS_WITH DETAILS DESPUES DE EVALUAR {i}, MATRIz: {result}",
-                    ColoredLogger.GRAY,
-                )
             if result.test_results_matrix:
                 for action_list in result.test_results_matrix:
-                    # convert each test result to dict
                     row = [_test_result_to_dict(tr) for tr in action_list]
                     matrix_converted.append(row)
             else:
                 matrix_converted = []
-
             test_results_matrices.append(matrix_converted)
 
             # 2) Compute raw_score & time factor
@@ -204,14 +93,11 @@ async def get_rewards_with_details(
             else:
                 time_factor = 0.0
 
-            final_score_time_adjusted = (
-                1.0 - time_weight
-            ) * raw_score + time_weight * time_factor
+            final_score_time_adjusted = (1.0 - time_weight) * raw_score + time_weight * time_factor
 
+            # Ensure at least min_response_reward if the raw_score is >= min_correct_format_score
             if raw_score >= min_correct_format_score:
-                final_score_time_adjusted = max(
-                    final_score_time_adjusted, min_response_reward
-                )
+                final_score_time_adjusted = max(final_score_time_adjusted, min_response_reward)
 
             rewards[i] = final_score_time_adjusted
 
@@ -244,7 +130,6 @@ async def get_rewards_with_details(
             evaluation_results.append(eval_dict)
 
     except Exception as e:
-        # bt.logging.error(f"Error evaluating task solutions with details: {e}")
         ColoredLogger.error(
             f"Error evaluating task solutions with details: {e}",
             ColoredLogger.RED,
@@ -253,6 +138,24 @@ async def get_rewards_with_details(
             rewards[i] = 0.0
             test_results_matrices.append([])
             evaluation_results.append({"error": str(e), "reward_score": 0.0})
+
+    # ---------------------------------------------------
+    # 5) Override the reward to 0 if the miner responded
+    #    incorrectly to the *invalid version* check.
+    # ---------------------------------------------------
+    if invalid_version_responders is not None:
+        for i, solution in enumerate(task_solutions):
+            # If the miner's UID is in invalid_version_responders, set reward to 0
+            try:
+                miner_uid = int(solution.web_agent_id)
+            except ValueError:
+                miner_uid = -1
+
+            if miner_uid in invalid_version_responders:
+                # Set that miner's reward to 0, ignoring any prior calculation
+                rewards[i] = 0.0
+                if i < len(evaluation_results):
+                    evaluation_results[i]["reward_score"] = 0.0
 
     bt.logging.info(f"Detailed evaluation complete. Rewards: {rewards}")
     return rewards, test_results_matrices, evaluation_results

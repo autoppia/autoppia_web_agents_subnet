@@ -1,3 +1,8 @@
+import copy
+import time
+import asyncio
+import bittensor as bt
+from typing import List, Set
 from autoppia_iwa.src.data_generation.domain.classes import (
     Task,
     TaskGenerationConfig,
@@ -19,7 +24,7 @@ from autoppia_web_agents_subnet.validator.config import (
     MIN_RESPONSE_REWARD,
     PROMPTS_PER_ITERATION,
     MAX_ACTIONS_LENGTH,
-    TIMEOUT
+    TIMEOUT,
 )
 from autoppia_web_agents_subnet.validator.utils import (
     init_miner_stats,
@@ -30,10 +35,7 @@ from autoppia_web_agents_subnet.validator.utils import (
 )
 from autoppia_web_agents_subnet.validator.reward import get_rewards_with_details
 from autoppia_web_agents_subnet.utils.uids import get_random_uids
-import time
-import bittensor as bt
-import asyncio
-from typing import List
+from autoppia_web_agents_subnet.validator.version import check_miner_not_responding_to_invalid_version
 
 
 async def generate_tasks_for_web_project(
@@ -63,17 +65,16 @@ async def generate_tasks_for_web_project(
 
 
 def get_task_solution_from_synapse(
-    task_id, synapse: TaskSynapse, web_agent_id: str
+    task_id: str, synapse: TaskSynapse, web_agent_id: str
 ) -> TaskSolution:
     """
     Safely extracts actions from a TaskSynapse response and creates a TaskSolution
-    with the original task reference, limiting actions to a maximum of 15.
+    with the original task reference, limiting actions to a maximum length.
     """
     actions = []
     if synapse and hasattr(synapse, "actions") and isinstance(synapse.actions, list):
         actions = synapse.actions[:MAX_ACTIONS_LENGTH]  # Limit actions to at most 15
 
-    # Create a TaskSolution with our trusted task object, not one from the miner
     return TaskSolution(task_id=task_id, actions=actions, web_agent_id=web_agent_id)
 
 
@@ -112,6 +113,26 @@ def collect_task_solutions(
     return task_solutions, execution_times
 
 
+async def send_task_synapse_to_miners(
+    validator, miner_axons, task_synapse: TaskSynapse, miner_uids: List[int]
+) -> List[TaskSynapse]:
+    """
+    Send the (correct-version) synapse to the given miners and retrieve their responses.
+    """
+    # Ensure we set the correct version here
+    task_synapse.version = validator.version
+
+    # The actual forward pass to the selected miners
+    responses: List[TaskSynapse] = await validator.dendrite.send(
+        axons=miner_axons,
+        synapse=task_synapse,
+        timeout=10,
+    )
+
+    bt.logging.info(f"Received responses from {len(responses)} miners.")
+    return responses
+
+
 async def process_tasks(
     validator, web_project: WebProject, tasks_generated: List[Task]
 ) -> None:
@@ -137,12 +158,12 @@ async def process_tasks(
         )
         bt.logging.debug(f"Task tests: {task.tests}")
 
-        # Choose a random subset of miners
+        # 1) Choose a random subset of miners
         miner_uids = get_random_uids(validator, k=SAMPLE_SIZE)
         bt.logging.info(f"Miner UIDs chosen: {miner_uids}")
         miner_axons = [validator.metagraph.axons[uid] for uid in miner_uids]
 
-        # Build synapse and send
+        # 2) Build the normal synapse structure (correct version is set during sending)
         task_synapse = TaskSynapse(
             prompt=task.prompt,
             url=task.url,
@@ -150,16 +171,30 @@ async def process_tasks(
             screenshot=task.screenshot,
             actions=[],
         )
+
+        # 3) Test the version check by sending an intentionally WRONG version
+        version_responses = await check_miner_not_responding_to_invalid_version(
+            validator, task_synapse=copy.deepcopy(task_synapse), miner_axons=miner_axons, timeout=10
+        )
+
+        # 4) Figure out which miners responded incorrectly (non-empty actions to invalid version)
+        invalid_version_responders: Set[int] = set()
+        for i, vresp in enumerate(version_responses):
+            if vresp and hasattr(vresp, "actions") and vresp.actions:
+                # This miner responded to the WRONG version with non-empty actions => penalize
+                invalid_version_responders.add(miner_uids[i])
+
+        # 5) Now actually send the correct version
         responses = await send_task_synapse_to_miners(
             validator, miner_axons, task_synapse, miner_uids
         )
 
-        # Convert responses into TaskSolutions
+        # 6) Convert responses into TaskSolutions
         task_solutions, execution_times = collect_task_solutions(
             task, responses, miner_uids
         )
 
-        # Evaluate solutions
+        # 7) Evaluate solutions & compute rewards
         start_eval = time.time()
         rewards, test_results_matrices, evaluation_results = (
             await get_rewards_with_details(
@@ -171,13 +206,14 @@ async def process_tasks(
                 time_weight=TIME_WEIGHT,
                 min_correct_format_score=MIN_SCORE_FOR_CORRECT_FORMAT,
                 min_response_reward=MIN_RESPONSE_REWARD,
+                invalid_version_responders=invalid_version_responders,  # <-- pass the penalized set
             )
         )
         end_eval = time.time()
         bt.logging.info(f"Miners final rewards: {rewards}")
         bt.logging.info(f"Rewards computed in {end_eval - start_eval:.2f}s.")
 
-        # Handle feedback & stats in a separate helper
+        # 8) Handle feedback & stats
         feedback_data = await handle_feedback_and_stats(
             validator=validator,
             web_project=web_project,
@@ -191,7 +227,7 @@ async def process_tasks(
             evaluation_results=evaluation_results,
         )
 
-        # Aggregate the returned stats
+        # 9) Aggregate the returned stats
         num_no_response += feedback_data["num_no_response"]
         num_success += feedback_data["num_success"]
         num_wrong += feedback_data["num_wrong"]
@@ -237,7 +273,7 @@ async def forward(self) -> None:
     """
     Main entry point that runs each forward cycle:
       1. Retrieve a random web project and generate tasks.
-      2. Send tasks to miners, gather and evaluate responses, update scores, send feedback.
+      2. Send tasks (with an invalid version check + the correct version) to miners, gather and evaluate responses.
       3. Track performance stats, log them, and sleep.
     """
     try:
@@ -258,25 +294,19 @@ async def forward(self) -> None:
         )
         tasks_generated_end_time = time.time()
         tasks_generated_time = tasks_generated_end_time - tasks_generated_start_time
-        self.validator_performance_stats["total_tasks_generated"] += len(
-            tasks_generated
-        )
-        self.validator_performance_stats[
-            "total_generated_tasks_time"
-        ] += tasks_generated_time
+        self.validator_performance_stats["total_tasks_generated"] += len(tasks_generated)
+        self.validator_performance_stats["total_generated_tasks_time"] += tasks_generated_time
 
         if not tasks_generated:
             bt.logging.warning("No tasks generated, skipping forward step.")
             return
 
-        # 3. Process tasks
+        # 3. Process tasks (this includes the invalid version check + correct version flow)
         tasks_processed_start_time = time.time()
         await process_tasks(self, demo_web_project, tasks_generated)
         tasks_processed_end_time = time.time()
         tasks_processed_time = tasks_processed_end_time - tasks_processed_start_time
-        self.validator_performance_stats[
-            "total_processing_tasks_time"
-        ] += tasks_processed_time
+        self.validator_performance_stats["total_processing_tasks_time"] += tasks_processed_time
 
         # Finalize
         forward_end_time = time.time()

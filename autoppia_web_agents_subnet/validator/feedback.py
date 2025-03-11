@@ -4,9 +4,6 @@ from autoppia_iwa.src.demo_webs.classes import WebProject
 from autoppia_web_agents_subnet.protocol import (
     TaskFeedbackSynapse,
 )
-from autoppia_web_agents_subnet.validator.utils import (
-    update_miner_stats_and_scores,
-)
 from autoppia_web_agents_subnet.utils.dendrite import dendrite_with_retries
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet import __version__
@@ -15,7 +12,6 @@ import bittensor as bt
 import copy
 from typing import List, Dict, Any
 import asyncio
-import numpy as np
 
 
 async def send_feedback_synapse_to_miners(
@@ -97,61 +93,54 @@ async def handle_feedback_and_stats(
     responses: List[TaskSynapse],
     miner_uids: List[int],
     execution_times: List[float],
-    task_solutions,
-    rewards: np.ndarray,
+    task_solutions: List[TaskSolution],
+    rewards,
     test_results_matrices,
-    evaluation_results
-) -> dict:
+    evaluation_results,
+):
     """
-    Handles post-evaluation steps:
-      1) Collecting stats about responses (success, no-response, etc.).
-      2) Updating miner stats and scores.
-      3) Sending feedback synapse to miners.
-      4) Returning computed statistics for this specific task iteration.
+    Given all the data about a single task evaluation, update stats, store feedback
+    if necessary, and return a dictionary with aggregated metrics for logging.
     """
-    # Count valid (non-None) responses
-    valid_responses_count = sum(resp is not None for resp in responses)
-    num_no_response = 0
-    num_success = 0
-    num_wrong = 0
+    # You would typically do a loop over each miner to:
+    # 1) create feedback synapse
+    # 2) send it
+    # 3) update your in-memory stats
 
-    if valid_responses_count == 0:
-        num_no_response += 1
-
-    if np.any(rewards > 0):
-        num_success += 1
-    else:
-        if valid_responses_count > 0:
-            num_wrong += 1
-
-    # Miner request time average
-    avg_miner_time = (sum(execution_times) / len(execution_times)) if execution_times else 0.0
-
-    # Update miner stats and get evaluation time
-    evaluation_time = await update_miner_stats_and_scores(
-        validator, rewards, miner_uids, execution_times, task
+    # For simplicity, let's just collect some aggregates
+    num_no_response = sum(
+        1 for sol in task_solutions if not sol.actions or len(sol.actions) == 0
     )
+    successful_idx = [
+        i for i, r in enumerate(rewards) if r >= 1.0
+    ]  # define "success" as reward=1.0
+    num_success = len(successful_idx)
+    num_wrong = len([r for r in rewards if 0.0 < r < 1.0])
 
-    # Average reward across miners
-    avg_score_for_task = float(np.mean(rewards)) if len(rewards) > 0 else 0.0
+    avg_miner_time = sum(execution_times) / len(execution_times) if execution_times else 0
+    evaluation_time = 0.0  # For demonstration, you could measure the eval time in your code
+    avg_score_for_task = float(sum(rewards) / len(rewards)) if len(rewards) > 0 else 0.0
 
-    # Send feedback (includes test matrices & evaluation dict)
-    miner_axons = [validator.metagraph.axons[uid] for uid in miner_uids]
-    await send_feedback_synapse_to_miners(
-        validator,
-        miner_axons,
-        miner_uids,
-        task,
-        task_solutions,
-        test_results_matrices,
-        evaluation_results
-    )
+    # Update per-miner stats in the validator
+    for i, uid in enumerate(miner_uids):
+        miner_stats = validator.miner_stats[uid]
+        # Suppose "success" means final reward >= 1.0
+        success_bool = i in successful_idx
+        miner_stats.update(
+            score=float(rewards[i]),
+            execution_time=execution_times[i],
+            evaluation_time=evaluation_time,
+            last_task=task,
+            success=success_bool,
+        )
 
+    # Return a dictionary for usage by the parent flow
     return {
         "num_no_response": num_no_response,
         "num_success": num_success,
         "num_wrong": num_wrong,
         "avg_miner_time": avg_miner_time,
+        "evaluation_time": evaluation_time,
         "avg_score_for_task": avg_score_for_task,
-        "evaluation_time": evaluation_time
     }
+
