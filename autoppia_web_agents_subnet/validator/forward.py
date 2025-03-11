@@ -1,5 +1,5 @@
 import time
-import numpy as np
+
 import bittensor as bt
 import asyncio
 from typing import List
@@ -42,6 +42,11 @@ from autoppia_web_agents_subnet.validator.utils import (
     update_validator_performance_stats,
     print_validator_performance_stats
 )
+from autoppia_web_agents_subnet.utils.dendrite import dendrite_with_retries
+from autoppia_web_agents_subnet.validator.config import (
+    TIMEOUT
+)
+from autoppia_iwa.src.web_agents.classes import TaskSolution
 
 
 async def generate_tasks_for_web_project(demo_web_project: WebProject, prompts_per_use_case:int) -> List[Task]:
@@ -68,71 +73,81 @@ async def generate_tasks_for_web_project(demo_web_project: WebProject, prompts_p
     return tasks_generated
 
 
-async def handle_feedback_and_stats(
-    validator,
-    web_project: WebProject,
+
+def get_task_solution_from_synapse(
+    task_id, synapse: TaskSynapse, web_agent_id: str
+) -> TaskSolution:
+    """
+    Safely extracts actions from a TaskSynapse response and creates a TaskSolution
+    with the original task reference, limiting actions to a maximum of 15.
+    """
+    actions = []
+    if synapse and hasattr(synapse, "actions") and isinstance(synapse.actions, list):
+        actions = synapse.actions[:MAX_ACTIONS_LENGTH]  # Limit actions to at most 15
+
+    # Create a TaskSolution with our trusted task object, not one from the miner
+    return TaskSolution(task_id=task_id, actions=actions, web_agent_id=web_agent_id)
+
+
+def collect_task_solutions(
     task: Task,
     responses: List[TaskSynapse],
     miner_uids: List[int],
-    execution_times: List[float],
-    task_solutions,
-    rewards: np.ndarray,
-    test_results_matrices,
-    evaluation_results
-) -> dict:
+) -> (List[TaskSolution], List[float]):
     """
-    Handles post-evaluation steps:
-      1) Collecting stats about responses (success, no-response, etc.).
-      2) Updating miner stats and scores.
-      3) Sending feedback synapse to miners.
-      4) Returning computed statistics for this specific task iteration.
+    Collects TaskSolutions from the miners' responses and keeps track of their execution times.
     """
-    # Count valid (non-None) responses
-    valid_responses_count = sum(resp is not None for resp in responses)
-    num_no_response = 0
-    num_success = 0
-    num_wrong = 0
+    task_solutions = []
+    execution_times = []
+    for miner_uid, response in zip(miner_uids, responses):
+        try:
+            task_solution = get_task_solution_from_synapse(
+                task_id=task.id,
+                synapse=response,
+                web_agent_id=str(miner_uid),
+            )
+        except Exception as e:
+            bt.logging.error(f"Error in Miner Response Format: {e}")
+            task_solution = TaskSolution(
+                task_id=task.id, actions=[], web_agent_id=str(miner_uid)
+            )
+        task_solutions.append(task_solution)
+        if (
+            response
+            and hasattr(response.dendrite, "process_time")
+            and response.dendrite.process_time is not None
+        ):
+            process_time = response.dendrite.process_time
+        else:
+            process_time = TIMEOUT
+        execution_times.append(process_time)
+    return task_solutions, execution_times
 
-    if valid_responses_count == 0:
-        num_no_response += 1
 
-    if np.any(rewards > 0):
-        num_success += 1
-    else:
-        if valid_responses_count > 0:
-            num_wrong += 1
-
-    # Miner request time average
-    avg_miner_time = (sum(execution_times) / len(execution_times)) if execution_times else 0.0
-
-    # Update miner stats and get evaluation time
-    evaluation_time = await update_miner_stats_and_scores(
-        validator, rewards, miner_uids, execution_times, task
+async def send_task_synapse_to_miners(
+    validator,
+    miner_axons: List[bt.axon],
+    task_synapse: TaskSynapse,
+    miner_uids: List[int],
+) -> List[TaskSynapse]:
+    """
+    Sends a TaskSynapse to a list of miner axons and returns their responses.
+    """
+    bt.logging.info(f"Sending TaskSynapse to {len(miner_uids)} miners. Miner Timeout: {TIMEOUT}s")
+    responses: List[TaskSynapse] = await dendrite_with_retries(
+        dendrite=validator.dendrite,
+        axons=miner_axons,
+        synapse=task_synapse,
+        deserialize=True,
+        timeout=TIMEOUT,
     )
-
-    # Average reward across miners
-    avg_score_for_task = float(np.mean(rewards)) if len(rewards) > 0 else 0.0
-
-    # Send feedback (includes test matrices & evaluation dict)
-    miner_axons = [validator.metagraph.axons[uid] for uid in miner_uids]
-    await send_feedback_synapse_to_miners(
-        validator,
-        miner_axons,
-        miner_uids,
-        task,
-        task_solutions,
-        test_results_matrices,
-        evaluation_results
+    num_valid_responses = sum(resp is not None for resp in responses)
+    num_none_responses = len(responses) - num_valid_responses
+    bt.logging.info(
+        f"Received {len(responses)} responses: "
+        f"{num_valid_responses} valid, {num_none_responses} errors."
     )
-
-    return {
-        "num_no_response": num_no_response,
-        "num_success": num_success,
-        "num_wrong": num_wrong,
-        "avg_miner_time": avg_miner_time,
-        "avg_score_for_task": avg_score_for_task,
-        "evaluation_time": evaluation_time
-    }
+    return responses
 
 
 async def process_tasks(validator, web_project: WebProject, tasks_generated: List[Task]) -> None:

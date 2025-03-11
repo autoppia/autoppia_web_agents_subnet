@@ -37,6 +37,7 @@ from autoppia_iwa.config.config import (
     AGENT_PORT,
     USE_APIFIED_AGENT,
 )
+from autoppia_web_agents_subnet.utils.weights_version import is_version_in_range
 
 
 class Miner(BaseMinerNeuron):
@@ -57,6 +58,13 @@ class Miner(BaseMinerNeuron):
         self.load_state()
 
     async def forward(self, synapse: TaskSynapse) -> TaskSynapse:
+
+        # Checking Weights Version
+        version_check = is_version_in_range(synapse.version, self.version, self.least_acceptable_version)
+
+        if not version_check:
+            return synapse
+
         try:
             start_time = time.time()
             validator_hotkey = getattr(synapse.dendrite, "hotkey", None)
@@ -94,7 +102,7 @@ class Miner(BaseMinerNeuron):
             bt.logging.error(f"An error occurred on miner forward: {e}")
 
         return synapse
-
+    
     async def forward_feedback(
         self, synapse: TaskFeedbackSynapse
     ) -> TaskFeedbackSynapse:
@@ -103,20 +111,24 @@ class Miner(BaseMinerNeuron):
         We just call print_in_terminal() to see a summary.
         """
         ColoredLogger.info(
-            f" Synapse Feedback received{synapse}. I am going to print in terminal",
+            f"Synapse Feedback received {synapse}. Printing in terminal...",
             ColoredLogger.RED,
         )
 
         try:
             synapse.print_in_terminal()
         except Exception as e:
-            ColoredLogger.error(
-                "Error occurred while printing in terminal TaskFeedback"
-            )
+            ColoredLogger.error("Error occurred while printing in terminal TaskFeedback")
             bt.logging.info(e)
         return synapse
 
     async def blacklist(self, synapse: TaskSynapse) -> typing.Tuple[bool, str]:
+        """
+        Blacklist logic to disallow requests from certain hotkeys:
+          - Missing or unrecognized hotkeys
+          - Non-validator hotkeys if force_validator_permit is True
+          - Hotkeys not meeting the minimum stake requirement
+        """
         ColoredLogger.info(
             f"Processing Blacklist from validator: {synapse.dendrite.hotkey}",
             ColoredLogger.YELLOW,
@@ -126,36 +138,57 @@ class Miner(BaseMinerNeuron):
             bt.logging.warning("Received a request without a dendrite or hotkey.")
             return True, "Missing dendrite or hotkey"
 
-        uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
         if (
             not self.config.blacklist.allow_non_registered
             and synapse.dendrite.hotkey not in self.metagraph.hotkeys
         ):
             return True, "Unrecognized hotkey"
 
+        uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
+
         if self.config.blacklist.force_validator_permit:
             if not self.metagraph.validator_permit[uid]:
                 return True, "Non-validator hotkey"
+
+        # -----------------------------------------------------------------------
+        # Added check for minimum stake requirement
+        # -----------------------------------------------------------------------
+        stake = self.metagraph.S[uid]
+        min_stake = self.config.blacklist.minimum_stake_requirement
+        if stake < min_stake:
+            return True, f"Insufficient stake ({stake} < {min_stake})"
 
         return False, "Hotkey recognized!"
 
     async def blacklist_feedback(
         self, synapse: TaskFeedbackSynapse
     ) -> typing.Tuple[bool, str]:
+        """
+        Blacklist logic for feedback requests. Similar to blacklist().
+        """
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
             bt.logging.warning("Received a request without a dendrite or hotkey.")
             return True, "Missing dendrite or hotkey"
 
-        uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
         if (
             not self.config.blacklist.allow_non_registered
             and synapse.dendrite.hotkey not in self.metagraph.hotkeys
         ):
             return True, "Unrecognized hotkey"
 
+        uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
+
         if self.config.blacklist.force_validator_permit:
             if not self.metagraph.validator_permit[uid]:
                 return True, "Non-validator hotkey"
+
+        # -----------------------------------------------------------------------
+        # Added check for minimum stake requirement (feedback path)
+        # -----------------------------------------------------------------------
+        stake = self.metagraph.S[uid]
+        min_stake = self.config.blacklist.minimum_stake_requirement
+        if stake < min_stake:
+            return True, f"Insufficient stake ({stake} < {min_stake})"
 
         return False, "Hotkey recognized!"
 
