@@ -163,7 +163,6 @@ async def send_feedback_synapse_to_miners(
     :param screenshot_policy: Either "remove" or "keep". If "remove", the screenshot is cleared.
     """
     feedback_list = []
-
     feedback_task = prepare_for_feedback(task)
 
     for i, miner_uid in enumerate(miner_uids):        
@@ -171,15 +170,14 @@ async def send_feedback_synapse_to_miners(
         feedback = TaskFeedbackSynapse(
             version=__version__,
             miner_id=str(miner_uid),
-            task=None,
-            actions=None,
+            task=feedback_task,
+            actions=task_solutions[i].actions if i < len(task_solutions) else [],
             test_results_matrix=(
                 test_results_matrices[i] if i < len(test_results_matrices) else None
             ),
-            evaluation_result=None,
-            # evaluation_result=(
-            #     evaluation_results[i] if i < len(evaluation_results) else None
-            # ),
+            evaluation_result=(
+                evaluation_results[i] if i < len(evaluation_results) else None
+            ),
             stats=None,
         )
 
