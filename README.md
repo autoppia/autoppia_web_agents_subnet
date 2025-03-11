@@ -1,10 +1,16 @@
-<div align="center" style="width: 100vw;">
-  <picture style="width: 100vw;">
-    <source srcset="autoppia_logo_black.png" media="(prefers-color-scheme: dark)" style="width: 100%;">
-    <source srcset="autoppia_logo_black.png" media="(prefers-color-scheme: light)" style="width: 100%;">
-    <img src="autoppia_logo_black.png" alt="Autoppia Logo" style="width: 100vw">
-  </picture>
+<div align="center">
+
+# **Web Agents Subnet (Bittensor Sn36)**
+
+### [🌐 Autoppia](https://autoppia.com/infinite-web-arena-subnet)
+
+### [⛏️ Mining](docs/miner.md)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[🔗 IWA](https://github.com/autoppia/autoppia_iwa)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[🧑‍🏫 Validating](docs/validator.md)
+
+### [💬 Discord](https://discordapp.com/channels/799672011265015819/1339356060787408996)
+
 </div>
+
+---
 
 ## 🔍 Overview
 
