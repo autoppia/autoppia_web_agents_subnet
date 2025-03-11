@@ -693,6 +693,14 @@
         "documentation": {}
     },
     {
+        "label": "Dict",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
         "label": "List",
         "importPath": "typing",
         "description": "typing",
@@ -702,6 +710,14 @@
     },
     {
         "label": "Optional",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Type",
         "importPath": "typing",
         "description": "typing",
         "isExtraImport": true,
@@ -2493,14 +2509,6 @@
         "documentation": {}
     },
     {
-        "label": "BackendEvent",
-        "importPath": "autoppia_iwa.src.demo_webs.classes",
-        "description": "autoppia_iwa.src.demo_webs.classes",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.demo_webs.classes",
-        "documentation": {}
-    },
-    {
         "label": "WebProject",
         "importPath": "autoppia_iwa.src.demo_webs.classes",
         "description": "autoppia_iwa.src.demo_webs.classes",
@@ -3357,7 +3365,7 @@
         "documentation": {}
     },
     {
-        "label": "load_real_tasks",
+        "label": "generate_hash",
         "importPath": "autoppia_iwa.src.shared.web_voyager_utils",
         "description": "autoppia_iwa.src.shared.web_voyager_utils",
         "isExtraImport": true,
@@ -3365,75 +3373,11 @@
         "documentation": {}
     },
     {
-        "label": "ApifiedWebAgent",
-        "importPath": "autoppia_iwa.src.web_agents.apified_agent",
-        "description": "autoppia_iwa.src.web_agents.apified_agent",
+        "label": "load_real_tasks",
+        "importPath": "autoppia_iwa.src.shared.web_voyager_utils",
+        "description": "autoppia_iwa.src.shared.web_voyager_utils",
         "isExtraImport": true,
-        "detail": "autoppia_iwa.src.web_agents.apified_agent",
-        "documentation": {}
-    },
-    {
-        "label": "ApifiedWebAgent",
-        "importPath": "autoppia_iwa.src.web_agents.apified_agent",
-        "description": "autoppia_iwa.src.web_agents.apified_agent",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.web_agents.apified_agent",
-        "documentation": {}
-    },
-    {
-        "label": "ApifiedWebAgent",
-        "importPath": "autoppia_iwa.src.web_agents.apified_agent",
-        "description": "autoppia_iwa.src.web_agents.apified_agent",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.web_agents.apified_agent",
-        "documentation": {}
-    },
-    {
-        "label": "ApifiedWebAgent",
-        "importPath": "autoppia_iwa.src.web_agents.apified_agent",
-        "description": "autoppia_iwa.src.web_agents.apified_agent",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.web_agents.apified_agent",
-        "documentation": {}
-    },
-    {
-        "label": "ApifiedWebAgent",
-        "importPath": "autoppia_iwa.src.web_agents.apified_agent",
-        "description": "autoppia_iwa.src.web_agents.apified_agent",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.web_agents.apified_agent",
-        "documentation": {}
-    },
-    {
-        "label": "ApifiedWebAgent",
-        "importPath": "autoppia_iwa.src.web_agents.apified_agent",
-        "description": "autoppia_iwa.src.web_agents.apified_agent",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.web_agents.apified_agent",
-        "documentation": {}
-    },
-    {
-        "label": "ApifiedWebAgent",
-        "importPath": "autoppia_iwa.src.web_agents.apified_agent",
-        "description": "autoppia_iwa.src.web_agents.apified_agent",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.web_agents.apified_agent",
-        "documentation": {}
-    },
-    {
-        "label": "ApifiedWebAgent",
-        "importPath": "autoppia_iwa.src.web_agents.apified_agent",
-        "description": "autoppia_iwa.src.web_agents.apified_agent",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.web_agents.apified_agent",
-        "documentation": {}
-    },
-    {
-        "label": "ApifiedWebAgent",
-        "importPath": "autoppia_iwa.src.web_agents.apified_agent",
-        "description": "autoppia_iwa.src.web_agents.apified_agent",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.web_agents.apified_agent",
+        "detail": "autoppia_iwa.src.shared.web_voyager_utils",
         "documentation": {}
     },
     {
@@ -3485,7 +3429,7 @@
         "documentation": {}
     },
     {
-        "label": "BaseAgent",
+        "label": "IWebAgent",
         "importPath": "autoppia_iwa.src.web_agents.base",
         "description": "autoppia_iwa.src.web_agents.base",
         "isExtraImport": true,
@@ -3602,6 +3546,54 @@
         "description": "autoppia_iwa.src.web_agents.classes",
         "isExtraImport": true,
         "detail": "autoppia_iwa.src.web_agents.classes",
+        "documentation": {}
+    },
+    {
+        "label": "RandomClickerWebAgent",
+        "importPath": "autoppia_iwa.src.web_agents.random.agent",
+        "description": "autoppia_iwa.src.web_agents.random.agent",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.web_agents.random.agent",
+        "documentation": {}
+    },
+    {
+        "label": "RandomClickerWebAgent",
+        "importPath": "autoppia_iwa.src.web_agents.random.agent",
+        "description": "autoppia_iwa.src.web_agents.random.agent",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.web_agents.random.agent",
+        "documentation": {}
+    },
+    {
+        "label": "RandomClickerWebAgent",
+        "importPath": "autoppia_iwa.src.web_agents.random.agent",
+        "description": "autoppia_iwa.src.web_agents.random.agent",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.web_agents.random.agent",
+        "documentation": {}
+    },
+    {
+        "label": "RandomClickerWebAgent",
+        "importPath": "autoppia_iwa.src.web_agents.random.agent",
+        "description": "autoppia_iwa.src.web_agents.random.agent",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.web_agents.random.agent",
+        "documentation": {}
+    },
+    {
+        "label": "RandomClickerWebAgent",
+        "importPath": "autoppia_iwa.src.web_agents.random.agent",
+        "description": "autoppia_iwa.src.web_agents.random.agent",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.web_agents.random.agent",
+        "documentation": {}
+    },
+    {
+        "label": "RandomClickerWebAgent",
+        "importPath": "autoppia_iwa.src.web_agents.random.agent",
+        "description": "autoppia_iwa.src.web_agents.random.agent",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.web_agents.random.agent",
         "documentation": {}
     },
     {
@@ -3671,51 +3663,75 @@
         "documentation": {}
     },
     {
-        "label": "RandomClickerWebAgent",
-        "importPath": "autoppia_iwa.src.web_agents.random.agent",
-        "description": "autoppia_iwa.src.web_agents.random.agent",
+        "label": "ApifiedWebAgent",
+        "importPath": "autoppia_iwa.src.web_agents.apified_agent",
+        "description": "autoppia_iwa.src.web_agents.apified_agent",
         "isExtraImport": true,
-        "detail": "autoppia_iwa.src.web_agents.random.agent",
+        "detail": "autoppia_iwa.src.web_agents.apified_agent",
         "documentation": {}
     },
     {
-        "label": "RandomClickerWebAgent",
-        "importPath": "autoppia_iwa.src.web_agents.random.agent",
-        "description": "autoppia_iwa.src.web_agents.random.agent",
+        "label": "ApifiedWebAgent",
+        "importPath": "autoppia_iwa.src.web_agents.apified_agent",
+        "description": "autoppia_iwa.src.web_agents.apified_agent",
         "isExtraImport": true,
-        "detail": "autoppia_iwa.src.web_agents.random.agent",
+        "detail": "autoppia_iwa.src.web_agents.apified_agent",
         "documentation": {}
     },
     {
-        "label": "RandomClickerWebAgent",
-        "importPath": "autoppia_iwa.src.web_agents.random.agent",
-        "description": "autoppia_iwa.src.web_agents.random.agent",
+        "label": "ApifiedWebAgent",
+        "importPath": "autoppia_iwa.src.web_agents.apified_agent",
+        "description": "autoppia_iwa.src.web_agents.apified_agent",
         "isExtraImport": true,
-        "detail": "autoppia_iwa.src.web_agents.random.agent",
+        "detail": "autoppia_iwa.src.web_agents.apified_agent",
         "documentation": {}
     },
     {
-        "label": "RandomClickerWebAgent",
-        "importPath": "autoppia_iwa.src.web_agents.random.agent",
-        "description": "autoppia_iwa.src.web_agents.random.agent",
+        "label": "ApifiedWebAgent",
+        "importPath": "autoppia_iwa.src.web_agents.apified_agent",
+        "description": "autoppia_iwa.src.web_agents.apified_agent",
         "isExtraImport": true,
-        "detail": "autoppia_iwa.src.web_agents.random.agent",
+        "detail": "autoppia_iwa.src.web_agents.apified_agent",
         "documentation": {}
     },
     {
-        "label": "RandomClickerWebAgent",
-        "importPath": "autoppia_iwa.src.web_agents.random.agent",
-        "description": "autoppia_iwa.src.web_agents.random.agent",
+        "label": "ApifiedWebAgent",
+        "importPath": "autoppia_iwa.src.web_agents.apified_agent",
+        "description": "autoppia_iwa.src.web_agents.apified_agent",
         "isExtraImport": true,
-        "detail": "autoppia_iwa.src.web_agents.random.agent",
+        "detail": "autoppia_iwa.src.web_agents.apified_agent",
         "documentation": {}
     },
     {
-        "label": "RandomClickerWebAgent",
-        "importPath": "autoppia_iwa.src.web_agents.random.agent",
-        "description": "autoppia_iwa.src.web_agents.random.agent",
+        "label": "ApifiedWebAgent",
+        "importPath": "autoppia_iwa.src.web_agents.apified_agent",
+        "description": "autoppia_iwa.src.web_agents.apified_agent",
         "isExtraImport": true,
-        "detail": "autoppia_iwa.src.web_agents.random.agent",
+        "detail": "autoppia_iwa.src.web_agents.apified_agent",
+        "documentation": {}
+    },
+    {
+        "label": "ApifiedWebAgent",
+        "importPath": "autoppia_iwa.src.web_agents.apified_agent",
+        "description": "autoppia_iwa.src.web_agents.apified_agent",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.web_agents.apified_agent",
+        "documentation": {}
+    },
+    {
+        "label": "ApifiedWebAgent",
+        "importPath": "autoppia_iwa.src.web_agents.apified_agent",
+        "description": "autoppia_iwa.src.web_agents.apified_agent",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.web_agents.apified_agent",
+        "documentation": {}
+    },
+    {
+        "label": "ApifiedWebAgent",
+        "importPath": "autoppia_iwa.src.web_agents.apified_agent",
+        "description": "autoppia_iwa.src.web_agents.apified_agent",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.web_agents.apified_agent",
         "documentation": {}
     },
     {
@@ -4354,6 +4370,14 @@
         "documentation": {}
     },
     {
+        "label": "generate_html_differences",
+        "importPath": "autoppia_iwa.src.shared.web_utils",
+        "description": "autoppia_iwa.src.shared.web_utils",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.shared.web_utils",
+        "documentation": {}
+    },
+    {
         "label": "async_extract_html",
         "importPath": "autoppia_iwa.src.shared.web_utils",
         "description": "autoppia_iwa.src.shared.web_utils",
@@ -4539,6 +4563,14 @@
     },
     {
         "label": "Field",
+        "importPath": "pydantic",
+        "description": "pydantic",
+        "isExtraImport": true,
+        "detail": "pydantic",
+        "documentation": {}
+    },
+    {
+        "label": "ValidationError",
         "importPath": "pydantic",
         "description": "pydantic",
         "isExtraImport": true,
@@ -5041,6 +5073,22 @@
         "description": "bs4",
         "isExtraImport": true,
         "detail": "bs4",
+        "documentation": {}
+    },
+    {
+        "label": "ChatCompletion",
+        "importPath": "openai.types.chat",
+        "description": "openai.types.chat",
+        "isExtraImport": true,
+        "detail": "openai.types.chat",
+        "documentation": {}
+    },
+    {
+        "label": "Event",
+        "importPath": "autoppia_iwa.src.demo_webs.projects.base_events",
+        "description": "autoppia_iwa.src.demo_webs.projects.base_events",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.demo_webs.projects.base_events",
         "documentation": {}
     },
     {
@@ -10940,7 +10988,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.benchmark",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.benchmark",
-        "peekOfCode": "config = BenchmarkConfig()\nsolution_cache = ConsolidatedSolutionCache(str(config.solutions_cache_dir))\n# Define agents\nAGENTS: List[BaseAgent] = [\n    # RandomClickerWebAgent(id=\"2\", name=\"Random-clicker\"),\n    ApifiedWebAgent(id='1', name=\"Browser-Use\", host=\"127.0.0.1\", port=5000, timeout=120),\n    # ApifiedWebAgent(name=\"Autoppia-Agent\", host=\"localhost\", port=9002, timeout=120),\n]\nvisualizer = SubnetVisualizer()\n@visualize_task(visualizer)",
+        "peekOfCode": "config = BenchmarkConfig()\nsolution_cache = ConsolidatedSolutionCache(str(config.solutions_cache_dir))\n# Define agents\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(id=\"2\", name=\"Random-clicker\"),\n    # ApifiedWebAgent(id='1', name=\"Browser-Use\", host=\"127.0.0.1\", port=5000, timeout=120),\n    # ApifiedWebAgent(name=\"Autoppia-Agent\", host=\"localhost\", port=9002, timeout=120),\n]\nvisualizer = SubnetVisualizer()\n@visualize_task(visualizer)",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.benchmark",
         "documentation": {}
     },
@@ -10949,7 +10997,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.entrypoints.benchmark",
         "description": "autoppia_iwa_module.autoppia_iwa.entrypoints.benchmark",
-        "peekOfCode": "solution_cache = ConsolidatedSolutionCache(str(config.solutions_cache_dir))\n# Define agents\nAGENTS: List[BaseAgent] = [\n    # RandomClickerWebAgent(id=\"2\", name=\"Random-clicker\"),\n    ApifiedWebAgent(id='1', name=\"Browser-Use\", host=\"127.0.0.1\", port=5000, timeout=120),\n    # ApifiedWebAgent(name=\"Autoppia-Agent\", host=\"localhost\", port=9002, timeout=120),\n]\nvisualizer = SubnetVisualizer()\n@visualize_task(visualizer)\nasync def generate_tasks(demo_project: WebProject, tasks_data: Optional[TaskData] = None) -> List[Task]:",
+        "peekOfCode": "solution_cache = ConsolidatedSolutionCache(str(config.solutions_cache_dir))\n# Define agents\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(id=\"2\", name=\"Random-clicker\"),\n    # ApifiedWebAgent(id='1', name=\"Browser-Use\", host=\"127.0.0.1\", port=5000, timeout=120),\n    # ApifiedWebAgent(name=\"Autoppia-Agent\", host=\"localhost\", port=9002, timeout=120),\n]\nvisualizer = SubnetVisualizer()\n@visualize_task(visualizer)\nasync def generate_tasks(demo_project: WebProject, tasks_data: Optional[TaskData] = None) -> List[Task]:",
         "detail": "autoppia_iwa_module.autoppia_iwa.entrypoints.benchmark",
         "documentation": {}
     },
@@ -11525,7 +11573,7 @@
         "kind": 2,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.tests_classes",
         "description": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.tests_classes",
-        "peekOfCode": "def save_usage_record(prompt, response, time_taken, test_type, log_file: Path = PROJECT_BASE_DIR / \"judge_tests_usage_logs\"):\n    \"\"\"Saves token usage and execution time to log file.\"\"\"\n    input_tokens = response.usage.prompt_tokens\n    output_tokens = response.usage.completion_tokens\n    log_entry = {\n        \"test_type\": test_type,\n        \"timestamp\": datetime.now(timezone.utc).isoformat(),\n        \"task\": prompt,\n        \"input_tokens\": input_tokens,\n        \"output_tokens\": output_tokens,",
+        "peekOfCode": "def save_usage_record(prompt, response: \"ChatCompletion\", time_taken, test_type, final_result: bool, log_file: Path = PROJECT_BASE_DIR / \"judge_tests_usage_logs.jsonl\"):\n    \"\"\"Saves token usage and execution time to log file.\"\"\"\n    from autoppia_iwa.src.shared.pricings import pricing_dict\n    input_tokens = response.usage.prompt_tokens\n    output_tokens = response.usage.completion_tokens\n    model_name = response.model\n    if model_name not in pricing_dict:\n        print(f\"[WARNING] Model '{model_name}' not found in pricing dictionary\")\n    input_cost_per_token = pricing_dict[model_name][\"input\"]\n    output_cost_per_token = pricing_dict[model_name][\"output\"]",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.tests_classes",
         "documentation": {}
     },
@@ -11939,7 +11987,16 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.projects.base_events",
         "description": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.projects.base_events",
-        "peekOfCode": "class Event(BaseModel):\n    \"\"\"Base event class for all event types\"\"\"\n    event_name: str\n    timestamp: int\n    web_agent_id: str\n    user_id: Optional[int] = None\n    class ValidationCriteria(BaseModel):\n        pass\n    def validate_criteria(self, criteria: Optional[ValidationCriteria] = None) -> bool:\n        if criteria and hasattr(criteria, \"model_fields\"):",
+        "peekOfCode": "class Event(BaseModel):\n    \"\"\"Base event class for all event types\"\"\"\n    event_name: str\n    timestamp: int\n    web_agent_id: str\n    user_id: Optional[int] = None\n    def __init_subclass__(cls, **kwargs):\n        \"\"\"Automatically register subclasses in the ActionRegistry.\"\"\"\n        super().__init_subclass__(**kwargs)\n        EventRegistry.register(cls)",
+        "detail": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.projects.base_events",
+        "documentation": {}
+    },
+    {
+        "label": "EventRegistry",
+        "kind": 6,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.projects.base_events",
+        "description": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.projects.base_events",
+        "peekOfCode": "class EventRegistry:\n    \"\"\"Registry for storing and managing Event subclasses.\"\"\"\n    _registry: Dict[str, Type[Event]] = {}\n    @classmethod\n    def register(cls, event_class: Type[Event]) -> None:\n        \"\"\"Register an Event subclass.\"\"\"\n        if not issubclass(event_class, Event):\n            raise ValueError(f\"{event_class.__name__} is not a subclass of Event\")\n        cls._registry[event_class.__name__] = event_class\n    @classmethod",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.projects.base_events",
         "documentation": {}
     },
@@ -11975,7 +12032,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.classes",
         "description": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.classes",
-        "peekOfCode": "class UseCase(BaseModel):\n    \"\"\"Represents a use case in the application\"\"\"\n    name: str\n    description: str\n    event: Type\n    event_source_code: str\n    examples: List[Dict]\n    replace_func: Optional[Callable[[str], str]] = Field(default=None, exclude=True)\n    class Config:\n        arbitrary_types_allowed = True",
+        "peekOfCode": "class UseCase(BaseModel):\n    \"\"\"Represents a use case in the application\"\"\"\n    name: str\n    description: str\n    event: Type[Event]\n    event_source_code: str\n    examples: List[Dict]\n    replace_func: Optional[Callable[[str], str]] = Field(default=None, exclude=True)\n    class Config:\n        arbitrary_types_allowed = True",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.classes",
         "documentation": {}
     },
@@ -12664,6 +12721,15 @@
         "documentation": {}
     },
     {
+        "label": "pricing_dict",
+        "kind": 5,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.src.shared.pricings",
+        "description": "autoppia_iwa_module.autoppia_iwa.src.shared.pricings",
+        "peekOfCode": "pricing_dict = {\n    \"gpt-4.5-preview\": {\"input\": 75.00 / 1_000_000, \"output\": 150.00 / 1_000_000},  # $75.00 per million tokens → $0.000075 per token  # $150.00 per million tokens → $0.000150 per token\n    \"gpt-4.5-preview-2025-02-27\": {\"input\": 75.00 / 1_000_000, \"output\": 150.00 / 1_000_000},  # $75.00 per million tokens → $0.000075 per token  # $150.00 per million tokens → $0.000150 per token\n    \"gpt-4o\": {\"input\": 2.50 / 1_000_000, \"output\": 10.00 / 1_000_000},  # $2.50 per million tokens → $0.0000025 per token  # $10.00 per million tokens → $0.000010 per token\n    \"gpt-4o-2024-08-06\": {\"input\": 2.50 / 1_000_000, \"output\": 10.00 / 1_000_000},  # $2.50 per million tokens → $0.0000025 per token  # $10.00 per million tokens → $0.000010 per token\n    \"gpt-4o-audio-preview\": {\"input\": 2.50 / 1_000_000, \"output\": 10.00 / 1_000_000},  # $2.50 per million tokens → $0.0000025 per token  # $10.00 per million tokens → $0.000010 per token\n    \"gpt-4o-audio-preview-2024-12-17\": {\"input\": 2.50 / 1_000_000, \"output\": 10.00 / 1_000_000},  # $2.50 per million tokens → $0.0000025 per token  # $10.00 per million tokens → $0.000010 per token\n    \"gpt-4o-realtime-preview\": {\"input\": 5.00 / 1_000_000, \"output\": 20.00 / 1_000_000},  # $5.00 per million tokens → $0.0000050 per token  # $20.00 per million tokens → $0.000020 per token\n    \"gpt-4o-realtime-preview-2024-12-17\": {\n        \"input\": 5.00 / 1_000_000,  # $5.00 per million tokens → $0.0000050 per token",
+        "detail": "autoppia_iwa_module.autoppia_iwa.src.shared.pricings",
+        "documentation": {}
+    },
+    {
         "label": "PromptImporter",
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.shared.prompt_importer",
@@ -12812,7 +12878,16 @@
         "kind": 2,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.shared.web_voyager_utils",
         "description": "autoppia_iwa_module.autoppia_iwa.src.shared.web_voyager_utils",
-        "peekOfCode": "def load_real_tasks(num_of_urls: int) -> List[TaskData]:\n    \"\"\"Load real tasks, excluding impossible ones.\"\"\"\n    data_dir = PROJECT_BASE_DIR.parent / \"data\"\n    print(\"Loading real tasks...\")\n    original_tasks = load_jsonl_file(data_dir / \"web_voyager_tasks/web_voyager_data.jsonl\")\n    impossible_tasks_ids = set(load_jsonl_file(data_dir / \"web_voyager_tasks/web_voyager_impossible_tasks.json\"))\n    return [TaskData(**task) for task in original_tasks if task[\"id\"] not in impossible_tasks_ids][:num_of_urls]",
+        "peekOfCode": "def load_real_tasks(num_of_urls: int) -> List[TaskData]:\n    \"\"\"Load real tasks, excluding impossible ones.\"\"\"\n    data_dir = PROJECT_BASE_DIR.parent / \"data\"\n    print(\"Loading real tasks...\")\n    original_tasks = load_jsonl_file(data_dir / \"web_voyager_tasks/web_voyager_data.jsonl\")\n    impossible_tasks_ids = set(load_jsonl_file(data_dir / \"web_voyager_tasks/web_voyager_impossible_tasks.json\"))\n    return [TaskData(**task) for task in original_tasks if task[\"id\"] not in impossible_tasks_ids][:num_of_urls]\ndef generate_hash(input_string: str) -> str:\n    \"\"\"Generate a SHA-256 hash of the input string.\"\"\"\n    return hashlib.sha256(input_string.encode('utf-8')).hexdigest()",
+        "detail": "autoppia_iwa_module.autoppia_iwa.src.shared.web_voyager_utils",
+        "documentation": {}
+    },
+    {
+        "label": "generate_hash",
+        "kind": 2,
+        "importPath": "autoppia_iwa_module.autoppia_iwa.src.shared.web_voyager_utils",
+        "description": "autoppia_iwa_module.autoppia_iwa.src.shared.web_voyager_utils",
+        "peekOfCode": "def generate_hash(input_string: str) -> str:\n    \"\"\"Generate a SHA-256 hash of the input string.\"\"\"\n    return hashlib.sha256(input_string.encode('utf-8')).hexdigest()",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.shared.web_voyager_utils",
         "documentation": {}
     },
@@ -17807,7 +17882,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.tests.web_voyager.test_real_web",
         "description": "autoppia_iwa_module.tests.web_voyager.test_real_web",
-        "peekOfCode": "config = WebVoyagerConfig()\nsolution_cache = ConsolidatedSolutionCache(str(config.solutions_cache_dir))\n# Define agents\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),\n    # ApifiedWebAgent(name=\"Browser-Use\", host=\"localhost\", port=9000, timeout=120),\n    # ApifiedWebAgent(name=\"Autoppia-Agent\", host=\"localhost\", port=9002, timeout=120),\n]\n# Setup logging\nlogging.basicConfig(",
+        "peekOfCode": "config = WebVoyagerConfig()\nsolution_cache = ConsolidatedSolutionCache(str(config.solutions_cache_dir))\n# Define agents\nAGENTS: List[IWebAgent] = [\n    # RandomClickerWebAgent(name=\"Random-clicker\"),\n    ApifiedWebAgent(name=\"Browser-Use\", host=\"localhost\", port=5000, timeout=120),\n    # ApifiedWebAgent(name=\"Autoppia-Agent\", host=\"localhost\", port=9002, timeout=120),\n]\n# Setup logging\nlogging.basicConfig(",
         "detail": "autoppia_iwa_module.tests.web_voyager.test_real_web",
         "documentation": {}
     },
@@ -17816,7 +17891,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.tests.web_voyager.test_real_web",
         "description": "autoppia_iwa_module.tests.web_voyager.test_real_web",
-        "peekOfCode": "solution_cache = ConsolidatedSolutionCache(str(config.solutions_cache_dir))\n# Define agents\nAGENTS: List[BaseAgent] = [\n    RandomClickerWebAgent(name=\"Random-clicker\"),\n    # ApifiedWebAgent(name=\"Browser-Use\", host=\"localhost\", port=9000, timeout=120),\n    # ApifiedWebAgent(name=\"Autoppia-Agent\", host=\"localhost\", port=9002, timeout=120),\n]\n# Setup logging\nlogging.basicConfig(\n    level=logging.INFO,",
+        "peekOfCode": "solution_cache = ConsolidatedSolutionCache(str(config.solutions_cache_dir))\n# Define agents\nAGENTS: List[IWebAgent] = [\n    # RandomClickerWebAgent(name=\"Random-clicker\"),\n    ApifiedWebAgent(name=\"Browser-Use\", host=\"localhost\", port=5000, timeout=120),\n    # ApifiedWebAgent(name=\"Autoppia-Agent\", host=\"localhost\", port=9002, timeout=120),\n]\n# Setup logging\nlogging.basicConfig(\n    level=logging.INFO,",
         "detail": "autoppia_iwa_module.tests.web_voyager.test_real_web",
         "documentation": {}
     },
