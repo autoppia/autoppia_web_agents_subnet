@@ -35,7 +35,8 @@ from autoppia_web_agents_subnet.validator.utils import (
     update_validator_performance_stats,
     print_validator_performance_stats,
     dendrite_with_retries,
-    update_miner_stats_and_scores
+    update_miner_stats_and_scores,
+    prepare_for_feedback
 )
 from autoppia_web_agents_subnet.validator.reward import get_rewards_with_details
 from autoppia_web_agents_subnet.utils.uids import get_random_uids
@@ -163,15 +164,11 @@ async def send_feedback_synapse_to_miners(
     """
     feedback_list = []
 
+    feedback_task = prepare_for_feedback(task)
+
     for i, miner_uid in enumerate(miner_uids):
         # Make a shallow copy so we can strip out large fields
-        feedback_task = copy.copy(task)
-
-        feedback_task.screenshot = ""
-        feedback_task.screenshot_description = ""
-        feedback_task.html = ""
-        feedback_task.clean_html = ""
-
+        
         # Build the feedback synapse
         feedback = TaskFeedbackSynapse(
             version=__version__,

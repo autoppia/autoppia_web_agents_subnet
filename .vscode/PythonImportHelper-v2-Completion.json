@@ -10718,6 +10718,14 @@
         "documentation": {}
     },
     {
+        "label": "prepare_for_feedback",
+        "importPath": "autoppia_web_agents_subnet.validator.utils",
+        "description": "autoppia_web_agents_subnet.validator.utils",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.validator.utils",
+        "documentation": {}
+    },
+    {
         "label": "get_rewards_with_details",
         "importPath": "autoppia_web_agents_subnet.validator.reward",
         "description": "autoppia_web_agents_subnet.validator.reward",
@@ -18389,6 +18397,15 @@
         "importPath": "autoppia_web_agents_subnet.validator.utils",
         "description": "autoppia_web_agents_subnet.validator.utils",
         "peekOfCode": "def print_validator_performance_stats(validator) -> None:\n    \"\"\"\n    Pretty-prints the validator performance stats using a Rich-styled table.\n    \"\"\"\n    from rich.table import Table\n    from rich.console import Console\n    from rich import box\n    vps = getattr(validator, \"validator_performance_stats\", None)\n    if not vps:\n        bt.logging.warning(\"No validator performance stats to display.\")",
+        "detail": "autoppia_web_agents_subnet.validator.utils",
+        "documentation": {}
+    },
+    {
+        "label": "prepare_for_feedback",
+        "kind": 2,
+        "importPath": "autoppia_web_agents_subnet.validator.utils",
+        "description": "autoppia_web_agents_subnet.validator.utils",
+        "peekOfCode": "def prepare_for_feedback(task) -> Task:\n    copied_task = task.deepcopy(task)\n    copied_task.use_case = None\n    copied_task.milestones = None\n    copied_task.interactive_elements = None\n    copied_task.screenshot = None\n    copied_task.screenshot_description = None\n    copied_task.html = None\n    copied_task.clean_html = None\n    return copied_task",
         "detail": "autoppia_web_agents_subnet.validator.utils",
         "documentation": {}
     },
