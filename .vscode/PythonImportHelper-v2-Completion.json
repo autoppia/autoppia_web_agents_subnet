@@ -10566,6 +10566,14 @@
         "documentation": {}
     },
     {
+        "label": "ColoredLogger",
+        "importPath": "autoppia_web_agents_subnet.utils.logging",
+        "description": "autoppia_web_agents_subnet.utils.logging",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.utils.logging",
+        "documentation": {}
+    },
+    {
         "label": "FORWARD_SLEEP_SECONDS",
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
