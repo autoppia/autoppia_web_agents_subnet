@@ -1,4 +1,9 @@
 <div align="center">
+<picture>
+    <source srcset="./assets/autoppia_logo.png" media="(prefers-color-scheme: dark)">
+    <source srcset="./assets/autoppia_logo.png" media="(prefers-color-scheme: light)">
+    <img src="autoppia_logo.png">
+</picture>
 
 # **Web Agents Subnet (Bittensor Sn36)**
 
@@ -7,9 +12,7 @@
 ### [⛏️ Mining](docs/miner.md)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[🔗 IWA](https://github.com/autoppia/autoppia_iwa)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[🧑‍🏫 Validating](docs/validator.md)
 
 ### [💬 Discord](https://discordapp.com/channels/799672011265015819/1339356060787408996)
-
 </div>
-
 ---
 
 ## 🔍 Overview
