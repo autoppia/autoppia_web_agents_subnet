@@ -164,12 +164,6 @@ async def send_feedback_synapse_to_miners(
     :param screenshot_policy: Either "remove" or "keep". If "remove", the screenshot is cleared.
     """
     feedback_list = []
-    feedback_task = prepare_for_feedback(task)
-
-    ColoredLogger.info(
-        f"Sending TaskFeedbackSynapse to {feedback_task} miners in parallel",
-        ColoredLogger.GREEN,
-    )
     for i, miner_uid in enumerate(miner_uids):
         feedback = TaskFeedbackSynapse(
             version=__version__,
@@ -209,7 +203,7 @@ async def send_feedback_synapse_to_miners(
 
     # Wait for all feedback requests to complete
     results = await asyncio.gather(*feedback_tasks)
-    bt.logging.info("Feedback responses received from miners.")
+    bt.logging.info("Feedback responses received from miners")
     return results
 
 
@@ -249,11 +243,6 @@ async def handle_feedback_and_validator_stats(
         task_solutions=task_solutions,
         test_results_matrices=test_results_matrices,
         evaluation_results=evaluation_results,
-    )
-
-    ColoredLogger.info(
-        f"Feedback synapse responses received: {feedback_responses}",
-        ColoredLogger.BLUE,
     )
 
     # Return a dictionary for usage by the parent flow
