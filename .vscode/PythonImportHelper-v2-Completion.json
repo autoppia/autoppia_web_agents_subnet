@@ -10774,6 +10774,14 @@
         "documentation": {}
     },
     {
+        "label": "handle_feedback_and_stats",
+        "importPath": "autoppia_web_agents_subnet.validator.feedback",
+        "description": "autoppia_web_agents_subnet.validator.feedback",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.validator.feedback",
+        "documentation": {}
+    },
+    {
         "label": "generate_random_version",
         "importPath": "autoppia_web_agents_subnet.utils.weights_version",
         "description": "autoppia_web_agents_subnet.utils.weights_version",
