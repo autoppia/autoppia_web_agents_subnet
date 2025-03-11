@@ -54,11 +54,6 @@ class BaseValidatorNeuron(BaseNeuron):
         # Save a copy of the hotkeys to local memory.
         self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
 
-        # Dendrite lets us send messages to other nodes (axons) in the network.
-        # if self.config.mock:
-        #     self.dendrite = MockDendrite(wallet=self.wallet)
-        # else:
-        #     self.dendrite = bt.dendrite(wallet=self.wallet)
         self.dendrite = bt.dendrite(wallet=self.wallet)
 
         bt.logging.info(f"Dendrite: {self.dendrite}")
