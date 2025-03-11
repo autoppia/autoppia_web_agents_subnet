@@ -284,6 +284,19 @@ async def dendrite_with_retries(
 
         assert all(el is not None for el in res)
         return res
-    
+
     except Exception as e:
         bt.logging.error(f"Error while sending synapse with dendrite with retries {e}")
+
+
+def prepare_for_feedback(task) -> Task:
+    copied_task = task.deepcopy(task)
+    copied_task.use_case = None
+    copied_task.milestones = None
+    copied_task.interactive_elements = None
+    copied_task.screenshot = None
+    copied_task.screenshot_description = None
+    copied_task.html = None
+    copied_task.clean_html = None
+
+    return copied_task
