@@ -4,8 +4,8 @@ from bittensor import Synapse
 from autoppia_iwa.src.execution.actions.actions import AllActionsUnion
 from autoppia_iwa.src.data_generation.domain.classes import Task
 from autoppia_iwa.src.shared.visualizator import SubnetVisualizer
-from rich.console import Console
 from autoppia_iwa.src.data_generation.domain.classes import TestUnion
+from rich.console import Console
 
 
 class TaskSynapse(Synapse):

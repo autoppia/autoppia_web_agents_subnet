@@ -2,7 +2,7 @@ import copy
 import time
 import asyncio
 import bittensor as bt
-from typing import List, Set, Dict, Any
+from typing import List, Set, Dict, Any, Tuple
 from autoppia_iwa.src.data_generation.domain.classes import (
     Task,
     TaskGenerationConfig,
@@ -35,7 +35,6 @@ from autoppia_web_agents_subnet.validator.utils import (
     update_validator_performance_stats,
     print_validator_performance_stats,
     dendrite_with_retries,
-    prepare_for_feedback,
 )
 from autoppia_web_agents_subnet.validator.reward import get_rewards_with_details
 from autoppia_web_agents_subnet.utils.uids import get_random_uids
@@ -88,7 +87,7 @@ def collect_task_solutions(
     task: Task,
     responses: List[TaskSynapse],
     miner_uids: List[int],
-) -> (List[TaskSolution], List[float]):
+) -> Tuple[List[TaskSolution], List[float]]:
     """
     Collects TaskSolutions from the miners' responses and keeps track of their execution times.
     """
@@ -235,7 +234,7 @@ async def handle_feedback_and_validator_stats(
     evaluation_time = 0.0  # If you measure your evaluator time, assign it here
     avg_score_for_task = float(sum(rewards) / len(rewards)) if len(rewards) > 0 else 0.0
 
-    feedback_responses = await send_feedback_synapse_to_miners(
+    await send_feedback_synapse_to_miners(
         validator=validator,
         miner_axons=miner_axons,
         miner_uids=miner_uids,

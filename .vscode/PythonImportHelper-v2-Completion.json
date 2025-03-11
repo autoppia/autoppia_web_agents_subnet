@@ -1621,6 +1621,14 @@
         "documentation": {}
     },
     {
+        "label": "Tuple",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
         "label": "List",
         "importPath": "typing",
         "description": "typing",
@@ -10702,14 +10710,6 @@
         "documentation": {}
     },
     {
-        "label": "prepare_for_feedback",
-        "importPath": "autoppia_web_agents_subnet.validator.utils",
-        "description": "autoppia_web_agents_subnet.validator.utils",
-        "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet.validator.utils",
-        "documentation": {}
-    },
-    {
         "label": "get_rewards_with_details",
         "importPath": "autoppia_web_agents_subnet.validator.reward",
         "description": "autoppia_web_agents_subnet.validator.reward",
@@ -18362,7 +18362,7 @@
         "kind": 2,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "def collect_task_solutions(\n    task: Task,\n    responses: List[TaskSynapse],\n    miner_uids: List[int],\n) -> (List[TaskSolution], List[float]):\n    \"\"\"\n    Collects TaskSolutions from the miners' responses and keeps track of their execution times.\n    \"\"\"\n    task_solutions = []\n    execution_times = []",
+        "peekOfCode": "def collect_task_solutions(\n    task: Task,\n    responses: List[TaskSynapse],\n    miner_uids: List[int],\n) -> Tuple[List[TaskSolution], List[float]]:\n    \"\"\"\n    Collects TaskSolutions from the miners' responses and keeps track of their execution times.\n    \"\"\"\n    task_solutions = []\n    execution_times = []",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
