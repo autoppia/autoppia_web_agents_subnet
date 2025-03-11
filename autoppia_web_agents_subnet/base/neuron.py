@@ -28,6 +28,9 @@ from autoppia_web_agents_subnet.utils.misc import ttl_get_block
 from autoppia_web_agents_subnet import __spec_version__ as spec_version
 import time
 import traceback
+import requests
+from autoppia_web_agents_subnet import version_url
+import re
 
 
 class BaseNeuron(ABC):
@@ -205,3 +208,27 @@ class BaseNeuron(ABC):
         bt.logging.trace(
             "load_state() not implemented for this neuron. You can implement this function to load model checkpoints or other useful data."
         )
+
+    def parse_versions(self):
+        self.version = "10.0.0"
+        self.least_acceptable_version = "0.0.0"
+
+        bt.logging.info(f"Parsing versions...")
+        response = requests.get(version_url)
+        bt.logging.info(f"Response: {response.status_code}")
+        if response.status_code == 200:
+            content = response.text
+
+            version_pattern = r"__version__\s*=\s*['\"]([^'\"]+)['\"]"
+            least_acceptable_version_pattern = r"__least_acceptable_version__\s*=\s*['\"]([^'\"]+)['\"]"
+
+            try:
+                version = re.search(version_pattern, content).group(1)
+                least_acceptable_version = re.search(least_acceptable_version_pattern, content).group(1)
+            except AttributeError as e:
+                bt.logging.error(f"While parsing versions got error: {e}")
+                return
+
+            self.version = version
+            self.least_acceptable_version = least_acceptable_version
+        return

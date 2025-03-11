@@ -14,10 +14,8 @@ from autoppia_iwa.src.demo_webs.config import demo_web_projects
 
 from autoppia_web_agents_subnet.protocol import (
     TaskSynapse,
-    TaskFeedbackSynapse,
     MinerStats,
 )
-from autoppia_web_agents_subnet.utils.dendrite import dendrite_with_retries
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
 from autoppia_web_agents_subnet.validator.config import (
@@ -25,7 +23,6 @@ from autoppia_web_agents_subnet.validator.config import (
     TIME_WEIGHT,
     TIMEOUT
 )
-from autoppia_web_agents_subnet import __version__
 from copy import deepcopy
 
 
@@ -191,176 +188,6 @@ def print_validator_performance_stats(validator) -> None:
 # --------------------------------------------------------------------
 # TASK / RESPONSE UTILITIES
 # --------------------------------------------------------------------
-
-
-def clean_miner_task(task: Task) -> Task:
-    """
-    Creates a shallow copy of the Task removing fields not needed by miners,
-    and ensures the `html` attribute is never None.
-    """
-    task_copy = deepcopy(task)
-    task_copy.tests = None
-    task_copy.milestones = None
-
-    # Ensure `html` is never None
-    if hasattr(task_copy, "html") and task_copy.html is None:
-        task_copy.html = ""
-        
-    # Convert any string 'id' to int if needed
-    if hasattr(task_copy, "id") and isinstance(task_copy.id, str):
-        try:
-            task_copy.id = int(task_copy.id)
-        except ValueError:
-            pass
-    return task_copy
-
-
-def collect_task_solutions(
-    task: Task,
-    responses: List[TaskSynapse],
-    miner_uids: List[int],
-) -> (List[TaskSolution], List[float]):
-    """
-    Collects TaskSolutions from the miners' responses and keeps track of their execution times.
-    """
-    task_solutions = []
-    execution_times = []
-    for miner_uid, response in zip(miner_uids, responses):
-        try:
-            task_solution = get_task_solution_from_synapse(
-                task_id=task.id,
-                synapse=response,
-                web_agent_id=str(miner_uid),
-            )
-        except Exception as e:
-            bt.logging.error(f"Error in Miner Response Format: {e}")
-            task_solution = TaskSolution(
-                task_id=task.id, actions=[], web_agent_id=str(miner_uid)
-            )
-        task_solutions.append(task_solution)
-        if (
-            response
-            and hasattr(response.dendrite, "process_time")
-            and response.dendrite.process_time is not None
-        ):
-            process_time = response.dendrite.process_time
-        else:
-            process_time = TIMEOUT
-        execution_times.append(process_time)
-    return task_solutions, execution_times
-
-
-def get_task_solution_from_synapse(
-    task_id, synapse: TaskSynapse, web_agent_id: str
-) -> TaskSolution:
-    """
-    Safely extracts actions from a TaskSynapse response and creates a TaskSolution
-    with the original task reference, limiting actions to a maximum of 15.
-    """
-    actions = []
-    if synapse and hasattr(synapse, "actions") and isinstance(synapse.actions, list):
-        actions = synapse.actions[:MAX_ACTIONS_LENGTH]  # Limit actions to at most 15
-
-    # Create a TaskSolution with our trusted task object, not one from the miner
-    return TaskSolution(task_id=task_id, actions=actions, web_agent_id=web_agent_id)
-
-
-async def send_task_synapse_to_miners(
-    validator,
-    miner_axons: List[bt.axon],
-    task_synapse: TaskSynapse,
-    miner_uids: List[int],
-) -> List[TaskSynapse]:
-    """
-    Sends a TaskSynapse to a list of miner axons and returns their responses.
-    """
-    bt.logging.info(f"Sending TaskSynapse to {len(miner_uids)} miners. Miner Timeout: {TIMEOUT}s")
-    responses: List[TaskSynapse] = await dendrite_with_retries(
-        dendrite=validator.dendrite,
-        axons=miner_axons,
-        synapse=task_synapse,
-        deserialize=True,
-        timeout=TIMEOUT,
-    )
-    num_valid_responses = sum(resp is not None for resp in responses)
-    num_none_responses = len(responses) - num_valid_responses
-    bt.logging.info(
-        f"Received {len(responses)} responses: "
-        f"{num_valid_responses} valid, {num_none_responses} errors."
-    )
-    return responses
-
-
-async def send_feedback_synapse_to_miners(
-    validator,
-    miner_axons: List[bt.axon],
-    miner_uids: List[int],
-    task: Task,
-    task_solutions: List[TaskSolution],
-    test_results_matrices: List[List[List[Any]]],
-    evaluation_results: List[Dict[str, Any]],
-    screenshot_policy: str = "remove"
-) -> None:
-    """
-    Sends a TaskFeedbackSynapse to each miner with the relevant evaluation details.
-
-    :param validator: The validator instance, which holds the dendrite and other context.
-    :param miner_axons: List of miner axons corresponding to the chosen miner_uids.
-    :param miner_uids: The UIDs of the miners to send feedback to.
-    :param task: The original Task object.
-    :param task_solutions: List of TaskSolution objects from each miner.
-    :param test_results_matrices: List of test-result matrices returned by the reward function.
-    :param evaluation_results: List of evaluation details for each miner (scores, etc.).
-    :param screenshot_policy: Either "remove" or "keep". If "remove", the screenshot is cleared.
-    """
-    feedback_list = []
-
-    for i, miner_uid in enumerate(miner_uids):
-        # Make a shallow copy so we can strip out large fields
-        feedback_task = copy.copy(task)
-
-        # # Remove or strip heavy fields if screenshot_policy is "remove"
-        # if screenshot_policy == "remove":
-        #     feedback_task.screenshot = ""
-        #     feedback_task.html = ""
-        #     feedback_task.clean_html = ""
-
-        # Build the feedback synapse
-        feedback = TaskFeedbackSynapse(
-            version=__version__,
-            miner_id=str(miner_uid),
-            task=task,
-            actions=task_solutions[i].actions if i < len(task_solutions) else [],
-            test_results_matrix=test_results_matrices[i] if i < len(test_results_matrices) else None,
-            evaluation_result=evaluation_results[i] if i < len(evaluation_results) else None,
-            stats=None, 
-        )
-
-        feedback_list.append(feedback)
-
-    ColoredLogger.info(
-        f"Sending TaskFeedbackSynapse to {len(miner_axons)} miners in parallel",
-        ColoredLogger.BLUE,
-    )
-
-    feedback_tasks = []
-    for axon, feedback_synapse in zip(miner_axons, feedback_list):
-        feedback_tasks.append(
-            asyncio.create_task(
-                dendrite_with_retries(
-                    dendrite=validator.dendrite,
-                    axons=[axon],
-                    synapse=feedback_synapse,
-                    deserialize=True,
-                    timeout=60,  # adjust as needed
-                )
-            )
-        )
-
-    # Wait for all feedback requests to complete
-    results = await asyncio.gather(*feedback_tasks)
-    bt.logging.info("Feedback responses received from miners.")
-    return results
 
 
 async def update_miner_stats_and_scores(

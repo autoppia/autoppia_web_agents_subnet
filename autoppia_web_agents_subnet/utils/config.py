@@ -175,6 +175,7 @@ def add_miner_args(cls, parser):
         default="opentensor-dev",
         help="Wandb entity to log to.",
     )
+    
 
 
 def add_validator_args(cls, parser):
