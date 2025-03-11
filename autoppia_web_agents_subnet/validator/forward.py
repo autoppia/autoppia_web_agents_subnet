@@ -166,7 +166,6 @@ async def send_feedback_synapse_to_miners(
     feedback_task = prepare_for_feedback(task)
 
     for i, miner_uid in enumerate(miner_uids):        
-        # Build the feedback synapse
         feedback = TaskFeedbackSynapse(
             version=__version__,
             miner_id=str(miner_uid),
@@ -188,12 +187,11 @@ async def send_feedback_synapse_to_miners(
     for axon, feedback_synapse in zip(miner_axons, feedback_list):
         feedback_tasks.append(
             asyncio.create_task(
-                dendrite_with_retries(
-                    dendrite=validator.dendrite,
+                validator.dendrite(
                     axons=[axon],
                     synapse=feedback_synapse,
                     deserialize=True,
-                    timeout=FEEDBACK_TIMEOUT,
+                    timeout=FEEDBACK_TIMEOUT
                 )
             )
         )
