@@ -1,7 +1,7 @@
 <picture>
     <source srcset="autoppia_logo_black.png"  media="(prefers-color-scheme: dark)">
     <source srcset="autoppia_logo_black.png"  media="(prefers-color-scheme: light)">
-    <img src="autoppia_logo_black.png">
+    <img src="icon256.png">
 </picture>
 <div align="center">
 
