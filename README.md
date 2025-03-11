@@ -4,7 +4,7 @@
     <img src="autoppia_logo_black.png">
 </picture>
 <div align="center">
----
+
 
 # **Web Agents Subnet (Bittensor Sn36)** <!-- omit in toc -->
 [![Discord Chat](https://img.shields.io/discord/308323056592486420.svg)](https://discord.gg/bittensor)
