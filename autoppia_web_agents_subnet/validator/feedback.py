@@ -9,7 +9,6 @@ from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet import __version__
 from autoppia_web_agents_subnet.protocol import TaskSynapse
 import bittensor as bt
-import copy
 from typing import List, Dict, Any
 import asyncio
 
@@ -23,7 +22,7 @@ async def send_feedback_synapse_to_miners(
     test_results_matrices: List[List[List[Any]]],
     evaluation_results: List[Dict[str, Any]],
     screenshot_policy: str = "remove"
-) -> None:
+) -> List[List[TaskFeedbackSynapse]]:
     """
     Sends a TaskFeedbackSynapse to each miner with the relevant evaluation details.
 
@@ -35,28 +34,34 @@ async def send_feedback_synapse_to_miners(
     :param test_results_matrices: List of test-result matrices returned by the reward function.
     :param evaluation_results: List of evaluation details for each miner (scores, etc.).
     :param screenshot_policy: Either "remove" or "keep". If "remove", the screenshot is cleared.
+    :return: A list of responses from each miner (each response is typically a list of TaskFeedbackSynapse).
     """
+
     feedback_list = []
 
     for i, miner_uid in enumerate(miner_uids):
-        # Make a shallow copy so we can strip out large fields
-        feedback_task = copy.copy(task)
-
-        # # Remove or strip heavy fields if screenshot_policy is "remove"
+        # Optionally strip out large fields from the Task
         # if screenshot_policy == "remove":
-        #     feedback_task.screenshot = ""
-        #     feedback_task.html = ""
-        #     feedback_task.clean_html = ""
+        #     task.screenshot = ""
+        #     task.html = ""
+        #     if hasattr(task, "clean_html"):
+        #         task.clean_html = ""
 
         # Build the feedback synapse
         feedback = TaskFeedbackSynapse(
             version=__version__,
             miner_id=str(miner_uid),
             task=task,
-            actions=task_solutions[i].actions if i < len(task_solutions) else [],
-            test_results_matrix=test_results_matrices[i] if i < len(test_results_matrices) else None,
-            evaluation_result=evaluation_results[i] if i < len(evaluation_results) else None,
-            stats=None, 
+            actions=(
+                task_solutions[i].actions if i < len(task_solutions) else []
+            ),
+            test_results_matrix=(
+                test_results_matrices[i] if i < len(test_results_matrices) else None
+            ),
+            evaluation_result=(
+                evaluation_results[i] if i < len(evaluation_results) else None
+            ),
+            stats=None,
         )
 
         feedback_list.append(feedback)
@@ -66,6 +71,7 @@ async def send_feedback_synapse_to_miners(
         ColoredLogger.BLUE,
     )
 
+    # Create tasks to send each feedback synapse (in parallel) via dendrite
     feedback_tasks = []
     for axon, feedback_synapse in zip(miner_axons, feedback_list):
         feedback_tasks.append(
@@ -91,6 +97,7 @@ async def handle_feedback_and_stats(
     web_project: WebProject,
     task: Task,
     responses: List[TaskSynapse],
+    miner_axons: List[bt.axon],                 # <-- Add the miner_axons
     miner_uids: List[int],
     execution_times: List[float],
     task_solutions: List[TaskSolution],
@@ -102,29 +109,21 @@ async def handle_feedback_and_stats(
     Given all the data about a single task evaluation, update stats, store feedback
     if necessary, and return a dictionary with aggregated metrics for logging.
     """
-    # You would typically do a loop over each miner to:
-    # 1) create feedback synapse
-    # 2) send it
-    # 3) update your in-memory stats
-
-    # For simplicity, let's just collect some aggregates
+    # -- Basic aggregator logic (unchanged) --
     num_no_response = sum(
         1 for sol in task_solutions if not sol.actions or len(sol.actions) == 0
     )
-    successful_idx = [
-        i for i, r in enumerate(rewards) if r >= 1.0
-    ]  # define "success" as reward=1.0
+    successful_idx = [i for i, r in enumerate(rewards) if r >= 1.0]
     num_success = len(successful_idx)
     num_wrong = len([r for r in rewards if 0.0 < r < 1.0])
 
     avg_miner_time = sum(execution_times) / len(execution_times) if execution_times else 0
-    evaluation_time = 0.0  # For demonstration, you could measure the eval time in your code
+    evaluation_time = 0.0  # If you measure your evaluator time, assign it here
     avg_score_for_task = float(sum(rewards) / len(rewards)) if len(rewards) > 0 else 0.0
 
     # Update per-miner stats in the validator
     for i, uid in enumerate(miner_uids):
         miner_stats = validator.miner_stats[uid]
-        # Suppose "success" means final reward >= 1.0
         success_bool = i in successful_idx
         miner_stats.update(
             score=float(rewards[i]),
@@ -133,6 +132,23 @@ async def handle_feedback_and_stats(
             last_task=task,
             success=success_bool,
         )
+
+    # -- Now send the TaskFeedbackSynapse to each miner so they have the evaluation details --
+    feedback_responses = await send_feedback_synapse_to_miners(
+        validator=validator,
+        miner_axons=miner_axons,
+        miner_uids=miner_uids,
+        task=task,
+        task_solutions=task_solutions,
+        test_results_matrices=test_results_matrices,
+        evaluation_results=evaluation_results,
+        screenshot_policy="remove",  # or "keep", depending on your preference
+    )
+
+    ColoredLogger.info(
+        f"Feedback synapse responses received: {feedback_responses}",
+        ColoredLogger.BLUE,
+    )
 
     # Return a dictionary for usage by the parent flow
     return {
@@ -143,4 +159,3 @@ async def handle_feedback_and_stats(
         "evaluation_time": evaluation_time,
         "avg_score_for_task": avg_score_for_task,
     }
-

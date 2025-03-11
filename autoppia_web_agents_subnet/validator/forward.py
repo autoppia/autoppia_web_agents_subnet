@@ -36,6 +36,7 @@ from autoppia_web_agents_subnet.validator.utils import (
 from autoppia_web_agents_subnet.validator.reward import get_rewards_with_details
 from autoppia_web_agents_subnet.utils.uids import get_random_uids
 from autoppia_web_agents_subnet.validator.version import check_miner_not_responding_to_invalid_version
+from autoppia_web_agents_subnet.validator.feedback import handle_feedback_and_stats
 
 
 async def generate_tasks_for_web_project(
