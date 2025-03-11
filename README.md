@@ -2,32 +2,15 @@
     <source srcset="autoppia_logo_black.png"  media="(prefers-color-scheme: dark)">
     <source srcset="autoppia_logo_black.png"  media="(prefers-color-scheme: light)">
     <img src="autoppia_logo_black.png">
-</picture><div align="center">
-
+</picture>
 <div align="center">
 
 # **Web Agents Subnet (Bittensor Sn36)** <!-- omit in toc -->
 [![Discord Chat](https://img.shields.io/discord/308323056592486420.svg)](https://discord.gg/bittensor)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
-
 ---
-
-[Autoppia](https://autoppia.com/infinite-web-arena-subnet) • [Discord](https://discordapp.com/channels/799672011265015819/1339356060787408996) • [Mining](docs/miner.md) • [Validating](docs/validator.md) 
+[🌐 Autoppia](https://autoppia.com/infinite-web-arena-subnet) • [💬 Discord](https://discordapp.com/channels/799672011265015819/1339356060787408996) • [⛏️ Mining](docs/miner.md) • [🧑‍🏫 Validating](docs/validator.md) • [🔗 IWA](https://github.com/autoppia/autoppia_iwa)
 </div>
-
----
-
-
-# **Web Agents Subnet (Bittensor Sn36)**
-
-### [🌐 Autoppia](https://autoppia.com/infinite-web-arena-subnet)
-
-### [⛏️ Mining](docs/miner.md)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[🔗 IWA](https://github.com/autoppia/autoppia_iwa)&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;[🧑‍🏫 Validating](docs/validator.md)
-
-### [💬 Discord](https://discordapp.com/channels/799672011265015819/1339356060787408996)
-
-</div>
-
 ---
 
 ## 🔍 Overview
