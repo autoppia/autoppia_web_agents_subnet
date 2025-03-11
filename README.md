@@ -6,12 +6,13 @@
 <div align="center">
 
 
-# **Web Agents Subnet (Bittensor Sn36)** <!-- omit in toc -->
+# **Web Agents Subnet (SN 36)** <!-- omit in toc -->
 [![Discord Chat](https://img.shields.io/discord/308323056592486420.svg)](https://discord.gg/bittensor)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
 
 [🌐 Autoppia](https://autoppia.com/infinite-web-arena-subnet) • [🔗 IWA](https://github.com/autoppia/autoppia_iwa) • [⛏️ Mining](docs/miner.md) • [🧑‍🏫 Validating](docs/validator.md)
 </div>
+
 ---
 
 ## 🔍 Overview
