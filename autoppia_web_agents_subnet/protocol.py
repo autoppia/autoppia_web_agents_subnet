@@ -9,12 +9,10 @@ from rich.table import Table
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_iwa.src.data_generation.domain.classes import TestUnion
 
-
 class MinerStats(BaseModel):
     """
     Stores basic stats about a miner, updated after each task.
     """
-
     avg_score: float = 0.0
     avg_execution_time: float = 0.0
     avg_evaluation_time: float = 0.0
@@ -24,7 +22,6 @@ class MinerStats(BaseModel):
     sum_score: float = 0.0
     sum_execution_time: float = 0.0
     sum_evaluation_time: float = 0.0
-
     # Additional fields
     last_task_score: float = 0.0
     last_execution_time: float = 0.0
@@ -45,30 +42,24 @@ class MinerStats(BaseModel):
         self.sum_score += score
         self.sum_execution_time += execution_time
         self.sum_evaluation_time += evaluation_time
-
         if success:
             self.total_successful_tasks += 1
-
         self.avg_score = self.sum_score / self.total_tasks
         self.avg_execution_time = self.sum_execution_time / self.total_tasks
         self.avg_evaluation_time = self.sum_evaluation_time / self.total_tasks
-
         self.last_task = last_task
         self.last_task_score = score
         self.last_execution_time = execution_time
-
 
 class TaskSynapse(Synapse):
     """
     Synapse carrying the Task prompt & data from validator to miners.
     """
-
     version: str = ""
     prompt: str
     url: str
     html: Optional[str] = None
     screenshot: Optional[str] = None
-
     actions: List[AllActionsUnion] = Field(
         default_factory=list, description="The actions that solve the task"
     )
@@ -80,19 +71,20 @@ class TaskSynapse(Synapse):
     def deserialize(self) -> "TaskSynapse":
         return self
 
-
 class TaskFeedbackSynapse(Synapse):
     """
     Synapse carrying feedback from validator back to miner,
     including test_results, evaluation scores, and stats.
     """
-
     version: str = ""
     miner_id: str
-    task:Task
+    task_id: str
+    prompt: str
+    tests: Optional[List[TestUnion]] = None
     actions: Optional[List[AllActionsUnion]] = Field(default_factory=list)
     test_results_matrix: Optional[List[List[Any]]] = None
     evaluation_result: Optional[Dict[str, Any]] = None
+    stats: Optional[MinerStats] = None
 
     class Config:
         extra = "allow"
@@ -102,48 +94,37 @@ class TaskFeedbackSynapse(Synapse):
         return self
 
     def print_in_terminal(self):
-
         visualizer = SubnetVisualizer()
-        ColoredLogger.info(
-            f" PRINTEANDO EN TERMINAL",
-            ColoredLogger.GREEN,
-        )
-
         # If we have enough data for a full evaluation
         if (
-            self.task
-            and hasattr(self.task, "id")
+            self.task_id
             and self.actions
             and self.test_results_matrix
         ):
-            ColoredLogger.info(
-                f" 1er if",
-                ColoredLogger.GREEN,
-            )
-
+            # Create a temporary task object with the available attributes
+            task = Task(id=self.task_id, prompt=self.prompt)
+            if self.tests:
+                task.tests = self.tests
+                
             visualizer.show_full_evaluation(
                 agent_id=self.miner_id,
-                task=self.task,
+                task=task,
                 actions=self.actions,
                 test_results_matrix=self.test_results_matrix,
                 evaluation_result=self.evaluation_result,
             )
-        elif self.task and hasattr(self.task, "id"):
-            ColoredLogger.info(
-                f" 2 if",
-                ColoredLogger.GREEN,
-            )
+        elif self.task_id:
             # Partial data => just show the task
-            visualizer.show_task_with_tests(self.task)
+            task = Task(id=self.task_id, prompt=self.prompt)
+            if self.tests:
+                task.tests = self.tests
+                
+            visualizer.show_task_with_tests(task)
             console = Console()
             console.print(
                 f"\n[bold yellow]Insufficient actions or test results for {self.miner_id}[/bold yellow]"
             )
         else:
-            ColoredLogger.info(
-                f" 3 if",
-                ColoredLogger.GREEN,
-            )
             console = Console()
             table = Table(
                 title=f"Miner Feedback Stats for {self.miner_id}",
@@ -152,13 +133,11 @@ class TaskFeedbackSynapse(Synapse):
             )
             table.add_column("Metric", style="dim")
             table.add_column("Value", justify="right")
-
             validator_hotkey = getattr(self.dendrite, "hotkey", None)
             table.add_row(
                 "Validator Hotkey", validator_hotkey if validator_hotkey else "None"
             )
             table.add_row("Miner ID", self.miner_id)
-
             if self.stats:
                 table.add_row("Total Tasks", str(self.stats.total_tasks))
                 table.add_row(

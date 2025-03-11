@@ -176,7 +176,9 @@ async def send_feedback_synapse_to_miners(
         feedback = TaskFeedbackSynapse(
             version=__version__,
             miner_id=str(miner_uid),
-            task=feedback_task,
+            task_id=task.id,
+            prompt=feedback_task,
+            tests=task.tests,
             actions=task_solutions[i].actions if i < len(task_solutions) else [],
             test_results_matrix=(
                 test_results_matrices[i] if i < len(test_results_matrices) else None
@@ -185,7 +187,7 @@ async def send_feedback_synapse_to_miners(
                 evaluation_results[i] if i < len(evaluation_results) else None
             ),
         )
-        
+
         feedback_list.append(feedback)
 
     ColoredLogger.info(
