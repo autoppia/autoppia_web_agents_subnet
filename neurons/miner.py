@@ -139,12 +139,14 @@ class Miner(BaseMinerNeuron):
             not self.config.blacklist.allow_non_registered
             and synapse.dendrite.hotkey not in self.metagraph.hotkeys
         ):
+            bt.logging.warning(f"Received a request without a dendrite or hotkey. {validator_hotkey}")
             return True, f"Unrecognized hotkey: {validator_hotkey}"
 
         uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
 
         if self.config.blacklist.force_validator_permit:
             if not self.metagraph.validator_permit[uid]:
+                bt.logging.warning(f"Blacklisted Non-Validator {validator_hotkey}")
                 return True, f"Non-validator hotkey: {validator_hotkey}"
 
         # -----------------------------------------------------------------------
@@ -153,6 +155,7 @@ class Miner(BaseMinerNeuron):
         stake = self.metagraph.S[uid]
         min_stake = self.config.blacklist.minimum_stake_requirement
         if stake < min_stake:
+            bt.logging.warning(f"Blacklisted insufficient stake: {validator_hotkey}")
             return True, f"Insufficient stake ({stake} < {min_stake}) for {validator_hotkey}"
 
         return False, f"Hotkey recognized: {validator_hotkey}"
