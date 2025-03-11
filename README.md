@@ -9,7 +9,7 @@
 [![Discord Chat](https://img.shields.io/discord/308323056592486420.svg)](https://discord.gg/bittensor)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
 ---
-[🌐 Autoppia](https://autoppia.com/infinite-web-arena-subnet) • [💬 Discord](https://discordapp.com/channels/799672011265015819/1339356060787408996) • [⛏️ Mining](docs/miner.md) • [🧑‍🏫 Validating](docs/validator.md) • [🔗 IWA](https://github.com/autoppia/autoppia_iwa)
+[🌐 Autoppia](https://autoppia.com/infinite-web-arena-subnet) • [🔗 IWA](https://github.com/autoppia/autoppia_iwa) • [⛏️ Mining](docs/miner.md) • [🧑‍🏫 Validating](docs/validator.md)
 </div>
 ---
 
