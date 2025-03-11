@@ -124,7 +124,7 @@ async def send_task_synapse_to_miners(
     task_synapse.version = validator.version
 
     # The actual forward pass to the selected miners
-    responses: List[TaskSynapse] = dendrite_with_retries(
+    responses: List[TaskSynapse] = await dendrite_with_retries(
         dendrite=validator.dendrite,
         axons=miner_axons,
         synapse=task_synapse,
