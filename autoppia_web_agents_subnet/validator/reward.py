@@ -44,7 +44,7 @@ async def get_rewards_with_details(
     """
     Extended version returning:
       - rewards array
-      - test_results_matrices (JSON-friendly)
+      - test_results_matrices  (JSON-friendly)
       - evaluation_results (dictionaries with raw_score, final_score, etc.)
 
     If a miner is in the 'invalid_version_responders' set, we set that miner's reward to 0.
