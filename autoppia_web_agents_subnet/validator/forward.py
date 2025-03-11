@@ -192,7 +192,7 @@ async def send_feedback_synapse_to_miners(
             prompt="",
             tests=None,
             actions=None,
-            # test_results_matrix=None,
+            test_results_matrix=None,
             # evaluation_result=None,
         )
 
