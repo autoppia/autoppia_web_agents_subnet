@@ -471,4 +471,5 @@ async def forward(self) -> None:
         await asyncio.sleep(FORWARD_SLEEP_SECONDS)
 
     except Exception as e:
+        raise e
         bt.logging.error(f"Error in validation forward: {e}")
