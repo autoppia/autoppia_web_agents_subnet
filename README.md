@@ -3,7 +3,7 @@
 <picture>
     <source srcset="logo_black.png"  media="(prefers-color-scheme: dark)">
     <source srcset="logo_black.png"  media="(prefers-color-scheme: light)">
-    <img src="logo_black.png">
+    <img style="height:75%" src="logo_black.png">
 </picture><div align="center">
 
 # **Web Agents Subnet (Bittensor Sn36)**
