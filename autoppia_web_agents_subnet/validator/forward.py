@@ -188,7 +188,8 @@ async def send_feedback_synapse_to_miners(
         feedback = TaskFeedbackSynapse(
             version=__version__,
             miner_id=str(miner_uid),
-            task=None,
+            prompt=None,
+            tests=None,
             actions=None,
             test_results_matrix=None,
             evaluation_result=None,

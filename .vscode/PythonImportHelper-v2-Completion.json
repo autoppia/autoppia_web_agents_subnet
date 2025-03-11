@@ -2421,6 +2421,14 @@
         "documentation": {}
     },
     {
+        "label": "TestUnion",
+        "importPath": "autoppia_iwa.src.data_generation.domain.classes",
+        "description": "autoppia_iwa.src.data_generation.domain.classes",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.data_generation.domain.classes",
+        "documentation": {}
+    },
+    {
         "label": "Task",
         "importPath": "autoppia_iwa.src.data_generation.domain.classes",
         "description": "autoppia_iwa.src.data_generation.domain.classes",
@@ -18441,7 +18449,7 @@
         "kind": 6,
         "importPath": "autoppia_web_agents_subnet.protocol",
         "description": "autoppia_web_agents_subnet.protocol",
-        "peekOfCode": "class TaskFeedbackSynapse(Synapse):\n    \"\"\"\n    Synapse carrying feedback from validator back to miner,\n    including test_results, evaluation scores, and stats.\n    \"\"\"\n    version: str = \"\"\n    miner_id: str\n    task: Optional[Task] = None\n    actions: Optional[List[AllActionsUnion]] = Field(default_factory=list)\n    test_results_matrix: Optional[List[List[Any]]] = None",
+        "peekOfCode": "class TaskFeedbackSynapse(Synapse):\n    \"\"\"\n    Synapse carrying feedback from validator back to miner,\n    including test_results, evaluation scores, and stats.\n    \"\"\"\n    version: str = \"\"\n    miner_id: str\n    prompt:str\n    tests: Optional[List[TestUnion]] = None\n    actions: Optional[List[AllActionsUnion]] = Field(default_factory=list)",
         "detail": "autoppia_web_agents_subnet.protocol",
         "documentation": {}
     },

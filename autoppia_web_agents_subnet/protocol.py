@@ -7,6 +7,7 @@ from autoppia_iwa.src.shared.visualizator import SubnetVisualizer
 from rich.console import Console
 from rich.table import Table
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+from autoppia_iwa.src.data_generation.domain.classes import TestUnion
 
 
 class MinerStats(BaseModel):
@@ -88,7 +89,8 @@ class TaskFeedbackSynapse(Synapse):
 
     version: str = ""
     miner_id: str
-    task: Optional[Task] = None
+    prompt:str
+    tests: Optional[List[TestUnion]] = None
     actions: Optional[List[AllActionsUnion]] = Field(default_factory=list)
     test_results_matrix: Optional[List[List[Any]]] = None
     evaluation_result: Optional[Dict[str, Any]] = None
