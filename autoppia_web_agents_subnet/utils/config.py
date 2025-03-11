@@ -149,6 +149,13 @@ def add_miner_args(cls, parser):
     )   
 
     parser.add_argument(
+        "--no-blacklist.force_validator_permit",
+        action="store_false",
+        dest="blacklist.force_validator_permit",
+        help="If set, we will NOT force incoming requests to have a permit.",
+    )
+
+    parser.add_argument(
         "--blacklist.minimum_stake_requirement",
         type=int,
         help="Minimum amount of stake needed to send request to miners.",
@@ -175,7 +182,6 @@ def add_miner_args(cls, parser):
         default="opentensor-dev",
         help="Wandb entity to log to.",
     )
-    
 
 
 def add_validator_args(cls, parser):

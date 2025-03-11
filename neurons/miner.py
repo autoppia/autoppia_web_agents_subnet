@@ -102,7 +102,7 @@ class Miner(BaseMinerNeuron):
             bt.logging.error(f"An error occurred on miner forward: {e}")
 
         return synapse
-    
+
     async def forward_feedback(
         self, synapse: TaskFeedbackSynapse
     ) -> TaskFeedbackSynapse:
@@ -208,8 +208,8 @@ class Miner(BaseMinerNeuron):
 
 
 if __name__ == "__main__":
-    # Typical miner entrypoint
-    app = AppBootstrap()
+    # Miner entrypoint
+    app = AppBootstrap()  # Wiring IWA Dependency Injection
     with Miner() as miner:
         while True:
             # bt.logging.info(f"Miner running... {time.time()}")

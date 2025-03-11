@@ -1613,6 +1613,14 @@
         "documentation": {}
     },
     {
+        "label": "Set",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
         "label": "List",
         "importPath": "typing",
         "description": "typing",
@@ -1646,6 +1654,14 @@
     },
     {
         "label": "Tuple",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Set",
         "importPath": "typing",
         "description": "typing",
         "isExtraImport": true,
@@ -10542,54 +10558,6 @@
         "documentation": {}
     },
     {
-        "label": "update_miner_stats_and_scores",
-        "importPath": "autoppia_web_agents_subnet.validator.utils",
-        "description": "autoppia_web_agents_subnet.validator.utils",
-        "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet.validator.utils",
-        "documentation": {}
-    },
-    {
-        "label": "init_miner_stats",
-        "importPath": "autoppia_web_agents_subnet.validator.utils",
-        "description": "autoppia_web_agents_subnet.validator.utils",
-        "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet.validator.utils",
-        "documentation": {}
-    },
-    {
-        "label": "retrieve_random_demo_web_project",
-        "importPath": "autoppia_web_agents_subnet.validator.utils",
-        "description": "autoppia_web_agents_subnet.validator.utils",
-        "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet.validator.utils",
-        "documentation": {}
-    },
-    {
-        "label": "init_validator_performance_stats",
-        "importPath": "autoppia_web_agents_subnet.validator.utils",
-        "description": "autoppia_web_agents_subnet.validator.utils",
-        "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet.validator.utils",
-        "documentation": {}
-    },
-    {
-        "label": "update_validator_performance_stats",
-        "importPath": "autoppia_web_agents_subnet.validator.utils",
-        "description": "autoppia_web_agents_subnet.validator.utils",
-        "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet.validator.utils",
-        "documentation": {}
-    },
-    {
-        "label": "print_validator_performance_stats",
-        "importPath": "autoppia_web_agents_subnet.validator.utils",
-        "description": "autoppia_web_agents_subnet.validator.utils",
-        "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet.validator.utils",
-        "documentation": {}
-    },
-    {
         "label": "dendrite_with_retries",
         "importPath": "autoppia_web_agents_subnet.utils.dendrite",
         "description": "autoppia_web_agents_subnet.utils.dendrite",
@@ -10742,6 +10710,46 @@
         "documentation": {}
     },
     {
+        "label": "init_miner_stats",
+        "importPath": "autoppia_web_agents_subnet.validator.utils",
+        "description": "autoppia_web_agents_subnet.validator.utils",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.validator.utils",
+        "documentation": {}
+    },
+    {
+        "label": "retrieve_random_demo_web_project",
+        "importPath": "autoppia_web_agents_subnet.validator.utils",
+        "description": "autoppia_web_agents_subnet.validator.utils",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.validator.utils",
+        "documentation": {}
+    },
+    {
+        "label": "init_validator_performance_stats",
+        "importPath": "autoppia_web_agents_subnet.validator.utils",
+        "description": "autoppia_web_agents_subnet.validator.utils",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.validator.utils",
+        "documentation": {}
+    },
+    {
+        "label": "update_validator_performance_stats",
+        "importPath": "autoppia_web_agents_subnet.validator.utils",
+        "description": "autoppia_web_agents_subnet.validator.utils",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.validator.utils",
+        "documentation": {}
+    },
+    {
+        "label": "print_validator_performance_stats",
+        "importPath": "autoppia_web_agents_subnet.validator.utils",
+        "description": "autoppia_web_agents_subnet.validator.utils",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.validator.utils",
+        "documentation": {}
+    },
+    {
         "label": "get_rewards_with_details",
         "importPath": "autoppia_web_agents_subnet.validator.reward",
         "description": "autoppia_web_agents_subnet.validator.reward",
@@ -10755,6 +10763,14 @@
         "description": "autoppia_web_agents_subnet.utils.uids",
         "isExtraImport": true,
         "detail": "autoppia_web_agents_subnet.utils.uids",
+        "documentation": {}
+    },
+    {
+        "label": "check_miner_not_responding_to_invalid_version",
+        "importPath": "autoppia_web_agents_subnet.validator.version",
+        "description": "autoppia_web_agents_subnet.validator.version",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.validator.version",
         "documentation": {}
     },
     {
@@ -18333,7 +18349,7 @@
         "kind": 2,
         "importPath": "autoppia_web_agents_subnet.validator.forward",
         "description": "autoppia_web_agents_subnet.validator.forward",
-        "peekOfCode": "def get_task_solution_from_synapse(\n    task_id, synapse: TaskSynapse, web_agent_id: str\n) -> TaskSolution:\n    \"\"\"\n    Safely extracts actions from a TaskSynapse response and creates a TaskSolution\n    with the original task reference, limiting actions to a maximum of 15.\n    \"\"\"\n    actions = []\n    if synapse and hasattr(synapse, \"actions\") and isinstance(synapse.actions, list):\n        actions = synapse.actions[:MAX_ACTIONS_LENGTH]  # Limit actions to at most 15",
+        "peekOfCode": "def get_task_solution_from_synapse(\n    task_id: str, synapse: TaskSynapse, web_agent_id: str\n) -> TaskSolution:\n    \"\"\"\n    Safely extracts actions from a TaskSynapse response and creates a TaskSolution\n    with the original task reference, limiting actions to a maximum length.\n    \"\"\"\n    actions = []\n    if synapse and hasattr(synapse, \"actions\") and isinstance(synapse.actions, list):\n        actions = synapse.actions[:MAX_ACTIONS_LENGTH]  # Limit actions to at most 15",
         "detail": "autoppia_web_agents_subnet.validator.forward",
         "documentation": {}
     },
@@ -18344,15 +18360,6 @@
         "description": "autoppia_web_agents_subnet.validator.forward",
         "peekOfCode": "def collect_task_solutions(\n    task: Task,\n    responses: List[TaskSynapse],\n    miner_uids: List[int],\n) -> (List[TaskSolution], List[float]):\n    \"\"\"\n    Collects TaskSolutions from the miners' responses and keeps track of their execution times.\n    \"\"\"\n    task_solutions = []\n    execution_times = []",
         "detail": "autoppia_web_agents_subnet.validator.forward",
-        "documentation": {}
-    },
-    {
-        "label": "normalize_execution_times",
-        "kind": 2,
-        "importPath": "autoppia_web_agents_subnet.validator.reward",
-        "description": "autoppia_web_agents_subnet.validator.reward",
-        "peekOfCode": "def normalize_execution_times(times: List[Optional[float]]) -> List[float]:\n    \"\"\"\n    Normalizes execution times to a [0..1] range (1 = fastest, 0 = slowest).\n    If all times are equal, returns 1.0 for those not None.\n    \"\"\"\n    if not times:\n        return []\n    valid_times = [t for t in times if t is not None]\n    if not valid_times:\n        return [0.0] * len(times)",
-        "detail": "autoppia_web_agents_subnet.validator.reward",
         "documentation": {}
     },
     {
