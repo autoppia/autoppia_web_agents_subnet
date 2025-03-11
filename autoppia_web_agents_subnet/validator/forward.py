@@ -28,10 +28,9 @@ from autoppia_web_agents_subnet.validator.config import (
     TIME_WEIGHT,
     MIN_SCORE_FOR_CORRECT_FORMAT,
     MIN_RESPONSE_REWARD,
-    PROMPTS_PER_ITERATION
+    PROMPTS_PER_ITERATION,
 )
 from autoppia_web_agents_subnet.validator.utils import (
-    clean_miner_task,
     collect_task_solutions,
     init_miner_stats,
     send_feedback_synapse_to_miners,
@@ -40,11 +39,13 @@ from autoppia_web_agents_subnet.validator.utils import (
     retrieve_random_demo_web_project,
     init_validator_performance_stats,
     update_validator_performance_stats,
-    print_validator_performance_stats
+    print_validator_performance_stats,
 )
 
 
-async def generate_tasks_for_web_project(demo_web_project: WebProject, prompts_per_use_case:int) -> List[Task]:
+async def generate_tasks_for_web_project(
+    demo_web_project: WebProject, prompts_per_use_case: int
+) -> List[Task]:
     """
     Creates tasks for the specified web project using the TaskGenerationPipeline.
     """
@@ -52,7 +53,7 @@ async def generate_tasks_for_web_project(demo_web_project: WebProject, prompts_p
         web_project=demo_web_project,
         save_domain_analysis_in_db=True,
         save_task_in_db=False,
-        prompts_per_use_case=prompts_per_use_case
+        prompts_per_use_case=prompts_per_use_case,
     )
     pipeline = TaskGenerationPipeline(config=config, web_project=demo_web_project)
     start_time = time.time()
@@ -60,7 +61,7 @@ async def generate_tasks_for_web_project(demo_web_project: WebProject, prompts_p
 
     ColoredLogger.info(
         f"Generated {len(tasks_generated)} tasks in {time.time() - start_time:.2f}s",
-        ColoredLogger.YELLOW
+        ColoredLogger.YELLOW,
     )
     for task in tasks_generated:
         bt.logging.info(f"Task prompt: {task.prompt}")
@@ -78,7 +79,7 @@ async def handle_feedback_and_stats(
     task_solutions,
     rewards: np.ndarray,
     test_results_matrices,
-    evaluation_results
+    evaluation_results,
 ) -> dict:
     """
     Handles post-evaluation steps:
@@ -103,7 +104,9 @@ async def handle_feedback_and_stats(
             num_wrong += 1
 
     # Miner request time average
-    avg_miner_time = (sum(execution_times) / len(execution_times)) if execution_times else 0.0
+    avg_miner_time = (
+        (sum(execution_times) / len(execution_times)) if execution_times else 0.0
+    )
 
     # Update miner stats and get evaluation time
     evaluation_time = await update_miner_stats_and_scores(
@@ -122,7 +125,7 @@ async def handle_feedback_and_stats(
         task,
         task_solutions,
         test_results_matrices,
-        evaluation_results
+        evaluation_results,
     )
 
     return {
@@ -131,11 +134,13 @@ async def handle_feedback_and_stats(
         "num_wrong": num_wrong,
         "avg_miner_time": avg_miner_time,
         "avg_score_for_task": avg_score_for_task,
-        "evaluation_time": evaluation_time
+        "evaluation_time": evaluation_time,
     }
 
 
-async def process_tasks(validator, web_project: WebProject, tasks_generated: List[Task]) -> None:
+async def process_tasks(
+    validator, web_project: WebProject, tasks_generated: List[Task]
+) -> None:
     """
     Sends tasks to sampled miners, gathers responses, evaluates them, and delegates
     feedback/stats logic to a separate helper method. Also aggregates task-level stats.
@@ -153,11 +158,10 @@ async def process_tasks(validator, web_project: WebProject, tasks_generated: Lis
 
     for index, task in enumerate(tasks_generated):
         task_start_time = time.time()
-        bt.logging.debug(f"Task #{index} (URL: {task.url}, ID: {task.id}): {task.prompt}")
+        bt.logging.debug(
+            f"Task #{index} (URL: {task.url}, ID: {task.id}): {task.prompt}"
+        )
         bt.logging.debug(f"Task tests: {task.tests}")
-
-        # Prepare a stripped-down version of the task for miners
-        miner_task = clean_miner_task(task=task)
 
         # Choose a random subset of miners
         miner_uids = get_random_uids(validator, k=SAMPLE_SIZE)
@@ -166,30 +170,34 @@ async def process_tasks(validator, web_project: WebProject, tasks_generated: Lis
 
         # Build synapse and send
         task_synapse = TaskSynapse(
-            prompt=miner_task.prompt,
-            url=miner_task.url,
-            html=miner_task.html,
-            screenshot=miner_task.screenshot,
-            actions=[]
+            prompt=task.prompt,
+            url=task.url,
+            html=task.html,
+            screenshot=task.screenshot,
+            actions=[],
         )
         responses = await send_task_synapse_to_miners(
             validator, miner_axons, task_synapse, miner_uids
         )
 
         # Convert responses into TaskSolutions
-        task_solutions, execution_times = collect_task_solutions(task, responses, miner_uids)
+        task_solutions, execution_times = collect_task_solutions(
+            task, responses, miner_uids
+        )
 
         # Evaluate solutions
         start_eval = time.time()
-        rewards, test_results_matrices, evaluation_results = await get_rewards_with_details(
-            validator,
-            web_project=web_project,
-            task=task,
-            task_solutions=task_solutions,
-            execution_times=execution_times,
-            time_weight=TIME_WEIGHT,
-            min_correct_format_score=MIN_SCORE_FOR_CORRECT_FORMAT,
-            min_response_reward=MIN_RESPONSE_REWARD,
+        rewards, test_results_matrices, evaluation_results = (
+            await get_rewards_with_details(
+                validator,
+                web_project=web_project,
+                task=task,
+                task_solutions=task_solutions,
+                execution_times=execution_times,
+                time_weight=TIME_WEIGHT,
+                min_correct_format_score=MIN_SCORE_FOR_CORRECT_FORMAT,
+                min_response_reward=MIN_RESPONSE_REWARD,
+            )
         )
         end_eval = time.time()
         bt.logging.info(f"Miners final rewards: {rewards}")
@@ -206,7 +214,7 @@ async def process_tasks(validator, web_project: WebProject, tasks_generated: Lis
             task_solutions=task_solutions,
             rewards=rewards,
             test_results_matrices=test_results_matrices,
-            evaluation_results=evaluation_results
+            evaluation_results=evaluation_results,
         )
 
         # Aggregate the returned stats
@@ -225,7 +233,7 @@ async def process_tasks(validator, web_project: WebProject, tasks_generated: Lis
 
         ColoredLogger.info(
             f"Task iteration time: {task_duration:.2f}s, avg miner request: {feedback_data['avg_miner_time']:.2f}s.",
-            ColoredLogger.YELLOW
+            ColoredLogger.YELLOW,
         )
         bt.logging.info(f"Sleeping for {TASK_SLEEP}s....")
         await asyncio.sleep(TASK_SLEEP)
@@ -247,7 +255,7 @@ async def process_tasks(validator, web_project: WebProject, tasks_generated: Lis
         num_no_response=num_no_response,
         sum_of_avg_response_times=sum_of_avg_response_times,
         sum_of_evaluation_times=sum_of_evaluation_times,
-        sum_of_avg_scores=sum_of_avg_scores
+        sum_of_avg_scores=sum_of_avg_scores,
     )
 
 
@@ -271,11 +279,17 @@ async def forward(self) -> None:
 
         # 2. Generate tasks
         tasks_generated_start_time = time.time()
-        tasks_generated = await generate_tasks_for_web_project(demo_web_project, PROMPTS_PER_ITERATION)
+        tasks_generated = await generate_tasks_for_web_project(
+            demo_web_project, PROMPTS_PER_ITERATION
+        )
         tasks_generated_end_time = time.time()
         tasks_generated_time = tasks_generated_end_time - tasks_generated_start_time
-        self.validator_performance_stats["total_tasks_generated"] += len(tasks_generated)
-        self.validator_performance_stats["total_generated_tasks_time"] += tasks_generated_time
+        self.validator_performance_stats["total_tasks_generated"] += len(
+            tasks_generated
+        )
+        self.validator_performance_stats[
+            "total_generated_tasks_time"
+        ] += tasks_generated_time
 
         if not tasks_generated:
             bt.logging.warning("No tasks generated, skipping forward step.")
@@ -286,7 +300,9 @@ async def forward(self) -> None:
         await process_tasks(self, demo_web_project, tasks_generated)
         tasks_processed_end_time = time.time()
         tasks_processed_time = tasks_processed_end_time - tasks_processed_start_time
-        self.validator_performance_stats["total_processing_tasks_time"] += tasks_processed_time
+        self.validator_performance_stats[
+            "total_processing_tasks_time"
+        ] += tasks_processed_time
 
         # Finalize
         forward_end_time = time.time()

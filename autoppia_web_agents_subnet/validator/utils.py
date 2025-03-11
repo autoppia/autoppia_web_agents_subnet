@@ -23,7 +23,7 @@ from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.validator.config import (
     MAX_ACTIONS_LENGTH,
     TIME_WEIGHT,
-    TIMEOUT
+    TIMEOUT,
 )
 from autoppia_web_agents_subnet import __version__
 from copy import deepcopy
@@ -48,6 +48,7 @@ def init_miner_stats(validator) -> None:
 # VALIDATOR-LEVEL PERFORMANCE STATS
 # --------------------------------------------------------------------
 
+
 def init_validator_performance_stats(validator) -> None:
     """
     Initialize a performance statistics dictionary on the validator if not present.
@@ -55,24 +56,19 @@ def init_validator_performance_stats(validator) -> None:
     """
     if not hasattr(validator, "validator_performance_stats"):
         validator.validator_performance_stats = {
-            "total_forwards_count": 0,           # how many forward passes occurred
-            "total_forwards_time": 0.0,          # sum of all forward iteration times
-
-            "total_tasks_generated": 0,          # how many tasks have been generated in total
-            "total_generated_tasks_time": 0.0,   # total time spent generating tasks
-
+            "total_forwards_count": 0,  # how many forward passes occurred
+            "total_forwards_time": 0.0,  # sum of all forward iteration times
+            "total_tasks_generated": 0,  # how many tasks have been generated in total
+            "total_generated_tasks_time": 0.0,  # total time spent generating tasks
             "total_processing_tasks_time": 0.0,  # total time spent in process_tasks
-
-            "total_tasks_sent": 0,               # how many tasks have been sent overall (accum. from all forwards)
-            "total_tasks_success": 0,            # tasks with at least one reward>0
-            "total_tasks_wrong": 0,              # tasks with responses but no reward>0
-            "total_tasks_no_response": 0,        # tasks with 0 valid responses
-
+            "total_tasks_sent": 0,  # how many tasks have been sent overall (accum. from all forwards)
+            "total_tasks_success": 0,  # tasks with at least one reward>0
+            "total_tasks_wrong": 0,  # tasks with responses but no reward>0
+            "total_tasks_no_response": 0,  # tasks with 0 valid responses
             "total_sum_of_avg_response_times": 0.0,  # sum of average miner solve times per task
-            "total_sum_of_evaluation_times": 0.0,     # sum of times spent evaluating (score updates)
-            "total_sum_of_avg_scores": 0.0,           # sum of average rewards per task
-
-            "overall_tasks_processed": 0,             # total tasks processed for stats
+            "total_sum_of_evaluation_times": 0.0,  # sum of times spent evaluating (score updates)
+            "total_sum_of_avg_scores": 0.0,  # sum of average rewards per task
+            "overall_tasks_processed": 0,  # total tasks processed for stats
         }
 
 
@@ -84,7 +80,7 @@ def update_validator_performance_stats(
     num_no_response: int,
     sum_of_avg_response_times: float,
     sum_of_evaluation_times: float,
-    sum_of_avg_scores: float
+    sum_of_avg_scores: float,
 ) -> None:
     """
     Accumulates stats from a single batch of processed tasks into
@@ -130,7 +126,9 @@ def print_validator_performance_stats(validator) -> None:
 
     total_gen_tasks = vps["total_tasks_generated"]
     avg_task_gen_time = (
-        vps["total_generated_tasks_time"] / total_gen_tasks if total_gen_tasks > 0 else 0.0
+        vps["total_generated_tasks_time"] / total_gen_tasks
+        if total_gen_tasks > 0
+        else 0.0
     )
 
     overall_tasks = vps["overall_tasks_processed"]
@@ -146,10 +144,14 @@ def print_validator_performance_stats(validator) -> None:
     success_rate = (tasks_success / tasks_sent) if tasks_sent > 0 else 0.0
 
     avg_response_time = (
-        vps["total_sum_of_avg_response_times"] / overall_tasks if overall_tasks > 0 else 0.0
+        vps["total_sum_of_avg_response_times"] / overall_tasks
+        if overall_tasks > 0
+        else 0.0
     )
     avg_evaluation_time = (
-        vps["total_sum_of_evaluation_times"] / overall_tasks if overall_tasks > 0 else 0.0
+        vps["total_sum_of_evaluation_times"] / overall_tasks
+        if overall_tasks > 0
+        else 0.0
     )
     avg_score = (
         vps["total_sum_of_avg_scores"] / overall_tasks if overall_tasks > 0 else 0.0
@@ -168,7 +170,9 @@ def print_validator_performance_stats(validator) -> None:
     table.add_row("Average Forward Time (s)", f"{avg_forward_time:.2f}")
 
     table.add_row("Tasks Generated (total)", str(total_gen_tasks))
-    table.add_row("Total Time Generating Tasks (s)", f"{vps['total_generated_tasks_time']:.2f}")
+    table.add_row(
+        "Total Time Generating Tasks (s)", f"{vps['total_generated_tasks_time']:.2f}"
+    )
     table.add_row("Average Time per Generated Task (s)", f"{avg_task_gen_time:.2f}")
 
     table.add_row("Tasks Processed (total)", str(tasks_sent))
@@ -181,8 +185,12 @@ def print_validator_performance_stats(validator) -> None:
     table.add_row("Avg Evaluation Time per Task (s)", f"{avg_evaluation_time:.4f}")
     table.add_row("Avg Score per Task", f"{avg_score:.4f}")
 
-    table.add_row("Total Time Processing Tasks (s)", f"{vps['total_processing_tasks_time']:.2f}")
-    table.add_row("Average Processing Time per Task (s)", f"{avg_processing_time_per_task:.2f}")
+    table.add_row(
+        "Total Time Processing Tasks (s)", f"{vps['total_processing_tasks_time']:.2f}"
+    )
+    table.add_row(
+        "Average Processing Time per Task (s)", f"{avg_processing_time_per_task:.2f}"
+    )
 
     console.print(table)
     console.print()  # extra newline
@@ -191,28 +199,6 @@ def print_validator_performance_stats(validator) -> None:
 # --------------------------------------------------------------------
 # TASK / RESPONSE UTILITIES
 # --------------------------------------------------------------------
-
-
-def clean_miner_task(task: Task) -> Task:
-    """
-    Creates a shallow copy of the Task removing fields not needed by miners,
-    and ensures the `html` attribute is never None.
-    """
-    task_copy = deepcopy(task)
-    task_copy.tests = None
-    task_copy.milestones = None
-
-    # Ensure `html` is never None
-    if hasattr(task_copy, "html") and task_copy.html is None:
-        task_copy.html = ""
-        
-    # Convert any string 'id' to int if needed
-    if hasattr(task_copy, "id") and isinstance(task_copy.id, str):
-        try:
-            task_copy.id = int(task_copy.id)
-        except ValueError:
-            pass
-    return task_copy
 
 
 def collect_task_solutions(
@@ -274,7 +260,9 @@ async def send_task_synapse_to_miners(
     """
     Sends a TaskSynapse to a list of miner axons and returns their responses.
     """
-    bt.logging.info(f"Sending TaskSynapse to {len(miner_uids)} miners. Miner Timeout: {TIMEOUT}s")
+    bt.logging.info(
+        f"Sending TaskSynapse to {len(miner_uids)} miners. Miner Timeout: {TIMEOUT}s"
+    )
     responses: List[TaskSynapse] = await dendrite_with_retries(
         dendrite=validator.dendrite,
         axons=miner_axons,
@@ -299,7 +287,7 @@ async def send_feedback_synapse_to_miners(
     task_solutions: List[TaskSolution],
     test_results_matrices: List[List[List[Any]]],
     evaluation_results: List[Dict[str, Any]],
-    screenshot_policy: str = "remove"
+    screenshot_policy: str = "remove",
 ) -> None:
     """
     Sends a TaskFeedbackSynapse to each miner with the relevant evaluation details.
@@ -329,11 +317,15 @@ async def send_feedback_synapse_to_miners(
         feedback = TaskFeedbackSynapse(
             version=__version__,
             miner_id=str(miner_uid),
-            task=task,
+            task=task.clean_task(),
             actions=task_solutions[i].actions if i < len(task_solutions) else [],
-            test_results_matrix=test_results_matrices[i] if i < len(test_results_matrices) else None,
-            evaluation_result=evaluation_results[i] if i < len(evaluation_results) else None,
-            stats=None, 
+            test_results_matrix=(
+                test_results_matrices[i] if i < len(test_results_matrices) else None
+            ),
+            evaluation_result=(
+                evaluation_results[i] if i < len(evaluation_results) else None
+            ),
+            stats=None,
         )
 
         feedback_list.append(feedback)
