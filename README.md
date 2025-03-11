@@ -1,8 +1,8 @@
-<div align="center" style="width: 100%;">
-  <picture style="width: 100%;">
+<div align="center" style="width: 100vw;">
+  <picture style="width: 100vw;">
     <source srcset="autoppia_logo_black.png" media="(prefers-color-scheme: dark)" style="width: 100%;">
     <source srcset="autoppia_logo_black.png" media="(prefers-color-scheme: light)" style="width: 100%;">
-    <img src="autoppia_logo_black.png" alt="Autoppia Logo" style="width: 100%; max-width: 100%;">
+    <img src="autoppia_logo_black.png" alt="Autoppia Logo" style="width: 100vw">
   </picture>
 </div>
 
