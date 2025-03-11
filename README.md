@@ -1,17 +1,16 @@
 <picture>
-    <img src="autoppia_log.png>
+    <source srcset="./assets/autoppia_logo.png" media="(prefers-color-scheme: dark)">
+    <source srcset="./assets/autoppia_logo.png" media="(prefers-color-scheme: light)">
+    <img src="autoppia_logo.png">
 </picture>
-
 <div align="center">
-
-# **Bittensor Pretrain Subnet** <!-- omit in toc -->
+# **Web Agents Subnet (Bittensor Sn36)** <!-- omit in toc -->
 [![Discord Chat](https://img.shields.io/discord/308323056592486420.svg)](https://discord.gg/bittensor)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
-
 ---
-
-[Leaderboard](https://www.macrocosmos.ai/sn9) • [Discord](https://discord.gg/bittensor) • [Network](https://taostats.io/subnets/netuid-9/) • [Research](https://bittensor.com/whitepaper) 
+[🌐 Autoppia](https://autoppia.com/infinite-web-arena-subnet) • [⛏️ Mining](docs/miner.md) • [🔗 IWA](https://github.com/autoppia/autoppia_iwa) • [🧑‍🏫 Validating](docs/validator.md) • [💬 Discord](https://discordapp.com/channels/799672011265015819/1339356060787408996)
 </div>
+---
 
 ---
 
