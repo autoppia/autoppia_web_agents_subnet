@@ -1,6 +1,6 @@
 <picture>
-    <source srcset="./assets/autoppia_logo.png" media="(prefers-color-scheme: dark)">
-    <source srcset="./assets/autoppia_logo.png" media="(prefers-color-scheme: light)">
+    <source srcset="autoppia_logo.png" media="(prefers-color-scheme: dark)">
+    <source srcset="autoppia_logo.png" media="(prefers-color-scheme: light)">
     <img src="autoppia_logo.png">
 </picture>
 
