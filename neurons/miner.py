@@ -156,10 +156,6 @@ class Miner(BaseMinerNeuron):
         """
 
         try:
-            ColoredLogger.info(
-                f"Synapse Feedback received {synapse}. Printing in terminal...",
-                ColoredLogger.RED,
-            )
             synapse.print_in_terminal()
         except Exception as e:
             ColoredLogger.error("Error occurred while printing in terminal TaskFeedback")
