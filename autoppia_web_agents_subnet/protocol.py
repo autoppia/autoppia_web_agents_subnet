@@ -1,55 +1,12 @@
-from pydantic import Field, BaseModel
+from pydantic import Field
 from typing import List, Optional, Any, Dict
 from bittensor import Synapse
 from autoppia_iwa.src.execution.actions.actions import AllActionsUnion
 from autoppia_iwa.src.data_generation.domain.classes import Task
 from autoppia_iwa.src.shared.visualizator import SubnetVisualizer
 from rich.console import Console
-from rich.table import Table
-from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_iwa.src.data_generation.domain.classes import TestUnion
 
-class MinerStats(BaseModel):
-    """
-    Stores basic stats about a miner, updated after each task.
-    """
-    avg_score: float = 0.0
-    avg_execution_time: float = 0.0
-    avg_evaluation_time: float = 0.0
-    total_tasks: int = 0
-    total_successful_tasks: int = 0
-    last_task: Optional[Task] = None
-    sum_score: float = 0.0
-    sum_execution_time: float = 0.0
-    sum_evaluation_time: float = 0.0
-    # Additional fields
-    last_task_score: float = 0.0
-    last_execution_time: float = 0.0
-
-    class Config:
-        extra = "allow"
-        arbitrary_types_allowed = True
-
-    def update(
-        self,
-        score: float,
-        execution_time: float,
-        evaluation_time: float,
-        last_task: Task,
-        success: bool = False,
-    ):
-        self.total_tasks += 1
-        self.sum_score += score
-        self.sum_execution_time += execution_time
-        self.sum_evaluation_time += evaluation_time
-        if success:
-            self.total_successful_tasks += 1
-        self.avg_score = self.sum_score / self.total_tasks
-        self.avg_execution_time = self.sum_execution_time / self.total_tasks
-        self.avg_evaluation_time = self.sum_evaluation_time / self.total_tasks
-        self.last_task = last_task
-        self.last_task_score = score
-        self.last_execution_time = execution_time
 
 class TaskSynapse(Synapse):
     """
@@ -71,6 +28,7 @@ class TaskSynapse(Synapse):
     def deserialize(self) -> "TaskSynapse":
         return self
 
+
 class TaskFeedbackSynapse(Synapse):
     """
     Synapse carrying feedback from validator back to miner,
@@ -84,7 +42,6 @@ class TaskFeedbackSynapse(Synapse):
     actions: Optional[List[AllActionsUnion]] = Field(default_factory=list)
     test_results_matrix: Optional[List[List[Any]]] = None
     evaluation_result: Optional[Dict[str, Any]] = None
-    stats: Optional[MinerStats] = None
 
     class Config:
         extra = "allow"
@@ -105,7 +62,7 @@ class TaskFeedbackSynapse(Synapse):
             task = Task(id=self.task_id, prompt=self.prompt)
             if self.tests:
                 task.tests = self.tests
-                
+
             visualizer.show_full_evaluation(
                 agent_id=self.miner_id,
                 task=task,
@@ -118,36 +75,9 @@ class TaskFeedbackSynapse(Synapse):
             task = Task(id=self.task_id, prompt=self.prompt)
             if self.tests:
                 task.tests = self.tests
-                
+
             visualizer.show_task_with_tests(task)
             console = Console()
             console.print(
                 f"\n[bold yellow]Insufficient actions or test results for {self.miner_id}[/bold yellow]"
             )
-        else:
-            console = Console()
-            table = Table(
-                title=f"Miner Feedback Stats for {self.miner_id}",
-                show_header=True,
-                header_style="bold magenta",
-            )
-            table.add_column("Metric", style="dim")
-            table.add_column("Value", justify="right")
-            validator_hotkey = getattr(self.dendrite, "hotkey", None)
-            table.add_row(
-                "Validator Hotkey", validator_hotkey if validator_hotkey else "None"
-            )
-            table.add_row("Miner ID", self.miner_id)
-            if self.stats:
-                table.add_row("Total Tasks", str(self.stats.total_tasks))
-                table.add_row(
-                    "Successful Tasks", str(self.stats.total_successful_tasks)
-                )
-                table.add_row("Avg Score", f"{self.stats.avg_score:.2f}")
-                table.add_row("Avg Exec Time", f"{self.stats.avg_execution_time:.2f}s")
-                if self.stats.last_task:
-                    table.add_row("Last Task ID", str(self.stats.last_task.id or "N/A"))
-                    table.add_row(
-                        "Last Task Score", f"{self.stats.last_task_score:.2f}"
-                    )
-            console.print(table)
