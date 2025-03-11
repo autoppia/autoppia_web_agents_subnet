@@ -166,10 +166,23 @@ async def send_feedback_synapse_to_miners(
     feedback_task = prepare_for_feedback(task)
 
     for i, miner_uid in enumerate(miner_uids):        
+        # feedback = TaskFeedbackSynapse(
+        #     version=__version__,
+        #     miner_id=str(miner_uid),
+        #     task=feedback_task,
+        #     actions=task_solutions[i].actions if i < len(task_solutions) else [],
+        #     test_results_matrix=(
+        #         test_results_matrices[i] if i < len(test_results_matrices) else None
+        #     ),
+        #     evaluation_result=(
+        #         evaluation_results[i] if i < len(evaluation_results) else None
+        #     ),
+        #     stats=None,
+        # )
         feedback = TaskFeedbackSynapse(
             version=__version__,
             miner_id=str(miner_uid),
-            task=None,
+            task=feedback_task,
             actions=None,
             test_results_matrix=None,
             evaluation_result=None,
