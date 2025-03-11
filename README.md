@@ -1,7 +1,7 @@
 <picture>
     <source srcset="autoppia_logo_black.png"  media="(prefers-color-scheme: dark)">
     <source srcset="autoppia_logo_black.png"  media="(prefers-color-scheme: light)">
-    <img style="height:75%" src="autoppia_logo_black.png">
+    <img src="autoppia_logo_black.png">
 </picture><div align="center">
 
 # **Web Agents Subnet (Bittensor Sn36)**
