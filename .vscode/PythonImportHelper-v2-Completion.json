@@ -10413,6 +10413,14 @@
         "documentation": {}
     },
     {
+        "label": "__spec_version__",
+        "importPath": "autoppia_web_agents_subnet",
+        "description": "autoppia_web_agents_subnet",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet",
+        "documentation": {}
+    },
+    {
         "label": "__version__",
         "importPath": "autoppia_web_agents_subnet",
         "description": "autoppia_web_agents_subnet",
