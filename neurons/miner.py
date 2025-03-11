@@ -133,7 +133,6 @@ class Miner(BaseMinerNeuron):
             task_solution = await self.agent.solve_task(task=task_for_agent)
 
             actions: List[BaseAction] = task_solution.actions
-            bt.logging.info(f"Task solved. Actions: {actions}")
 
             # Show actions
             self.show_actions(actions)
