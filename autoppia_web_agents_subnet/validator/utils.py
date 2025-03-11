@@ -242,14 +242,14 @@ async def dendrite_with_retries(
     synapse: TaskSynapse,
     deserialize: bool,
     timeout: float,
-    cnt_attempts=1
+    retries=1
 ) -> List[TaskSynapse]:
     res: List[TaskSynapse | None] = [None] * len(axons)
     idx = list(range(len(axons)))
     axons = axons.copy()
 
     try:
-        for attempt in range(cnt_attempts):
+        for attempt in range(retries):
             responses: List[TaskSynapse] = await dendrite(
                 axons=axons,
                 synapse=synapse,
@@ -261,10 +261,10 @@ async def dendrite_with_retries(
             new_axons = []
             for i, response in enumerate(responses):
                 if response.dendrite.status_code is not None and int(response.dendrite.status_code) == 422:
-                    if attempt == cnt_attempts - 1:
+                    if attempt == retries - 1:
                         res[idx[i]] = response
                         bt.logging.info(
-                            "Wasn't able to get answers from axon {} after {} attempts".format(axons[i], cnt_attempts)
+                            "Wasn't able to get answers from axon {} after {} attempts".format(axons[i], retries)
                         )
                     else:
                         new_idx.append(idx[i])
@@ -286,4 +286,4 @@ async def dendrite_with_retries(
         return res
     
     except Exception as e:
-        bt.logging.error("Error while sending synapse with dendrite with retries {e}")
+        bt.logging.error(f"Error while sending synapse with dendrite with retries {e}")
