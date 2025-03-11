@@ -1,6 +1,4 @@
 <picture>
-    <source srcset="autoppia_log.png"  media="(prefers-color-scheme: dark)">
-    <source srcset="autoppia_log.png"  media="(prefers-color-scheme: light)">
     <img src="autoppia_log.png>
 </picture>
 
