@@ -1,5 +1,3 @@
-
-
 <picture>
     <source srcset="logo_black.png"  media="(prefers-color-scheme: dark)">
     <source srcset="logo_black.png"  media="(prefers-color-scheme: light)">
