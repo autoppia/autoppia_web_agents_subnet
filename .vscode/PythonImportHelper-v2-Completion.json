@@ -18405,7 +18405,7 @@
         "kind": 2,
         "importPath": "autoppia_web_agents_subnet.validator.utils",
         "description": "autoppia_web_agents_subnet.validator.utils",
-        "peekOfCode": "def prepare_for_feedback(task) -> Task:\n    copied_task = task.deepcopy(task)\n    copied_task.use_case = None\n    copied_task.milestones = None\n    copied_task.interactive_elements = None\n    copied_task.screenshot = None\n    copied_task.screenshot_description = None\n    copied_task.html = None\n    copied_task.clean_html = None\n    return copied_task",
+        "peekOfCode": "def prepare_for_feedback(task) -> Task:\n    copied_task = copy.deepcopy(task)\n    copied_task.use_case = None\n    copied_task.milestones = None\n    copied_task.interactive_elements = None\n    copied_task.screenshot = None\n    copied_task.screenshot_description = None\n    copied_task.html = None\n    copied_task.clean_html = None\n    return copied_task",
         "detail": "autoppia_web_agents_subnet.validator.utils",
         "documentation": {}
     },

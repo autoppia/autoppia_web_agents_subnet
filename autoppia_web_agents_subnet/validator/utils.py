@@ -9,6 +9,7 @@ from autoppia_web_agents_subnet.validator.config import (
     TIME_WEIGHT,
     TIMEOUT,
 )
+import copy
 import random
 import time
 import numpy as np
@@ -290,7 +291,7 @@ async def dendrite_with_retries(
 
 
 def prepare_for_feedback(task) -> Task:
-    copied_task = task.deepcopy(task)
+    copied_task = copy.deepcopy(task)
     copied_task.use_case = None
     copied_task.milestones = None
     copied_task.interactive_elements = None
