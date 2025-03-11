@@ -33,7 +33,8 @@ from autoppia_web_agents_subnet.validator.utils import (
     init_validator_performance_stats,
     update_validator_performance_stats,
     print_validator_performance_stats,
-    dendrite_with_retries
+    dendrite_with_retries,
+    update_miner_stats_and_scores
 )
 from autoppia_web_agents_subnet.validator.reward import get_rewards_with_details
 from autoppia_web_agents_subnet.utils.uids import get_random_uids
@@ -243,17 +244,9 @@ async def handle_feedback_and_stats(
     evaluation_time = 0.0  # If you measure your evaluator time, assign it here
     avg_score_for_task = float(sum(rewards) / len(rewards)) if len(rewards) > 0 else 0.0
 
-    # Update per-miner stats in the validator
-    for i, uid in enumerate(miner_uids):
-        miner_stats = validator.miner_stats[int(uid)]
-        success_bool = i in successful_idx
-        miner_stats.update(
-            score=float(rewards[i]),
-            execution_time=execution_times[i],
-            evaluation_time=evaluation_time,
-            last_task=task,
-            success=success_bool,
-        )
+    evaluation_time = await update_miner_stats_and_scores(
+        validator, rewards, miner_uids, execution_times, task
+    )
 
     feedback_responses = await send_feedback_synapse_to_miners(
         validator=validator,

@@ -10702,6 +10702,14 @@
         "documentation": {}
     },
     {
+        "label": "update_miner_stats_and_scores",
+        "importPath": "autoppia_web_agents_subnet.validator.utils",
+        "description": "autoppia_web_agents_subnet.validator.utils",
+        "isExtraImport": true,
+        "detail": "autoppia_web_agents_subnet.validator.utils",
+        "documentation": {}
+    },
+    {
         "label": "get_rewards_with_details",
         "importPath": "autoppia_web_agents_subnet.validator.reward",
         "description": "autoppia_web_agents_subnet.validator.reward",

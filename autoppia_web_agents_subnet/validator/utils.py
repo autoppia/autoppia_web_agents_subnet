@@ -22,6 +22,7 @@ def init_miner_stats(validator) -> None:
     """
     if not hasattr(validator, "miner_stats"):
         validator.miner_stats = {}
+
     if "aggregated" not in validator.miner_stats:
         validator.miner_stats["aggregated"] = MinerStats()
 
@@ -191,6 +192,7 @@ async def update_miner_stats_and_scores(
         bt.logging.info("Scores updated for miners")
 
         for i, miner_uid in enumerate(miner_uids):
+            miner_uid = int(miner_uid)
             score_value = rewards[i] if rewards[i] is not None else 0.0
             exec_time_value = (
                 execution_times[i] if execution_times[i] is not None else TIMEOUT
@@ -198,6 +200,7 @@ async def update_miner_stats_and_scores(
             success = score_value >= TIME_WEIGHT
             if miner_uid not in validator.miner_stats:
                 validator.miner_stats[miner_uid] = MinerStats()
+
             validator.miner_stats[miner_uid].update(
                 score=float(score_value),
                 execution_time=float(exec_time_value),
