@@ -59,8 +59,11 @@ class Miner(BaseMinerNeuron):
 
     async def forward(self, synapse: TaskSynapse) -> TaskSynapse:
 
-        # Checking Weights Version
+        # Checking Weights Versio
         version_check = is_version_in_range(synapse.version, self.version, self.least_acceptable_version)
+        ColoredLogger.info(f"Version check: {synapse.version} | { self.version} | {self.least_acceptable_version}. Check: {version_check}",
+                           ColoredLogger.RED,
+                           )
 
         if not version_check:
             return synapse
