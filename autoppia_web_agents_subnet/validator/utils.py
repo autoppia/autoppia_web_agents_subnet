@@ -205,6 +205,7 @@ def clean_miner_task(task: Task) -> Task:
     # Ensure `html` is never None
     if hasattr(task_copy, "html") and task_copy.html is None:
         task_copy.html = ""
+        
     # Convert any string 'id' to int if needed
     if hasattr(task_copy, "id") and isinstance(task_copy.id, str):
         try:
