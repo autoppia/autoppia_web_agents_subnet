@@ -287,7 +287,6 @@ async def send_feedback_synapse_to_miners(
     task_solutions: List[TaskSolution],
     test_results_matrices: List[List[List[Any]]],
     evaluation_results: List[Dict[str, Any]],
-    screenshot_policy: str = "remove",
 ) -> None:
     """
     Sends a TaskFeedbackSynapse to each miner with the relevant evaluation details.
@@ -307,17 +306,16 @@ async def send_feedback_synapse_to_miners(
         # Make a shallow copy so we can strip out large fields
         feedback_task = copy.copy(task)
 
-        # # Remove or strip heavy fields if screenshot_policy is "remove"
-        # if screenshot_policy == "remove":
-        #     feedback_task.screenshot = ""
-        #     feedback_task.html = ""
-        #     feedback_task.clean_html = ""
+        feedback_task.screenshot = ""
+        feedback_task.screenshot_description = ""
+        feedback_task.html = ""
+        feedback_task.clean_html = ""
 
         # Build the feedback synapse
         feedback = TaskFeedbackSynapse(
             version=__version__,
             miner_id=str(miner_uid),
-            task=task.clean_task(),
+            task=feedback_task,
             actions=task_solutions[i].actions if i < len(task_solutions) else [],
             test_results_matrix=(
                 test_results_matrices[i] if i < len(test_results_matrices) else None
