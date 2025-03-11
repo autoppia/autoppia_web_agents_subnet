@@ -218,9 +218,7 @@ async def send_feedback_synapse_to_miners(
 
 async def handle_feedback_and_stats(
     validator,
-    web_project: WebProject,
     task: Task,
-    responses: List[TaskSynapse],
     miner_axons: List[bt.axon],                 
     miner_uids: List[int],
     execution_times: List[float],
@@ -368,10 +366,9 @@ async def process_tasks(
         # 8) Handle feedback & stats
         feedback_data = await handle_feedback_and_stats(
             validator=validator,
-            web_project=web_project,
             task=task,
-            responses=responses,
             miner_uids=miner_uids,
+            miner_axons=miner_axons,
             execution_times=execution_times,
             task_solutions=task_solutions,
             rewards=rewards,
