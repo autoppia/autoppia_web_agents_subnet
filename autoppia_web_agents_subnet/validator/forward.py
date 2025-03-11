@@ -175,6 +175,7 @@ async def send_feedback_synapse_to_miners(
             version=__version__,
             miner_id=str(miner_uid),
             task_id=task.id,
+            task_url=task.url,
             prompt=task.prompt,
             tests=task.tests,
             actions=task_solutions[i].actions if i < len(task_solutions) else [],

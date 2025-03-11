@@ -37,6 +37,7 @@ class TaskFeedbackSynapse(Synapse):
     version: str = ""
     miner_id: str
     task_id: str
+    task_url:str
     prompt: str
     tests: Optional[List[TestUnion]] = None
     actions: Optional[List[AllActionsUnion]] = Field(default_factory=list)
@@ -59,7 +60,7 @@ class TaskFeedbackSynapse(Synapse):
             and self.test_results_matrix
         ):
             # Create a temporary task object with the available attributes
-            task = Task(id=self.task_id, prompt=self.prompt)
+            task = Task(id=self.task_id, prompt=self.prompt, url=self.task_url)
             if self.tests:
                 task.tests = self.tests
 
@@ -72,7 +73,7 @@ class TaskFeedbackSynapse(Synapse):
             )
         elif self.task_id:
             # Partial data => just show the task
-            task = Task(id=self.task_id, prompt=self.prompt)
+            task = Task(id=self.task_id, prompt=self.prompt, url=self.task_url)
             if self.tests:
                 task.tests = self.tests
 
