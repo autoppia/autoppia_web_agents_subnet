@@ -1,9 +1,8 @@
-<picture>
+<picture style="background-color: black; display: inline-block; padding: 10px;">
     <source srcset="autoppia_logo.png" media="(prefers-color-scheme: dark)">
     <source srcset="autoppia_logo.png" media="(prefers-color-scheme: light)">
     <img src="autoppia_logo.png">
 </picture>
-
 
 ## 🔍 Overview
 
