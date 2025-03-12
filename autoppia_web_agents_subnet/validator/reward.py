@@ -103,10 +103,10 @@ def _process_evaluation_results(
     """
     for i, result in enumerate(detailed_results):
         # 1) Convert test_results_matrix to JSON-friendly shape
-        ColoredLogger.error(
-            f"RESULT-->: {result}",
-            ColoredLogger.RED,
-        )
+        # ColoredLogger.error(
+        #     f"RESULT-->: {result}",
+        #     ColoredLogger.RED,
+        # )
         matrix_converted = _convert_test_results_matrix(result.test_results_matrix)
         ColoredLogger.error(
             f"MATRIX_CONVERTED-->: {matrix_converted}",
