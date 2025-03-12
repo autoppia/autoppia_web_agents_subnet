@@ -66,7 +66,7 @@ if __name__ == "__main__":
 
     # IWA logging with loguru
     logger.remove()  # Remove default handler
-    logger.add("logfile.log", level="WARNING")  # Log to a file
+    logger.add("logfile.log", level="INFO")  # Log to a file
     logger.add(lambda msg: print(msg, end=""), level="WARNING")  # Log to console
 
     with Validator() as validator:
