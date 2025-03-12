@@ -298,7 +298,7 @@ async def process_tasks(
         task_synapse = TaskSynapse(
             prompt=task.prompt,
             url=task.url,
-            html=task.html,
+            html="",
             screenshot="",
             actions=[],
         )
@@ -349,7 +349,7 @@ async def process_tasks(
             )
         )
         ColoredLogger.info(
-            f"test result matrices: --> {test_results_matrices}, evaluation_results: --> {evaluation_results} ",
+            f"test result matrices: --> {test_results_matrices} ",
             ColoredLogger.RED,
         )
         end_eval = time.time()
