@@ -346,6 +346,10 @@ async def process_tasks(
                 invalid_version_responders=invalid_version_responders,
             )
         )
+        ColoredLogger.info(
+            f"test result matrices: --> {test_results_matrices}, evaluation_results: --> {evaluation_results} ",
+            ColoredLogger.RED,
+        )
         end_eval = time.time()
         bt.logging.info(f"Miners final rewards: {rewards}")
         bt.logging.info(f"Rewards computed in {end_eval - start_eval:.2f}s.")
