@@ -228,13 +228,13 @@ async def get_rewards_with_details(
             test_results_matrices.append([])
             evaluation_results.append({"error": str(e), "reward_score": 0.0})
 
-    # Override rewards for invalid-version responders
-    _apply_invalid_version_responders(
-        invalid_version_responders=invalid_version_responders,
-        task_solutions=task_solutions,
-        rewards=rewards,
-        evaluation_results=evaluation_results,
-    )
+    # # Override rewards for invalid-version responders
+    # _apply_invalid_version_responders(
+    #     invalid_version_responders=invalid_version_responders,
+    #     task_solutions=task_solutions,
+    #     rewards=rewards,
+    #     evaluation_results=evaluation_results,
+    # )
     ColoredLogger.error(
         f"Error evaluating task solutions with details: {test_results_matrices}",
         ColoredLogger.GRAY,
