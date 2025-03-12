@@ -123,6 +123,7 @@ def print_validator_performance_stats(validator) -> None:
         title="[bold yellow]Validator Performance Stats[/bold yellow]",
         header_style="bold magenta",
         box=box.SIMPLE,
+        expand=True,
     )
     table.add_column("Stat", style="cyan")
     table.add_column("Value", justify="right")
@@ -225,7 +226,7 @@ async def dendrite_with_retries(
     synapse: TaskSynapse,
     deserialize: bool,
     timeout: float,
-    retries=1
+    retries=1,
 ) -> List[TaskSynapse]:
     res: List[TaskSynapse | None] = [None] * len(axons)
     idx = list(range(len(axons)))
@@ -234,20 +235,22 @@ async def dendrite_with_retries(
     try:
         for attempt in range(retries):
             responses: List[TaskSynapse] = await dendrite(
-                axons=axons,
-                synapse=synapse,
-                deserialize=deserialize,
-                timeout=timeout
+                axons=axons, synapse=synapse, deserialize=deserialize, timeout=timeout
             )
 
             new_idx = []
             new_axons = []
             for i, response in enumerate(responses):
-                if response.dendrite.status_code is not None and int(response.dendrite.status_code) == 422:
+                if (
+                    response.dendrite.status_code is not None
+                    and int(response.dendrite.status_code) == 422
+                ):
                     if attempt == retries - 1:
                         res[idx[i]] = response
                         bt.logging.info(
-                            "Wasn't able to get answers from axon {} after {} attempts".format(axons[i], retries)
+                            "Wasn't able to get answers from axon {} after {} attempts".format(
+                                axons[i], retries
+                            )
                         )
                     else:
                         new_idx.append(idx[i])
@@ -257,7 +260,9 @@ async def dendrite_with_retries(
 
             if len(new_idx):
                 bt.logging.info(
-                    'Found {} synapses with broken pipe, retrying them'.format(len(new_idx))
+                    "Found {} synapses with broken pipe, retrying them".format(
+                        len(new_idx)
+                    )
                 )
             else:
                 break
