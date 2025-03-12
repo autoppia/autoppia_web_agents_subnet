@@ -108,7 +108,7 @@ def _process_evaluation_results(
         )
         matrix_converted = _convert_test_results_matrix(result.test_results_matrix)
         ColoredLogger.error(
-            f"RESULT-->: {matrix_converted}",
+            f"MATRIX_CONVERTED-->: {matrix_converted}",
             ColoredLogger.RED,
         )
         test_results_matrices.append(matrix_converted)
@@ -234,6 +234,9 @@ async def get_rewards_with_details(
         rewards=rewards,
         evaluation_results=evaluation_results,
     )
-
+    ColoredLogger.error(
+        f"Error evaluating task solutions with details: {test_results_matrices}",
+        ColoredLogger.GRAY,
+    )
     bt.logging.info(f"Detailed evaluation complete. Rewards: {rewards}")
     return rewards, test_results_matrices, evaluation_results
