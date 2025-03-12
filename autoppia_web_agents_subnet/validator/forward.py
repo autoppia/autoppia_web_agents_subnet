@@ -191,7 +191,7 @@ async def send_feedback_synapse_to_miners(
     feedback_tasks = []
     for axon, feedback_synapse in zip(miner_axons, feedback_list):
         # TODO: REMOVE:
-        if feedback_synapse.miner_uid == "102":
+        if feedback_synapse.miner_id == "102":
             ColoredLogger.info(
                 f"Sending TaskFeedbackSynapse to 'miner 102' miners in parallel",
                 ColoredLogger.BLUE,
