@@ -10,7 +10,6 @@ from autoppia_iwa.src.web_agents.classes import TaskSolution
 from autoppia_iwa.src.evaluation.classes import EvaluationResult
 from autoppia_iwa.src.demo_webs.classes import WebProject
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
-import numpy as np
 
 
 def _test_result_to_dict(tr: Any) -> Dict[str, Any]:
@@ -51,14 +50,56 @@ def _convert_test_results_matrix(
     return matrix_converted
 
 
-def _compute_time_factor(execution_time: Optional[float], max_time: float) -> float:
+def _normalize_execution_times(execution_times: List[Optional[float]]) -> List[float]:
     """
-    Compute a factor [0.0 ... 1.0] that decreases as execution_time approaches max_time.
-    If execution_time is None, return 0.0 as a default.
+    Normalize execution times across all miners to a [0.0 ... 1.0] range,
+    where 1.0 is the fastest (minimum time) and 0.0 is the slowest (maximum time).
+
+    - If there's only one miner with a valid time, give them a 1.0 if their raw score > 0.
+    - Any None times become 0.0 (or you can decide a different default).
     """
-    if execution_time is None:
-        return 0.0
-    return max(0.0, 1.0 - (execution_time / max_time))
+    valid_times = [t for t in execution_times if t is not None]
+    n = len(execution_times)
+
+    # If no valid times at all, everything is 0.0
+    if len(valid_times) == 0:
+        return [0.0] * n
+
+    # If there's exactly 1 valid time
+    # We will just assign 1.0 if that solution has a positive raw score,
+    # but we don't have the raw scores here, so we assign 1.0 for that single entry.
+    # We'll later apply the "score > 0" condition in final blending.
+    if len(valid_times) == 1:
+        # Find the index of the single valid time
+        single_time = valid_times[0]
+        normalized = []
+        for t in execution_times:
+            if t is None:
+                normalized.append(0.0)
+            elif t == single_time:
+                # We'll tentatively give 1.0, but final combination with raw_score
+                # can override if raw_score = 0
+                normalized.append(1.0)
+            else:
+                normalized.append(0.0)
+        return normalized
+
+    # General case: multiple valid times
+    min_time = min(valid_times)
+    max_time = max(valid_times)
+    denom = max_time - min_time if max_time > min_time else 1e-9
+
+    normalized_times = []
+    for et in execution_times:
+        if et is None:
+            # If no reported time, treat as 0.0
+            normalized_times.append(0.0)
+        else:
+            factor = 1.0 - ((et - min_time) / denom)
+            # clamp to [0, 1]
+            factor = max(0.0, min(factor, 1.0))
+            normalized_times.append(factor)
+    return normalized_times
 
 
 def _apply_invalid_version_responders(
@@ -95,39 +136,42 @@ def _process_evaluation_results(
     time_weight: float,
     min_correct_format_score: float,
     min_response_reward: float,
-    max_time: float = 60.0,
 ) -> Tuple[np.ndarray, List[List[List[Any]]], List[Dict[str, Any]]]:
     """
-    Process each EvaluationResult, converting the test matrix and
-    computing adjusted scores with a time penalty or bonus.
+    1. Convert test_results_matrix to JSON-friendly shape.
+    2. Compute the final reward as 80% from raw evaluation score
+       and 20% from a time factor that's normalized among all miners.
+       - If raw_score <= 0, final_score is 0.0 (i.e., no time bonus).
+       - If raw_score >= min_correct_format_score, ensure at least min_response_reward.
     """
+    # First, gather raw_scores and store them so we can handle them in a single pass.
+    raw_scores = []
+    for result in detailed_results:
+        raw_scores.append(result.final_score if result.final_score is not None else 0.0)
+
+    # Create the normalized time factors array
+    time_factors = _normalize_execution_times(execution_times)
+
+    # For each result/solution, finalize the reward
     for i, result in enumerate(detailed_results):
         # 1) Convert test_results_matrix to JSON-friendly shape
-        # ColoredLogger.error(
-        #     f"RESULT-->: {result}",
-        #     ColoredLogger.RED,
-        # )
         matrix_converted = _convert_test_results_matrix(result.test_results_matrix)
-        ColoredLogger.error(
-            f"MATRIX_CONVERTED-->: {matrix_converted}",
-            ColoredLogger.RED,
-        )
         test_results_matrices.append(matrix_converted)
 
-        # 2) Compute raw_score, time_factor, etc.
-        raw_score = result.final_score if result.final_score is not None else 0.0
-        execution_time = execution_times[i] if i < len(execution_times) else None
-        time_factor = _compute_time_factor(execution_time, max_time)
-
-        final_score_time_adjusted = (
-            1.0 - time_weight
-        ) * raw_score + time_weight * time_factor
-
-        # Ensure at least min_response_reward if raw_score >= min_correct_format_score
-        if raw_score >= min_correct_format_score:
-            final_score_time_adjusted = max(
-                final_score_time_adjusted, min_response_reward
+        raw_score = raw_scores[i]
+        time_factor = time_factors[i]
+        # If the solution is valid (raw_score > 0), combine with time factor
+        if raw_score > 0:
+            final_score_time_adjusted = ((1.0 - time_weight) * raw_score) + (
+                time_weight * time_factor
             )
+        else:
+            final_score_time_adjusted = 0.0
+
+        # Enforce a minimum reward if raw_score is above min_correct_format_score
+        if raw_score >= min_correct_format_score:
+            final_score_time_adjusted = max(final_score_time_adjusted, min_response_reward)
+
         rewards[i] = final_score_time_adjusted
 
         # 3) Build a JSON-friendly dict for evaluation
@@ -137,12 +181,9 @@ def _process_evaluation_results(
             "reward_score": float(final_score_time_adjusted),
             "random_clicker_score": float(result.random_clicker_score or 0.0),
             "time_factor": float(time_factor),
-            "execution_time": float(execution_time) if execution_time else None,
+            "execution_time": float(execution_times[i]) if i < len(execution_times) else None,
         }
-        ColoredLogger.error(
-            f"MATRIX_CONVERTED-->: {eval_dict}",
-            ColoredLogger.BLUE,
-        )
+
         # 4) If there's feedback with test counts, add it
         if result.feedback:
             eval_dict["feedback"] = {
@@ -215,14 +256,14 @@ async def get_rewards_with_details(
             test_results_matrices=test_results_matrices,
             evaluation_results=evaluation_results,
             execution_times=execution_times,
-            time_weight=time_weight,
+            time_weight=time_weight,  # 20% goes to time
             min_correct_format_score=min_correct_format_score,
             min_response_reward=min_response_reward,
         )
 
     except Exception as e:
         ColoredLogger.error(
-            f"Error evaluating task solutions with details: ",
+            f"Error evaluating task solutions with details: {str(e)}",
             ColoredLogger.RED,
         )
         # In case of errors, set all rewards to 0, store empty test results, and note the error
@@ -231,15 +272,16 @@ async def get_rewards_with_details(
             test_results_matrices.append([])
             evaluation_results.append({"error": str(e), "reward_score": 0.0})
 
-    # # Override rewards for invalid-version responders
-    # _apply_invalid_version_responders(
-    #     invalid_version_responders=invalid_version_responders,
-    #     task_solutions=task_solutions,
-    #     rewards=rewards,
-    #     evaluation_results=evaluation_results,
-    # )
+    # If you want to override rewards for invalid-version responders:
+    _apply_invalid_version_responders(
+        invalid_version_responders=invalid_version_responders,
+        task_solutions=task_solutions,
+        rewards=rewards,
+        evaluation_results=evaluation_results,
+    )
+
     ColoredLogger.error(
-        f"Error evaluating task solutions with details: {test_results_matrices}",
+        f"Final test results matrices: {test_results_matrices}",
         ColoredLogger.GRAY,
     )
     bt.logging.info(f"Detailed evaluation complete. Rewards: {rewards}")
