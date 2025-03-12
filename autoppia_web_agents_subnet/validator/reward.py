@@ -41,10 +41,10 @@ def _convert_test_results_matrix(
         return []
 
     matrix_converted = []
-    for action_list in test_results_matrix:
-        row = [_test_result_to_dict(tr) for tr in action_list]
+    for test_result in test_results_matrix:
+        row = [_test_result_to_dict(tr) for tr in test_result]
         ColoredLogger.error(
-            f"RESULT-->: {row}. ACTIONS --> {action_list}",
+            f"RESULT-->: {row}. ACTIONS --> {test_result}",
             ColoredLogger.GREEN,
         )
         matrix_converted.append(row)
@@ -103,10 +103,10 @@ def _process_evaluation_results(
     """
     for i, result in enumerate(detailed_results):
         # 1) Convert test_results_matrix to JSON-friendly shape
-        ColoredLogger.error(
-            f"RESULT-->: {result}",
-            ColoredLogger.RED,
-        )
+        # ColoredLogger.error(
+        #     f"RESULT-->: {result}",
+        #     ColoredLogger.RED,
+        # )
         matrix_converted = _convert_test_results_matrix(result.test_results_matrix)
         ColoredLogger.error(
             f"MATRIX_CONVERTED-->: {matrix_converted}",
@@ -139,7 +139,10 @@ def _process_evaluation_results(
             "time_factor": float(time_factor),
             "execution_time": float(execution_time) if execution_time else None,
         }
-
+        ColoredLogger.error(
+            f"MATRIX_CONVERTED-->: {eval_dict}",
+            ColoredLogger.BLUE,
+        )
         # 4) If there's feedback with test counts, add it
         if result.feedback:
             eval_dict["feedback"] = {
