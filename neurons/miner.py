@@ -16,6 +16,7 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
+import logging
 import time
 import typing
 from typing import List
@@ -96,6 +97,7 @@ class Miner(BaseMinerNeuron):
                 f"Task Prompt: {synapse.prompt}",
                 ColoredLogger.WHITE,
             )
+            bt.logging.info("Generating actions....")
 
             # Create Task object
             task = Task(
