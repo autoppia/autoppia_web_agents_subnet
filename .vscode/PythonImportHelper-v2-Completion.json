@@ -3969,6 +3969,14 @@
         "documentation": {}
     },
     {
+        "label": "logger",
+        "importPath": "loguru",
+        "description": "loguru",
+        "isExtraImport": true,
+        "detail": "loguru",
+        "documentation": {}
+    },
+    {
         "label": "CheckEventTest",
         "importPath": "autoppia_iwa.src.data_generation.domain.tests_classes",
         "description": "autoppia_iwa.src.data_generation.domain.tests_classes",
@@ -12142,15 +12150,6 @@
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.demo_webs_service",
         "description": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.demo_webs_service",
         "peekOfCode": "class BackendDemoWebService:\n    \"\"\"\n    Service for interacting with the backend of demo web endpoints.\n    Stores the web_project on initialization and uses its backend_url for API calls.\n    \"\"\"\n    def __init__(self, web_project: WebProject) -> None:\n        \"\"\"\n        Initialize a single aiohttp session holder and store the web_project.\n        Args:\n            web_project: The web project containing the backend_url to use",
-        "detail": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.demo_webs_service",
-        "documentation": {}
-    },
-    {
-        "label": "logger",
-        "kind": 5,
-        "importPath": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.demo_webs_service",
-        "description": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.demo_webs_service",
-        "peekOfCode": "logger = logging.getLogger(__name__)\nclass BackendDemoWebService:\n    \"\"\"\n    Service for interacting with the backend of demo web endpoints.\n    Stores the web_project on initialization and uses its backend_url for API calls.\n    \"\"\"\n    def __init__(self, web_project: WebProject) -> None:\n        \"\"\"\n        Initialize a single aiohttp session holder and store the web_project.\n        Args:",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.demo_webs_service",
         "documentation": {}
     },
