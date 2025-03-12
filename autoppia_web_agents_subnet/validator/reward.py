@@ -219,7 +219,7 @@ async def get_rewards_with_details(
 
     except Exception as e:
         ColoredLogger.error(
-            f"Error evaluating task solutions with details: {e}",
+            f"Error evaluating task solutions with details: ",
             ColoredLogger.RED,
         )
         # In case of errors, set all rewards to 0, store empty test results, and note the error
