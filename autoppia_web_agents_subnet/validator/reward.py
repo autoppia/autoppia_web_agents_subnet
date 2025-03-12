@@ -139,7 +139,10 @@ def _process_evaluation_results(
             "time_factor": float(time_factor),
             "execution_time": float(execution_time) if execution_time else None,
         }
-
+        ColoredLogger.error(
+            f"MATRIX_CONVERTED-->: {eval_dict}",
+            ColoredLogger.BLUE,
+        )
         # 4) If there's feedback with test counts, add it
         if result.feedback:
             eval_dict["feedback"] = {
