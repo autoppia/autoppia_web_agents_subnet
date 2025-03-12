@@ -357,7 +357,7 @@ async def process_tasks(
         bt.logging.info(f"Rewards computed in {end_eval - start_eval:.2f}s.")
 
         # Update Validator Scores
-        validator.update_scores(rewards, miner_uids)
+        validator.update_scores(rewards * 100, miner_uids)
 
         # 8) Handle feedback & stats
         feedback_data = await handle_feedback_and_validator_stats(
