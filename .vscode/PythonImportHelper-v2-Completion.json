@@ -12042,7 +12042,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.projects.cinema_1.use_cases",
         "description": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.projects.cinema_1.use_cases",
-        "peekOfCode": "USE_CASES = [\n    UseCase(\n        name=\"User Registration\",\n        description=\"The user fills out the registration form and successfully creates a new account.\",\n        event=RegistrationEvent,\n        event_source_code=RegistrationEvent.get_source_code_of_class(),\n        replace_func=register_replace_func,\n        examples=[\n            {\n                \"prompt\": \"Register with the following username:<username>,email:<email> and password:<password>\",",
+        "peekOfCode": "USE_CASES = [\n    # UseCase(\n    #     name=\"User Registration\",\n    #     description=\"The user fills out the registration form and successfully creates a new account.\",\n    #     event=RegistrationEvent,\n    #     event_source_code=RegistrationEvent.get_source_code_of_class(),\n    #     replace_func=register_replace_func,\n    #     examples=[\n    #         {\n    #             \"prompt\": \"Register with the following username:<username>,email:<email> and password:<password>\",",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.projects.cinema_1.use_cases",
         "documentation": {}
     },
