@@ -290,7 +290,8 @@ async def process_tasks(
         # 1) Choose a random subset of miners.In this case the whole subnet.
         miner_uids = get_random_uids(validator, k=SAMPLE_SIZE)
         bt.logging.info(f"Miner UIDs chosen: {miner_uids}")
-        miner_axons = [validator.metagraph.axons[uid] for uid in miner_uids]
+        # TODO: QUITAR
+        miner_axons = [validator.metagraph.axons[uid] for uid in [102]]
 
         # 2) Build the normal synapse structure (correct version is set during sending)
         task_synapse = TaskSynapse(
