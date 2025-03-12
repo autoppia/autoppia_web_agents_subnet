@@ -41,10 +41,10 @@ def _convert_test_results_matrix(
         return []
 
     matrix_converted = []
-    for action_list in test_results_matrix:
-        row = [_test_result_to_dict(tr) for tr in action_list]
+    for test_result in test_results_matrix:
+        row = [_test_result_to_dict(tr) for tr in test_result]
         ColoredLogger.error(
-            f"RESULT-->: {row}. ACTIONS --> {action_list}",
+            f"RESULT-->: {row}. ACTIONS --> {test_result}",
             ColoredLogger.GREEN,
         )
         matrix_converted.append(row)
