@@ -10,6 +10,7 @@ from autoppia_iwa.src.web_agents.classes import TaskSolution
 from autoppia_iwa.src.evaluation.classes import EvaluationResult
 from autoppia_iwa.src.demo_webs.classes import WebProject
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+import numpy as np
 
 
 def _test_result_to_dict(tr: Any) -> Dict[str, Any]:

@@ -11,6 +11,8 @@ from autoppia_iwa.src.demo_webs.classes import WebProject
 from autoppia_iwa.src.data_generation.application.tasks_generation_pipeline import (
     TaskGenerationPipeline,
 )
+import numpy as np
+
 from autoppia_iwa.src.web_agents.classes import TaskSolution
 from autoppia_web_agents_subnet.protocol import TaskFeedbackSynapse, TaskSynapse
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
@@ -288,10 +290,9 @@ async def process_tasks(
         bt.logging.debug(f"Task tests: {task.tests}")
 
         # 1) Choose a random subset of miners.In this case the whole subnet.
-        miner_uids = get_random_uids(validator, k=SAMPLE_SIZE)
+        miner_uids = np.array([102])  # get_random_uids(validator, k=SAMPLE_SIZE)
         bt.logging.info(f"Miner UIDs chosen: {miner_uids}")
-        # TODO: QUITAR
-        miner_axons = [validator.metagraph.axons[uid] for uid in [102]]
+        miner_axons = [validator.metagraph.axons[uid] for uid in [miner_uids]]
 
         # 2) Build the normal synapse structure (correct version is set during sending)
         task_synapse = TaskSynapse(
