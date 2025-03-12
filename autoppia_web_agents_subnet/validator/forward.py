@@ -299,7 +299,7 @@ async def process_tasks(
             prompt=task.prompt,
             url=task.url,
             html=task.html,
-            screenshot=task.screenshot,
+            screenshot="",
             actions=[],
         )
 
