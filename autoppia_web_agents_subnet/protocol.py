@@ -12,6 +12,7 @@ class TaskSynapse(Synapse):
     """
     Synapse carrying the Task prompt & data from validator to miners.
     """
+
     version: str = ""
     prompt: str
     url: str
@@ -34,10 +35,12 @@ class TaskFeedbackSynapse(Synapse):
     Synapse carrying feedback from validator back to miner,
     including test_results, evaluation scores, and stats.
     """
+
     version: str = ""
+    validator_id: str
     miner_id: str
     task_id: str
-    task_url:str
+    task_url: str
     prompt: str
     tests: Optional[List[TestUnion]] = None
     actions: Optional[List[AllActionsUnion]] = Field(default_factory=list)
@@ -54,11 +57,7 @@ class TaskFeedbackSynapse(Synapse):
     def print_in_terminal(self):
         visualizer = SubnetVisualizer()
         # If we have enough data for a full evaluation
-        if (
-            self.task_id
-            and self.actions
-            and self.test_results_matrix
-        ):
+        if self.task_id and self.actions and self.test_results_matrix:
             # Create a temporary task object with the available attributes
             task = Task(id=self.task_id, prompt=self.prompt, url=self.task_url)
             if self.tests:
@@ -66,6 +65,7 @@ class TaskFeedbackSynapse(Synapse):
 
             visualizer.show_full_evaluation(
                 agent_id=self.miner_id,
+                validator_id=self.validator_id,
                 task=task,
                 actions=self.actions,
                 test_results_matrix=self.test_results_matrix,
