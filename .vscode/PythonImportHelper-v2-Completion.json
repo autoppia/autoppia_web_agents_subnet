@@ -18416,7 +18416,7 @@
         "kind": 6,
         "importPath": "autoppia_web_agents_subnet.protocol",
         "description": "autoppia_web_agents_subnet.protocol",
-        "peekOfCode": "class TaskFeedbackSynapse(Synapse):\n    \"\"\"\n    Synapse carrying feedback from validator back to miner,\n    including test_results, evaluation scores, and stats.\n    \"\"\"\n    version: str = \"\"\n    miner_id: str\n    task_id: str\n    task_url:str\n    prompt: str",
+        "peekOfCode": "class TaskFeedbackSynapse(Synapse):\n    \"\"\"\n    Synapse carrying feedback from validator back to miner,\n    including test_results, evaluation scores, and stats.\n    \"\"\"\n    version: str = \"\"\n    validator_id: str\n    miner_id: str\n    task_id: str\n    task_url: str",
         "detail": "autoppia_web_agents_subnet.protocol",
         "documentation": {}
     },
