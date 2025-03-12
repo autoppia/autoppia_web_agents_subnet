@@ -42,6 +42,10 @@ def _convert_test_results_matrix(
     matrix_converted = []
     for action_list in test_results_matrix:
         row = [_test_result_to_dict(tr) for tr in action_list]
+        ColoredLogger.error(
+            f"RESULT-->: {row}. ACTIONS --> {action_list}",
+            ColoredLogger.GREEN,
+        )
         matrix_converted.append(row)
     return matrix_converted
 
@@ -98,7 +102,15 @@ def _process_evaluation_results(
     """
     for i, result in enumerate(detailed_results):
         # 1) Convert test_results_matrix to JSON-friendly shape
+        ColoredLogger.error(
+            f"RESULT-->: {result}",
+            ColoredLogger.RED,
+        )
         matrix_converted = _convert_test_results_matrix(result.test_results_matrix)
+        ColoredLogger.error(
+            f"RESULT-->: {matrix_converted}",
+            ColoredLogger.RED,
+        )
         test_results_matrices.append(matrix_converted)
 
         # 2) Compute raw_score, time_factor, etc.
@@ -107,9 +119,8 @@ def _process_evaluation_results(
         time_factor = _compute_time_factor(execution_time, max_time)
 
         final_score_time_adjusted = (
-            (1.0 - time_weight) * raw_score
-            + time_weight * time_factor
-        )
+            1.0 - time_weight
+        ) * raw_score + time_weight * time_factor
 
         # Ensure at least min_response_reward if raw_score >= min_correct_format_score
         if raw_score >= min_correct_format_score:
@@ -136,7 +147,9 @@ def _process_evaluation_results(
                 "total_execution_time": float(
                     getattr(result.feedback, "total_execution_time", 0.0)
                 ),
-                "executed_actions": int(getattr(result.feedback, "executed_actions", 0)),
+                "executed_actions": int(
+                    getattr(result.feedback, "executed_actions", 0)
+                ),
                 "failed_actions": int(getattr(result.feedback, "failed_actions", 0)),
             }
 
@@ -171,9 +184,7 @@ async def get_rewards_with_details(
     # Create the evaluator
     evaluator_config = EvaluatorConfig(
         save_results_in_db=False,
-        exclude_random_passed_tests=True,
         normalize_scores=True,
-        starting_url=task.url,
     )
     evaluator = ConcurrentEvaluator(web_project, evaluator_config)
 
@@ -190,7 +201,6 @@ async def get_rewards_with_details(
             )
         )
 
-        # Process the evaluation results
         (
             rewards,
             test_results_matrices,
