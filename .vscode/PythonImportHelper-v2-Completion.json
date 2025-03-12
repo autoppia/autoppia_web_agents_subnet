@@ -18236,7 +18236,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "TIMEOUT = 60 * 2 \nCHECK_VERSION_SYNAPSE = 30\nCHECK_VERSION_PROBABILITY = 0.25\nFEEDBACK_TIMEOUT = 30\nFORWARD_SLEEP_SECONDS = 60 * 1 \nTASK_SLEEP = 60 * 1 \nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1 \nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  ",
+        "peekOfCode": "TIMEOUT = 60 * 2 \nCHECK_VERSION_SYNAPSE = 30\nCHECK_VERSION_PROBABILITY = 0.25\nFEEDBACK_TIMEOUT = 30\nFORWARD_SLEEP_SECONDS = 60 * 1 \nTASK_SLEEP = 60 * 1 \nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  ",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },
@@ -18245,7 +18245,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "CHECK_VERSION_SYNAPSE = 30\nCHECK_VERSION_PROBABILITY = 0.25\nFEEDBACK_TIMEOUT = 30\nFORWARD_SLEEP_SECONDS = 60 * 1 \nTASK_SLEEP = 60 * 1 \nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1 \nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  \nMAX_ACTIONS_LENGTH = 15",
+        "peekOfCode": "CHECK_VERSION_SYNAPSE = 30\nCHECK_VERSION_PROBABILITY = 0.25\nFEEDBACK_TIMEOUT = 30\nFORWARD_SLEEP_SECONDS = 60 * 1 \nTASK_SLEEP = 60 * 1 \nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  \nMAX_ACTIONS_LENGTH = 15",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },
@@ -18254,7 +18254,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "CHECK_VERSION_PROBABILITY = 0.25\nFEEDBACK_TIMEOUT = 30\nFORWARD_SLEEP_SECONDS = 60 * 1 \nTASK_SLEEP = 60 * 1 \nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1 \nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  \nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1",
+        "peekOfCode": "CHECK_VERSION_PROBABILITY = 0.25\nFEEDBACK_TIMEOUT = 30\nFORWARD_SLEEP_SECONDS = 60 * 1 \nTASK_SLEEP = 60 * 1 \nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  \nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },
@@ -18263,7 +18263,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "FEEDBACK_TIMEOUT = 30\nFORWARD_SLEEP_SECONDS = 60 * 1 \nTASK_SLEEP = 60 * 1 \nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1 \nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  \nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1",
+        "peekOfCode": "FEEDBACK_TIMEOUT = 30\nFORWARD_SLEEP_SECONDS = 60 * 1 \nTASK_SLEEP = 60 * 1 \nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  \nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },
@@ -18272,7 +18272,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "FORWARD_SLEEP_SECONDS = 60 * 1 \nTASK_SLEEP = 60 * 1 \nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1 \nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  \nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\ndef read_config() -> bt.config:",
+        "peekOfCode": "FORWARD_SLEEP_SECONDS = 60 * 1 \nTASK_SLEEP = 60 * 1 \nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  \nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\ndef read_config() -> bt.config:",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },
@@ -18281,7 +18281,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "TASK_SLEEP = 60 * 1 \nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1 \nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  \nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()",
+        "peekOfCode": "TASK_SLEEP = 60 * 1 \nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  \nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },
@@ -18290,7 +18290,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "TIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.1 \nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  \nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)",
+        "peekOfCode": "TIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  \nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },
@@ -18299,7 +18299,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "MIN_SCORE_FOR_CORRECT_FORMAT = 0.1 \nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  \nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)\n    bt.wallet.add_args(parser)",
+        "peekOfCode": "MIN_SCORE_FOR_CORRECT_FORMAT = 0\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256  \nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)\n    bt.wallet.add_args(parser)",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },

@@ -137,8 +137,8 @@ def print_validator_performance_stats(validator) -> None:
     table.add_row("Average Time per Generated Task (s)", f"{avg_task_gen_time:.2f}")
 
     table.add_row("Tasks Processed (total)", str(tasks_sent))
-    table.add_row("Tasks with Success", str(tasks_success))
-    table.add_row("Tasks with Wrong", str(tasks_wrong))
+    table.add_row("Successfull tasks", str(tasks_success))
+    table.add_row("Not Successfull Tasks", str(tasks_wrong))
     table.add_row("Tasks with No Response", str(tasks_no_resp))
     table.add_row("Success Rate", f"{(success_rate * 100):.2f}%")
 
