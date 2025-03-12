@@ -190,16 +190,22 @@ async def send_feedback_synapse_to_miners(
 
     feedback_tasks = []
     for axon, feedback_synapse in zip(miner_axons, feedback_list):
-        feedback_tasks.append(
-            asyncio.create_task(
-                validator.dendrite(
-                    axons=[axon],
-                    synapse=feedback_synapse,
-                    deserialize=True,
-                    timeout=FEEDBACK_TIMEOUT,
+        # TODO: REMOVE:
+        if feedback_synapse.miner_uid == "102":
+            ColoredLogger.info(
+                f"Sending TaskFeedbackSynapse to 'miner 102' miners in parallel",
+                ColoredLogger.BLUE,
+            )
+            feedback_tasks.append(
+                asyncio.create_task(
+                    validator.dendrite(
+                        axons=[axon],
+                        synapse=feedback_synapse,
+                        deserialize=True,
+                        timeout=FEEDBACK_TIMEOUT,
+                    )
                 )
             )
-        )
 
     # Wait for all feedback requests to complete
     results = await asyncio.gather(*feedback_tasks)
