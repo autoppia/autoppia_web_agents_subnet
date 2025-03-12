@@ -6,6 +6,7 @@ from autoppia_iwa.src.data_generation.domain.classes import Task
 from autoppia_iwa.src.shared.visualizator import SubnetVisualizer
 from autoppia_iwa.src.data_generation.domain.classes import TestUnion
 from rich.console import Console
+import bittensor as bt
 
 
 class TaskSynapse(Synapse):
@@ -62,7 +63,7 @@ class TaskFeedbackSynapse(Synapse):
             task = Task(id=self.task_id, prompt=self.prompt, url=self.task_url)
             if self.tests:
                 task.tests = self.tests
-
+            bt.logging.info(self.evaluation_result)
             visualizer.show_full_evaluation(
                 agent_id=self.miner_id,
                 validator_id=self.validator_id,
