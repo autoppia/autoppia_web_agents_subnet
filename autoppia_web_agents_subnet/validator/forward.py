@@ -27,7 +27,7 @@ from autoppia_web_agents_subnet.validator.config import (
     TIMEOUT,
     CHECK_VERSION_PROBABILITY,
     FEEDBACK_TIMEOUT,
-    CHECK_VERSION_SYNAPSE
+    CHECK_VERSION_SYNAPSE,
 )
 from autoppia_web_agents_subnet.validator.utils import (
     retrieve_random_demo_web_project,
@@ -167,6 +167,7 @@ async def send_feedback_synapse_to_miners(
         feedback = TaskFeedbackSynapse(
             version=__version__,
             miner_id=str(miner_uid),
+            validator_id=str(validator.uid),
             task_id=task.id,
             task_url=task.url,
             prompt=task.prompt,
