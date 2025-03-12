@@ -451,7 +451,13 @@ async def forward(self) -> None:
 
         # 3. Process tasks (this includes the invalid version check + correct version flow)
         tasks_processed_start_time = time.time()
-        await process_tasks(self, demo_web_project, tasks_generated)
+        tasks_without_screenshot = []
+        for task in tasks_generated:
+            task_copy = copy.deepcopy(task)
+            if hasattr(task_copy, "screenshot"):
+                setattr(task_copy, "screenshot", None)  # Alternativa a `del`
+            tasks_without_screenshot.append(task_copy)
+        await process_tasks(self, demo_web_project, tasks_without_screenshot)
         tasks_processed_end_time = time.time()
         tasks_processed_time = tasks_processed_end_time - tasks_processed_start_time
         self.validator_performance_stats[
