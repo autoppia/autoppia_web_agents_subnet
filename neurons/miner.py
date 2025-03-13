@@ -77,7 +77,7 @@ class Miner(BaseMinerNeuron):
             bt.logging.info(f"  {i}. {action.type}: {action_attrs}")
 
     async def forward(self, synapse: TaskSynapse) -> TaskSynapse:
-        
+
         validator_hotkey = getattr(synapse.dendrite, "hotkey", None)
 
         # Checking Weights Version
@@ -90,7 +90,7 @@ class Miner(BaseMinerNeuron):
 
         try:
             start_time = time.time()
-            
+
             ColoredLogger.info(
                 f"Request Received from validator: {validator_hotkey}",
                 ColoredLogger.YELLOW,
