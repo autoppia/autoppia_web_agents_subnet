@@ -351,6 +351,10 @@ async def process_tasks(
             )
         )
         ColoredLogger.info(
+            f"task solutions: --> {task_solutions} ",
+            ColoredLogger.GREEN,
+        )
+        ColoredLogger.info(
             f"test result matrices: --> {test_results_matrices} ",
             ColoredLogger.RED,
         )
