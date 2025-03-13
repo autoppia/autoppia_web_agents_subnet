@@ -61,8 +61,11 @@ def _normalize_times_for_valid_solutions(
     Return a list of time_factors (same length as `execution_times`).
     """
     # Gather (time, idx) only for solutions that have raw_score > 0 and valid time
-    valid_pairs = [(t, idx) for idx, t in enumerate(execution_times)
-                   if t is not None and raw_scores[idx] > 0]
+    valid_pairs = [
+        (t, idx)
+        for idx, t in enumerate(execution_times)
+        if t is not None and raw_scores[idx] > 0
+    ]
     n = len(execution_times)
 
     # If no valid times at all => everyone gets 0.0
@@ -229,18 +232,12 @@ async def get_rewards_with_details(
 
     try:
         # Evaluate solutions
-        detailed_results: List[EvaluationResult] = await evaluator.evaluate_task_solutions(
-            task=task, task_solutions=task_solutions
+        detailed_results: List[EvaluationResult] = (
+            await evaluator.evaluate_task_solutions(
+                task=task, task_solutions=task_solutions
+            )
         )
-        for i, (solution, result) in enumerate(zip(task_solutions, detailed_results)):
-            ColoredLogger.info(
-                f"DEBUG: i={i}, solution.web_agent_id={solution.web_agent_id}, result={result.test_results_matrix}",
-                ColoredLogger.PURPLE,
-            )
-        for i, solution in enumerate(task_solutions):
-            bt.logging.info(
-                f"MINER CHECK: i={i}, solution.web_agent_id={solution.web_agent_id}"
-            )
+
         (
             rewards,
             test_results_matrices,

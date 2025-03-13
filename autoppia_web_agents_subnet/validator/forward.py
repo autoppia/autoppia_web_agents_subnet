@@ -347,22 +347,7 @@ async def process_tasks(
                 invalid_version_responders=invalid_version_responders,
             )
         )
-        ColoredLogger.info(
-            f"task solutions: --> {task_solutions} ",
-            ColoredLogger.GREEN,
-        )
-        ColoredLogger.info(
-            f"test result matrices: --> {test_results_matrices} ",
-            ColoredLogger.RED,
-        )
-        ColoredLogger.info(
-            f"REWARDS: --> {rewards} ",
-            ColoredLogger.YELLOW,
-        )
-        ColoredLogger.info(
-            f"MINERs IDS: --> {miner_uids} ",
-            ColoredLogger.BLUE,
-        )
+
         end_eval = time.time()
         bt.logging.info(f"Miners final rewards: {rewards}")
         bt.logging.info(f"Rewards computed in {end_eval - start_eval:.2f}s.")
