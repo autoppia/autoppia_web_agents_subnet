@@ -363,7 +363,7 @@ async def process_tasks(
             ColoredLogger.YELLOW,
         )
         ColoredLogger.info(
-            f"REWARDS: --> {miner_uids} ",
+            f"MINERs IDS: --> {miner_uids} ",
             ColoredLogger.BLUE,
         )
         end_eval = time.time()
