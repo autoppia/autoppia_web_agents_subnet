@@ -21,6 +21,7 @@ NUM_URLS = 1
 PROMPTS_PER_ITERATION = 1
 
 
+
 def read_config() -> bt.config:
     parser = argparse.ArgumentParser()
     bt.logging.add_args(parser)

@@ -169,6 +169,14 @@
         "documentation": {}
     },
     {
+        "label": "strtobool",
+        "importPath": "distutils.util",
+        "description": "distutils.util",
+        "isExtraImport": true,
+        "detail": "distutils.util",
+        "documentation": {}
+    },
+    {
         "label": "load_dotenv",
         "importPath": "dotenv",
         "description": "dotenv",
@@ -854,6 +862,14 @@
     },
     {
         "label": "Tuple",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Optional",
         "importPath": "typing",
         "description": "typing",
         "isExtraImport": true,
@@ -5516,6 +5532,31 @@
         "description": "playwright.async_api",
         "isExtraImport": true,
         "detail": "playwright.async_api",
+        "documentation": {}
+    },
+    {
+        "label": "bittensor",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "bittensor",
+        "description": "bittensor",
+        "detail": "bittensor",
+        "documentation": {}
+    },
+    {
+        "label": "Synapse",
+        "importPath": "bittensor",
+        "description": "bittensor",
+        "isExtraImport": true,
+        "detail": "bittensor",
+        "documentation": {}
+    },
+    {
+        "label": "display_batch_evaluation_summary",
+        "importPath": "autoppia_iwa.src.evaluation.evaluator.utils",
+        "description": "autoppia_iwa.src.evaluation.evaluator.utils",
+        "isExtraImport": true,
+        "detail": "autoppia_iwa.src.evaluation.evaluator.utils",
         "documentation": {}
     },
     {
@@ -10315,23 +10356,6 @@
         "documentation": {}
     },
     {
-        "label": "bittensor",
-        "kind": 6,
-        "isExtraImport": true,
-        "importPath": "bittensor",
-        "description": "bittensor",
-        "detail": "bittensor",
-        "documentation": {}
-    },
-    {
-        "label": "Synapse",
-        "importPath": "bittensor",
-        "description": "bittensor",
-        "isExtraImport": true,
-        "detail": "bittensor",
-        "documentation": {}
-    },
-    {
         "label": "traceback",
         "kind": 6,
         "isExtraImport": true,
@@ -12042,7 +12066,7 @@
         "kind": 5,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.projects.cinema_1.use_cases",
         "description": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.projects.cinema_1.use_cases",
-        "peekOfCode": "USE_CASES = [\n    # UseCase(\n    #     name=\"User Registration\",\n    #     description=\"The user fills out the registration form and successfully creates a new account.\",\n    #     event=RegistrationEvent,\n    #     event_source_code=RegistrationEvent.get_source_code_of_class(),\n    #     replace_func=register_replace_func,\n    #     examples=[\n    #         {\n    #             \"prompt\": \"Register with the following username:<username>,email:<email> and password:<password>\",",
+        "peekOfCode": "USE_CASES = [\n    UseCase(\n        name=\"User Registration\",\n        description=\"The user fills out the registration form and successfully creates a new account.\",\n        event=RegistrationEvent,\n        event_source_code=RegistrationEvent.get_source_code_of_class(),\n        replace_func=register_replace_func,\n        examples=[\n            {\n                \"prompt\": \"Register with the following username:<username>,email:<email> and password:<password>\",",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.demo_webs.projects.cinema_1.use_cases",
         "documentation": {}
     },
@@ -12168,7 +12192,7 @@
         "kind": 6,
         "importPath": "autoppia_iwa_module.autoppia_iwa.src.evaluation.evaluator.evaluator",
         "description": "autoppia_iwa_module.autoppia_iwa.src.evaluation.evaluator.evaluator",
-        "peekOfCode": "class ConcurrentEvaluator(IEvaluator):\n    def __init__(self, web_project: WebProject, config: EvaluatorConfig):\n        self.config = config\n        self._random_clicker_cache: Dict[str, Tuple[List[int], float]] = {}\n        self.total_evaluation_time = 0.0\n        self.evaluation_count = 0\n        self.web_project = web_project\n        self.backend_demo_webs_service = BackendDemoWebService(web_project=web_project)\n        # Statistics collection\n        self.evaluation_stats: List[EvaluationStats] = []",
+        "peekOfCode": "class ConcurrentEvaluator(IEvaluator):\n    def __init__(self, web_project: WebProject, config: EvaluatorConfig):\n        self.config = config\n        self._random_clicker_cache: Dict[str, Tuple[List[int], float]] = {}\n        self.total_evaluation_time = 0.0\n        self.evaluation_count = 0\n        self.web_project = web_project\n        self.backend_demo_webs_service = BackendDemoWebService(web_project=web_project)\n        # Estadísticas de ejecución y errores\n        self.evaluation_stats: List[EvaluationStats] = []",
         "detail": "autoppia_iwa_module.autoppia_iwa.src.evaluation.evaluator.evaluator",
         "documentation": {}
     },
@@ -18424,6 +18448,24 @@
         "importPath": "autoppia_web_agents_subnet.protocol",
         "description": "autoppia_web_agents_subnet.protocol",
         "peekOfCode": "class TaskFeedbackSynapse(Synapse):\n    \"\"\"\n    Synapse carrying feedback from validator back to miner,\n    including test_results, evaluation scores, and stats.\n    \"\"\"\n    version: str = \"\"\n    validator_id: str\n    miner_id: str\n    task_id: str\n    task_url: str",
+        "detail": "autoppia_web_agents_subnet.protocol",
+        "documentation": {}
+    },
+    {
+        "label": "SAVE_SUCCESSFULL_TASK_IN_JSON",
+        "kind": 5,
+        "importPath": "autoppia_web_agents_subnet.protocol",
+        "description": "autoppia_web_agents_subnet.protocol",
+        "peekOfCode": "SAVE_SUCCESSFULL_TASK_IN_JSON = bool(strtobool(os.getenv(\"SAVE_SUCCESSFULL_TASK_IN_JSON\", \"false\")))\nSUCCESSFUlL_TASKS_JSON_FILENAME = \"successfull_tasks.json\"\nclass TaskSynapse(Synapse):\n    \"\"\"\n    Synapse carrying the Task prompt & data from validator to miners.\n    \"\"\"\n    version: str = \"\"\n    prompt: str\n    url: str\n    html: Optional[str] = None",
+        "detail": "autoppia_web_agents_subnet.protocol",
+        "documentation": {}
+    },
+    {
+        "label": "SUCCESSFUlL_TASKS_JSON_FILENAME",
+        "kind": 5,
+        "importPath": "autoppia_web_agents_subnet.protocol",
+        "description": "autoppia_web_agents_subnet.protocol",
+        "peekOfCode": "SUCCESSFUlL_TASKS_JSON_FILENAME = \"successfull_tasks.json\"\nclass TaskSynapse(Synapse):\n    \"\"\"\n    Synapse carrying the Task prompt & data from validator to miners.\n    \"\"\"\n    version: str = \"\"\n    prompt: str\n    url: str\n    html: Optional[str] = None\n    screenshot: Optional[str] = None",
         "detail": "autoppia_web_agents_subnet.protocol",
         "documentation": {}
     },
