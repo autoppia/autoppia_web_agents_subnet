@@ -170,7 +170,9 @@ def _process_evaluation_results(
 
         # Enforce a minimum reward if raw_score is above min_correct_format_score
         if raw_score >= min_correct_format_score:
-            final_score_time_adjusted = max(final_score_time_adjusted, min_response_reward)
+            final_score_time_adjusted = max(
+                final_score_time_adjusted, min_response_reward
+            )
 
         rewards[i] = final_score_time_adjusted
 
@@ -181,7 +183,9 @@ def _process_evaluation_results(
             "reward_score": float(final_score_time_adjusted),
             "random_clicker_score": float(result.random_clicker_score or 0.0),
             "time_factor": float(time_factor),
-            "execution_time": float(execution_times[i]) if i < len(execution_times) else None,
+            "execution_time": (
+                float(execution_times[i]) if i < len(execution_times) else None
+            ),
         }
 
         # 4) If there's feedback with test counts, add it
@@ -245,6 +249,12 @@ async def get_rewards_with_details(
                 task=task, task_solutions=task_solutions
             )
         )
+        for i, (solution, result) in enumerate(zip(task_solutions, detailed_results)):
+            ColoredLogger.info(
+                f"DEBUG: i={i}, solution.web_agent_id={solution.web_agent_id}, result={result}",
+                ColoredLogger.PURPLE,
+            )
+            # ...
 
         (
             rewards,
