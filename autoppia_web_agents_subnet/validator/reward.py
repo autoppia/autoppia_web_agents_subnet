@@ -50,56 +50,40 @@ def _convert_test_results_matrix(
     return matrix_converted
 
 
-def _normalize_execution_times(execution_times: List[Optional[float]]) -> List[float]:
+def _normalize_times_for_valid_solutions(
+    execution_times: List[Optional[float]],
+    raw_scores: List[float],
+) -> List[float]:
     """
-    Normalize execution times across all miners to a [0.0 ... 1.0] range,
-    where 1.0 is the fastest (minimum time) and 0.0 is the slowest (maximum time).
+    Normalize execution times only over solutions that have raw_score > 0:
+      - If raw_score > 0 AND we have a valid execution_time, that time is included
+        for computing [0..1] range (min_time -> max_time).
+      - Solutions with raw_score <= 0 or None times are assigned a factor of 0.0
+        and also excluded from min/max computations.
 
-    - If there's only one miner with a valid time, give them a 1.0 if their raw score > 0.
-    - Any None times become 0.0 (or you can decide a different default).
+    Return a list of time_factors (same length as `execution_times`).
     """
-    valid_times = [t for t in execution_times if t is not None]
+    # Gather (time, idx) only for solutions that have raw_score > 0 and valid time
+    valid_pairs = [(t, idx) for idx, t in enumerate(execution_times)
+                   if t is not None and raw_scores[idx] > 0]
     n = len(execution_times)
 
-    # If no valid times at all, everything is 0.0
-    if len(valid_times) == 0:
+    # If no valid times at all => everyone gets 0.0
+    if not valid_pairs:
         return [0.0] * n
 
-    # If there's exactly 1 valid time
-    # We will just assign 1.0 if that solution has a positive raw score,
-    # but we don't have the raw scores here, so we assign 1.0 for that single entry.
-    # We'll later apply the "score > 0" condition in final blending.
-    if len(valid_times) == 1:
-        # Find the index of the single valid time
-        single_time = valid_times[0]
-        normalized = []
-        for t in execution_times:
-            if t is None:
-                normalized.append(0.0)
-            elif t == single_time:
-                # We'll tentatively give 1.0, but final combination with raw_score
-                # can override if raw_score = 0
-                normalized.append(1.0)
-            else:
-                normalized.append(0.0)
-        return normalized
-
-    # General case: multiple valid times
+    valid_times = [vp[0] for vp in valid_pairs]
     min_time = min(valid_times)
     max_time = max(valid_times)
     denom = max_time - min_time if max_time > min_time else 1e-9
 
-    normalized_times = []
-    for et in execution_times:
-        if et is None:
-            # If no reported time, treat as 0.0
-            normalized_times.append(0.0)
-        else:
-            factor = 1.0 - ((et - min_time) / denom)
-            # clamp to [0, 1]
-            factor = max(0.0, min(factor, 1.0))
-            normalized_times.append(factor)
-    return normalized_times
+    time_factors = [0.0] * n  # default all 0.0
+    for t, idx in valid_pairs:
+        factor = 1.0 - ((t - min_time) / denom)
+        factor = max(0.0, min(factor, 1.0))  # clamp to [0,1]
+        time_factors[idx] = factor
+
+    return time_factors
 
 
 def _apply_invalid_version_responders(
@@ -139,18 +123,18 @@ def _process_evaluation_results(
 ) -> Tuple[np.ndarray, List[List[List[Any]]], List[Dict[str, Any]]]:
     """
     1. Convert test_results_matrix to JSON-friendly shape.
-    2. Compute the final reward as 80% from raw evaluation score
-       and 20% from a time factor that's normalized among all miners.
+    2. Compute the final reward as (1 - time_weight)*raw_score + time_weight*time_factor,
+       where time_factor is normalized *only over solutions with raw_score>0*.
        - If raw_score <= 0, final_score is 0.0 (i.e., no time bonus).
        - If raw_score >= min_correct_format_score, ensure at least min_response_reward.
     """
-    # First, gather raw_scores and store them so we can handle them in a single pass.
-    raw_scores = []
-    for result in detailed_results:
-        raw_scores.append(result.final_score if result.final_score is not None else 0.0)
+    # Gather raw_scores
+    raw_scores = [
+        (r.final_score if r.final_score is not None else 0.0) for r in detailed_results
+    ]
 
-    # Create the normalized time factors array
-    time_factors = _normalize_execution_times(execution_times)
+    # Create time_factors only for solutions with raw_score>0
+    time_factors = _normalize_times_for_valid_solutions(execution_times, raw_scores)
 
     # For each result/solution, finalize the reward
     for i, result in enumerate(detailed_results):
@@ -160,6 +144,7 @@ def _process_evaluation_results(
 
         raw_score = raw_scores[i]
         time_factor = time_factors[i]
+
         # If the solution is valid (raw_score > 0), combine with time factor
         if raw_score > 0:
             final_score_time_adjusted = ((1.0 - time_weight) * raw_score) + (
@@ -168,13 +153,15 @@ def _process_evaluation_results(
         else:
             final_score_time_adjusted = 0.0
 
-        # Enforce a minimum reward if raw_score is above min_correct_format_score
+        # Enforce a minimum reward if raw_score >= min_correct_format_score
         if raw_score >= min_correct_format_score:
-            final_score_time_adjusted = max(final_score_time_adjusted, min_response_reward)
+            final_score_time_adjusted = max(
+                final_score_time_adjusted, min_response_reward
+            )
 
         rewards[i] = final_score_time_adjusted
 
-        # 3) Build a JSON-friendly dict for evaluation
+        # Build a JSON-friendly dict for evaluation
         eval_dict: Dict[str, Any] = {
             "raw_score": float(result.raw_score or 0.0),
             "final_score": float(raw_score),
@@ -184,7 +171,7 @@ def _process_evaluation_results(
             "execution_time": float(execution_times[i]) if i < len(execution_times) else None,
         }
 
-        # 4) If there's feedback with test counts, add it
+        # If there's feedback with test counts, add it
         if result.feedback:
             eval_dict["feedback"] = {
                 "passed_tests": int(getattr(result.feedback, "passed_tests", 0)),
@@ -220,7 +207,9 @@ async def get_rewards_with_details(
       - test_results_matrices (JSON-friendly)
       - evaluation_results (dictionaries with raw_score, final_score, etc.)
 
-    If a miner is in the 'invalid_version_responders' set, we set that miner's reward to 0.
+    If a miner is in 'invalid_version_responders', we override that miner's reward to 0.
+    
+    The main fix: we only normalize execution_time among solutions with raw_score>0.
     """
     bt.logging.info(
         f"Evaluating {len(task_solutions)} task solutions with detailed results"
@@ -240,10 +229,8 @@ async def get_rewards_with_details(
 
     try:
         # Evaluate solutions
-        detailed_results: List[EvaluationResult] = (
-            await evaluator.evaluate_task_solutions(
-                task=task, task_solutions=task_solutions
-            )
+        detailed_results: List[EvaluationResult] = await evaluator.evaluate_task_solutions(
+            task=task, task_solutions=task_solutions
         )
 
         (
@@ -272,7 +259,7 @@ async def get_rewards_with_details(
             test_results_matrices.append([])
             evaluation_results.append({"error": str(e), "reward_score": 0.0})
 
-    # If you want to override rewards for invalid-version responders:
+    # Override rewards for invalid-version responders if needed
     _apply_invalid_version_responders(
         invalid_version_responders=invalid_version_responders,
         task_solutions=task_solutions,
