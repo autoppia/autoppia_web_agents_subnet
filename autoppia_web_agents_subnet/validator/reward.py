@@ -42,10 +42,7 @@ def _convert_test_results_matrix(
     matrix_converted = []
     for test_result in test_results_matrix:
         row = [_test_result_to_dict(tr) for tr in test_result]
-        ColoredLogger.error(
-            f"RESULT-->: {row}. ACTIONS --> {test_result}",
-            ColoredLogger.GREEN,
-        )
+
         matrix_converted.append(row)
     return matrix_converted
 
@@ -293,9 +290,5 @@ async def get_rewards_with_details(
         evaluation_results=evaluation_results,
     )
 
-    ColoredLogger.error(
-        f"Final test results matrices: {test_results_matrices}",
-        ColoredLogger.GRAY,
-    )
     bt.logging.info(f"Detailed evaluation complete. Rewards: {rewards}")
     return rewards, test_results_matrices, evaluation_results
