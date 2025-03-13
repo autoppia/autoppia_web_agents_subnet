@@ -7,15 +7,13 @@ from autoppia_iwa.src.shared.visualizator import SubnetVisualizer
 from autoppia_iwa.src.data_generation.domain.classes import TestUnion
 from rich.console import Console
 import bittensor as bt
-
-# 1) Import the toggle variable and JSON filename from config
-from autoppia_web_agents_subnet.validator.config import (
-    SAVE_SUCCESSFULL_TASK_IN_JSON,
-    SUCCESSFUlL_TASKS_JSON_FILENAME
-)
-
 import json
 import os
+from distutils.util import strtobool
+
+
+SAVE_SUCCESSFULL_TASK_IN_JSON = bool(strtobool(os.getenv("SAVE_SUCCESSFULL_TASK_IN_JSON", "false")))
+SUCCESSFUlL_TASKS_JSON_FILENAME = "successfull_tasks.json"
 
 
 class TaskSynapse(Synapse):

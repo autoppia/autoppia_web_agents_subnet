@@ -10710,22 +10710,6 @@
         "documentation": {}
     },
     {
-        "label": "SAVE_SUCCESSFULL_TASK_IN_JSON",
-        "importPath": "autoppia_web_agents_subnet.validator.config",
-        "description": "autoppia_web_agents_subnet.validator.config",
-        "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet.validator.config",
-        "documentation": {}
-    },
-    {
-        "label": "SUCCESSFUlL_TASKS_JSON_FILENAME",
-        "importPath": "autoppia_web_agents_subnet.validator.config",
-        "description": "autoppia_web_agents_subnet.validator.config",
-        "isExtraImport": true,
-        "detail": "autoppia_web_agents_subnet.validator.config",
-        "documentation": {}
-    },
-    {
         "label": "retrieve_random_demo_web_project",
         "importPath": "autoppia_web_agents_subnet.validator.utils",
         "description": "autoppia_web_agents_subnet.validator.utils",
@@ -18319,7 +18303,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "FORWARD_SLEEP_SECONDS = 60 * 1\nTASK_SLEEP = 60 * 1\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.0\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\nSAVE_SUCCESSFULL_TASK_IN_JSON = bool(strtobool(os.getenv(\"SAVE_SUCCESSFULL_TASK_IN_JSON\", \"false\")))",
+        "peekOfCode": "FORWARD_SLEEP_SECONDS = 60 * 1\nTASK_SLEEP = 60 * 1\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.0\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\ndef read_config() -> bt.config:",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },
@@ -18328,7 +18312,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "TASK_SLEEP = 60 * 1\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.0\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\nSAVE_SUCCESSFULL_TASK_IN_JSON = bool(strtobool(os.getenv(\"SAVE_SUCCESSFULL_TASK_IN_JSON\", \"false\")))\nSUCCESSFUlL_TASKS_JSON_FILENAME = \"successfull_tasks.json\"",
+        "peekOfCode": "TASK_SLEEP = 60 * 1\nTIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.0\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },
@@ -18337,7 +18321,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "TIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.0\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\nSAVE_SUCCESSFULL_TASK_IN_JSON = bool(strtobool(os.getenv(\"SAVE_SUCCESSFULL_TASK_IN_JSON\", \"false\")))\nSUCCESSFUlL_TASKS_JSON_FILENAME = \"successfull_tasks.json\"\ndef read_config() -> bt.config:",
+        "peekOfCode": "TIME_WEIGHT = 0.2\nMIN_SCORE_FOR_CORRECT_FORMAT = 0.0\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },
@@ -18346,7 +18330,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "MIN_SCORE_FOR_CORRECT_FORMAT = 0.0\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\nSAVE_SUCCESSFULL_TASK_IN_JSON = bool(strtobool(os.getenv(\"SAVE_SUCCESSFULL_TASK_IN_JSON\", \"false\")))\nSUCCESSFUlL_TASKS_JSON_FILENAME = \"successfull_tasks.json\"\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()",
+        "peekOfCode": "MIN_SCORE_FOR_CORRECT_FORMAT = 0.0\nMIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)\n    bt.wallet.add_args(parser)",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },
@@ -18355,7 +18339,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "MIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\nSAVE_SUCCESSFULL_TASK_IN_JSON = bool(strtobool(os.getenv(\"SAVE_SUCCESSFULL_TASK_IN_JSON\", \"false\")))\nSUCCESSFUlL_TASKS_JSON_FILENAME = \"successfull_tasks.json\"\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)",
+        "peekOfCode": "MIN_RESPONSE_REWARD = 0\nSAMPLE_SIZE = 256\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)\n    bt.wallet.add_args(parser)\n    bt.subtensor.add_args(parser)",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },
@@ -18364,7 +18348,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "SAMPLE_SIZE = 256\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\nSAVE_SUCCESSFULL_TASK_IN_JSON = bool(strtobool(os.getenv(\"SAVE_SUCCESSFULL_TASK_IN_JSON\", \"false\")))\nSUCCESSFUlL_TASKS_JSON_FILENAME = \"successfull_tasks.json\"\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)\n    bt.wallet.add_args(parser)",
+        "peekOfCode": "SAMPLE_SIZE = 256\nMAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)\n    bt.wallet.add_args(parser)\n    bt.subtensor.add_args(parser)\n    bt.axon.add_args(parser)",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },
@@ -18373,7 +18357,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "MAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\nSAVE_SUCCESSFULL_TASK_IN_JSON = bool(strtobool(os.getenv(\"SAVE_SUCCESSFULL_TASK_IN_JSON\", \"false\")))\nSUCCESSFUlL_TASKS_JSON_FILENAME = \"successfull_tasks.json\"\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)\n    bt.wallet.add_args(parser)\n    bt.subtensor.add_args(parser)",
+        "peekOfCode": "MAX_ACTIONS_LENGTH = 15\nNUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)\n    bt.wallet.add_args(parser)\n    bt.subtensor.add_args(parser)\n    bt.axon.add_args(parser)\n    parser.add_argument(\"--netuid\", type=int, help=\"Subnet netuid\", default=36)",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },
@@ -18382,7 +18366,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "NUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\nSAVE_SUCCESSFULL_TASK_IN_JSON = bool(strtobool(os.getenv(\"SAVE_SUCCESSFULL_TASK_IN_JSON\", \"false\")))\nSUCCESSFUlL_TASKS_JSON_FILENAME = \"successfull_tasks.json\"\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)\n    bt.wallet.add_args(parser)\n    bt.subtensor.add_args(parser)\n    bt.axon.add_args(parser)",
+        "peekOfCode": "NUM_URLS = 1\nPROMPTS_PER_ITERATION = 1\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)\n    bt.wallet.add_args(parser)\n    bt.subtensor.add_args(parser)\n    bt.axon.add_args(parser)\n    parser.add_argument(\"--netuid\", type=int, help=\"Subnet netuid\", default=36)\n    parser.add_argument(",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },
@@ -18391,25 +18375,7 @@
         "kind": 5,
         "importPath": "autoppia_web_agents_subnet.validator.config",
         "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "PROMPTS_PER_ITERATION = 1\nSAVE_SUCCESSFULL_TASK_IN_JSON = bool(strtobool(os.getenv(\"SAVE_SUCCESSFULL_TASK_IN_JSON\", \"false\")))\nSUCCESSFUlL_TASKS_JSON_FILENAME = \"successfull_tasks.json\"\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)\n    bt.wallet.add_args(parser)\n    bt.subtensor.add_args(parser)\n    bt.axon.add_args(parser)\n    parser.add_argument(\"--netuid\", type=int, help=\"Subnet netuid\", default=36)",
-        "detail": "autoppia_web_agents_subnet.validator.config",
-        "documentation": {}
-    },
-    {
-        "label": "SAVE_SUCCESSFULL_TASK_IN_JSON",
-        "kind": 5,
-        "importPath": "autoppia_web_agents_subnet.validator.config",
-        "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "SAVE_SUCCESSFULL_TASK_IN_JSON = bool(strtobool(os.getenv(\"SAVE_SUCCESSFULL_TASK_IN_JSON\", \"false\")))\nSUCCESSFUlL_TASKS_JSON_FILENAME = \"successfull_tasks.json\"\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)\n    bt.wallet.add_args(parser)\n    bt.subtensor.add_args(parser)\n    bt.axon.add_args(parser)\n    parser.add_argument(\"--netuid\", type=int, help=\"Subnet netuid\", default=36)\n    parser.add_argument(",
-        "detail": "autoppia_web_agents_subnet.validator.config",
-        "documentation": {}
-    },
-    {
-        "label": "SUCCESSFUlL_TASKS_JSON_FILENAME",
-        "kind": 5,
-        "importPath": "autoppia_web_agents_subnet.validator.config",
-        "description": "autoppia_web_agents_subnet.validator.config",
-        "peekOfCode": "SUCCESSFUlL_TASKS_JSON_FILENAME = \"successfull_tasks.json\"\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)\n    bt.wallet.add_args(parser)\n    bt.subtensor.add_args(parser)\n    bt.axon.add_args(parser)\n    parser.add_argument(\"--netuid\", type=int, help=\"Subnet netuid\", default=36)\n    parser.add_argument(\n        \"--neuron.name\",",
+        "peekOfCode": "PROMPTS_PER_ITERATION = 1\ndef read_config() -> bt.config:\n    parser = argparse.ArgumentParser()\n    bt.logging.add_args(parser)\n    bt.wallet.add_args(parser)\n    bt.subtensor.add_args(parser)\n    bt.axon.add_args(parser)\n    parser.add_argument(\"--netuid\", type=int, help=\"Subnet netuid\", default=36)\n    parser.add_argument(\n        \"--neuron.name\",",
         "detail": "autoppia_web_agents_subnet.validator.config",
         "documentation": {}
     },
@@ -18482,6 +18448,24 @@
         "importPath": "autoppia_web_agents_subnet.protocol",
         "description": "autoppia_web_agents_subnet.protocol",
         "peekOfCode": "class TaskFeedbackSynapse(Synapse):\n    \"\"\"\n    Synapse carrying feedback from validator back to miner,\n    including test_results, evaluation scores, and stats.\n    \"\"\"\n    version: str = \"\"\n    validator_id: str\n    miner_id: str\n    task_id: str\n    task_url: str",
+        "detail": "autoppia_web_agents_subnet.protocol",
+        "documentation": {}
+    },
+    {
+        "label": "SAVE_SUCCESSFULL_TASK_IN_JSON",
+        "kind": 5,
+        "importPath": "autoppia_web_agents_subnet.protocol",
+        "description": "autoppia_web_agents_subnet.protocol",
+        "peekOfCode": "SAVE_SUCCESSFULL_TASK_IN_JSON = bool(strtobool(os.getenv(\"SAVE_SUCCESSFULL_TASK_IN_JSON\", \"false\")))\nSUCCESSFUlL_TASKS_JSON_FILENAME = \"successfull_tasks.json\"\nclass TaskSynapse(Synapse):\n    \"\"\"\n    Synapse carrying the Task prompt & data from validator to miners.\n    \"\"\"\n    version: str = \"\"\n    prompt: str\n    url: str\n    html: Optional[str] = None",
+        "detail": "autoppia_web_agents_subnet.protocol",
+        "documentation": {}
+    },
+    {
+        "label": "SUCCESSFUlL_TASKS_JSON_FILENAME",
+        "kind": 5,
+        "importPath": "autoppia_web_agents_subnet.protocol",
+        "description": "autoppia_web_agents_subnet.protocol",
+        "peekOfCode": "SUCCESSFUlL_TASKS_JSON_FILENAME = \"successfull_tasks.json\"\nclass TaskSynapse(Synapse):\n    \"\"\"\n    Synapse carrying the Task prompt & data from validator to miners.\n    \"\"\"\n    version: str = \"\"\n    prompt: str\n    url: str\n    html: Optional[str] = None\n    screenshot: Optional[str] = None",
         "detail": "autoppia_web_agents_subnet.protocol",
         "documentation": {}
     },
