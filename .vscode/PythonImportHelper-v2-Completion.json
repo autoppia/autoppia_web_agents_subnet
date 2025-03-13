@@ -5519,14 +5519,6 @@
         "documentation": {}
     },
     {
-        "label": "display_batch_evaluation_summary",
-        "importPath": "autoppia_iwa.src.evaluation.evaluator.utils",
-        "description": "autoppia_iwa.src.evaluation.evaluator.utils",
-        "isExtraImport": true,
-        "detail": "autoppia_iwa.src.evaluation.evaluator.utils",
-        "documentation": {}
-    },
-    {
         "label": "display_single_evaluation_summary",
         "importPath": "autoppia_iwa.src.evaluation.evaluator.utils",
         "description": "autoppia_iwa.src.evaluation.evaluator.utils",
