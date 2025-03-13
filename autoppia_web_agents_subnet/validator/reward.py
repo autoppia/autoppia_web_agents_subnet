@@ -147,6 +147,7 @@ def _process_evaluation_results(
             final_score_time_adjusted = ((1.0 - time_weight) * raw_score) + (
                 time_weight * time_factor
             )
+            final_score_time_adjusted = max(0.0, min(final_score_time_adjusted, 1.0))
         else:
             final_score_time_adjusted = 0.0
 
@@ -207,7 +208,7 @@ async def get_rewards_with_details(
       - evaluation_results (dictionaries with raw_score, final_score, etc.)
 
     If a miner is in 'invalid_version_responders', we override that miner's reward to 0.
-    
+
     The main fix: we only normalize execution_time among solutions with raw_score>0.
     """
     bt.logging.info(
