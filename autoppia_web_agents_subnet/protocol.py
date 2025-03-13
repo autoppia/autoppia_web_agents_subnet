@@ -66,19 +66,16 @@ class TaskFeedbackSynapse(Synapse):
 
     def print_in_terminal(self):
         visualizer = SubnetVisualizer()
-        console = Console()
-
-        # If we have enough data for a full evaluation:
         if self.task_id and self.actions and self.test_results_matrix:
             task = Task(id=self.task_id, prompt=self.prompt, url=self.task_url)
+            task_prepared_for_agent = task.prepare_for_agent(self.miner_id)
+
             if self.tests:
                 task.tests = self.tests
-            bt.logging.info(self.evaluation_result)
-
             visualizer.show_full_evaluation(
                 agent_id=self.miner_id,
                 validator_id=self.validator_id,
-                task=task,
+                task=task_prepared_for_agent,
                 actions=self.actions,
                 test_results_matrix=self.test_results_matrix,
                 evaluation_result=self.evaluation_result,
@@ -86,10 +83,13 @@ class TaskFeedbackSynapse(Synapse):
         elif self.task_id:
             # Partial data => just show the task
             task = Task(id=self.task_id, prompt=self.prompt, url=self.task_url)
+            task_prepared_for_agent = task.prepare_for_agent(self.miner_id)
+
             if self.tests:
                 task.tests = self.tests
 
-            visualizer.show_task_with_tests(task)
+            visualizer.show_task_with_tests(task_prepared_for_agent)
+            console = Console()
             console.print(
                 f"\n[bold yellow]Insufficient actions or test results for {self.miner_id}[/bold yellow]"
             )
