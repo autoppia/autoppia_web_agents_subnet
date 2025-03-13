@@ -12,7 +12,9 @@ import os
 from distutils.util import strtobool
 
 
-SAVE_SUCCESSFULL_TASK_IN_JSON = bool(strtobool(os.getenv("SAVE_SUCCESSFULL_TASK_IN_JSON", "false")))
+SAVE_SUCCESSFULL_TASK_IN_JSON = bool(
+    strtobool(os.getenv("SAVE_SUCCESSFULL_TASK_IN_JSON", "false"))
+)
 SUCCESSFUlL_TASKS_JSON_FILENAME = "successfull_tasks.json"
 
 
@@ -69,7 +71,7 @@ class TaskFeedbackSynapse(Synapse):
             task_prepared_for_agent = task.prepare_for_agent(self.miner_id)
 
             if self.tests:
-                task.tests = self.tests
+                task_prepared_for_agent.tests = self.tests
             visualizer.show_full_evaluation(
                 agent_id=self.miner_id,
                 validator_id=self.validator_id,
@@ -84,7 +86,7 @@ class TaskFeedbackSynapse(Synapse):
             task_prepared_for_agent = task.prepare_for_agent(self.miner_id)
 
             if self.tests:
-                task.tests = self.tests
+                task_prepared_for_agent.tests = self.tests
 
             visualizer.show_task_with_tests(task_prepared_for_agent)
             console = Console()
@@ -109,8 +111,7 @@ class TaskFeedbackSynapse(Synapse):
             return
 
         all_passed = all(
-            all(cell is True for cell in row)
-            for row in self.test_results_matrix
+            all(cell is True for cell in row) for row in self.test_results_matrix
         )
         if not all_passed:
             return
@@ -120,7 +121,9 @@ class TaskFeedbackSynapse(Synapse):
             "miner_id": self.miner_id,
             "task_url": self.task_url,
             "prompt": self.prompt,
-            "actions": [action.dict() for action in self.actions] if self.actions else [],
+            "actions": (
+                [action.dict() for action in self.actions] if self.actions else []
+            ),
             "test_results_matrix": self.test_results_matrix,
             "evaluation_result": self.evaluation_result,
         }
@@ -155,4 +158,6 @@ class TaskFeedbackSynapse(Synapse):
         with open(filename, "w", encoding="utf-8") as f:
             json.dump(existing_data, f, indent=2)
 
-        bt.logging.info(f"Successfully saved task with prompt: {data_to_save['prompt']}")
+        bt.logging.info(
+            f"Successfully saved task with prompt: {data_to_save['prompt']}"
+        )
