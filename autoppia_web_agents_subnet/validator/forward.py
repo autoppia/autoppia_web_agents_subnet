@@ -192,22 +192,20 @@ async def send_feedback_synapse_to_miners(
 
     feedback_tasks = []
     for axon, feedback_synapse in zip(miner_axons, feedback_list):
-        # TODO: REMOVE:
-        if feedback_synapse.miner_id == "234":
-            ColoredLogger.info(
-                f"Sending TaskFeedbackSynapse to 'miner 234' miners in parallel --> {feedback_synapse}",
-                ColoredLogger.BLUE,
-            )
-            feedback_tasks.append(
-                asyncio.create_task(
-                    validator.dendrite(
-                        axons=[axon],
-                        synapse=feedback_synapse,
-                        deserialize=True,
-                        timeout=FEEDBACK_TIMEOUT,
-                    )
+        ColoredLogger.info(
+            f"Sending TaskFeedbackSynapse to miners in parallel --> {feedback_synapse}",
+            ColoredLogger.BLUE,
+        )
+        feedback_tasks.append(
+            asyncio.create_task(
+                validator.dendrite(
+                    axons=[axon],
+                    synapse=feedback_synapse,
+                    deserialize=True,
+                    timeout=FEEDBACK_TIMEOUT,
                 )
             )
+        )
 
     # Wait for all feedback requests to complete
     results = await asyncio.gather(*feedback_tasks)
@@ -290,9 +288,8 @@ async def process_tasks(
         bt.logging.debug(f"Task tests: {task.tests}")
 
         # 1) Choose a random subset of miners.In this case the whole subnet.
-        miner_uids = np.array(
-            [101, 234, 103]
-        )  # get_random_uids(validator, k=SAMPLE_SIZE)
+        miner_uids = get_random_uids(validator, k=SAMPLE_SIZE)
+
         bt.logging.info(f"Miner UIDs chosen: {miner_uids}")
         miner_axons = [validator.metagraph.axons[uid] for uid in miner_uids]
 
