@@ -42,10 +42,7 @@ def _convert_test_results_matrix(
     matrix_converted = []
     for test_result in test_results_matrix:
         row = [_test_result_to_dict(tr) for tr in test_result]
-        ColoredLogger.error(
-            f"RESULT-->: {row}. ACTIONS --> {test_result}",
-            ColoredLogger.GREEN,
-        )
+
         matrix_converted.append(row)
     return matrix_converted
 
@@ -168,7 +165,9 @@ def _process_evaluation_results(
             "reward_score": float(final_score_time_adjusted),
             "random_clicker_score": float(result.random_clicker_score or 0.0),
             "time_factor": float(time_factor),
-            "execution_time": float(execution_times[i]) if i < len(execution_times) else None,
+            "execution_time": (
+                float(execution_times[i]) if i < len(execution_times) else None
+            ),
         }
 
         # If there's feedback with test counts, add it
@@ -232,7 +231,16 @@ async def get_rewards_with_details(
         detailed_results: List[EvaluationResult] = await evaluator.evaluate_task_solutions(
             task=task, task_solutions=task_solutions
         )
-
+        for i, (solution, result) in enumerate(zip(task_solutions, detailed_results)):
+            ColoredLogger.info(
+                f"DEBUG: i={i}, solution.web_agent_id={solution.web_agent_id}, result={result.test_results_matrix}",
+                ColoredLogger.PURPLE,
+            )
+            # ...
+        for i, solution in enumerate(task_solutions):
+            bt.logging.info(
+                f"MINER CHECK: i={i}, solution.web_agent_id={solution.web_agent_id}"
+            )
         (
             rewards,
             test_results_matrices,
@@ -267,9 +275,5 @@ async def get_rewards_with_details(
         evaluation_results=evaluation_results,
     )
 
-    ColoredLogger.error(
-        f"Final test results matrices: {test_results_matrices}",
-        ColoredLogger.GRAY,
-    )
     bt.logging.info(f"Detailed evaluation complete. Rewards: {rewards}")
     return rewards, test_results_matrices, evaluation_results

@@ -193,9 +193,9 @@ async def send_feedback_synapse_to_miners(
     feedback_tasks = []
     for axon, feedback_synapse in zip(miner_axons, feedback_list):
         # TODO: REMOVE:
-        if feedback_synapse.miner_id == "102":
+        if feedback_synapse.miner_id == "234":
             ColoredLogger.info(
-                f"Sending TaskFeedbackSynapse to 'miner 102' miners in parallel --> {feedback_synapse}",
+                f"Sending TaskFeedbackSynapse to 'miner 234' miners in parallel --> {feedback_synapse}",
                 ColoredLogger.BLUE,
             )
             feedback_tasks.append(
@@ -290,7 +290,9 @@ async def process_tasks(
         bt.logging.debug(f"Task tests: {task.tests}")
 
         # 1) Choose a random subset of miners.In this case the whole subnet.
-        miner_uids = np.array([101, 102, 103])  # get_random_uids(validator, k=SAMPLE_SIZE)
+        miner_uids = np.array(
+            [101, 234, 103]
+        )  # get_random_uids(validator, k=SAMPLE_SIZE)
         bt.logging.info(f"Miner UIDs chosen: {miner_uids}")
         miner_axons = [validator.metagraph.axons[uid] for uid in miner_uids]
 
@@ -349,8 +351,20 @@ async def process_tasks(
             )
         )
         ColoredLogger.info(
+            f"task solutions: --> {task_solutions} ",
+            ColoredLogger.GREEN,
+        )
+        ColoredLogger.info(
             f"test result matrices: --> {test_results_matrices} ",
             ColoredLogger.RED,
+        )
+        ColoredLogger.info(
+            f"REWARDS: --> {rewards} ",
+            ColoredLogger.YELLOW,
+        )
+        ColoredLogger.info(
+            f"MINERs IDS: --> {miner_uids} ",
+            ColoredLogger.BLUE,
         )
         end_eval = time.time()
         bt.logging.info(f"Miners final rewards: {rewards}")

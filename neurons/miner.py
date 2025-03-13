@@ -67,29 +67,41 @@ class Miner(BaseMinerNeuron):
             bt.logging.warning("No actions to log.")
             return
 
-        bt.logging.info("Actions sent:")
+        ColoredLogger.info(
+            f"Actions sent:",
+            ColoredLogger.GRAY,
+        )
         for i, action in enumerate(actions, 1):
             action_attrs = {}
-
             action_attrs = vars(action)
 
             # Log with consistent format
+            ColoredLogger.info(
+                f"    {i}. {action.type}: {action_attrs}",
+                ColoredLogger.GREEN,
+            )
+
             bt.logging.info(f"  {i}. {action.type}: {action_attrs}")
 
     async def forward(self, synapse: TaskSynapse) -> TaskSynapse:
-        
+
         validator_hotkey = getattr(synapse.dendrite, "hotkey", None)
         ColoredLogger.info(
-                f"Request Received from validator: {validator_hotkey}",
-                ColoredLogger.YELLOW,
-            )
-        
+            f"Request Received from validator: {validator_hotkey}",
+            ColoredLogger.YELLOW,
+        )
+
         # Checking Weights Version
-        version_check = is_version_in_range(synapse.version, self.version, self.least_acceptable_version)
+        version_check = is_version_in_range(
+            synapse.version, self.version, self.least_acceptable_version
+        )
 
         if not version_check:
             ColoredLogger.info(f"Not reponding to {validator_hotkey} due to", "yellow")
-            ColoredLogger.info(f"version check: {synapse.version} not between {self.least_acceptable_version} - { self.version}. This is intended behaviour", "yellow")
+            ColoredLogger.info(
+                f"version check: {synapse.version} not between {self.least_acceptable_version} - { self.version}. This is intended behaviour",
+                "yellow",
+            )
             return synapse
 
         try:
@@ -105,8 +117,8 @@ class Miner(BaseMinerNeuron):
             task_for_agent = task.prepare_for_agent(str(self.uid))
 
             ColoredLogger.info(
-                f"Task Prompt: {task.prompt}",
-                ColoredLogger.WHITE,
+                f"Task Prompt: {task_for_agent.prompt}",
+                ColoredLogger.BLUE,
             )
             bt.logging.info("Generating actions....")
 
@@ -140,7 +152,9 @@ class Miner(BaseMinerNeuron):
         try:
             synapse.print_in_terminal()
         except Exception as e:
-            ColoredLogger.error("Error occurred while printing in terminal TaskFeedback")
+            ColoredLogger.error(
+                "Error occurred while printing in terminal TaskFeedback"
+            )
             bt.logging.info(e)
         return synapse
 
@@ -161,7 +175,9 @@ class Miner(BaseMinerNeuron):
             not self.config.blacklist.allow_non_registered
             and synapse.dendrite.hotkey not in self.metagraph.hotkeys
         ):
-            bt.logging.warning(f"Received a request without a dendrite or hotkey. {validator_hotkey}")
+            bt.logging.warning(
+                f"Received a request without a dendrite or hotkey. {validator_hotkey}"
+            )
             return True, f"Unrecognized hotkey: {validator_hotkey}"
 
         uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
@@ -178,7 +194,10 @@ class Miner(BaseMinerNeuron):
         min_stake = self.config.blacklist.minimum_stake_requirement
         if stake < min_stake:
             bt.logging.warning(f"Blacklisted insufficient stake: {validator_hotkey}")
-            return True, f"Insufficient stake ({stake} < {min_stake}) for {validator_hotkey}"
+            return (
+                True,
+                f"Insufficient stake ({stake} < {min_stake}) for {validator_hotkey}",
+            )
 
         return False, f"Hotkey recognized: {validator_hotkey}"
 
