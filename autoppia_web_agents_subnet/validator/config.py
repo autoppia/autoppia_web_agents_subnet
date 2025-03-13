@@ -1,5 +1,7 @@
 import argparse
 import bittensor as bt
+from distutils.util import strtobool
+import os
 
 TIMEOUT = 60 * 2
 
@@ -19,6 +21,10 @@ SAMPLE_SIZE = 256
 MAX_ACTIONS_LENGTH = 15
 NUM_URLS = 1
 PROMPTS_PER_ITERATION = 1
+
+
+SAVE_SUCCESSFULL_TASK_IN_JSON = bool(strtobool(os.getenv("SAVE_SUCCESSFULL_TASK_IN_JSON", "false")))
+SUCCESSFUlL_TASKS_JSON_FILENAME = "successfull_tasks.json"
 
 
 def read_config() -> bt.config:
