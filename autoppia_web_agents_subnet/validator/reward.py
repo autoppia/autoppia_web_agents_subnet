@@ -237,7 +237,6 @@ async def get_rewards_with_details(
                 f"DEBUG: i={i}, solution.web_agent_id={solution.web_agent_id}, result={result.test_results_matrix}",
                 ColoredLogger.PURPLE,
             )
-            # ...
         for i, solution in enumerate(task_solutions):
             bt.logging.info(
                 f"MINER CHECK: i={i}, solution.web_agent_id={solution.web_agent_id}"
