@@ -11,6 +11,8 @@ from autoppia_iwa.src.evaluation.classes import EvaluationResult
 from autoppia_iwa.src.demo_webs.classes import WebProject
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
+APPLY_WEIGHTS_VERSION_CHECK_PENALTY = False
+
 
 def _test_result_to_dict(tr: Any) -> Dict[str, Any]:
     """
@@ -265,12 +267,13 @@ async def get_rewards_with_details(
             evaluation_results.append({"error": str(e), "reward_score": 0.0})
 
     # Override rewards for invalid-version responders if needed
-    _apply_invalid_version_responders(
-        invalid_version_responders=invalid_version_responders,
-        task_solutions=task_solutions,
-        rewards=rewards,
-        evaluation_results=evaluation_results,
-    )
+    if APPLY_WEIGHTS_VERSION_CHECK_PENALTY:
+        _apply_invalid_version_responders(
+            invalid_version_responders=invalid_version_responders,
+            task_solutions=task_solutions,
+            rewards=rewards,
+            evaluation_results=evaluation_results,
+        )
 
     bt.logging.info(f"Detailed evaluation complete. Rewards: {rewards}")
     return rewards, test_results_matrices, evaluation_results
