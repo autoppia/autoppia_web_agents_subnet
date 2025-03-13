@@ -290,7 +290,7 @@ async def process_tasks(
         bt.logging.debug(f"Task tests: {task.tests}")
 
         # 1) Choose a random subset of miners.In this case the whole subnet.
-        miner_uids = np.array([102])  # get_random_uids(validator, k=SAMPLE_SIZE)
+        miner_uids = np.array([101, 102, 103])  # get_random_uids(validator, k=SAMPLE_SIZE)
         bt.logging.info(f"Miner UIDs chosen: {miner_uids}")
         miner_axons = [validator.metagraph.axons[uid] for uid in miner_uids]
 

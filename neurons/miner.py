@@ -77,9 +77,13 @@ class Miner(BaseMinerNeuron):
             bt.logging.info(f"  {i}. {action.type}: {action_attrs}")
 
     async def forward(self, synapse: TaskSynapse) -> TaskSynapse:
-
+        
         validator_hotkey = getattr(synapse.dendrite, "hotkey", None)
-
+        ColoredLogger.info(
+                f"Request Received from validator: {validator_hotkey}",
+                ColoredLogger.YELLOW,
+            )
+        
         # Checking Weights Version
         version_check = is_version_in_range(synapse.version, self.version, self.least_acceptable_version)
 
@@ -91,16 +95,6 @@ class Miner(BaseMinerNeuron):
         try:
             start_time = time.time()
 
-            ColoredLogger.info(
-                f"Request Received from validator: {validator_hotkey}",
-                ColoredLogger.YELLOW,
-            )
-            ColoredLogger.info(
-                f"Task Prompt: {synapse.prompt}",
-                ColoredLogger.WHITE,
-            )
-            bt.logging.info("Generating actions....")
-
             # Create Task object
             task = Task(
                 prompt=synapse.prompt,
@@ -109,6 +103,13 @@ class Miner(BaseMinerNeuron):
                 screenshot=synapse.screenshot,
             )
             task_for_agent = task.prepare_for_agent(str(self.uid))
+
+            ColoredLogger.info(
+                f"Task Prompt: {task.prompt}",
+                ColoredLogger.WHITE,
+            )
+            bt.logging.info("Generating actions....")
+
             # Process the task
             task_solution = await self.agent.solve_task(task=task_for_agent)
 
