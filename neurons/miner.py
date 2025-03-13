@@ -92,17 +92,17 @@ class Miner(BaseMinerNeuron):
         )
 
         # Checking Weights Version
-        version_check = is_version_in_range(
-            synapse.version, self.version, self.least_acceptable_version
-        )
+        # version_check = is_version_in_range(
+        #     synapse.version, self.version, self.least_acceptable_version
+        # )
 
-        if not version_check:
-            ColoredLogger.info(f"Not reponding to {validator_hotkey} due to", "yellow")
-            ColoredLogger.info(
-                f"version check: {synapse.version} not between {self.least_acceptable_version} - { self.version}. This is intended behaviour",
-                "yellow",
-            )
-            return synapse
+        # if not version_check:
+        #     ColoredLogger.info(f"Not reponding to {validator_hotkey} due to", "yellow")
+        #     ColoredLogger.info(
+        #         f"version check: {synapse.version} not between {self.least_acceptable_version} - { self.version}. This is intended behaviour",
+        #         "yellow",
+        #     )
+        #     return synapse
 
         try:
             start_time = time.time()
