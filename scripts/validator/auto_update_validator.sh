@@ -1,5 +1,5 @@
 #!/bin/bash
-# auto_update_validator.sh - Check for updates and redeploy if a new version is available
+# auto_update_validator.sh - Check for updates and redeploy if a new version is available.
 # If deployment fails, revert to the previous codebase and redeploy the old version.
 
 # Set default values or use arguments if provided
@@ -37,6 +37,7 @@ get_remote_version() {
         | sed -E 's/.*=[[:space:]]*["'\''"]?([^"'\'' ]+)["'\''"]?.*/\1/'
 }
 
+# Returns 0 if v2 > v1, else returns 1
 version_greater() {
     [ "$(printf '%s\n' "$2" "$1" | sort -V | head -n1)" != "$1" ]
 }
@@ -49,10 +50,12 @@ redeploy_old_version() {
     cd ..
     # Revert main repo
     git reset --hard "$PREV_MAIN_HEAD"
+    
     echo "Reinstalling old version..."
     source validator_env/bin/activate
     pip install -e .
     pip install -e autoppia_iwa_module
+    
     echo "Restarting old version in PM2..."
     pm2 restart "$PROCESS_NAME" || pm2 start neurons/validator.py \
         --name "$PROCESS_NAME" \
@@ -84,6 +87,8 @@ update_and_deploy() {
         fi
         echo "MongoDB deployment completed successfully."
     fi
+    
+    # Pull new code in the autoppia_iwa_module sub-repo
     cd autoppia_iwa_module
     if ! git pull origin main; then
         echo "Failed to pull autoppia_iwa_module."
@@ -92,6 +97,31 @@ update_and_deploy() {
         return 1
     fi
     cd ..
+    
+    # If there's a nested webs_demo or other submodules, you can also pull them similarly:
+    # cd autoppia_iwa_module/modules/webs_demo
+    # git pull origin main
+    # cd ../../../
+    
+    # Stop Docker containers on ports 8000 or 5432 (if they exist)
+    echo "Stopping Docker containers on ports 8000 or 5432 (if any)..."
+    docker ps --format "{{.ID}} {{.Ports}}" \
+      | grep -E '0.0.0.0:8000|0.0.0.0:5432' \
+      | awk '{print $1}' \
+      | xargs -r docker stop
+    
+    # Deploy webs demo if script exists
+    if [ -f "./scripts/validator/deploy_demo_webs.sh" ]; then
+        echo "Deploying webs demo..."
+        chmod +x ./scripts/validator/deploy_demo_webs.sh
+        if ! ./scripts/validator/deploy_demo_webs.sh; then
+            echo "Failed to deploy webs demo."
+            redeploy_old_version
+            return 1
+        fi
+        echo "Webs demo deployed successfully."
+    fi
+    
     echo "Installing new code..."
     source validator_env/bin/activate
     if ! pip install -e .; then
@@ -99,28 +129,30 @@ update_and_deploy() {
         redeploy_old_version
         return 1
     fi
+    
     if ! pip install -e autoppia_iwa_module; then
         echo "pip install -e autoppia_iwa_module failed"
         redeploy_old_version
         return 1
     fi
+    
     echo "Restarting PM2 process..."
     if ! pm2 restart "$PROCESS_NAME"; then
-        echo "PM2 restart failed"
-        # Attempt fallback: start if restart fails
+        echo "PM2 restart failed. Attempting fallback PM2 start..."
         if ! pm2 start neurons/validator.py \
             --name "$PROCESS_NAME" \
             --interpreter python \
             -- \
             --netuid 36 \
             --subtensor.network finney \
-            --wallet.name your_coldkey \
-            --wallet.hotkey your_hotkey; then
+            --wallet.name "$WALLET_NAME" \
+            --wallet.hotkey "$WALLET_HOTKEY"; then
             echo "Fallback PM2 start also failed. Reverting..."
             redeploy_old_version
             return 1
         fi
     fi
+    
     echo "Deployment completed successfully."
     return 0
 }
@@ -148,6 +180,6 @@ while true; do
         fi
     fi
     
-    echo "Sleeping for $(($SLEEP_INTERVAL/60)) minutes before next check..."
+    echo "Sleeping for $(($SLEEP_INTERVAL / 60)) minutes before next check..."
     sleep $SLEEP_INTERVAL
 done
