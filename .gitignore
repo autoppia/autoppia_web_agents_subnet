@@ -23,6 +23,7 @@ output.png
 
 #IDE
 .vscode
+PythonImportHelper-v2-Completion
 
 # Distribution / packaging
 .Python
