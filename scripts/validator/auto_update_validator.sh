@@ -1,8 +1,8 @@
 #!/bin/bash
-# auto_update_validator.sh - Check for updates and redeploy if a new version is available.
-# If deployment fails, revert to the previous codebase and redeploy the old version.
+# auto_update_validator.sh - Check for updates only. If a new version is available, runs update.sh.
+# Run this script in the background (via PM2 or another process manager)
+# so it checks periodically for new versions.
 
-# Set default values or use arguments if provided
 PROCESS_NAME="subnet-36-validator"
 WALLET_NAME="your_coldkey"
 WALLET_HOTKEY="your_hotkey"
@@ -25,161 +25,48 @@ SLEEP_INTERVAL=120  # 2 minutes in seconds
 echo "Starting auto-update service for process: $PROCESS_NAME"
 
 get_local_version() {
-    grep "$VERSION_VARIABLE" "$CONFIG_FILE" | head -n1 | sed -E 's/.*=[[:space:]]*["'\''"]?([^"'\'' ]+)["'\''"]?.*/\1/'
+    grep "$VERSION_VARIABLE" "$CONFIG_FILE" 2>/dev/null \
+        | head -n1 \
+        | sed -E 's/.*=[[:space:]]*["'\''"]?([^"'\'' ]+)["'\''"]?.*/\1/'
 }
 
 get_remote_version() {
     git fetch origin
-    # Compare with 'main' branch
+    # Compare against 'main' branch
     git show origin/main:"$CONFIG_FILE" 2>/dev/null \
         | grep "$VERSION_VARIABLE" \
         | head -n1 \
         | sed -E 's/.*=[[:space:]]*["'\''"]?([^"'\'' ]+)["'\''"]?.*/\1/'
 }
 
-# Returns 0 if v2 > v1, else returns 1
+# Returns 0 (true) if v2 > v1, else 1 (false).
 version_greater() {
     [ "$(printf '%s\n' "$2" "$1" | sort -V | head -n1)" != "$1" ]
-}
-
-redeploy_old_version() {
-    echo "Reverting to previous commits..."
-    # Revert autoppia_iwa
-    cd autoppia_iwa_module
-    git reset --hard "$PREV_IWA_HEAD"
-    cd ..
-    # Revert main repo
-    git reset --hard "$PREV_MAIN_HEAD"
-    
-    echo "Reinstalling old version..."
-    source validator_env/bin/activate
-    pip install -e .
-    pip install -e autoppia_iwa_module
-    
-    echo "Restarting old version in PM2..."
-    pm2 restart "$PROCESS_NAME" || pm2 start neurons/validator.py \
-        --name "$PROCESS_NAME" \
-        --interpreter python \
-        -- \
-        --netuid 36 \
-        --subtensor.network finney \
-        --wallet.name "$WALLET_NAME" \
-        --wallet.hotkey "$WALLET_HOTKEY"
-    echo "Old version redeployed."
-}
-
-update_and_deploy() {
-    echo "Pulling new code..."
-    if ! git pull origin main; then
-        echo "Failed to pull main repo."
-        redeploy_old_version
-        return 1
-    fi
-    
-    # Deploy MongoDB if script exists
-    if [ -f "./scripts/mongo/deploy_mongo_docker.sh" ]; then
-        echo "Deploying MongoDB via Docker..."
-        chmod +x ./scripts/mongo/deploy_mongo_docker.sh
-        if ! ./scripts/mongo/deploy_mongo_docker.sh -y; then
-            echo "MongoDB deployment failed."
-            redeploy_old_version
-            return 1
-        fi
-        echo "MongoDB deployment completed successfully."
-    fi
-    
-    # Pull new code in the autoppia_iwa_module sub-repo
-    cd autoppia_iwa_module
-    if ! git pull origin main; then
-        echo "Failed to pull autoppia_iwa_module."
-        cd ..
-        redeploy_old_version
-        return 1
-    fi
-    cd ..
-    
-    # If there's a nested webs_demo or other submodules, you can also pull them similarly:
-    # cd autoppia_iwa_module/modules/webs_demo
-    # git pull origin main
-    # cd ../../../
-    
-    # Stop Docker containers on ports 8000 or 5432 (if they exist)
-    echo "Stopping Docker containers on ports 8000 or 5432 (if any)..."
-    docker ps --format "{{.ID}} {{.Ports}}" \
-      | grep -E '0.0.0.0:8000|0.0.0.0:5432' \
-      | awk '{print $1}' \
-      | xargs -r docker stop
-    
-    # Deploy webs demo if script exists
-    if [ -f "./scripts/validator/deploy_demo_webs.sh" ]; then
-        echo "Deploying webs demo..."
-        chmod +x ./scripts/validator/deploy_demo_webs.sh
-        if ! ./scripts/validator/deploy_demo_webs.sh; then
-            echo "Failed to deploy webs demo."
-            redeploy_old_version
-            return 1
-        fi
-        echo "Webs demo deployed successfully."
-    fi
-    
-    echo "Installing new code..."
-    source validator_env/bin/activate
-    if ! pip install -e .; then
-        echo "pip install -e . failed"
-        redeploy_old_version
-        return 1
-    fi
-    
-    if ! pip install -e autoppia_iwa_module; then
-        echo "pip install -e autoppia_iwa_module failed"
-        redeploy_old_version
-        return 1
-    fi
-    
-    echo "Restarting PM2 process..."
-    if ! pm2 restart "$PROCESS_NAME"; then
-        echo "PM2 restart failed. Attempting fallback PM2 start..."
-        if ! pm2 start neurons/validator.py \
-            --name "$PROCESS_NAME" \
-            --interpreter python \
-            -- \
-            --netuid 36 \
-            --subtensor.network finney \
-            --wallet.name "$WALLET_NAME" \
-            --wallet.hotkey "$WALLET_HOTKEY"; then
-            echo "Fallback PM2 start also failed. Reverting..."
-            redeploy_old_version
-            return 1
-        fi
-    fi
-    
-    echo "Deployment completed successfully."
-    return 0
 }
 
 while true; do
     LOCAL_VERSION=$(get_local_version)
     REMOTE_VERSION=$(get_remote_version)
-    
+
     if [ -z "$REMOTE_VERSION" ]; then
-        echo "Unable to retrieve remote version."
+        echo "Unable to retrieve remote version (or no remote version found)."
     else
         if version_greater "$REMOTE_VERSION" "$LOCAL_VERSION"; then
-            echo "New version detected: $REMOTE_VERSION (local: $LOCAL_VERSION)"
-            # Capture current commits before updating
-            PREV_MAIN_HEAD=$(git rev-parse HEAD)
-            PREV_IWA_HEAD=$(cd autoppia_iwa_module && git rev-parse HEAD)
+            echo "New version detected: $REMOTE_VERSION (local: $LOCAL_VERSION)."
+            echo "Invoking update.sh..."
+            bash update.sh "$PROCESS_NAME" "$WALLET_NAME" "$WALLET_HOTKEY"
             
-            if update_and_deploy; then
-                echo "Update successful: now at version $REMOTE_VERSION."
-            else
-                echo "Update failed; reverted to previous version ($LOCAL_VERSION)."
-            fi
+            # Check exit code if desired:
+            # if [ $? -eq 0 ]; then
+            #     echo "update.sh completed successfully."
+            # else
+            #     echo "update.sh failed."
+            # fi
         else
             echo "No update available (local: $LOCAL_VERSION, remote: $REMOTE_VERSION)."
         fi
     fi
-    
-    echo "Sleeping for $(($SLEEP_INTERVAL / 60)) minutes before next check..."
+
+    echo "Sleeping for $(($SLEEP_INTERVAL/60)) minutes..."
     sleep $SLEEP_INTERVAL
 done
