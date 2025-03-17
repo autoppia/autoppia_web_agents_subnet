@@ -10,7 +10,7 @@ import bittensor as bt
 import json
 import os
 from distutils.util import strtobool
-
+from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
 SAVE_SUCCESSFULL_TASK_IN_JSON = bool(
     strtobool(os.getenv("SAVE_SUCCESSFULL_TASK_IN_JSON", "false"))
@@ -66,6 +66,10 @@ class TaskFeedbackSynapse(Synapse):
 
     def print_in_terminal(self):
         visualizer = SubnetVisualizer()
+        ColoredLogger.info(
+            f"FEEDBACK SYNAPSE --> { self.task_id,self.actions,self.test_results_matrix}",
+            ColoredLogger.BLUE,
+        )
         if self.task_id and self.actions and self.test_results_matrix:
             task = Task(id=self.task_id, prompt=self.prompt, url=self.task_url)
             task_prepared_for_agent = task.prepare_for_agent(self.miner_id)
