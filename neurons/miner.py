@@ -16,7 +16,6 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import logging
 import time
 import typing
 from typing import List
@@ -24,7 +23,7 @@ from typing import List
 import bittensor as bt
 
 from autoppia_web_agents_subnet.base.miner import BaseMinerNeuron
-from autoppia_web_agents_subnet.protocol import TaskSynapse, TaskFeedbackSynapse
+from autoppia_web_agents_subnet.protocol import TaskSynapse, TaskFeedbackSynapse, MinerStats
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
 from autoppia_iwa.src.bootstrap import AppBootstrap
@@ -39,6 +38,7 @@ from autoppia_iwa.config.config import (
     USE_APIFIED_AGENT,
 )
 from autoppia_web_agents_subnet.utils.weights_version import is_version_in_range
+from autoppia_web_agents_subnet.miner.stats import MinerStats
 
 
 class Miner(BaseMinerNeuron):
@@ -55,6 +55,10 @@ class Miner(BaseMinerNeuron):
             if USE_APIFIED_AGENT
             else RandomClickerWebAgent(is_random=False)
         )
+
+        # Instantiate your MinerStats to keep track of feedback across tasks
+        self.miner_stats = MinerStats()
+
         self.load_state()
 
     def show_actions(self, actions: List[BaseAction]) -> None:
@@ -67,12 +71,8 @@ class Miner(BaseMinerNeuron):
             bt.logging.warning("No actions to log.")
             return
 
-        ColoredLogger.info(
-            f"Actions sent:",
-            ColoredLogger.GRAY,
-        )
+        bt.logging.info("Actions sent: ")
         for i, action in enumerate(actions, 1):
-            action_attrs = {}
             action_attrs = vars(action)
 
             # Log with consistent format
@@ -80,7 +80,6 @@ class Miner(BaseMinerNeuron):
                 f"    {i}. {action.type}: {action_attrs}",
                 ColoredLogger.GREEN,
             )
-
             bt.logging.info(f"  {i}. {action.type}: {action_attrs}")
 
     async def forward(self, synapse: TaskSynapse) -> TaskSynapse:
@@ -91,13 +90,13 @@ class Miner(BaseMinerNeuron):
             ColoredLogger.YELLOW,
         )
 
-        # Checking Weights Version
+        # Checking Weights Version (commented out for now)
         # version_check = is_version_in_range(
         #     synapse.version, self.version, self.least_acceptable_version
         # )
-
+        #
         # if not version_check:
-        #     ColoredLogger.info(f"Not reponding to {validator_hotkey} due to", "yellow")
+        #     ColoredLogger.info(f"Not responding to {validator_hotkey} due to", "yellow")
         #     ColoredLogger.info(
         #         f"version check: {synapse.version} not between {self.least_acceptable_version} - { self.version}. This is intended behaviour",
         #         "yellow",
@@ -124,12 +123,12 @@ class Miner(BaseMinerNeuron):
 
             # Process the task
             task_solution = await self.agent.solve_task(task=task_for_agent)
-
             actions: List[BaseAction] = task_solution.actions
 
             # Show actions
             self.show_actions(actions)
 
+            # Assign actions back to the synapse
             synapse.actions = actions
 
             ColoredLogger.success(
@@ -146,16 +145,22 @@ class Miner(BaseMinerNeuron):
     ) -> TaskFeedbackSynapse:
         """
         Endpoint for feedback requests from the validator.
-        We just call print_in_terminal() to see a summary.
+        Logs the feedback, updates MinerStats, and prints a summary.
         """
 
         try:
-            synapse.print_in_terminal()
+            # Update our MinerStats with the feedback
+            self.miner_stats.log_feedback(synapse.score, synapse.execution_time)
+
+            # Print feedback in terminal, including a global stats snapshot
+            synapse.print_in_terminal(miner_stats=self.miner_stats)
+
         except Exception as e:
             ColoredLogger.error(
                 "Error occurred while printing in terminal TaskFeedback"
             )
             bt.logging.info(e)
+
         return synapse
 
     async def blacklist(self, synapse: TaskSynapse) -> typing.Tuple[bool, str]:

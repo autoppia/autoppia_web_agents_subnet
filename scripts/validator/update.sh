@@ -71,7 +71,7 @@ update_and_deploy() {
         echo "MongoDB deployment completed successfully."
     fi
     
-    # Pull new code in the autoppia_iwa_module sub-repo
+    # Pull new code in autoppia_iwa_module
     cd autoppia_iwa_module
     if ! git pull origin main; then
         echo "Failed to pull autoppia_iwa_module."
@@ -79,15 +79,22 @@ update_and_deploy() {
         redeploy_old_version
         return 1
     fi
+
+    # Pull new code in webs_demo as well
+    if [ -d "modules/webs_demo" ]; then
+      cd modules/webs_demo
+      if ! git pull origin main; then
+          echo "Failed to pull webs_demo submodule."
+          cd ../../..
+          redeploy_old_version
+          return 1
+      fi
+      cd ../../..
+    fi
+    
+    # Now back to main repo
     cd ..
-    
-    # Example: if there's a nested "webs_demo" sub-repo
-    # cd autoppia_iwa_module/modules/webs_demo
-    # git pull origin main
-    # cd ../../../
-    
-    # Removed the block that stops Docker containers on ports 8000 or 5432
-    
+
     # Deploy webs demo if script exists
     if [ -f "./scripts/validator/deploy_demo_webs.sh" ]; then
         echo "Deploying webs demo..."
@@ -103,6 +110,7 @@ update_and_deploy() {
     # Now install the updated code
     echo "Installing new code..."
     source validator_env/bin/activate
+    
     if ! pip install -e .; then
         echo "pip install -e . failed."
         redeploy_old_version
