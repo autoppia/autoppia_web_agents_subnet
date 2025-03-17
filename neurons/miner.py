@@ -165,7 +165,6 @@ class Miner(BaseMinerNeuron):
           - Non-validator hotkeys if force_validator_permit is True
           - Hotkeys not meeting the minimum stake requirement
         """
-        ColoredLogger.info("BLACKLIST", ColoredLogger.RED)
 
         validator_hotkey = synapse.dendrite.hotkey
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
@@ -208,7 +207,6 @@ class Miner(BaseMinerNeuron):
         """
         Blacklist logic for feedback requests. Similar to blacklist().
         """
-        ColoredLogger.info("BLACKLIST FEEDBACK", ColoredLogger.RED)
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
             bt.logging.warning("Received a request without a dendrite or hotkey.")
             return True, "Missing dendrite or hotkey"
