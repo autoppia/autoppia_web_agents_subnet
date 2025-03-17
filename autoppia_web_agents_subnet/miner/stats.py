@@ -1,46 +1,41 @@
-from pydantic import BaseModel
 from typing import Optional
-from autoppia_iwa.src.data_generation.domain.classes import Task
 
 
-class MinerStats(BaseModel):
+class MinerStats:
     """
-    Stores basic stats about a miner, updated after each task.
+    A simple class for tracking aggregate statistics across multiple tasks:
+      - number of tasks
+      - average score
+      - average execution time
     """
-    avg_score: float = 0.0
-    avg_execution_time: float = 0.0
-    avg_evaluation_time: float = 0.0
-    total_tasks: int = 0
-    total_successful_tasks: int = 0
-    last_task: Optional[Task] = None
-    sum_score: float = 0.0
-    sum_execution_time: float = 0.0
-    sum_evaluation_time: float = 0.0
-    # Additional fields
-    last_task_score: float = 0.0
-    last_execution_time: float = 0.0
 
-    class Config:
-        extra = "allow"
-        arbitrary_types_allowed = True
+    def __init__(self):
+        self.num_tasks: int = 0
+        self.total_score: float = 0.0
+        self.total_execution_time: float = 0.0
 
-    def update(
-        self,
-        score: float,
-        execution_time: float,
-        evaluation_time: float,
-        last_task: Task,
-        success: bool = False,
-    ):
-        self.total_tasks += 1
-        self.sum_score += score
-        self.sum_execution_time += execution_time
-        self.sum_evaluation_time += evaluation_time
-        if success:
-            self.total_successful_tasks += 1
-        self.avg_score = self.sum_score / self.total_tasks
-        self.avg_execution_time = self.sum_execution_time / self.total_tasks
-        self.avg_evaluation_time = self.sum_evaluation_time / self.total_tasks
-        self.last_task = last_task
-        self.last_task_score = score
-        self.last_execution_time = execution_time
+    def log_feedback(self, score: Optional[float], execution_time: Optional[float]):
+        """
+        Logs feedback by incrementing number of tasks and updating total
+        score and total execution time.
+        """
+        if score is None:
+            score = 0.0
+        if execution_time is None:
+            execution_time = 0.0
+
+        self.num_tasks += 1
+        self.total_score += score
+        self.total_execution_time += execution_time
+
+    @property
+    def avg_score(self) -> float:
+        if self.num_tasks == 0:
+            return 0.0
+        return self.total_score / self.num_tasks
+
+    @property
+    def avg_execution_time(self) -> float:
+        if self.num_tasks == 0:
+            return 0.0
+        return self.total_execution_time / self.num_tasks
