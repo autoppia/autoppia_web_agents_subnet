@@ -23,7 +23,7 @@ from typing import List
 import bittensor as bt
 
 from autoppia_web_agents_subnet.base.miner import BaseMinerNeuron
-from autoppia_web_agents_subnet.protocol import TaskSynapse, TaskFeedbackSynapse, MinerStats
+from autoppia_web_agents_subnet.protocol import TaskSynapse, TaskFeedbackSynapse
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
 from autoppia_iwa.src.bootstrap import AppBootstrap
@@ -37,8 +37,8 @@ from autoppia_iwa.config.config import (
     AGENT_PORT,
     USE_APIFIED_AGENT,
 )
-from autoppia_web_agents_subnet.utils.weights_version import is_version_in_range
 from autoppia_web_agents_subnet.miner.stats import MinerStats
+from autoppia_web_agents_subnet.utils.weights_version import is_version_in_range
 
 
 class Miner(BaseMinerNeuron):
