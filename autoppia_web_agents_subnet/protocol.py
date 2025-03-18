@@ -40,6 +40,23 @@ class TaskSynapse(Synapse):
         return self
 
 
+class OrganicTaskSynapse(Synapse):
+    """
+    Synapse carrying the Task prompt & data from validator to miners.
+    """
+
+    version: str = ""
+    prompt: str
+    url: str
+
+    class Config:
+        extra = "allow"
+        arbitrary_types_allowed = True
+
+    def deserialize(self) -> "TaskSynapse":
+        return self
+
+
 class TaskFeedbackSynapse(bt.Synapse):
     """
     Synapse carrying feedback from validator back to miner,
