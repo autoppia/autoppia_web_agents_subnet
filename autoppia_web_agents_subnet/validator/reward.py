@@ -62,9 +62,6 @@ def _normalize_times_for_valid_solutions(
 
     Return a list of time_factors (same length as `execution_times`).
     """
-    print("Scores and times lengths")
-    print(len(raw_scores))
-    print(len(execution_times))
     # Gather (time, idx) only for solutions that have raw_score > 0 and valid time
     valid_pairs = [
         (t, idx)
