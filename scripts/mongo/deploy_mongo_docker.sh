@@ -9,7 +9,7 @@ CONTAINER_NAME="mongodb"
 MONGO_VERSION="latest"
 HOST_PORT=27017
 CONTAINER_PORT=27017
-MONGO_VOLUME="$HOME/mongodb_data"
+MONGO_VOLUME="$(pwd)/mongodb_data"
 DUMP_FOLDER="$(pwd)/data/mongo-dump"
 MONGO_USER="adminUser"
 
