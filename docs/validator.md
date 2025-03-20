@@ -41,7 +41,6 @@ chmod +x scripts/validator/install_docker.sh
 
 4. Set up environment variables:
 ```bash
-# Edit .env with your configuration
 cp .env.example .env
 ```
 
@@ -143,7 +142,6 @@ This configuration allows you to run the validator, LLM service, and demo webs o
 ### Starting the Validator
 
 ```bash
-deactivate
 source validator_env/bin/activate
 pm2 start neurons/validator.py \
   --name "subnet-36-validator" \
