@@ -207,6 +207,7 @@ class Miner(BaseMinerNeuron):
         """
         Blacklist logic for feedback requests. Similar to blacklist().
         """
+        validator_hotkey = synapse.dendrite.hotkey
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
             bt.logging.warning("Received a request without a dendrite or hotkey.")
             return True, "Missing dendrite or hotkey"
@@ -215,23 +216,31 @@ class Miner(BaseMinerNeuron):
             not self.config.blacklist.allow_non_registered
             and synapse.dendrite.hotkey not in self.metagraph.hotkeys
         ):
-            return True, "Unrecognized hotkey"
+            bt.logging.warning(
+                f"Received a request without a dendrite or hotkey. {validator_hotkey}"
+            )
+            return True, f"Unrecognized hotkey: {validator_hotkey}"
 
         uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
 
         if self.config.blacklist.force_validator_permit:
             if not self.metagraph.validator_permit[uid]:
-                return True, "Non-validator hotkey"
+                bt.logging.warning(f"Blacklisted Non-Validator {validator_hotkey}")
+                return True, f"Non-validator hotkey: {validator_hotkey}"
 
         # -----------------------------------------------------------------------
-        # Added check for minimum stake requirement (feedback path)
+        # Added check for minimum stake requirement
         # -----------------------------------------------------------------------
         stake = self.metagraph.S[uid]
         min_stake = self.config.blacklist.minimum_stake_requirement
         if stake < min_stake:
-            return True, f"Insufficient stake ({stake} < {min_stake})"
+            bt.logging.warning(f"Blacklisted insufficient stake: {validator_hotkey}")
+            return (
+                True,
+                f"Insufficient stake ({stake} < {min_stake}) for {validator_hotkey}",
+            )
 
-        return False, "Hotkey recognized!"
+        return False, f"Hotkey recognized: {validator_hotkey}"
 
     async def priority(self, synapse: TaskSynapse) -> float:
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
