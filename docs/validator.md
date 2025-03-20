@@ -1,7 +1,5 @@
 # Validator Guide for Subnet 36
 
-This guide walks you through setting up a validator for Subnet 36.
-
 ## Requirements
 
 **Important Linux Distribution Note**:
