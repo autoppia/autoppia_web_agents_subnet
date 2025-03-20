@@ -132,7 +132,7 @@ DEMO_WEBS_STARTING_PORT=8000
 
 This configuration allows you to run the validator, LLM service, and demo webs on separate machines for better resource management.
 
-## 4. Validator Deployment and Autostart
+## 4. Validator Deployment
 
 ### Starting the Validator
 
