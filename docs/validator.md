@@ -15,6 +15,8 @@ The deployment is compartmentalized, allowing each component to be deployed sepa
 - **LLM**: OpenAI API or Local LLM
 - **Demo-Webs**: CPU only (Docker required)
 
+If you have deployed something in another machine configure .env with the correct urls.
+
 ## 1. Initial Setup
 
 1. Clone and setup the repository:
