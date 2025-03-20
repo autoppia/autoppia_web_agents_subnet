@@ -165,6 +165,14 @@ pm2 start --name auto_update_validator --interpreter /bin/bash ./scripts/validat
 
 *Note*: Edit the script to match your PM2 configuration (process name, wallet keys) before running it. The script automatically checks for updates, deploys new versions, and includes automatic rollback if the update fails. It runs every 5 minutes to ensure your validator stays up to date.
 
+### Update Script
+
+To Update repos, modules, and demo-webs you can run:
+
+```bash
+./scripts/validator/update.sh
+```
+
 ## Support
 
 Contact **@Daryxx**, **@Riiveer**, or **@Miguelik** on Discord
