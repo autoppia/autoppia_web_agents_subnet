@@ -119,17 +119,12 @@ cd "$CURRENT_DIR"
 
 Edit `.env`:
 ```bash
-LOCAL_MODEL_ENDPOINT=http://localhost:6000
 DEMO_WEBS_ENDPOINT=http://localhost
 DEMO_WEBS_STARTING_PORT=8000
 ```
 
 #### Configuration Options:
 
-- **`LOCAL_MODEL_ENDPOINT`**: The endpoint where your LLM service is running
-  - Default: `http://localhost:6000`
-  - You can modify this if running the LLM on a different server
-  - Example remote setup: `http://your-llm-server_ip:port`
 - **`DEMO_WEBS_ENDPOINT`**: The endpoint where your demo web projects are deployed
   - Default: `http://localhost`
   - You can modify this if running the demo webs on a different server
