@@ -147,7 +147,7 @@ class Miner(BaseMinerNeuron):
         Endpoint for feedback requests from the validator.
         Logs the feedback, updates MinerStats, and prints a summary.
         """
-
+        ColoredLogger.info("Received feedback", ColoredLogger.GRAY)
         try:
             # Update our MinerStats with the feedback
             self.miner_stats.log_feedback(synapse.score, synapse.execution_time)
