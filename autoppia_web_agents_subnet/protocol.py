@@ -5,12 +5,15 @@ from autoppia_iwa.src.execution.actions.actions import AllActionsUnion
 from autoppia_iwa.src.data_generation.domain.classes import Task
 from autoppia_iwa.src.shared.visualizator import SubnetVisualizer
 from autoppia_iwa.src.data_generation.domain.classes import TestUnion
+from filelock import FileLock
 from rich.console import Console
 import bittensor as bt
 import json
 import os
+import time
 from distutils.util import strtobool
 from .miner.stats import MinerStats
+
 
 SAVE_SUCCESSFULL_TASK_IN_JSON = bool(
     strtobool(os.getenv("SAVE_SUCCESSFULL_TASK_IN_JSON", "false"))
@@ -83,10 +86,11 @@ class TaskFeedbackSynapse(bt.Synapse):
     def deserialize(self) -> "TaskFeedbackSynapse":
         return self
 
-    def print_in_terminal(self, miner_stats: Optional[MinerStats] = None):
+    def print_in_terminal(self, miner_stats: Optional["MinerStats"] = None):
         """
         Prints a detailed summary of the feedback in the terminal.
-        Also shows global miner stats if provided.
+        Also shows global miner stats if provided, and optionally saves
+        the task if needed.
         """
 
         visualizer = SubnetVisualizer()
@@ -151,10 +155,48 @@ class TaskFeedbackSynapse(bt.Synapse):
             )
 
         # --------------------------------------------
-        # Attempt to save successful tasks as JSON
+        # (Optional) Attempt to save successful tasks
         # --------------------------------------------
         if SAVE_SUCCESSFULL_TASK_IN_JSON:
             self._save_successful_task_if_needed()
+
+        # --------------------------------------------
+        # Example: Immediately store all feedback data
+        # --------------------------------------------
+        self.save_to_json()
+
+
+    def save_to_json(self, filename: str = "feedback_tasks.json"):
+        """
+        Saves ALL feedback fields to a local JSON file.
+        Uses a file-level lock for concurrency across processes.
+        """
+        # Convert this Pydantic model into a Python dict
+        # This includes all fields (version, validator_id, etc.)
+        data = self.model_dump()
+
+        # Add a timestamp to track when we saved
+        data["local_save_timestamp"] = time.time()
+
+        # The .lock file ensures only one process writes at a time
+        lock_file = filename + ".lock"
+
+        with FileLock(lock_file):
+            # Ensure the JSON file exists and is initialized as a list
+            if not os.path.isfile(filename):
+                with open(filename, "w") as f:
+                    json.dump([], f)
+
+            # Read the existing JSON contents into memory
+            with open(filename, "r") as f:
+                content = json.load(f)
+
+            # Append this feedback entry
+            content.append(data)
+
+            # Write the updated content back
+            with open(filename, "w") as f:
+                json.dump(content, f, indent=4)
 
     def _save_successful_task_if_needed(self):
         """
