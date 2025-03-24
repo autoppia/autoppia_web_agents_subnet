@@ -9,8 +9,8 @@ from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
 async def check_miner_not_responding_to_invalid_version(self, task_synapse:TaskSynapse, miner_axons, probability:float, timeout:int):
     try:
-        do_check_versions = random.random() < probability
-
+        # do_check_versions = random.random() < probability
+        do_check_versions = False
         version_responses = []
         if do_check_versions:
             random_version = generate_random_version(self.version, self.least_acceptable_version)
