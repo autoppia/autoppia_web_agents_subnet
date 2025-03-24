@@ -256,7 +256,6 @@ async def get_rewards_with_details(
         )
 
     except Exception as e:
-        raise e
         ColoredLogger.error(
             
             f"Error evaluating task solutions with details: {str(e)}",
