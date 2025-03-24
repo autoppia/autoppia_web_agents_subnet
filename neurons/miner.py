@@ -19,12 +19,6 @@
 import time
 import typing
 from typing import List
-import json
-import os
-
-# For concurrency-safe file access across multiple processes
-# pip install filelock
-from filelock import FileLock
 
 import bittensor as bt
 
@@ -45,6 +39,7 @@ from autoppia_iwa.config.config import (
 )
 from autoppia_web_agents_subnet.miner.stats import MinerStats
 from autoppia_web_agents_subnet.utils.weights_version import is_version_in_range
+
 
 class Miner(BaseMinerNeuron):
     """
@@ -79,6 +74,8 @@ class Miner(BaseMinerNeuron):
         bt.logging.info("Actions sent: ")
         for i, action in enumerate(actions, 1):
             action_attrs = vars(action)
+
+            # Log with consistent format
             ColoredLogger.info(
                 f"    {i}. {action.type}: {action_attrs}",
                 ColoredLogger.GREEN,
@@ -86,9 +83,6 @@ class Miner(BaseMinerNeuron):
             bt.logging.info(f"  {i}. {action.type}: {action_attrs}")
 
     async def forward(self, synapse: TaskSynapse) -> TaskSynapse:
-        """
-        Called when the validator (or other hotkeys) wants to generate a solution (actions).
-        """
 
         validator_hotkey = getattr(synapse.dendrite, "hotkey", None)
         ColoredLogger.info(
@@ -100,9 +94,11 @@ class Miner(BaseMinerNeuron):
         # version_check = is_version_in_range(
         #     synapse.version, self.version, self.least_acceptable_version
         # )
+        #
         # if not version_check:
+        #     ColoredLogger.info(f"Not responding to {validator_hotkey} due to", "yellow")
         #     ColoredLogger.info(
-        #         f"Not responding to {validator_hotkey} due to version mismatch",
+        #         f"version check: {synapse.version} not between {self.least_acceptable_version} - { self.version}. This is intended behaviour",
         #         "yellow",
         #     )
         #     return synapse
@@ -125,11 +121,11 @@ class Miner(BaseMinerNeuron):
             )
             bt.logging.info("Generating actions....")
 
-            # Process the task using your chosen WebAgent
+            # Process the task
             task_solution = await self.agent.solve_task(task=task_for_agent)
             actions: List[BaseAction] = task_solution.actions
 
-            # Show actions in logs
+            # Show actions
             self.show_actions(actions)
 
             # Assign actions back to the synapse
@@ -149,50 +145,20 @@ class Miner(BaseMinerNeuron):
     ) -> TaskFeedbackSynapse:
         """
         Endpoint for feedback requests from the validator.
-        Logs the feedback, updates MinerStats, prints a summary,
-        AND saves feedback to tasks.json (with concurrency-safe writing).
+        Logs the feedback, updates MinerStats, and prints a summary.
         """
         ColoredLogger.info("Received feedback", ColoredLogger.GRAY)
         try:
-            # 1) Update our in-memory stats
+            # Update our MinerStats with the feedback
             self.miner_stats.log_feedback(synapse.score, synapse.execution_time)
 
-            # 2) Print feedback in terminal, including a global stats snapshot
+            # Print feedback in terminal, including a global stats snapshot
             synapse.print_in_terminal(miner_stats=self.miner_stats)
 
-            # 3) Save feedback to tasks.json
-            feedback_data = {
-                "timestamp": time.time(),
-                "score": synapse.score,
-                "execution_time": synapse.execution_time,
-                "prompt": synapse.prompt,
-                "url": synapse.url,
-                "hotkey": getattr(synapse.dendrite, "hotkey", "unknown_hotkey")
-            }
-
-            # Use a file lock to prevent concurrent writes
-            lock_file = "tasks.json.lock"
-            json_file = "tasks.json"
-
-            with FileLock(lock_file):
-                # If tasks.json doesn't exist, initialize it as an empty list
-                if not os.path.isfile(json_file):
-                    with open(json_file, "w") as f:
-                        json.dump([], f)
-
-                # Read current list of feedback
-                with open(json_file, "r") as f:
-                    data_list = json.load(f)
-
-                # Append new feedback item
-                data_list.append(feedback_data)
-
-                # Write updated list back to tasks.json
-                with open(json_file, "w") as f:
-                    json.dump(data_list, f, indent=4)
-
         except Exception as e:
-            ColoredLogger.error("Error occurred while processing feedback")
+            ColoredLogger.error(
+                "Error occurred while printing in terminal TaskFeedback"
+            )
             bt.logging.info(e)
 
         return synapse
@@ -215,7 +181,7 @@ class Miner(BaseMinerNeuron):
             and synapse.dendrite.hotkey not in self.metagraph.hotkeys
         ):
             bt.logging.warning(
-                f"Received a request with unrecognized hotkey: {validator_hotkey}"
+                f"Received a request without a dendrite or hotkey. {validator_hotkey}"
             )
             return True, f"Unrecognized hotkey: {validator_hotkey}"
 
@@ -226,7 +192,9 @@ class Miner(BaseMinerNeuron):
                 bt.logging.warning(f"Blacklisted Non-Validator {validator_hotkey}")
                 return True, f"Non-validator hotkey: {validator_hotkey}"
 
+        # -----------------------------------------------------------------------
         # Added check for minimum stake requirement
+        # -----------------------------------------------------------------------
         stake = self.metagraph.S[uid]
         min_stake = self.config.blacklist.minimum_stake_requirement
         if stake < min_stake:
@@ -245,7 +213,7 @@ class Miner(BaseMinerNeuron):
         Blacklist logic for feedback requests. Similar to blacklist().
         """
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
-            bt.logging.warning("Received a feedback request without a dendrite or hotkey.")
+            bt.logging.warning("Received a request without a dendrite or hotkey.")
             return True, "Missing dendrite or hotkey"
 
         if (
@@ -260,7 +228,9 @@ class Miner(BaseMinerNeuron):
             if not self.metagraph.validator_permit[uid]:
                 return True, "Non-validator hotkey"
 
+        # -----------------------------------------------------------------------
         # Added check for minimum stake requirement (feedback path)
+        # -----------------------------------------------------------------------
         stake = self.metagraph.S[uid]
         min_stake = self.config.blacklist.minimum_stake_requirement
         if stake < min_stake:
@@ -269,10 +239,6 @@ class Miner(BaseMinerNeuron):
         return False, "Hotkey recognized!"
 
     async def priority(self, synapse: TaskSynapse) -> float:
-        """
-        Priority logic for forward requests. 
-        Could be a function of stake or other criteria.
-        """
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
             bt.logging.warning("Received a request without a dendrite or hotkey.")
             return 0.0
@@ -281,9 +247,6 @@ class Miner(BaseMinerNeuron):
         return float(self.metagraph.S[caller_uid])
 
     async def priority_feedback(self, synapse: TaskFeedbackSynapse) -> float:
-        """
-        Priority logic for feedback requests.
-        """
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
             bt.logging.warning(
                 "Received a feedback request without a dendrite or hotkey."
@@ -293,9 +256,11 @@ class Miner(BaseMinerNeuron):
         caller_uid = self.metagraph.hotkeys.index(synapse.dendrite.hotkey)
         return float(self.metagraph.S[caller_uid])
 
+
 if __name__ == "__main__":
     # Miner entrypoint
     app = AppBootstrap()  # Wiring IWA Dependency Injection
     with Miner() as miner:
         while True:
+            # bt.logging.info(f"Miner running... {time.time()}")
             time.sleep(5)
