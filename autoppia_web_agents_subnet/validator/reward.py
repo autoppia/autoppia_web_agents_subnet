@@ -55,34 +55,31 @@ def _normalize_times_for_valid_solutions(
 ) -> List[float]:
     """
     Normalize execution times only over solutions that have raw_score > 0:
-      - If raw_score > 0 AND we have a valid execution_time, that time is included
-        for computing [0..1] range (min_time -> max_time).
-      - Solutions with raw_score <= 0 or None times are assigned a factor of 0.0
-        and also excluded from min/max computations.
-
-    Return a list of time_factors (same length as `execution_times`).
+      ...
     """
-    # Gather (time, idx) only for solutions that have raw_score > 0 and valid time
     valid_pairs = [
         (t, idx)
         for idx, t in enumerate(execution_times)
         if t is not None and raw_scores[idx] > 0
     ]
-    n = len(execution_times)
 
-    # If no valid times at all => everyone gets 0.0
+    # If no valid times, default all to 0.0
     if not valid_pairs:
-        return [0.0] * n
+        return [0.0] * len(execution_times)
 
+    # Instead of the linear difference approach, 
+    # use the ratio approach: factor = min_time / t
     valid_times = [vp[0] for vp in valid_pairs]
     min_time = min(valid_times)
-    max_time = max(valid_times)
-    denom = max_time - min_time if max_time > min_time else 1e-9
 
-    time_factors = [0.0] * n  # default all 0.0
+    time_factors = [0.0] * len(execution_times)
     for t, idx in valid_pairs:
-        factor = 1.0 - ((t - min_time) / denom)
-        factor = max(0.0, min(factor, 1.0))  # clamp to [0,1]
+        if t <= 0:
+            factor = 0.0
+        else:
+            factor = min_time / t
+        # clamp to [0,1]
+        factor = max(0.0, min(1.0, factor))
         time_factors[idx] = factor
 
     return time_factors

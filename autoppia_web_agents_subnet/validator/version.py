@@ -1,5 +1,4 @@
 import bittensor as bt
-import random
 from typing import List
 from autoppia_web_agents_subnet.utils.weights_version import generate_random_version
 from autoppia_web_agents_subnet.protocol import TaskSynapse
