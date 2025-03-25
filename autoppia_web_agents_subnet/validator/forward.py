@@ -12,7 +12,7 @@ from autoppia_iwa.src.data_generation.application.tasks_generation_pipeline impo
     TaskGenerationPipeline,
 )
 import numpy as np
-
+from bittensor import dendrite
 from autoppia_iwa.src.web_agents.classes import TaskSolution
 from autoppia_web_agents_subnet.protocol import TaskFeedbackSynapse, TaskSynapse
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
@@ -117,10 +117,18 @@ def collect_task_solutions(
         else:
             process_time = TIMEOUT
 
-        bt.logging.info("Miner UID" , miner_uid)
-        bt.logging.info("Process Time" , process_time)
-
         execution_times.append(process_time)
+
+    miners_uids_copy = miner_uids[:]
+    process_times_copy = execution_times[:]
+
+    # Zip and sort by processing times (ascending)
+    sorted_pairs = sorted(zip(miners_uids_copy, process_times_copy), key=lambda x: x[1])
+
+    # Print each miner UID with its corresponding sorted processing time
+    for miner_uid, proc_time in sorted_pairs:
+        print(f"Miner {miner_uid} took {proc_time:.2f}s")
+
     return task_solutions, execution_times
 
 

@@ -71,6 +71,7 @@ def _normalize_times_for_valid_solutions(
       4) If no valid times, return [0.0] for all solutions.
       5) Always ensure the output list has exactly the same length as the input list.
     """
+
     n = len(execution_times)
     # Prepare a default result array (0.0 for all)
     time_factors = [0.0] * n
