@@ -8,53 +8,33 @@ try:
 except ImportError:
     tabulate = None
 
+
 def main(json_file_path: str):
     # 1) Load data from JSON file
     with open(json_file_path, "r") as f:
         data = json.load(f)
     
-    # If your file is a single large list of dictionaries, then data is that list.
-    # E.g.:
-    # data = [
-    #   {
-    #       "version": "...",
-    #       "validator_id": "...",
-    #       "miner_id": "...",
-    #       ...
-    #   },
-    #   ...
-    # ]
-    
-    # We’ll gather stats for final_score, reward_score, and time_factor.
+    # We'll gather:
+    #   - final_score in a global list
+    #   - reward_score/time_factor grouped by (validator_id, miner_id)
     final_scores = []
-    
-    # We’ll also gather reward_score/time_factor in a grouped manner:
-    # Key = (validator_id, miner_id) => values = list of reward_scores or time_factors
     reward_scores_map = defaultdict(list)
     time_factor_map = defaultdict(list)
     
     for item in data:
-        # 1. Grab final_score
-        #    The object has "evaluation_result" with "final_score"
-        #    If missing, default to None (skip)
+        # Grab relevant fields
         eval_result = item.get("evaluation_result", {})
         
         final_score = eval_result.get("final_score", None)
         if final_score is not None:
             final_scores.append(final_score)
         
-        # 2. Grab reward_score
         reward_score = eval_result.get("reward_score", None)
-        
-        # 3. Grab time_factor
         time_factor = eval_result.get("time_factor", None)
         
-        # We also need validator_id and miner_id from top-level fields
         validator_id = str(item.get("validator_id", "unknown_validator"))
         miner_id = str(item.get("miner_id", "unknown_miner"))
         
-        # Group them by (validator_id, miner_id)
-        # Only add if reward_score/time_factor is not None
         if reward_score is not None:
             reward_scores_map[(validator_id, miner_id)].append(reward_score)
         if time_factor is not None:
@@ -77,70 +57,66 @@ def main(json_file_path: str):
         print(f"Max final_score    : {max_fs:.2f}")
     
     # -------------------------------------------------------------------------
-    # 3) TABLE of average "reward_score" by (validator_id, miner_id)
+    # 3) We need a combined set of all validator_id and miner_id from both maps
+    # -------------------------------------------------------------------------
+    all_validator_ids = set()
+    all_miner_ids = set()
+
+    # Gather from reward_scores_map
+    for (val_id, min_id) in reward_scores_map.keys():
+        all_validator_ids.add(val_id)
+        all_miner_ids.add(min_id)
+    # Gather from time_factor_map
+    for (val_id, min_id) in time_factor_map.keys():
+        all_validator_ids.add(val_id)
+        all_miner_ids.add(min_id)
+    
+    # Now sort them exactly once
+    validators = sorted(all_validator_ids)
+    miners = sorted(all_miner_ids)
+    
+    # -------------------------------------------------------------------------
+    # 4) TABLE of average "reward_score"
     # -------------------------------------------------------------------------
     print("\n=== Average reward_score by Validator (rows) and Miner (columns) ===")
-    # Collect all unique validator_ids and miner_ids to build a pivot table
-    validators = set()
-    miners = set()
-    for (val_id, min_id) in reward_scores_map.keys():
-        validators.add(val_id)
-        miners.add(min_id)
-    
-    # Sort them so the table is consistent
-    validators = sorted(validators)
-    miners = sorted(miners)
-    
-    # Build a 2D matrix: rows = validators, columns = miners
     matrix_reward = []
     for v in validators:
         row = []
         for m in miners:
             scores = reward_scores_map.get((v, m), [])
-            if len(scores) == 0:
-                row.append(None)  # or "N/A"
-            else:
+            if scores:
                 row.append(round(statistics.mean(scores), 2))
+            else:
+                row.append(None)
         matrix_reward.append(row)
     
-    # Print using tabulate if available, otherwise do your own printing
+    # Print table
     if tabulate:
         header = ["Validator \\ Miner"] + miners
         table = []
         for i, v in enumerate(validators):
             table.append([v] + matrix_reward[i])
-        
         print(tabulate(table, headers=header, tablefmt="pretty"))
     else:
-        # Basic printing if tabulate is not installed
-        print("    " + "    ".join([f"{m:>10}" for m in miners]))
+        # Basic fallback printing
+        print("    " + "   ".join([f"{m:>10}" for m in miners]))
         for i, v in enumerate(validators):
-            row_str = [f"{x if x is not None else 'N/A':>10}" for x in matrix_reward[i]]
+            row_str = [(f"{x:.2f}" if x is not None else "N/A").rjust(10) for x in matrix_reward[i]]
             print(f"{v:>3} " + " ".join(row_str))
     
     # -------------------------------------------------------------------------
-    # 4) TABLE of average "time_factor" by (validator_id, miner_id)
+    # 5) TABLE of average "time_factor"
     # -------------------------------------------------------------------------
     print("\n=== Average time_factor by Validator (rows) and Miner (columns) ===")
-    
-    # We can reuse the sets of validators/miners, but let's ensure we include
-    # any new ones that only appear in time_factor_map
-    for (val_id, min_id) in time_factor_map.keys():
-        validators.add(val_id)
-        miners.add(min_id)
-    
-    validators = sorted(validators)
-    miners = sorted(miners)
-    
     matrix_time_factor = []
     for v in validators:
         row = []
         for m in miners:
             times = time_factor_map.get((v, m), [])
-            if len(times) == 0:
-                row.append(None)
-            else:
+            if times:
                 row.append(round(statistics.mean(times), 2))
+            else:
+                row.append(None)
         matrix_time_factor.append(row)
     
     if tabulate:
@@ -148,18 +124,14 @@ def main(json_file_path: str):
         table = []
         for i, v in enumerate(validators):
             table.append([v] + matrix_time_factor[i])
-        
         print(tabulate(table, headers=header, tablefmt="pretty"))
     else:
-        print("    " + "    ".join([f"{m:>10}" for m in miners]))
+        print("    " + "   ".join([f"{m:>10}" for m in miners]))
         for i, v in enumerate(validators):
-            row_str = [f"{x if x is not None else 'N/A':>10}" for x in matrix_time_factor[i]]
+            row_str = [(f"{x:.2f}" if x is not None else "N/A").rjust(10) for x in matrix_time_factor[i]]
             print(f"{v:>3} " + " ".join(row_str))
 
 
 if __name__ == "__main__":
-    # Example usage:
-    # python analyze_feedback.py
-    # (Update the path to your JSON file that has the list of TaskFeedbackSynapse data)
-    path_to_your_json = "feedback_tasks.json"  # or feedback_tasks.json, etc.
+    path_to_your_json = "feedback_tasks.json"
     main(path_to_your_json)
