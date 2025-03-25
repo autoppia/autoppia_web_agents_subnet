@@ -45,13 +45,13 @@ cp .env.example .env
 ```
 
 5. Install MongoDB (Docker):
-   - Permissions to mongodb_data location (sometimes is needed)
-   ```bash
-   sudo chown -R $(whoami) /data/mongodb_data
+  - Permissions to mongodb_data location (sometimes is needed)
+  ```bash
+  sudo chown -R $(whoami) /data/mongodb_data
 
   - Deploy Mongo Docker
   ```bash
-   chmod +x scripts/mongo/deploy_mongo_docker.sh 
+  chmod +x scripts/mongo/deploy_mongo_docker.sh 
   ./scripts/mongo/deploy_mongo_docker.sh -y
   
 6. Update MongoDB URL in `.env` if you deployed it at a different IP or port:
