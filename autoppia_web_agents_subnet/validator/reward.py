@@ -49,8 +49,6 @@ def _convert_test_results_matrix(
     return matrix_converted
 
 
-
-
 def _normalize_times_for_valid_solutions(
     execution_times: List[Optional[float]],
     raw_scores: List[float],

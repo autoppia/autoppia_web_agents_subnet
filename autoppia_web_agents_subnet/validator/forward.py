@@ -116,6 +116,10 @@ def collect_task_solutions(
             process_time = response.dendrite.process_time
         else:
             process_time = TIMEOUT
+
+        bt.logging.info("Miner UID" , miner_uid)
+        bt.logging.info("Process Time" , process_time)
+
         execution_times.append(process_time)
     return task_solutions, execution_times
 
