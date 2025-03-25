@@ -49,37 +49,68 @@ def _convert_test_results_matrix(
     return matrix_converted
 
 
+
+
 def _normalize_times_for_valid_solutions(
     execution_times: List[Optional[float]],
     raw_scores: List[float],
+    high_percentile: float = 90.0,
 ) -> List[float]:
     """
-    Normalize execution times only over solutions that have raw_score > 0:
-      ...
+    Normalize execution times only over solutions that have raw_score > 0 and valid times,
+    but clamp outliers at the given 'high_percentile' to avoid skewing.
+
+    Returns a list of the same length as execution_times, where each element is in [0, 1].
+
+    Steps:
+      1) Collect valid times (where raw_score > 0 and time is not None).
+      2) Compute min_time and clamp max_time at the desired percentile
+         (i.e., anything above that percentile is set to the percentile).
+      3) Normalize such that:
+         - times at 'min_time' => factor = 1.0
+         - times at or above 'max_time' => factor = 0.0
+         - everything else is scaled linearly in between.
+      4) If no valid times, return [0.0] for all solutions.
+      5) Always ensure the output list has exactly the same length as the input list.
     """
+    n = len(execution_times)
+    # Prepare a default result array (0.0 for all)
+    time_factors = [0.0] * n
+
+    # Gather (time, idx) for solutions with raw_score>0 and a valid (not None) time
     valid_pairs = [
         (t, idx)
         for idx, t in enumerate(execution_times)
         if t is not None and raw_scores[idx] > 0
     ]
 
-    # If no valid times, default all to 0.0
+    # If no valid times => everyone remains 0.0, done.
     if not valid_pairs:
-        return [0.0] * len(execution_times)
+        return time_factors
 
-    # Instead of the linear difference approach, 
-    # use the ratio approach: factor = min_time / t
-    valid_times = [vp[0] for vp in valid_pairs]
-    min_time = min(valid_times)
+    # Extract just the times into a NumPy array
+    valid_times = np.array([vp[0] for vp in valid_pairs], dtype=float)
 
-    time_factors = [0.0] * len(execution_times)
+    # Compute min_time and clamped max_time at high_percentile
+    min_time = float(np.min(valid_times))
+    max_time = float(np.percentile(valid_times, high_percentile))
+
+    # Avoid division by zero if min_time ~ max_time
+    denom = max_time - min_time
+    if denom < 1e-9:
+        # If all valid times are nearly identical => assign factor=1.0 to these solutions
+        for _, idx in valid_pairs:
+            time_factors[idx] = 1.0
+        return time_factors
+
+    # Compute time_factors for each valid time
     for t, idx in valid_pairs:
-        if t <= 0:
-            factor = 0.0
-        else:
-            factor = min_time / t
-        # clamp to [0,1]
-        factor = max(0.0, min(1.0, factor))
+        # Clamp time if above the percentile cutoff
+        clamped_t = min(t, max_time)
+        # Linear factor: smaller time => bigger factor
+        factor = 1.0 - ((clamped_t - min_time) / denom)
+        # Ensure it's within [0,1]
+        factor = max(0.0, min(factor, 1.0))
         time_factors[idx] = factor
 
     return time_factors
@@ -254,7 +285,7 @@ async def get_rewards_with_details(
 
     except Exception as e:
         ColoredLogger.error(
-            
+
             f"Error evaluating task solutions with details: {str(e)}",
             ColoredLogger.RED,
         )
