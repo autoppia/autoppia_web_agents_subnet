@@ -161,5 +161,5 @@ if __name__ == "__main__":
     # Example usage:
     # python analyze_feedback.py
     # (Update the path to your JSON file that has the list of TaskFeedbackSynapse data)
-    path_to_your_json = "tasks.json"  # or feedback_tasks.json, etc.
+    path_to_your_json = "feedback_tasks.json"  # or feedback_tasks.json, etc.
     main(path_to_your_json)
