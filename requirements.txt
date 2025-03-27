@@ -5,3 +5,4 @@ numpy
 setuptools
 loguru
 xmldiff
+filelock
