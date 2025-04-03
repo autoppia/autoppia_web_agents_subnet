@@ -158,13 +158,12 @@ class TaskFeedbackSynapse(bt.Synapse):
         # (Optional) Attempt to save successful tasks
         # --------------------------------------------
         if SAVE_SUCCESSFULL_TASK_IN_JSON:
-            self._save_successful_task_if_needed()
+            self._save_successful_task_if_needed(self.evaluation_result)
 
         # --------------------------------------------
         # Example: Immediately store all feedback data
         # --------------------------------------------
         self.save_to_json()
-
 
     def save_to_json(self, filename: str = "feedback_tasks.json"):
         """
@@ -198,20 +197,13 @@ class TaskFeedbackSynapse(bt.Synapse):
             with open(filename, "w") as f:
                 json.dump(content, f, indent=4)
 
-    def _save_successful_task_if_needed(self):
+    def _save_successful_task_if_needed(self,evaluation_result):
         """
         Checks if the current task is 'successful' according to your logic,
         and if so, appends it to SUCCESSFUlL_TASKS_JSON_FILENAME only if
         its prompt doesn't already exist in the file.
         """
-        if not self.test_results_matrix:
-            return
-
-        # Example success check: all cells in test_results_matrix are True
-        all_passed = all(
-            all(cell is True for cell in row) for row in self.test_results_matrix
-        )
-        if not all_passed:
+        if evaluation_result["final_score"] < 1:
             return
 
         data_to_save = {

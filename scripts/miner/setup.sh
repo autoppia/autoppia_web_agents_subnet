@@ -48,8 +48,18 @@ try_install() {
 # ---------------------------------------------------------
 install_system_dependencies() {
   echo -e "\e[34m[INFO]\e[0m Installing system dependencies..."
-  sudo apt update -y || handle_error "Failed to update package list"
-  sudo apt upgrade -y || handle_error "Failed to upgrade packages"
+  
+  # Try to update but continue if it fails
+  if ! sudo apt update -y; then
+    echo -e "\e[33m[WARN]\e[0m Failed to update package list, continuing anyway..."
+  fi
+  
+  # Try to upgrade but continue if it fails
+  if ! sudo apt upgrade -y; then
+    echo -e "\e[33m[WARN]\e[0m Failed to upgrade packages, continuing anyway..."
+  fi
+  
+  # Only exit if sudo installation fails, as this is critical
   sudo apt install -y sudo || handle_error "Failed to install sudo"
 }
 
