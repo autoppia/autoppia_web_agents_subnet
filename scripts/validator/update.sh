@@ -151,7 +151,7 @@ update_and_deploy() {
 
 # Capture current commits before updating, for revert if needed
 PREV_MAIN_HEAD=$(git rev-parse HEAD)
-PREV_IWA_HEAD=$(cd autoppia_iwa_module && git rev-parse HEAD)
+PREV_IWA_HEAD=$(cd autoppia_iwa_module && git rev-parse HEAD && cd ..)
 
 echo "Local HEAD (main repo): $PREV_MAIN_HEAD"
 echo "Local HEAD (autoppia_iwa_module): $PREV_IWA_HEAD"
