@@ -5,6 +5,12 @@
 PROCESS_NAME="subnet-36-validator"
 WALLET_NAME="your_coldkey"
 WALLET_HOTKEY="your_hotkey"
+SUBTENSOR_PARAM="--subtensor.network finney"
+
+# Base directory of the repo
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+REPO_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+cd "$REPO_ROOT" || exit 1
 
 # Parse command line arguments
 if [ $# -ge 1 ]; then
@@ -16,8 +22,12 @@ fi
 if [ $# -ge 3 ]; then
     WALLET_HOTKEY="$3"
 fi
+if [ $# -ge 4 ]; then
+    SUBTENSOR_PARAM="$4"
+fi
 
 echo "Starting forced update for process: $PROCESS_NAME"
+echo "Using subtensor param: $SUBTENSOR_PARAM"
 
 ########################################
 # Functions
@@ -25,105 +35,98 @@ echo "Starting forced update for process: $PROCESS_NAME"
 
 redeploy_old_version() {
     echo "Reverting to previous commits..."
-    # Revert autoppia_iwa_module
-    cd autoppia_iwa_module
-    git reset --hard "$PREV_IWA_HEAD"
-    cd ..
-    
-    # Revert main repo
+    cd "$REPO_ROOT" || exit 1
+
+    if [ -d "autoppia_iwa_module" ]; then
+        cd autoppia_iwa_module || exit 1
+        git reset --hard "$PREV_IWA_HEAD"
+        cd "$REPO_ROOT" || exit 1
+    fi
+
     git reset --hard "$PREV_MAIN_HEAD"
-    
+
     echo "Reinstalling old version..."
-    source validator_env/bin/activate
+    source "$REPO_ROOT/validator_env/bin/activate"
     pip install -e .
     pip install -e autoppia_iwa_module
-    
+
     echo "Restarting old version in PM2..."
     pm2 restart "$PROCESS_NAME" || pm2 start neurons/validator.py \
         --name "$PROCESS_NAME" \
         --interpreter python \
         -- \
         --netuid 36 \
-        --subtensor.network finney \
+        $SUBTENSOR_PARAM \
         --wallet.name "$WALLET_NAME" \
         --wallet.hotkey "$WALLET_HOTKEY"
-    
+
     echo "Old version redeployed."
 }
 
 update_and_deploy() {
     echo "Pulling new code from main..."
+    cd "$REPO_ROOT" || exit 1
     if ! git pull origin main; then
         echo "Failed to pull main repo."
         redeploy_old_version
         return 1
     fi
-    
-    # Deploy MongoDB if script exists
-    if [ -f "./scripts/mongo/deploy_mongo_docker.sh" ]; then
+
+    if [ -f "$REPO_ROOT/scripts/mongo/deploy_mongo_docker.sh" ]; then
         echo "Deploying MongoDB via Docker..."
-        chmod +x ./scripts/mongo/deploy_mongo_docker.sh
-        if ! ./scripts/mongo/deploy_mongo_docker.sh -y; then
+        chmod +x "$REPO_ROOT/scripts/mongo/deploy_mongo_docker.sh"
+        if ! "$REPO_ROOT/scripts/mongo/deploy_mongo_docker.sh" -y; then
             echo "MongoDB deployment failed."
             redeploy_old_version
             return 1
         fi
         echo "MongoDB deployment completed successfully."
     fi
-    
-    # Pull new code in autoppia_iwa_module
-    cd autoppia_iwa_module
-    if ! git pull origin main; then
-        echo "Failed to pull autoppia_iwa_module."
-        cd ..
-        redeploy_old_version
-        return 1
+
+    if [ -d "$REPO_ROOT/autoppia_iwa_module" ]; then
+        cd "$REPO_ROOT/autoppia_iwa_module" || exit 1
+        if ! git pull origin main; then
+            echo "Failed to pull autoppia_iwa_module."
+            redeploy_old_version
+            return 1
+        fi
     fi
 
-    # Pull new code in webs_demo as well
-    if [ -d "modules/webs_demo" ]; then
-      cd modules/webs_demo
-      if ! git pull origin main; then
-          echo "Failed to pull webs_demo submodule."
-          cd ../../..
-          redeploy_old_version
-          return 1
-      fi
-      cd ../../..
+    if [ -d "$REPO_ROOT/modules/webs_demo" ]; then
+        cd "$REPO_ROOT/modules/webs_demo" || exit 1
+        if ! git pull origin main; then
+            echo "Failed to pull webs_demo submodule."
+            redeploy_old_version
+            return 1
+        fi
     fi
-    
-    # Now back to main repo
-    cd ..
 
-    # Deploy webs demo if script exists
-    if [ -f "./scripts/validator/deploy_demo_webs.sh" ]; then
+    if [ -f "$REPO_ROOT/scripts/validator/deploy_demo_webs.sh" ]; then
         echo "Deploying webs demo..."
-        chmod +x ./scripts/validator/deploy_demo_webs.sh
-        if ! ./scripts/validator/deploy_demo_webs.sh; then
+        chmod +x "$REPO_ROOT/scripts/validator/deploy_demo_webs.sh"
+        if ! "$REPO_ROOT/scripts/validator/deploy_demo_webs.sh"; then
             echo "Failed to deploy webs demo."
             redeploy_old_version
             return 1
         fi
         echo "Webs demo deployed successfully."
     fi
-    
-    # Now install the updated code
+
     echo "Installing new code..."
-    source validator_env/bin/activate
-    
-    if ! pip install -e .; then
+    source "$REPO_ROOT/validator_env/bin/activate"
+
+    if ! pip install -e "$REPO_ROOT"; then
         echo "pip install -e . failed."
         redeploy_old_version
         return 1
     fi
-    
-    if ! pip install -e autoppia_iwa_module; then
+
+    if ! pip install -e "$REPO_ROOT/autoppia_iwa_module"; then
         echo "pip install -e autoppia_iwa_module failed."
         redeploy_old_version
         return 1
     fi
-    
-    # Restart PM2 process
+
     echo "Restarting PM2 process..."
     if ! pm2 restart "$PROCESS_NAME"; then
         echo "PM2 restart failed. Attempting fallback start..."
@@ -132,7 +135,7 @@ update_and_deploy() {
             --interpreter python \
             -- \
             --netuid 36 \
-            --subtensor.network finney \
+            $SUBTENSOR_PARAM \
             --wallet.name "$WALLET_NAME" \
             --wallet.hotkey "$WALLET_HOTKEY"; then
             echo "Fallback PM2 start also failed. Reverting..."
@@ -140,7 +143,7 @@ update_and_deploy() {
             return 1
         fi
     fi
-    
+
     echo "Deployment completed successfully."
     return 0
 }
@@ -149,14 +152,13 @@ update_and_deploy() {
 # Main
 ########################################
 
-# Capture current commits before updating, for revert if needed
+cd "$REPO_ROOT" || exit 1
 PREV_MAIN_HEAD=$(git rev-parse HEAD)
 PREV_IWA_HEAD=$(cd autoppia_iwa_module && git rev-parse HEAD && cd ..)
 
 echo "Local HEAD (main repo): $PREV_MAIN_HEAD"
 echo "Local HEAD (autoppia_iwa_module): $PREV_IWA_HEAD"
 
-# Perform the forced update
 if update_and_deploy; then
     echo "Forced update successful."
 else
