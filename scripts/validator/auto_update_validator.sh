@@ -54,7 +54,7 @@ while true; do
         if version_greater "$REMOTE_VERSION" "$LOCAL_VERSION"; then
             echo "New version detected: $REMOTE_VERSION (local: $LOCAL_VERSION)."
             echo "Invoking update.sh..."
-            bash update.sh "$PROCESS_NAME" "$WALLET_NAME" "$WALLET_HOTKEY"
+            bash scripts/validator/update.sh "$PROCESS_NAME" "$WALLET_NAME" "$WALLET_HOTKEY"
             
             # Check exit code if desired:
             # if [ $? -eq 0 ]; then
