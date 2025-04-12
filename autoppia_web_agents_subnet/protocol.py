@@ -197,13 +197,14 @@ class TaskFeedbackSynapse(bt.Synapse):
             with open(filename, "w") as f:
                 json.dump(content, f, indent=4)
 
-    def _save_successful_task_if_needed(self,evaluation_result):
+    def _save_successful_task_if_needed(self, evaluation_result):
         """
         Checks if the current task is 'successful' according to your logic,
         and if so, appends it to SUCCESSFUlL_TASKS_JSON_FILENAME only if
         its prompt doesn't already exist in the file.
         """
-        if evaluation_result["final_score"] < 1:
+        # Modify according to your own success criteria
+        if evaluation_result.get("final_score", 0) < 1:
             return
 
         data_to_save = {
@@ -220,28 +221,33 @@ class TaskFeedbackSynapse(bt.Synapse):
 
         filename = SUCCESSFUlL_TASKS_JSON_FILENAME
 
-        # Load existing data (or start with an empty dict)
+        # Load existing data (or start with an empty list)
         if os.path.exists(filename):
             try:
                 with open(filename, "r", encoding="utf-8") as f:
                     try:
                         existing_data = json.load(f)
+                        if not isinstance(existing_data, list):
+                            # If the file content is not a list, we override
+                            # with an empty list (or convert it appropriately)
+                            existing_data = []
                     except json.JSONDecodeError:
-                        existing_data = {}
+                        existing_data = []
             except FileNotFoundError:
-                existing_data = {}
+                existing_data = []
         else:
-            existing_data = {}
+            existing_data = []
 
-        # Check if this prompt is already in the file. If so, skip saving.
-        if data_to_save["prompt"] in existing_data:
+        # Check if this prompt already exists
+        if any(task.get("prompt") == data_to_save["prompt"] for task in existing_data):
             bt.logging.info(
-                f"Task with the same prompt already exists. Skipping save for prompt: {data_to_save['prompt']}"
+                f"Task with the same prompt already exists. "
+                f"Skipping save for prompt: {data_to_save['prompt']}"
             )
             return
 
-        # Otherwise, add this new prompt to the dictionary
-        existing_data[data_to_save["prompt"]] = data_to_save
+        # Otherwise, append the new successful task
+        existing_data.append(data_to_save)
 
         # Write updated data to file
         with open(filename, "w", encoding="utf-8") as f:
