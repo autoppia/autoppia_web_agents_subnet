@@ -15,8 +15,8 @@
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-__version__ = "2.0.3"
-__least_acceptable_version__ = "2.0.3"
+__version__ = "2.1.1"
+__least_acceptable_version__ = "2.1.1"
 version_split = __version__.split(".")
 version_url = "https://raw.githubusercontent.com/autoppia/autoppia_web_agents_subnet/main/autoppia_web_agents_subnet/__init__.py"
 
