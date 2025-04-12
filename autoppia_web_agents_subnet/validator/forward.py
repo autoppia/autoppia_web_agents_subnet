@@ -20,6 +20,7 @@ from autoppia_web_agents_subnet.validator.config import (
     SAMPLE_SIZE,
     TASK_SLEEP,
     TIME_WEIGHT,
+    EFFICIENCY_WEIGHT,
     MIN_SCORE_FOR_CORRECT_FORMAT,
     MIN_RESPONSE_REWARD,
     PROMPTS_PER_ITERATION,
@@ -392,6 +393,7 @@ async def process_tasks(
                 min_correct_format_score=MIN_SCORE_FOR_CORRECT_FORMAT,
                 min_response_reward=MIN_RESPONSE_REWARD,
                 invalid_version_responders=invalid_version_responders,
+                efficiency_weight=EFFICIENCY_WEIGHT
             )
         )
 
