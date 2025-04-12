@@ -38,7 +38,7 @@ from autoppia_iwa.config.config import (
     USE_APIFIED_AGENT,
 )
 from autoppia_web_agents_subnet.miner.stats import MinerStats
-from autoppia_web_agents_subnet.utils.weights_version import is_version_in_range
+# from autoppia_web_agents_subnet.utils.weights_version import is_version_in_range
 
 
 class Miner(BaseMinerNeuron):
@@ -156,6 +156,7 @@ class Miner(BaseMinerNeuron):
             synapse.print_in_terminal(miner_stats=self.miner_stats)
 
         except Exception as e:
+            raise e
             ColoredLogger.error(
                 "Error occurred while printing in terminal TaskFeedback"
             )
