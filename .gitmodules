@@ -2,3 +2,6 @@
 	path = autoppia_iwa_module
 	url = https://github.com/autoppia/autoppia_iwa.git
 	branch = main
+[submodule "autoppia_web_operator"]
+	path = autoppia_web_operator
+	url = https://github.com/autoppia/autoppia_web_operator.git
