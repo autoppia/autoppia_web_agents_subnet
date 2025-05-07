@@ -241,9 +241,10 @@ class TaskFeedbackSynapse(bt.Synapse):
         )
 
 
-class SetOperatorEndpointSynapse(Synapse):
+class SetOperatorEndpointSynapse(bt.Synapse):
     """
-    Synapse carrying the Task prompt & data from validator to miners.
+    Synapse for telling miners your operator's endpoint.
+    Miners will (optionally) respond with data to be saved.
     """
 
     version: str = ""
@@ -253,5 +254,5 @@ class SetOperatorEndpointSynapse(Synapse):
         extra = "allow"
         arbitrary_types_allowed = True
 
-    def deserialize(self) -> "TaskSynapse":
+    def deserialize(self) -> "SetOperatorEndpointSynapse":
         return self
