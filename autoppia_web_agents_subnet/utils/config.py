@@ -260,6 +260,13 @@ def add_validator_args(cls, parser):
         default="opentensor-dev",
     )
 
+    parser.add_argument(
+        "--subtensor.network",
+        type=str,
+        help="The subtensor network to connect to",
+        default="finney",
+    )
+
 
 def config(cls):
     """
