@@ -44,6 +44,8 @@ class Validator(BaseValidatorNeuron):
     def __init__(self, config=None):
         super(Validator, self).__init__(config=config)
 
+        self.forward_count = 0
+
         bt.logging.info("load_state()")
         self.load_state()
 
