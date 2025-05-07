@@ -96,7 +96,7 @@ class TaskFeedbackSynapse(bt.Synapse):
         visualizer = SubnetVisualizer()
         console = Console()
 
-        # -- Print the specific task result: 
+        # -- Print the specific task result:
         console.print("\n[bold green]Task Feedback[/bold green]", style="bold cyan")
         console.print(
             f"[bold]Task ID:[/bold] {self.task_id}\n"
@@ -110,7 +110,7 @@ class TaskFeedbackSynapse(bt.Synapse):
         console.print(
             f"[bold]Score:[/bold] {self.score} | "
             f"[bold]Execution Time:[/bold] {self.execution_time} seconds\n",
-            style="cyan"
+            style="cyan",
         )
 
         # If we have enough data (actions/tests), display them visually
@@ -146,7 +146,7 @@ class TaskFeedbackSynapse(bt.Synapse):
         if miner_stats:
             console.print(
                 "\n[bold magenta]----- Miner Global Stats -----[/bold magenta]",
-                style="bold magenta"
+                style="bold magenta",
             )
             console.print(f"  • Total Tasks: [bold]{miner_stats.num_tasks}[/bold]")
             console.print(f"  • Avg. Score: [bold]{miner_stats.avg_score:.2f}[/bold]")
@@ -160,10 +160,10 @@ class TaskFeedbackSynapse(bt.Synapse):
         if SAVE_SUCCESSFULL_TASK_IN_JSON:
             self._save_successful_task_if_needed(self.evaluation_result)
 
-        # --------------------------------------------
-        # Example: Immediately store all feedback data
-        # --------------------------------------------
-        self.save_to_json()
+            # --------------------------------------------
+            # Example: Immediately store all feedback data
+            # --------------------------------------------
+            self.save_to_json()
 
     def save_to_json(self, filename: str = "feedback_tasks.json"):
         """
