@@ -9,7 +9,7 @@
 #  - A virtual environment using python3.11 -m venv
 #  - Your project's Python requirements
 #  - autoppia_iwa (editable)
-#  - Bittensor (v9.6.0)
+#  - Bittensor library & CLI (v9.6.0)
 
 set -e  # Exit immediately on error
 
@@ -122,12 +122,13 @@ install_autoppia_iwa() {
 }
 
 # ---------------------------------------------------------
-# 7. Install Bittensor (v9.6.0)
+# 7. Install Bittensor library & CLI (v9.6.0)
 # ---------------------------------------------------------
 install_bittensor() {
-  echo -e "\e[34m[INFO]\e[0m Installing Bittensor==9.6.0..."
-  pip install bittensor==9.6.0 || handle_error "Failed to install Bittensor"
-  success_msg "Bittensor 9.6.0 installed."
+  echo -e "\e[34m[INFO]\e[0m Installing Bittensor library and CLI v9.6.0..."
+  pip install bittensor==9.6.0 bittensor-cli==9.6.0 \
+    || handle_error "Failed to install Bittensor library and/or CLI"
+  success_msg "Bittensor 9.6.0 and CLI installed."
 }
 
 # ---------------------------------------------------------
