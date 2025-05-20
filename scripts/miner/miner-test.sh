@@ -65,9 +65,37 @@ install_python311() {
 # ---------------------------------------------------------
 install_pm2() {
   echo -e "\e[34m[INFO]\e[0m Installing Node.js 18.x and PM2..."
-  echo -e "\e[34m[INFO]\e[0m Attempting to remove conflicting Node.js packages..."
+
+  # --- START: Enhanced Node.js Cleanup ---
+  echo -e "\e[34m[INFO]\e[0m Attempting to remove all conflicting Node.js packages and clear caches..."
+
+  # Try to remove libnode72 directly first
+  if dpkg -s libnode72 &> /dev/null; then
+    echo -e "\e[34m[INFO]\e[0m Found libnode72, attempting to remove it first."
+    sudo apt remove --purge -y libnode72 || echo -e "\e[33m[WARN]\e[0m Failed to remove libnode72 cleanly, attempting dpkg --force-all."
+    if dpkg -s libnode72 &> /dev/null; then
+        echo -e "\e[33m[WARN]\e[0m libnode72 still present. Attempting forced removal."
+        sudo dpkg --force-all --remove libnode72 || handle_error "Failed to force remove libnode72. Manual intervention might be needed."
+    fi
+  fi
+
+  if [ -f "/usr/share/systemtap/tapset/node.stp" ]; then
+    echo -e "\e[33m[WARN]\e[0m Conflicting file /usr/share/systemtap/tapset/node.stp found. Attempting to remove it."
+    sudo rm -f /usr/share/systemtap/tapset/node.stp || echo -e "\e[33m[WARN]\e[0m Could not remove /usr/share/systemtap/tapset/node.stp. This might cause issues."
+  fi
+
+  # Remove other common conflicting nodejs packages
   sudo apt remove --purge -y libnode-dev nodejs-dev nodejs-doc || true
+  sudo apt remove --purge -y nodejs || true
+
+  # Clean up orphaned dependencies and fix broken installations
   sudo apt autoremove -y || true
+  sudo apt install --fix-broken -y || true
+  sudo apt clean
+
+  # Update package lists after cleanup
+  sudo apt update || handle_error "Failed to update apt repositories after Node.js cleanup"
+
 
   echo -e "\e[34m[INFO]\e[0m Configuring NodeSource repo for Node.js 18.x..."
   curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash - || handle_error "Failed to configure NodeSource repo"
@@ -103,10 +131,10 @@ create_and_activate_venv() {
 install_python_requirements() {
   echo -e "\e[34m[INFO]\e[0m Upgrading pip and setuptools..."
   pip install --upgrade pip setuptools || handle_error "Failed to upgrade pip/setuptools"
-  pip install numpy==1.26.4 aiohttp==3.11.12 "thinc<2.0.0" || handle_error "Failed to install specific numpy/aiohttp/thinc versions"
+#  pip install numpy==1.26.4 aiohttp==3.11.12 || handle_error "Failed to install specific numpy/aiohttp versions"
 
   echo -e "\e[34m[INFO]\e[0m Installing remaining Python requirements from requirements.txt..."
-  pip install -r requirements.txt --ignore-installed --no-deps || handle_error "Failed to install requirements.txt"
+  pip install -r requirements.txt || handle_error "Failed to install requirements.txt"
   success_msg "Python dependencies installed."
 }
 
