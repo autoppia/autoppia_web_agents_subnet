@@ -1,59 +1,77 @@
 #!/bin/bash
 #
-# setup.sh - Setup environment dependencies for Validator
+# setup.sh - Setup environment dependencies for Miner
 #
-# This script installs and configures:
-#  - System dependencies
-#  - Python 3.11 (via deadsnakes PPA)
-#  - Node.js 18.x and PM2
-#  - A virtual environment using python3.11 -m venv
-#  - Your project's Python requirements
-#  - autoppia_iwa (editable)
-#  - Bittensor library & CLI (v9.6.0)
+# Optimized for Bittensor miner operations with dependency isolation
 
-set -e  # Exit immediately on error
+set -eo pipefail  # Exit on error and handle piped commands
 
 # ---------------------------------------------------------
-# Error Handling and Helpers
+# Configuration
 # ---------------------------------------------------------
+NODE_VERSION="18"
+VENV_DIR="miner_env"
+MINER_USER=$(whoami)
+
+# ---------------------------------------------------------
+# Colorized Output Helpers
+# ---------------------------------------------------------
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
 handle_error() {
-  echo -e "\e[31m[ERROR]\e[0m $1" >&2
+  echo -e "${RED}[ERROR]${NC} $1" >&2
   exit 1
 }
 
 success_msg() {
-  echo -e "\e[32m[SUCCESS]\e[0m $1"
+  echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+info_msg() {
+  echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+warn_msg() {
+  echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
 # ---------------------------------------------------------
-# 1. System Dependencies
+# 1. Install System Dependencies
 # ---------------------------------------------------------
 install_system_dependencies() {
-  echo -e "\e[34m[INFO]\e[0m Installing system dependencies..."
-  sudo apt update || echo -e "\e[33m[WARN]\e[0m 'apt update' failed, continuing..."
-  sudo apt upgrade -y || echo -e "\e[33m[WARN]\e[0m 'apt upgrade' failed, continuing..."
-  sudo apt install -y \
-    sudo software-properties-common curl git build-essential \
-    cmake wget unzip \
-    || handle_error "Could not install basic system dependencies"
-  success_msg "System dependencies installed."
+  info_msg "Updating system packages..."
+  sudo apt-get update || warn_msg "apt update returned non-zero exit code"
+  sudo apt-get upgrade -y || warn_msg "apt upgrade returned non-zero exit code"
+
+  info_msg "Installing essential system packages..."
+  sudo apt-get install -y \
+    software-properties-common curl git build-essential cmake \
+    wget unzip sqlite3 libsqlite3-dev \
+    || handle_error "System dependencies installation failed"
+
+  success_msg "System dependencies installed"
 }
 
 # ---------------------------------------------------------
-# 2. Python 3.11 and Libraries
+# 2. Install Python 3.11 and Related Libraries
 # ---------------------------------------------------------
 install_python311() {
-  echo -e "\e[34m[INFO]\e[0m Adding deadsnakes PPA and installing Python 3.11..."
-  sudo add-apt-repository -y ppa:deadsnakes/ppa || handle_error "Failed to add deadsnakes PPA"
-  sudo apt update || handle_error "Failed to update apt repositories"
-  sudo apt install -y \
-    python3.11 python3.11-venv python3.11-dev sqlite3 \
-    libasound2 libnss3 libnss3-dev \
-    libatk1.0-0 libatk-bridge2.0-0 libcups2 \
+  info_msg "Adding Python 3.11 repository..."
+  sudo add-apt-repository -y ppa:deadsnakes/ppa >/dev/null 2>&1 || handle_error "Failed to add deadsnakes PPA"
+  sudo apt-get update || handle_error "apt update failed after PPA add"
+
+  info_msg "Installing Python 3.11 and required libraries..."
+  sudo apt-get install -y \
+    python3.11 python3.11-venv python3.11-dev \
+    libasound2 libnss3 libnss3-dev libatk1.0-0 libatk-bridge2.0-0 libcups2 \
     libx11-xcb1 libxcomposite1 libxcursor1 libxdamage1 libxrandr2 libgbm1 \
-    libpango-1.0-0 libgtk-3-0 \
-    libvpx-dev libevent-dev libopus0 \
-    libgstreamer1.0-0 libgstreamer-plugins-base1.0-0 libgstreamer-plugins-good1.0-0 libgstreamer-plugins-bad1.0-0 \
+    libpango-1.0-0 libgtk-3-0 libvpx-dev libevent-dev libopus0 \
+    libgstreamer1.0-0 libgstreamer-plugins-base1.0-0 \
+    libgstreamer-plugins-good1.0-0 libgstreamer-plugins-bad1.0-0 \
     libwebp-dev libharfbuzz-dev libsecret-1-dev libhyphen0 libflite1 \
     libgles2-mesa libgl1-mesa-dev libx264-dev \
     || handle_error "Could not install Python 3.11 and related libraries"
@@ -61,128 +79,90 @@ install_python311() {
 }
 
 # ---------------------------------------------------------
-# 3. Node.js 18.x and PM2
+# 3. Install Node.js 18.x and PM2
 # ---------------------------------------------------------
 install_pm2() {
-  echo -e "\e[34m[INFO]\e[0m Installing Node.js 18.x and PM2..."
+  info_msg "Removing previous Node.js installations..."
+  sudo apt-get purge -y 'nodejs*' 'npm*' 'libnode*' >/dev/null 2>&1 || true
+  sudo rm -rf /etc/apt/sources.list.d/nodesource.list >/dev/null 2>&1 || true
 
-  # --- START: Enhanced Node.js Cleanup ---
-  echo -e "\e[34m[INFO]\e[0m Attempting to remove all conflicting Node.js packages and clear caches..."
+  info_msg "Installing Node.js v${NODE_VERSION}..."
+  curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | sudo -E bash - >/dev/null 2>&1 || handle_error "NodeSource setup failed"
+  sudo apt-get install -y nodejs || handle_error "Node.js installation failed"
 
-  # Try to remove libnode72 directly first
-  if dpkg -s libnode72 &> /dev/null; then
-    echo -e "\e[34m[INFO]\e[0m Found libnode72, attempting to remove it first."
-    sudo apt remove --purge -y libnode72 || echo -e "\e[33m[WARN]\e[0m Failed to remove libnode72 cleanly, attempting dpkg --force-all."
-    if dpkg -s libnode72 &> /dev/null; then
-        echo -e "\e[33m[WARN]\e[0m libnode72 still present. Attempting forced removal."
-        sudo dpkg --force-all --remove libnode72 || handle_error "Failed to force remove libnode72. Manual intervention might be needed."
-    fi
-  fi
+  info_msg "Installing PM2 globally..."
+  sudo npm install -g pm2 >/dev/null 2>&1 || handle_error "PM2 installation failed"
 
-  if [ -f "/usr/share/systemtap/tapset/node.stp" ]; then
-    echo -e "\e[33m[WARN]\e[0m Conflicting file /usr/share/systemtap/tapset/node.stp found. Attempting to remove it."
-    sudo rm -f /usr/share/systemtap/tapset/node.stp || echo -e "\e[33m[WARN]\e[0m Could not remove /usr/share/systemtap/tapset/node.stp. This might cause issues."
-  fi
+  info_msg "Configuring PM2 startup..."
+  sudo env PATH="$PATH:/usr/bin" pm2 startup systemd -u "$MINER_USER" --hp "$HOME" >/dev/null 2>&1 || warn_msg "PM2 startup configuration skipped"
 
-  # Remove other common conflicting nodejs packages
-  sudo apt remove --purge -y libnode-dev nodejs-dev nodejs-doc || true
-  sudo apt remove --purge -y nodejs || true
-
-  # Clean up orphaned dependencies and fix broken installations
-  sudo apt autoremove -y || true
-  sudo apt install --fix-broken -y || true
-  sudo apt clean
-
-  # Update package lists after cleanup
-  sudo apt update || handle_error "Failed to update apt repositories after Node.js cleanup"
-
-
-  echo -e "\e[34m[INFO]\e[0m Configuring NodeSource repo for Node.js 18.x..."
-  curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash - || handle_error "Failed to configure NodeSource repo"
-  sudo apt install -y nodejs || handle_error "Could not install Node.js"
-  sudo npm install -g pm2 || handle_error "Could not install PM2"
-  pm2 update || handle_error "Failed to update PM2"
-  # Configure PM2 to start on boot
-  sudo env PATH="$PATH" pm2 startup systemd -u "$(whoami)" --hp "$HOME" \
-    || handle_error "Failed to configure PM2 startup"
-  success_msg "Node.js and PM2 configured."
+  pm2 update &>/dev/null || true
+  success_msg "Node.js v${NODE_VERSION} and PM2 installed"
 }
 
 # ---------------------------------------------------------
-# 4. Create and activate virtual environment with python -m venv
+# 4. Virtual Environment Setup
 # ---------------------------------------------------------
-create_and_activate_venv() {
-  local VENV_DIR="miner_env"
-  echo -e "\e[34m[INFO]\e[0m Creating virtual environment with python3.11 in '$VENV_DIR'..."
-  if [ ! -d "$VENV_DIR" ]; then
+setup_virtualenv() {
+  info_msg "Setting up Python virtual environment..."
+
+  if [[ ! -d "$VENV_DIR" ]]; then
     python3.11 -m venv "$VENV_DIR" || handle_error "Failed to create virtual environment"
-    success_msg "Virtual environment created."
-  else
-    echo -e "\e[32m[INFO]\e[0m Virtual environment already exists, reusing."
   fi
-  echo -e "\e[34m[INFO]\e[0m Activating virtual environment..."
+
   # shellcheck source=/dev/null
-  source "$VENV_DIR/bin/activate" || handle_error "Failed to activate virtual environment"
+  source "$VENV_DIR/bin/activate" || handle_error "Virtual environment activation failed"
+
+  python_version=$(python -V 2>&1)
+  echo "$python_version" | grep -q "3.11" || handle_error "Python 3.11 not active in virtual environment"
+  success_msg "Virtual environment activated with $python_version"
 }
 
 # ---------------------------------------------------------
-# 5. Install Python dependencies (pip + requirements.txt)
+# 5. Python Dependencies
 # ---------------------------------------------------------
-install_python_requirements() {
-  echo -e "\e[34m[INFO]\e[0m Upgrading pip and setuptools..."
-  pip install --upgrade pip setuptools || handle_error "Failed to upgrade pip/setuptools"
-#  pip install numpy==1.26.4 aiohttp==3.11.12 || handle_error "Failed to install specific numpy/aiohttp versions"
+install_python_deps() {
+  info_msg "Upgrading pip, setuptools, and wheel..."
+  pip install --no-cache-dir --upgrade pip setuptools==70.0.0 wheel || handle_error "Python build tool upgrade failed"
 
-  echo -e "\e[34m[INFO]\e[0m Installing remaining Python requirements from requirements.txt..."
-  pip install -r requirements.txt || handle_error "Failed to install requirements.txt"
-  success_msg "Python dependencies installed."
+  info_msg "Installing Python project requirements..."
+  pip install --no-cache-dir -r requirements.txt || handle_error "Python dependencies installation failed"
+
+  success_msg "Python dependencies installed"
 }
 
 # ---------------------------------------------------------
-# 6. Install autoppia_iwa in editable mode
+# 6. Application Setup
 # ---------------------------------------------------------
-install_autoppia_iwa() {
-  echo -e "\e[34m[INFO]\e[0m Installing autoppia_iwa dependencies..."
-  pip install loguru pydantic pytest rich || handle_error "Failed to install autoppia_iwa deps"
-  echo -e "\e[34m[INFO]\e[0m Installing autoppia_iwa_module..."
-  if [ -d autoppia_iwa_module ]; then
-    (cd autoppia_iwa_module && pip install -e .) || handle_error "Failed to install autoppia_iwa_module"
-    success_msg "autoppia_iwa_module installed."
-  else
-    echo -e "\e[33m[WARN]\e[0m Directory autoppia_iwa_module not found, skipping."
+setup_application() {
+  # Install autoppia_iwa_module if present
+  if [[ -d "autoppia_iwa_module" ]]; then
+    info_msg "Installing autoppia_iwa_module..."
+    (cd autoppia_iwa_module && pip install -e . >/dev/null) || handle_error "autoppia_iwa_module installation failed"
   fi
-  echo -e "\e[34m[INFO]\e[0m Installing main package in editable mode..."
-  pip install -e . || handle_error "Failed to install main package"
-  success_msg "autoppia_iwa installed in editable mode."
+
+  info_msg "Installing main application in editable mode..."
+  pip install -e . || handle_error "Main application installation failed"
+
+  info_msg "Installing Bittensor..."
+  pip install --no-cache-dir bittensor==9.6.0 bittensor-cli==9.4.1 || handle_error "Bittensor installation failed"
+
+  success_msg "Application and Bittensor installed"
 }
 
 # ---------------------------------------------------------
-# 7. Install Bittensor library & CLI (v9.6.0)
-# ---------------------------------------------------------
-install_bittensor() {
-  echo -e "\e[34m[INFO]\e[0m Installing Bittensor library and CLI v9.6.0..."
-  pip install bittensor==9.6.0 bittensor-cli==9.6.0 \
-    || handle_error "Failed to install Bittensor library and/or CLI"
-  success_msg "Bittensor 9.6.0 and CLI installed."
-}
-
-# ---------------------------------------------------------
-# Main execution flow
+# Main Execution Flow
 # ---------------------------------------------------------
 main() {
   install_system_dependencies
   install_python311
   install_pm2
+  setup_virtualenv
+  install_python_deps
+  setup_application
 
-  echo -e "\e[34m[INFO]\e[0m Checking installed Python version in venv context..."
-  python --version || handle_error "Python not found in activated virtual environment"
-
-  create_and_activate_venv
-  install_python_requirements
-  install_autoppia_iwa
-  install_bittensor
-
-  echo -e "\n\e[32m[ALL DONE]\e[0m Validator environment setup complete."
+  echo -e "\n${GREEN}[MINER READY]${NC} Setup completed successfully!"
+  echo -e "To activate the environment, run: ${YELLOW}source ${VENV_DIR}/bin/activate${NC}"
 }
 
 main "$@"
