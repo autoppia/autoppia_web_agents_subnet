@@ -65,6 +65,11 @@ install_python311() {
 # ---------------------------------------------------------
 install_pm2() {
   echo -e "\e[34m[INFO]\e[0m Installing Node.js 18.x and PM2..."
+  echo -e "\e[34m[INFO]\e[0m Attempting to remove conflicting Node.js packages..."
+  sudo apt remove --purge -y libnode-dev nodejs-dev nodejs-doc || true
+  sudo apt autoremove -y || true
+
+  echo -e "\e[34m[INFO]\e[0m Configuring NodeSource repo for Node.js 18.x..."
   curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash - || handle_error "Failed to configure NodeSource repo"
   sudo apt install -y nodejs || handle_error "Could not install Node.js"
   sudo npm install -g pm2 || handle_error "Could not install PM2"
@@ -98,8 +103,10 @@ create_and_activate_venv() {
 install_python_requirements() {
   echo -e "\e[34m[INFO]\e[0m Upgrading pip and setuptools..."
   pip install --upgrade pip setuptools || handle_error "Failed to upgrade pip/setuptools"
-  echo -e "\e[34m[INFO]\e[0m Installing Python requirements..."
-  pip install -r requirements.txt || handle_error "Failed to install requirements.txt"
+  pip install numpy==1.26.4 aiohttp==3.11.12 "thinc<2.0.0" || handle_error "Failed to install specific numpy/aiohttp/thinc versions"
+
+  echo -e "\e[34m[INFO]\e[0m Installing remaining Python requirements from requirements.txt..."
+  pip install -r requirements.txt --ignore-installed --no-deps || handle_error "Failed to install requirements.txt"
   success_msg "Python dependencies installed."
 }
 
@@ -108,7 +115,7 @@ install_python_requirements() {
 # ---------------------------------------------------------
 install_autoppia_iwa() {
   echo -e "\e[34m[INFO]\e[0m Installing autoppia_iwa dependencies..."
-  pip install loguru numpy pydantic pytest rich || handle_error "Failed to install autoppia_iwa deps"
+  pip install loguru pydantic pytest rich || handle_error "Failed to install autoppia_iwa deps"
   echo -e "\e[34m[INFO]\e[0m Installing autoppia_iwa_module..."
   if [ -d autoppia_iwa_module ]; then
     (cd autoppia_iwa_module && pip install -e .) || handle_error "Failed to install autoppia_iwa_module"
@@ -139,8 +146,8 @@ main() {
   install_python311
   install_pm2
 
-  echo -e "\e[34m[INFO]\e[0m Checking installed Python version..."
-  python3.11 --version || handle_error "Python 3.11 not found"
+  echo -e "\e[34m[INFO]\e[0m Checking installed Python version in venv context..."
+  python --version || handle_error "Python not found in activated virtual environment"
 
   create_and_activate_venv
   install_python_requirements
