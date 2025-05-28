@@ -29,7 +29,7 @@ from autoppia_web_agents_subnet.validator.config import (
     CHECK_VERSION_PROBABILITY,
     FEEDBACK_TIMEOUT,
     CHECK_VERSION_SYNAPSE,
-    NUMBER_OF_PROMPTS_PER_FORWARD
+    NUMBER_OF_PROMPTS_PER_FORWARD,
 )
 from autoppia_web_agents_subnet.validator.utils import (
     retrieve_random_demo_web_project,
@@ -46,9 +46,7 @@ from autoppia_web_agents_subnet.validator.version import (
 
 
 async def generate_tasks_for_web_project(
-    demo_web_project: WebProject,
-    total_prompts: int,
-    prompts_per_use_case: int
+    demo_web_project: WebProject, total_prompts: int, prompts_per_use_case: int
 ) -> List[Task]:
     """
     Creates up to `total_prompts` tasks for the specified web project using the TaskGenerationPipeline.
@@ -60,8 +58,6 @@ async def generate_tasks_for_web_project(
     """
 
     config = TaskGenerationConfig(
-        web_project=demo_web_project,
-        save_domain_analysis_in_db=True,
         save_task_in_db=False,
         prompts_per_use_case=prompts_per_use_case,
     )
@@ -296,7 +292,7 @@ async def handle_feedback_and_validator_stats(
         test_results_matrices=test_results_matrices,
         evaluation_results=evaluation_results,
         rewards=rewards,
-        execution_times=execution_times
+        execution_times=execution_times,
     )
 
     # Return a dictionary for usage by the parent flow
@@ -393,7 +389,7 @@ async def process_tasks(
                 min_correct_format_score=MIN_SCORE_FOR_CORRECT_FORMAT,
                 min_response_reward=MIN_RESPONSE_REWARD,
                 invalid_version_responders=invalid_version_responders,
-                efficiency_weight=EFFICIENCY_WEIGHT
+                efficiency_weight=EFFICIENCY_WEIGHT,
             )
         )
 
@@ -479,7 +475,9 @@ async def forward(self) -> None:
         # 2. Generate tasks
         tasks_generated_start_time = time.time()
         tasks_generated = await generate_tasks_for_web_project(
-            demo_web_project, total_prompts=NUMBER_OF_PROMPTS_PER_FORWARD,prompts_per_use_case=PROMPTS_PER_ITERATION
+            demo_web_project,
+            total_prompts=NUMBER_OF_PROMPTS_PER_FORWARD,
+            prompts_per_use_case=PROMPTS_PER_ITERATION,
         )
         tasks_generated_end_time = time.time()
         tasks_generated_time = tasks_generated_end_time - tasks_generated_start_time
