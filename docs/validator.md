@@ -1,146 +1,171 @@
-# Validator Guide for Subnet 36
+# 🚀 Validator Guide for Subnet 36
 
-## Requirements
+## 📋 System Requirements
 
-**Important Linux Distribution Note**:
-- Our **install_dependencies.sh** script currently supports:
-  1. Ubuntu 22.04 LTS (Jammy)
-  2. Ubuntu 24.04 LTS (Noble)
-- If using a different Ubuntu version, you may need to manually adjust the dependencies in the **install_dependencies.sh** script
+### **Linux Distribution Support**
 
-## Component Overview
+Our `install_dependencies.sh` script currently supports:
 
-The deployment is compartmentalized, allowing each component to be deployed separately:
-- **Validator**: CPU only (MongoDB Recommended)
-- **LLM**: OpenAI API or Local LLM
-- **Demo-Webs**: CPU only (Docker required)
+- **Ubuntu 22.04 LTS** (Jammy) ✅
+- **Ubuntu 24.04 LTS** (Noble) ✅
 
-If you have deployed something in another machine configure .env with the correct urls.
+⚠️ **Note**: For other Ubuntu versions, manually adjust dependencies in the installation script.
 
-## 1. Initial Setup
+---
 
-1. Clone and setup the repository:
+## 🏗️ Architecture Overview
+
+The deployment uses a **modular architecture** - each component can be deployed separately:
+
+| Component       | Requirements            | Notes                       |
+| --------------- | ----------------------- | --------------------------- |
+| **Validator**   | CPU only                | Lightweight setup           |
+| **LLM Service** | OpenAI API or Local GPU | A40 GPU suggested for local |
+| **Demo Webs**   | CPU only                | Docker required             |
+
+💡 **Tip**: Components can run on different machines - configure `.env` with appropriate URLs.
+
+---
+
+## 🔧 1. Initial Setup
+
+### **Repository Setup**
+
 ```bash
+# Clone and initialize
 git clone https://github.com/autoppia/autoppia_web_agents_subnet
 cd autoppia_web_agents_subnet
 git submodule update --init --recursive --remote
 ```
 
-2. Install system dependencies:
+### **System Dependencies**
+
 ```bash
+# Install dependencies
 chmod +x scripts/validator/install_dependencies.sh
 ./scripts/validator/install_dependencies.sh
 playwright install
 ```
 
-3. Install Docker:
+### **Docker Installation**
+
 ```bash
 chmod +x scripts/validator/install_docker.sh
 ./scripts/validator/install_docker.sh
 ```
 
-4. Set up environment variables:
+### **Environment Configuration**
+
 ```bash
 cp .env.example .env
 ```
 
-5. Install MongoDB (Docker):
-  - Permissions to mongodb_data location (sometimes is needed)
-  ```bash
-  sudo chown -R $(whoami) /data/mongodb_data
-  ```
+### **Validator Environment**
 
-  - Deploy Mongo Docker
-  ```bash
-  chmod +x scripts/mongo/deploy_mongo_docker.sh 
-  ./scripts/mongo/deploy_mongo_docker.sh -y
-  ```
-  
-6. ONLY if you deployed mongo at a different IP or port: Update MongoDB URL in `.env` 
-```bash
-MONGODB_URL="mongodb://adminUser:password@localhost:27017/admin?authSource=admin"
-```
-
-7. Setup the validator environment:
 ```bash
 chmod +x scripts/validator/setup.sh
 ./scripts/validator/setup.sh
 ```
 
-## 2. LLM Setup
+---
 
-- **POD TYPE**: We suggest using A40 in RunPod
-- **Requirements**: CUDA 12.4.1 and PyTorch 2.4.0
-- **Tested on RunPod template**: `runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04`
-- **Model**: Using Qwen/Qwen2.5-14B-Instruct by default in `run_local_llm.py`
+## 🤖 2. LLM Configuration
 
-### Option A: OpenAI API (No GPU Required)
+### **Recommended Specs for Local LLM**
 
-Edit `.env`:
+- **Platform**: RunPod with A40 GPU
+- **Requirements**: CUDA 12.4.1 + PyTorch 2.4.0
+- **Template**: `runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04`
+- **Model**: Qwen/Qwen2.5-14B-Instruct (default)
+
+### **Option A: OpenAI API** 🌐 (No GPU Required)
+
+Edit your `.env` file:
+
 ```bash
 LLM_PROVIDER="openai"
 OPENAI_API_KEY="your-api-key-here"
 ```
 
-### Option B: Local LLM (GPU Required)
+### **Option B: Local LLM** 🖥️ (GPU Required)
 
-1. Edit `.env`:
+**Step 1**: Configure environment
+
 ```bash
+# Edit .env
 LLM_PROVIDER="local"
 LOCAL_MODEL_ENDPOINT="http://localhost:6000/generate"
 ```
 
-2. Setup local LLM:
+**Step 2**: Setup local LLM
+
 ```bash
 chmod +x autoppia_iwa_module/modules/llm_local/setup.sh
 ./autoppia_iwa_module/modules/llm_local/setup.sh
 ```
 
-3. Setup in PM2:
+**Step 3**: Deploy with PM2
+
 ```bash
 source llm_env/bin/activate
-CUDA_VISIBLE_DEVICES=0 pm2 start autoppia_iwa_module/modules/llm_local/run_local_llm.py --name llm_local -- --port 6000
+CUDA_VISIBLE_DEVICES=0 pm2 start autoppia_iwa_module/modules/llm_local/run_local_llm.py \
+  --name llm_local -- --port 6000
 ```
 
-4. Verify if your LLM is working correctly:
+**Step 4**: Test deployment
+
 ```bash
 python3 autoppia_iwa_module/modules/llm_local/test/test_one_request.py
 ```
 
-## 3. Demo Webs Setup
+---
 
-This setup requires **Docker**. The following commands will install Docker and initialize the demo webs:
+## 🌐 3. Demo Webs Setup
+
+### **Prerequisites**
+
+- Docker and Docker Compose installed
+
+### **Installation**
 
 ```bash
 CURRENT_DIR=$(pwd)
 cd autoppia_iwa_module/modules/webs_demo/scripts
+
+# Install Docker
 chmod +x install_docker.sh
 ./install_docker.sh
+
+# Setup demo webs
 chmod +x setup.sh
 ./setup.sh
+
 cd "$CURRENT_DIR"
 ```
 
-### Configure endpoints (optional):
+### **Configuration** (Optional)
 
-Edit `.env`:
+Edit `.env` to customize endpoints:
+
 ```bash
 DEMO_WEBS_ENDPOINT=http://localhost
 DEMO_WEBS_STARTING_PORT=8000
 ```
 
-#### Configuration Options:
+#### **Configuration Options**
 
-- **`DEMO_WEBS_ENDPOINT`**: The endpoint where your demo web projects are deployed
-  - Default: `http://localhost`
-  - You can modify this if running the demo webs on a different server
-  - Example remote setup: `http://your-demo-webs-server-ip`
+| Variable                  | Description            | Default            | Example                |
+| ------------------------- | ---------------------- | ------------------ | ---------------------- |
+| `DEMO_WEBS_ENDPOINT`      | Base URL for demo webs | `http://localhost` | `http://192.168.1.100` |
+| `DEMO_WEBS_STARTING_PORT` | Starting port number   | `8000`             | `9000`                 |
 
-This configuration allows you to run the validator, LLM service, and demo webs on separate machines for better resource management.
+🔧 **Remote Setup**: Change endpoint to your demo webs server IP for distributed deployment.
 
-## 4. Validator Deployment
+---
 
-### Starting the Validator
+## ✅ 4. Validator Deployment
+
+### **Starting the Validator**
 
 ```bash
 source validator_env/bin/activate
@@ -155,31 +180,48 @@ pm2 start neurons/validator.py \
   --logging.debug
 ```
 
-### Auto Update for Validator
+### **Auto-Update Setup** 🔄
 
-Setup automatic version control and safe updates for your validator:
+Enable automatic updates with safe rollback:
 
 ```bash
 chmod +x scripts/validator/auto_update_validator.sh
-pm2 start --name auto_update_validator --interpreter /bin/bash ./scripts/validator/auto_update_validator.sh -- subnet-36-validator your_actual_coldkey your_actual_hotkey
+pm2 start --name auto_update_validator \
+  --interpreter /bin/bash \
+  ./scripts/validator/auto_update_validator.sh \
+  -- subnet-36-validator your_actual_coldkey your_actual_hotkey
 ```
 
-*Note*: Edit the script to match your PM2 configuration (process name, wallet keys) before running it. The script automatically checks for updates, deploys new versions, and includes automatic rollback if the update fails. It runs every 5 minutes to ensure your validator stays up to date.
+⚠️ **Important**: Edit the script with your actual PM2 process name and wallet keys before running.
 
-### Update Script
+**Features**:
 
-To Update repos, modules, and demo-webs you can run:
+- ✅ Automatic version checking (every 5 minutes)
+- ✅ Safe deployment with rollback
+- ✅ Zero-downtime updates
+
+### **Manual Updates**
+
+Update all components manually:
 
 ```bash
 ./scripts/validator/update.sh
 ```
 
-## Support
+---
 
-Contact **@Daryxx**, **@Riiveer**, or **@Miguelik** on Discord
+## 🆘 Support & Contact
 
-## Important Notes
+Need help? Contact our team on Discord:
 
-- For optimal performance, use bare metal GPU
-- Demo webs require Docker and Docker Compose
-- All components can be deployed on separate machines
+- **@Daryxx**
+- **@Riiveer**
+
+---
+
+## ⚠️ Important Notes
+
+- 🖥️ **Performance**: Use bare metal GPU for optimal local LLM performance
+- 🐳 **Dependencies**: Demo webs require Docker and Docker Compose
+- 🌍 **Scalability**: All components support distributed deployment across multiple machines
+- 🔒 **Security**: Ensure proper firewall configuration for remote deployments
