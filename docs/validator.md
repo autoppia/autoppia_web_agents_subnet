@@ -42,16 +42,16 @@ git submodule update --init --recursive --remote
 
 ```bash
 # Install system dependencies
-chmod +x scripts/main/install_dependencies.sh
-./scripts/main/install_dependencies.sh
+chmod +x scripts/validator/main/install_dependencies.sh
+./scripts/validator/main/install_dependencies.sh
 ```
 
 ### **Validator Setup**
 
 ```bash
 # Setup Python environment and packages
-chmod +x scripts/main/setup.sh
-./scripts/main/setup.sh
+chmod +x scripts/validator/main/setup.sh
+./scripts/validator/main/setup.sh
 ```
 
 ### **Environment Configuration**
@@ -120,16 +120,16 @@ python3 autoppia_iwa_module/modules/llm_local/test/test_one_request.py
 
 ```bash
 # Install Docker (if not already installed)
-chmod +x scripts/demo-webs/install_docker.sh
-./scripts/demo-webs/install_docker.sh
+chmod +x scripts/validator/demo-webs/install_docker.sh
+./scripts/validator/demo-webs/install_docker.sh
 ```
 
 ### **Deploy Demo Webs**
 
 ```bash
 # Setup demo web applications
-chmod +x scripts/demo-webs/deploy_demo_webs.sh
-./scripts/demo-webs/deploy_demo_webs.sh
+chmod +x scripts/validator/demo-webs/deploy_demo_webs.sh
+./scripts/validator/demo-webs/deploy_demo_webs.sh
 ```
 
 ### **Configuration** (Optional)
@@ -178,10 +178,10 @@ pm2 start neurons/validator.py \
 Enable automatic updates with safe rollback:
 
 ```bash
-chmod +x scripts/update-validator/auto_update_validator.sh
+chmod +x scripts/validator/update-validator/auto_update_validator.sh
 pm2 start --name auto_update_validator \
   --interpreter /bin/bash \
-  ./scripts/update-validator/auto_update_validator.sh \
+  ./scripts/validator/update-validator/auto_update_validator.sh \
   -- subnet-36-validator your_actual_coldkey your_actual_hotkey
 ```
 
@@ -198,8 +198,8 @@ pm2 start --name auto_update_validator \
 Update all components manually:
 
 ```bash
-chmod +x scripts/update-validator/update.sh
-./scripts/update-validator/update.sh
+chmod +x scripts/validator/update-validator/update.sh
+./scripts/validator/update-validator/update.sh
 ```
 
 ---
