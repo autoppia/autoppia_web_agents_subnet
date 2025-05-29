@@ -178,10 +178,10 @@ pm2 start neurons/validator.py \
 Enable automatic updates with safe rollback:
 
 ```bash
-chmod +x scripts/validator/update-validator/auto_update_validator.sh
+chmod +x scripts/validator/update/auto_update_validator.sh
 pm2 start --name auto_update_validator \
   --interpreter /bin/bash \
-  ./scripts/validator/update-validator/auto_update_validator.sh \
+  ./scripts/validator/update/auto_update_validator.sh \
   -- subnet-36-validator your_actual_coldkey your_actual_hotkey
 ```
 
@@ -198,8 +198,13 @@ pm2 start --name auto_update_validator \
 Update all components manually:
 
 ```bash
-chmod +x scripts/validator/update-validator/update.sh
-./scripts/validator/update-validator/update.sh
+# Complete update
+chmod +x scripts/validator/update/full_update.sh
+./scripts/validator/update/full_update.sh
+
+# Or forced update with rollback
+chmod +x scripts/validator/update/update.sh
+./scripts/validator/update/update.sh
 ```
 
 ---
