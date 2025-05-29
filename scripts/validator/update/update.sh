@@ -72,17 +72,6 @@ update_and_deploy() {
         return 1
     fi
 
-    if [ -f "$REPO_ROOT/scripts/mongo/deploy_mongo_docker.sh" ]; then
-        echo "Deploying MongoDB via Docker..."
-        chmod +x "$REPO_ROOT/scripts/mongo/deploy_mongo_docker.sh"
-        if ! "$REPO_ROOT/scripts/mongo/deploy_mongo_docker.sh" -y; then
-            echo "MongoDB deployment failed."
-            redeploy_old_version
-            return 1
-        fi
-        echo "MongoDB deployment completed successfully."
-    fi
-
     if [ -d "$REPO_ROOT/autoppia_iwa_module" ]; then
         cd "$REPO_ROOT/autoppia_iwa_module" || exit 1
         if ! git pull origin main; then
@@ -90,21 +79,25 @@ update_and_deploy() {
             redeploy_old_version
             return 1
         fi
+        cd "$REPO_ROOT" || exit 1
     fi
 
-    if [ -d "$REPO_ROOT/modules/webs_demo" ]; then
-        cd "$REPO_ROOT/modules/webs_demo" || exit 1
+    # Update webs_demo submodule if it exists
+    if [ -d "$REPO_ROOT/autoppia_iwa_module/modules/webs_demo" ]; then
+        cd "$REPO_ROOT/autoppia_iwa_module/modules/webs_demo" || exit 1
         if ! git pull origin main; then
             echo "Failed to pull webs_demo submodule."
             redeploy_old_version
             return 1
         fi
+        cd "$REPO_ROOT" || exit 1
     fi
 
-    if [ -f "$REPO_ROOT/scripts/validator/deploy_demo_webs.sh" ]; then
+    # Deploy demo webs if script exists
+    if [ -f "$REPO_ROOT/scripts/demo-webs/deploy_demo_webs.sh" ]; then
         echo "Deploying webs demo..."
-        chmod +x "$REPO_ROOT/scripts/validator/deploy_demo_webs.sh"
-        if ! "$REPO_ROOT/scripts/validator/deploy_demo_webs.sh"; then
+        chmod +x "$REPO_ROOT/scripts/demo-webs/deploy_demo_webs.sh"
+        if ! "$REPO_ROOT/scripts/demo-webs/deploy_demo_webs.sh"; then
             echo "Failed to deploy webs demo."
             redeploy_old_version
             return 1

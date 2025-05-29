@@ -41,30 +41,24 @@ git submodule update --init --recursive --remote
 ### **System Dependencies**
 
 ```bash
-# Install dependencies
-chmod +x scripts/validator/install_dependencies.sh
-./scripts/validator/install_dependencies.sh
-playwright install
+# Install system dependencies
+chmod +x scripts/main/install_dependencies.sh
+./scripts/main/install_dependencies.sh
 ```
 
-### **Docker Installation**
+### **Validator Setup**
 
 ```bash
-chmod +x scripts/validator/install_docker.sh
-./scripts/validator/install_docker.sh
+# Setup Python environment and packages
+chmod +x scripts/main/setup.sh
+./scripts/main/setup.sh
 ```
 
 ### **Environment Configuration**
 
 ```bash
 cp .env.example .env
-```
-
-### **Validator Environment**
-
-```bash
-chmod +x scripts/validator/setup.sh
-./scripts/validator/setup.sh
+# Edit .env with your specific settings
 ```
 
 ---
@@ -122,25 +116,20 @@ python3 autoppia_iwa_module/modules/llm_local/test/test_one_request.py
 
 ## 🌐 3. Demo Webs Setup
 
-### **Prerequisites**
-
-- Docker and Docker Compose installed
-
-### **Installation**
+### **Docker Installation**
 
 ```bash
-CURRENT_DIR=$(pwd)
-cd autoppia_iwa_module/modules/webs_demo/scripts
+# Install Docker (if not already installed)
+chmod +x scripts/demo-webs/install_docker.sh
+./scripts/demo-webs/install_docker.sh
+```
 
-# Install Docker
-chmod +x install_docker.sh
-./install_docker.sh
+### **Deploy Demo Webs**
 
-# Setup demo webs
-chmod +x setup.sh
-./setup.sh
-
-cd "$CURRENT_DIR"
+```bash
+# Setup demo web applications
+chmod +x scripts/demo-webs/deploy_demo_webs.sh
+./scripts/demo-webs/deploy_demo_webs.sh
 ```
 
 ### **Configuration** (Optional)
@@ -180,15 +169,19 @@ pm2 start neurons/validator.py \
   --logging.debug
 ```
 
-### **Auto-Update Setup** 🔄
+---
+
+## 🔄 5. Updates & Maintenance
+
+### **Auto-Update Setup**
 
 Enable automatic updates with safe rollback:
 
 ```bash
-chmod +x scripts/validator/auto_update_validator.sh
+chmod +x scripts/update-validator/auto_update_validator.sh
 pm2 start --name auto_update_validator \
   --interpreter /bin/bash \
-  ./scripts/validator/auto_update_validator.sh \
+  ./scripts/update-validator/auto_update_validator.sh \
   -- subnet-36-validator your_actual_coldkey your_actual_hotkey
 ```
 
@@ -205,7 +198,8 @@ pm2 start --name auto_update_validator \
 Update all components manually:
 
 ```bash
-./scripts/validator/update.sh
+chmod +x scripts/update-validator/update.sh
+./scripts/update-validator/update.sh
 ```
 
 ---
