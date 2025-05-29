@@ -1,5 +1,5 @@
 #!/bin/bash
-# install_dependencies.sh - Install ONLY system dependencies for validator
+# install_dependencies.sh - Install ONLY system dependencies for miner
 set -e
 
 handle_error() {
@@ -29,7 +29,7 @@ install_system_dependencies() {
     || handle_error "Failed to add Python PPA"
   sudo apt update -y || handle_error "Failed to refresh apt lists"
   
-  # Common packages for all Ubuntu versions
+  # Same packages as validator (miners need browser automation too)
   COMMON_PACKAGES=(
     python3.11 python3.11-venv python3.11-dev
     build-essential cmake wget unzip sqlite3
@@ -81,13 +81,13 @@ verify_installation() {
 }
 
 main() {
-  info_msg "Installing validator system dependencies..."
+  info_msg "Installing miner system dependencies..."
   install_system_dependencies
   install_pm2
   verify_installation
   
   success_msg "System dependencies installed successfully!"
-  echo -e "\e[33m[NEXT]\e[0m Run: ./scripts/validator/main/setup.sh"
+  echo -e "\e[33m[NEXT]\e[0m Run: ./scripts/miner/setup.sh"
 }
 
 main "$@"
