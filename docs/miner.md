@@ -108,10 +108,6 @@ pm2 start neurons/miner.py \
 
 > **For Competitive Web Agents**: Deploy these components for advanced functionality
 
-## 🔧 Optional Components
-
-> **For Competitive Web Agents**: Deploy these components for advanced functionality
-
 ### **1. LLM Configuration** 🤖
 
 You have **multiple options** for LLM integration:

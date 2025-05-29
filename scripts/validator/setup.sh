@@ -71,9 +71,10 @@ install_autoppia_iwa_module() {
 }
 
 install_bittensor() {
-  echo -e "\e[34m[INFO]\e[0m Installing Bittensor..."
-  git clone https://github.com/opentensor/bittensor.git && cd bittensor && pip install . && pip install bittensor==9.0.0 && cd .. && rm -rf bittensor
-  success_msg "Bittensor installed successfully."
+  echo -e "\e[34m[INFO]\e[0m Installing Bittensor library and CLI v9.6.0..."
+  pip install bittensor==9.6.0 bittensor-cli==9.4.2\
+    || handle_error "Failed to install Bittensor library and/or CLI"
+  success_msg "Bittensor 9.6.0 and CLI installed."
 }
 
 main() {
