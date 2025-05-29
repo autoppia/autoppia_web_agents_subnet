@@ -274,7 +274,7 @@ async def get_rewards_with_details(
     )
 
     evaluator_config = EvaluatorConfig(
-        save_results_in_db=False,
+        # save_results_in_db=False,
         normalize_scores=True,
     )
     evaluator = ConcurrentEvaluator(web_project, evaluator_config)

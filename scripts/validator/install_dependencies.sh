@@ -86,7 +86,7 @@ install_chrome_and_chromedriver() {
 main() {
   install_system_dependencies
   install_pm2
-  install_chrome_and_chromedriver
+#  install_chrome_and_chromedriver
   success_msg "System dependencies installed successfully!"
 }
 

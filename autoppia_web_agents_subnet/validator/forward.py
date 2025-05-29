@@ -58,7 +58,7 @@ async def generate_tasks_for_web_project(
     """
 
     config = TaskGenerationConfig(
-        save_task_in_db=False,
+        # save_task_in_db=False,
         prompts_per_use_case=prompts_per_use_case,
     )
     pipeline = TaskGenerationPipeline(config=config, web_project=demo_web_project)
