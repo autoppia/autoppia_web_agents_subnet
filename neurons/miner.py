@@ -156,11 +156,11 @@ class Miner(BaseMinerNeuron):
             synapse.print_in_terminal(miner_stats=self.miner_stats)
 
         except Exception as e:
-            raise e
             ColoredLogger.error(
                 "Error occurred while printing in terminal TaskFeedback"
-            )
             bt.logging.info(e)
+            )
+            raise e
 
         return synapse
 
