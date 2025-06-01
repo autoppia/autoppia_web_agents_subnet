@@ -25,9 +25,7 @@ from .logging import setup_events_logger
 
 def is_cuda_available():
     try:
-        output = subprocess.check_output(
-            ["nvidia-smi", "-L"], stderr=subprocess.STDOUT
-        )
+        output = subprocess.check_output(["nvidia-smi", "-L"], stderr=subprocess.STDOUT)
         if "NVIDIA" in output.decode("utf-8"):
             return "cuda"
     except Exception:
@@ -146,7 +144,7 @@ def add_miner_args(cls, parser):
         action="store_true",
         help="If set, we will force incoming requests to have a permit.",
         default=True,
-    )   
+    )
 
     parser.add_argument(
         "--no-blacklist.force_validator_permit",
@@ -258,13 +256,6 @@ def add_validator_args(cls, parser):
         type=str,
         help="The name of the project where you are sending the new run.",
         default="opentensor-dev",
-    )
-
-    parser.add_argument(
-        "--subtensor.network",
-        type=str,
-        help="The subtensor network to connect to",
-        default="finney",
     )
 
 
