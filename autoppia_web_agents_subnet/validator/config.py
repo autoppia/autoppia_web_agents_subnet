@@ -18,7 +18,9 @@ NUM_URLS = 1
 PROMPTS_PER_ITERATION = 1
 NUMBER_OF_PROMPTS_PER_FORWARD = 12
 SET_OPERATOR_ENDPOINT_FORWARDS_INTERVAL = 10
-LEADERBOARD_ENDPOINT = os.getenv("LEADERBOARD_ENDPOINT", "https://leaderboard-api.autoppia.com")
+LEADERBOARD_ENDPOINT = os.getenv(
+    "LEADERBOARD_ENDPOINT", "https://leaderboard-api.autoppia.com"
+)
 
 
 def read_config() -> bt.config:

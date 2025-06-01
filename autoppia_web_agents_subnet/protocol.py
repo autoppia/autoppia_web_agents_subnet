@@ -139,25 +139,20 @@ class TaskFeedbackSynapse(Synapse):
 
         # optionally persist locally
         if SAVE_SUCCESSFUL_TASK_IN_JSON:
-            self._save_successful_task_if_needed()
-
-            # --------------------------------------------
-            # Example: Immediately store all feedback data
-            # --------------------------------------------
             self.save_to_json()
 
-        # === NEW: fire off to leaderboard endpoint ===
         try:
-            # extract block & timestamp however you get them in your app
-            current_block = bt.wallet.get_current_block()  # or however you fetch it
+            # current_block = bt.wallet.get_current_block()
             resp = log_task_to_leaderboard(
-                task=task,
-                stats=self.evaluation_result.get("stats"),
-                validator_hotkey=self.validator_id,
+                task_id=task.id,
+                success=self.score >= 1.0,
+                score=self.score,
+                duration=self.execution_time,
+                website=self.task_url,
+                created_at=datetime.now(timezone.utc),
                 validator_uid=int(self.validator_id),
                 miner_hotkey=self.miner_id,
                 miner_uid=int(self.miner_id),
-                block_number=current_block,
             )
             console.print(
                 f"[bold green]Logged to leaderboard:[/bold green] {resp.status_code}"
@@ -175,40 +170,6 @@ class TaskFeedbackSynapse(Synapse):
             arr = json.loads(Path(filename).read_text())
             arr.append(data)
             Path(filename).write_text(json.dumps(arr, indent=2))
-
-    def _save_successful_task_if_needed(self):
-        """Append only high-scoring runs to SUCCESSFUL_TASKS_JSON_FILENAME."""
-        if not self.evaluation_result:
-            return
-        final_score = self.evaluation_result.get("stats", {}).get("final_score", 0)
-        if final_score < 1:
-            return
-
-        # build a de-duped list of prompts
-        fn = SUCCESSFUL_TASKS_JSON_FILENAME
-        if Path(fn).exists():
-            try:
-                arr = json.loads(Path(fn).read_text())
-            except json.JSONDecodeError:
-                arr = []
-        else:
-            arr = []
-
-        if any(entry.get("prompt") == self.prompt for entry in arr):
-            bt.logging.info("Prompt already saved – skipping.")
-            return
-
-        entry = {
-            "task_id": self.task_id,
-            "miner_id": self.miner_id,
-            "prompt": self.prompt,
-            "score": self.score,
-            "actions": [a.dict() for a in (self.actions or [])],
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-        arr.append(entry)
-        Path(fn).write_text(json.dumps(arr, indent=2))
-        bt.logging.info(f"Saved successful task: {self.task_id}")
 
 
 class SetOperatorEndpointSynapse(bt.Synapse):
