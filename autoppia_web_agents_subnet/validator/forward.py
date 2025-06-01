@@ -148,20 +148,20 @@ def collect_task_solutions(
 
         execution_times.append(process_time)
 
-    miners_uids_copy = miner_uids[:]
-    process_times_copy = execution_times[:]
+    # miners_uids_copy = miner_uids[:]
+    # process_times_copy = execution_times[:]
 
     # Zip and sort by processing times (ascending)
-    sorted_pairs = sorted(zip(miners_uids_copy, process_times_copy), key=lambda x: x[1])
+    # sorted_pairs = sorted(zip(miners_uids_copy, process_times_copy), key=lambda x: x[1])
 
-    ColoredLogger.info(
-        "Showing miner request times: ",
-        ColoredLogger.YELLOW,
-    )
+    # ColoredLogger.info(
+    #     "Showing miner request times: ",
+    #     ColoredLogger.YELLOW,
+    # )
 
     # Print each miner UID with its corresponding sorted processing time
-    for miner_uid, proc_time in sorted_pairs:
-        bt.logging.info(f"Miner {miner_uid} took {proc_time:.2f}s")
+    # for miner_uid, proc_time in sorted_pairs:
+    #     bt.logging.info(f"Miner {miner_uid} took {proc_time:.2f}s")
 
     return task_solutions, execution_times
 
