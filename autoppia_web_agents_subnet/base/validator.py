@@ -24,10 +24,8 @@ import asyncio
 import argparse
 import threading
 import bittensor as bt
-
 from typing import List, Union
 from traceback import print_exception
-
 from autoppia_web_agents_subnet.base.neuron import BaseNeuron
 from autoppia_web_agents_subnet.base.utils.weight_utils import (
     process_weights_for_netuid,
