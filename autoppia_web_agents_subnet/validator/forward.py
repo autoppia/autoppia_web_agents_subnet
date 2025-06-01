@@ -1,6 +1,9 @@
 import copy
 import time
 import asyncio
+import os
+import json
+from filelock import FileLock
 import bittensor as bt
 from typing import List, Set, Dict, Any, Tuple
 from autoppia_iwa.src.data_generation.domain.classes import (
@@ -12,7 +15,11 @@ from autoppia_iwa.src.data_generation.application.tasks_generation_pipeline impo
     TaskGenerationPipeline,
 )
 from autoppia_iwa.src.web_agents.classes import TaskSolution
-from autoppia_web_agents_subnet.protocol import TaskFeedbackSynapse, TaskSynapse
+from autoppia_web_agents_subnet.protocol import (
+    TaskFeedbackSynapse,
+    TaskSynapse,
+    SetOperatorEndpointSynapse,
+)
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet import __version__
 from autoppia_web_agents_subnet.validator.config import (
@@ -30,6 +37,7 @@ from autoppia_web_agents_subnet.validator.config import (
     FEEDBACK_TIMEOUT,
     CHECK_VERSION_SYNAPSE,
     NUMBER_OF_PROMPTS_PER_FORWARD,
+    SET_OPERATOR_ENDPOINT_FORWARDS_INTERVAL,
 )
 from autoppia_web_agents_subnet.validator.utils import (
     retrieve_random_demo_web_project,
@@ -455,6 +463,83 @@ async def process_tasks(
     )
 
 
+async def broadcast_and_save_operator_endpoints(validator) -> None:
+    """
+    Constructs and sends a SetOperatorEndpointSynapse to each selected miner,
+    gathers their responses, and saves them to operator_endpoints.json at your project root.
+    """
+    # 1. Create the synapse you want to broadcast
+    from autoppia_web_agents_subnet import __version__
+    from autoppia_web_agents_subnet.protocol import SetOperatorEndpointSynapse
+
+    operator_synapse = SetOperatorEndpointSynapse(
+        version=__version__, endpoint="https://your-validator-endpoint.com"
+    )
+
+    bt.logging.info("Broadcasting SetOperatorEndpointSynapse...")
+
+    # 2. You decide how to pick which miners to broadcast to.
+    #    For example, choose all or a subset:
+    miner_uids = get_random_uids(validator, k=SAMPLE_SIZE)
+    miner_axons = [validator.metagraph.axons[uid] for uid in miner_uids]
+
+    # 3. Actually send the synapse to those miners (async).
+    #    If you have a helper or use something like dendrite_with_retries:
+    responses: list[SetOperatorEndpointSynapse] = await dendrite_with_retries(
+        dendrite=validator.dendrite,
+        axons=miner_axons,
+        synapse=operator_synapse,
+        deserialize=True,
+        timeout=10,  # or whichever you prefer
+        retries=1,
+    )
+
+    bt.logging.info(f"Got {len(responses)} responses for SetOperatorEndpointSynapse")
+
+    # 4. Save the responses to JSON
+    await save_operator_endpoints_in_json(responses, miner_uids)
+
+
+async def save_operator_endpoints_in_json(
+    responses: list[SetOperatorEndpointSynapse],
+    miner_uids: list[int],
+    filename: str = "operator_endpoints.json",
+):
+    """
+    Map each `miner_uid` -> the endpoint from that miner's response,
+    then store in `operator_endpoints.json`.
+    """
+    lock_file = filename + ".lock"
+
+    # Make sure file is initialized as a JSON dict if it doesn't exist
+    if not os.path.isfile(filename):
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump({}, f)
+
+    with FileLock(lock_file):
+        # Load existing content
+        with open(filename, "r", encoding="utf-8") as f:
+            try:
+                existing_data = json.load(f)
+                if not isinstance(existing_data, dict):
+                    existing_data = {}
+            except json.JSONDecodeError:
+                existing_data = {}
+
+        # For each response, map the miner UID => the endpoint it returns
+        # or simply store the one we sent, if miners echo it or modify it.
+        for uid, resp in zip(miner_uids, responses):
+            # Some miners might return a different endpoint, or attach data to `resp.endpoint`.
+            returned_endpoint = resp.endpoint if resp else "no_response"
+            existing_data[str(uid)] = returned_endpoint
+
+        # Save
+        with open(filename, "w", encoding="utf-8") as f:
+            json.dump(existing_data, f, indent=4)
+
+    bt.logging.info(f"Saved {len(responses)} endpoints to {filename}")
+
+
 async def forward(self) -> None:
     """
     Main entry point that runs each forward cycle:
@@ -463,9 +548,15 @@ async def forward(self) -> None:
       3. Track performance stats, log them, and sleep.
     """
     try:
+        # Initialize validator stats if needed
         init_validator_performance_stats(self)
 
-        bt.logging.info(f"Starting forward step with version {__version__}")
+        # Optionally track how many times forward() was called
+        self.forward_count += 1
+
+        bt.logging.info(
+            f"[Forward #{self.forward_count}] Starting forward step with version {__version__}"
+        )
         forward_start_time = time.time()
 
         # 1. Pick a random demo web project
@@ -481,6 +572,7 @@ async def forward(self) -> None:
         )
         tasks_generated_end_time = time.time()
         tasks_generated_time = tasks_generated_end_time - tasks_generated_start_time
+
         self.validator_performance_stats["total_tasks_generated"] += len(
             tasks_generated
         )
@@ -496,11 +588,15 @@ async def forward(self) -> None:
         tasks_processed_start_time = time.time()
 
         await process_tasks(self, demo_web_project, tasks_generated)
+
         tasks_processed_end_time = time.time()
         tasks_processed_time = tasks_processed_end_time - tasks_processed_start_time
         self.validator_performance_stats[
             "total_processing_tasks_time"
         ] += tasks_processed_time
+
+        if self.forward_count % SET_OPERATOR_ENDPOINT_FORWARDS_INTERVAL == 0:
+            await broadcast_and_save_operator_endpoints(self)
 
         # Finalize
         forward_end_time = time.time()

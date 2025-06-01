@@ -1,66 +1,34 @@
-from pydantic import Field
-from typing import List, Optional, Any, Dict
-from bittensor import Synapse
-from autoppia_iwa.src.execution.actions.actions import AllActionsUnion
-from autoppia_iwa.src.data_generation.domain.classes import Task
-from autoppia_iwa.src.shared.visualizator import SubnetVisualizer
-from autoppia_iwa.src.data_generation.domain.classes import TestUnion
-from filelock import FileLock
-from rich.console import Console
-import bittensor as bt
-import json
+# file: autoppia_iwa/src/execution/synapses.py
+
 import os
+import json
 import time
+from datetime import datetime, timezone
+from pathlib import Path
 from distutils.util import strtobool
+from filelock import FileLock
+from typing import Any, Dict, List, Optional
+
+import bittensor as bt
+from bittensor import Synapse
+from pydantic import Field
+from rich.console import Console
+
+from autoppia_iwa.src.data_generation.domain.classes import Task, TestUnion
+from autoppia_iwa.src.execution.actions.actions import AllActionsUnion
+from autoppia_iwa.src.shared.visualizator import SubnetVisualizer
 from .miner.stats import MinerStats
 
+# === new import ===
+from autoppia_web_agents_subnet.validator.leaderboard import log_task_to_leaderboard
 
-SAVE_SUCCESSFULL_TASK_IN_JSON = bool(
-    strtobool(os.getenv("SAVE_SUCCESSFULL_TASK_IN_JSON", "false"))
+SAVE_SUCCESSFUL_TASK_IN_JSON = bool(
+    strtobool(os.getenv("SAVE_SUCCESSFUL_TASK_IN_JSON", "false"))
 )
-SUCCESSFUlL_TASKS_JSON_FILENAME = "successfull_tasks.json"
+SUCCESSFUL_TASKS_JSON_FILENAME = "successful_tasks.json"
 
 
-class TaskSynapse(Synapse):
-    """
-    Synapse carrying the Task prompt & data from validator to miners.
-    """
-
-    version: str = ""
-    prompt: str
-    url: str
-    html: Optional[str] = None
-    screenshot: Optional[str] = None
-    actions: List[AllActionsUnion] = Field(
-        default_factory=list, description="The actions that solve the task"
-    )
-
-    class Config:
-        extra = "allow"
-        arbitrary_types_allowed = True
-
-    def deserialize(self) -> "TaskSynapse":
-        return self
-
-
-class OrganicTaskSynapse(Synapse):
-    """
-    Synapse carrying the Task prompt & data from validator to miners.
-    """
-
-    version: str = ""
-    prompt: str
-    url: str
-
-    class Config:
-        extra = "allow"
-        arbitrary_types_allowed = True
-
-    def deserialize(self) -> "TaskSynapse":
-        return self
-
-
-class TaskFeedbackSynapse(bt.Synapse):
+class TaskFeedbackSynapse(Synapse):
     """
     Synapse carrying feedback from validator back to miner,
     including test_results, evaluation scores, and stats.
@@ -86,15 +54,15 @@ class TaskFeedbackSynapse(bt.Synapse):
     def deserialize(self) -> "TaskFeedbackSynapse":
         return self
 
-    def print_in_terminal(self, miner_stats: Optional["MinerStats"] = None):
+    def print_in_terminal(self, miner_stats: Optional[MinerStats] = None):
         """
         Prints a detailed summary of the feedback in the terminal.
         Also shows global miner stats if provided, and optionally saves
         the task if needed.
         """
 
-        visualizer = SubnetVisualizer()
         console = Console()
+        visualizer = SubnetVisualizer()
 
         # -- Print the specific task result:
         console.print("\n[bold green]Task Feedback[/bold green]", style="bold cyan")
@@ -105,45 +73,38 @@ class TaskFeedbackSynapse(bt.Synapse):
             f"[bold]URL:[/bold] {self.task_url}\n"
             f"[bold]Prompt:[/bold] {self.prompt}\n"
         )
-
-        # Show the score and execution time for this task
         console.print(
             f"[bold]Score:[/bold] {self.score} | "
             f"[bold]Execution Time:[/bold] {self.execution_time} seconds\n",
             style="cyan",
         )
 
-        # If we have enough data (actions/tests), display them visually
-        if self.task_id and self.actions and self.test_results_matrix:
-            task = Task(id=self.task_id, prompt=self.prompt, url=self.task_url)
-            task_prepared_for_agent = task.prepare_for_agent(self.miner_id)
+        # show full or partial evaluation in the visualizer
+        task = Task(id=self.task_id, prompt=self.prompt, url=self.task_url)
+        task = task.prepare_for_agent(self.miner_id)
+        if self.tests:
+            task.tests = self.tests
 
-            if self.tests:
-                task_prepared_for_agent.tests = self.tests
-
+        if self.actions and self.test_results_matrix:
             visualizer.show_full_evaluation(
                 agent_id=self.miner_id,
                 validator_id=self.validator_id,
-                task=task_prepared_for_agent,
+                task=task,
                 actions=self.actions,
                 test_results_matrix=self.test_results_matrix,
                 evaluation_result=self.evaluation_result,
             )
-        elif self.task_id:
-            # Partial data => just show the task
-            task = Task(id=self.task_id, prompt=self.prompt, url=self.task_url)
-            task_prepared_for_agent = task.prepare_for_agent(self.miner_id)
-
-            if self.tests:
-                task_prepared_for_agent.tests = self.tests
-
-            visualizer.show_task_with_tests(task_prepared_for_agent)
+        else:
+            visualizer.show_task_with_tests(task)
             console.print(
-                f"\n[bold yellow]Insufficient actions or test results for {self.miner_id}[/bold yellow]"
+                "[bold yellow]Insufficient actions or test results to render full evaluation.[/bold yellow]"
             )
 
-        # -- Show global miner stats after printing the specific report:
+        # show overall miner stats if available
         if miner_stats:
+            console.print("\n[bold magenta]Miner Global Stats[/bold magenta]")
+            console.print(f" • Total Tasks: [bold]{miner_stats.num_tasks}[/bold]")
+            console.print(f" • Avg. Score: [bold]{miner_stats.avg_score:.2f}[/bold]")
             console.print(
                 "\n[bold magenta]----- Miner Global Stats -----[/bold magenta]",
                 style="bold magenta",
@@ -154,105 +115,75 @@ class TaskFeedbackSynapse(bt.Synapse):
                 f"  • Avg. Execution Time: [bold]{miner_stats.avg_execution_time:.2f}[/bold] seconds"
             )
 
-        # --------------------------------------------
-        # (Optional) Attempt to save successful tasks
-        # --------------------------------------------
-        if SAVE_SUCCESSFULL_TASK_IN_JSON:
-            self._save_successful_task_if_needed(self.evaluation_result)
+        # optionally persist locally
+        if SAVE_SUCCESSFUL_TASK_IN_JSON:
+            self._save_successful_task_if_needed()
 
             # --------------------------------------------
             # Example: Immediately store all feedback data
             # --------------------------------------------
             self.save_to_json()
 
+        # === NEW: fire off to leaderboard endpoint ===
+        try:
+            # extract block & timestamp however you get them in your app
+            current_block = bt.wallet.get_current_block()  # or however you fetch it
+            resp = log_task_to_leaderboard(
+                task=task,
+                stats=self.evaluation_result.get("stats"),
+                validator_hotkey=self.validator_id,
+                validator_uid=int(self.validator_id),
+                miner_hotkey=self.miner_id,
+                miner_uid=int(self.miner_id),
+                block_number=current_block,
+            )
+            console.print(
+                f"[bold green]Logged to leaderboard:[/bold green] {resp.status_code}"
+            )
+        except Exception as e:
+            console.print(f"[bold red]Failed to log to leaderboard:[/bold red] {e}")
+
     def save_to_json(self, filename: str = "feedback_tasks.json"):
-        """
-        Saves ALL feedback fields to a local JSON file.
-        Uses a file-level lock for concurrency across processes.
-        """
-        # Convert this Pydantic model into a Python dict
-        # This includes all fields (version, validator_id, etc.)
         data = self.model_dump()
-
-        # Add a timestamp to track when we saved
         data["local_save_timestamp"] = time.time()
+        lock = FileLock(f"{filename}.lock")
+        with lock:
+            if not Path(filename).exists():
+                Path(filename).write_text("[]")
+            arr = json.loads(Path(filename).read_text())
+            arr.append(data)
+            Path(filename).write_text(json.dumps(arr, indent=2))
 
-        # The .lock file ensures only one process writes at a time
-        lock_file = filename + ".lock"
-
-        with FileLock(lock_file):
-            # Ensure the JSON file exists and is initialized as a list
-            if not os.path.isfile(filename):
-                with open(filename, "w") as f:
-                    json.dump([], f)
-
-            # Read the existing JSON contents into memory
-            with open(filename, "r") as f:
-                content = json.load(f)
-
-            # Append this feedback entry
-            content.append(data)
-
-            # Write the updated content back
-            with open(filename, "w") as f:
-                json.dump(content, f, indent=4)
-
-    def _save_successful_task_if_needed(self, evaluation_result):
-        """
-        Checks if the current task is 'successful' according to your logic,
-        and if so, appends it to SUCCESSFUlL_TASKS_JSON_FILENAME only if
-        its prompt doesn't already exist in the file.
-        """
-        # Modify according to your own success criteria
-        if evaluation_result.get("final_score", 0) < 1:
+    def _save_successful_task_if_needed(self):
+        """Append only high-scoring runs to SUCCESSFUL_TASKS_JSON_FILENAME."""
+        if not self.evaluation_result:
+            return
+        final_score = self.evaluation_result.get("stats", {}).get("final_score", 0)
+        if final_score < 1:
             return
 
-        data_to_save = {
+        # build a de-duped list of prompts
+        fn = SUCCESSFUL_TASKS_JSON_FILENAME
+        if Path(fn).exists():
+            try:
+                arr = json.loads(Path(fn).read_text())
+            except json.JSONDecodeError:
+                arr = []
+        else:
+            arr = []
+
+        if any(entry.get("prompt") == self.prompt for entry in arr):
+            bt.logging.info("Prompt already saved – skipping.")
+            return
+
+        entry = {
             "task_id": self.task_id,
             "miner_id": self.miner_id,
-            "task_url": self.task_url,
             "prompt": self.prompt,
-            "actions": (
-                [action.dict() for action in self.actions] if self.actions else []
-            ),
-            "test_results_matrix": self.test_results_matrix,
-            "evaluation_result": self.evaluation_result,
+            "score": self.score,
+            "actions": [a.dict() for a in (self.actions or [])],
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
-
-        filename = SUCCESSFUlL_TASKS_JSON_FILENAME
-
-        # Load existing data (or start with an empty list)
-        if os.path.exists(filename):
-            try:
-                with open(filename, "r", encoding="utf-8") as f:
-                    try:
-                        existing_data = json.load(f)
-                        if not isinstance(existing_data, list):
-                            # If the file content is not a list, we override
-                            # with an empty list (or convert it appropriately)
-                            existing_data = []
-                    except json.JSONDecodeError:
-                        existing_data = []
-            except FileNotFoundError:
-                existing_data = []
-        else:
-            existing_data = []
-
-        # Check if this prompt already exists
-        if any(task.get("prompt") == data_to_save["prompt"] for task in existing_data):
-            bt.logging.info(
-                f"Task with the same prompt already exists. "
-                f"Skipping save for prompt: {data_to_save['prompt']}"
-            )
-            return
-
-        # Otherwise, append the new successful task
-        existing_data.append(data_to_save)
-
-        # Write updated data to file
-        with open(filename, "w", encoding="utf-8") as f:
-            json.dump(existing_data, f, indent=2)
-
-        bt.logging.info(
-            f"Successfully saved task with prompt: {data_to_save['prompt']}"
-        )
+        arr.append(entry)
+        Path(fn).write_text(json.dumps(arr, indent=2))
+        bt.logging.info(f"Saved successful task: {self.task_id}")
