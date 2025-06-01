@@ -28,6 +28,28 @@ SAVE_SUCCESSFUL_TASK_IN_JSON = bool(
 SUCCESSFUL_TASKS_JSON_FILENAME = "successful_tasks.json"
 
 
+class TaskSynapse(Synapse):
+    """
+    Synapse carrying the Task prompt & data from validator to miners.
+    """
+
+    version: str = ""
+    prompt: str
+    url: str
+    html: Optional[str] = None
+    screenshot: Optional[str] = None
+    actions: List[AllActionsUnion] = Field(
+        default_factory=list, description="The actions that solve the task"
+    )
+
+    class Config:
+        extra = "allow"
+        arbitrary_types_allowed = True
+
+    def deserialize(self) -> "TaskSynapse":
+        return self
+
+
 class TaskFeedbackSynapse(Synapse):
     """
     Synapse carrying feedback from validator back to miner,
@@ -187,3 +209,20 @@ class TaskFeedbackSynapse(Synapse):
         arr.append(entry)
         Path(fn).write_text(json.dumps(arr, indent=2))
         bt.logging.info(f"Saved successful task: {self.task_id}")
+
+
+class SetOperatorEndpointSynapse(bt.Synapse):
+    """
+    Synapse for telling miners your operator's endpoint.
+    Miners will (optionally) respond with data to be saved.
+    """
+
+    version: str = ""
+    endpoint: str
+
+    class Config:
+        extra = "allow"
+        arbitrary_types_allowed = True
+
+    def deserialize(self) -> "SetOperatorEndpointSynapse":
+        return self
