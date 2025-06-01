@@ -264,6 +264,6 @@ class Miner(BaseMinerNeuron):
 if __name__ == "__main__":
     # Miner entrypoint
     app = AppBootstrap()  # Wiring IWA Dependency Injection
-    with Miner(config=config()) as miner:
+    with Miner() as miner:
         while True:
             time.sleep(5)
