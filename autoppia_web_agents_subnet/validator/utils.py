@@ -2,7 +2,7 @@ from autoppia_iwa.src.data_generation.domain.classes import Task
 from autoppia_iwa.src.demo_webs.classes import WebProject
 from autoppia_iwa.src.demo_webs.utils import initialize_demo_webs_projects
 from autoppia_iwa.src.demo_webs.config import demo_web_projects
-from autoppia_web_agents_subnet.protocol import TaskSynapse
+from autoppia_web_agents_subnet.protocol import TaskSynapse, SetOperatorEndpointSynapse
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 import copy
 import random
@@ -223,18 +223,18 @@ async def retrieve_random_demo_web_project() -> WebProject:
 async def dendrite_with_retries(
     dendrite: bt.dendrite,
     axons: list,
-    synapse: TaskSynapse,
+    synapse: TaskSynapse | SetOperatorEndpointSynapse,
     deserialize: bool,
     timeout: float,
     retries=1,
-) -> List[TaskSynapse]:
-    res: List[TaskSynapse | None] = [None] * len(axons)
+) -> List[TaskSynapse | SetOperatorEndpointSynapse | None] | None:
+    res: List[TaskSynapse | SetOperatorEndpointSynapse | None] = [None] * len(axons)
     idx = list(range(len(axons)))
     axons = axons.copy()
 
     try:
         for attempt in range(retries):
-            responses: List[TaskSynapse] = await dendrite(
+            responses: List[TaskSynapse | SetOperatorEndpointSynapse] = await dendrite(
                 axons=axons, synapse=synapse, deserialize=deserialize, timeout=timeout
             )
 

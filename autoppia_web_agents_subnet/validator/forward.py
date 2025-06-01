@@ -479,18 +479,16 @@ async def broadcast_and_save_operator_endpoints(validator) -> None:
     bt.logging.info("Broadcasting SetOperatorEndpointSynapse...")
 
     # 2. You decide how to pick which miners to broadcast to.
-    #    For example, choose all or a subset:
     miner_uids = get_random_uids(validator, k=SAMPLE_SIZE)
     miner_axons = [validator.metagraph.axons[uid] for uid in miner_uids]
 
     # 3. Actually send the synapse to those miners (async).
-    #    If you have a helper or use something like dendrite_with_retries:
     responses: list[SetOperatorEndpointSynapse] = await dendrite_with_retries(
         dendrite=validator.dendrite,
         axons=miner_axons,
         synapse=operator_synapse,
         deserialize=True,
-        timeout=10,  # or whichever you prefer
+        timeout=10,
         retries=1,
     )
 
