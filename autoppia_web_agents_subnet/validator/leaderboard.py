@@ -57,7 +57,8 @@ def log_task_to_leaderboard(
         "created_at": created_at,
     }
 
-    resp = requests.post(endpoint, json=payload, timeout=timeout)
+    # resp = requests.post(endpoint, json=payload, timeout=timeout)
     # will raise an HTTPError on 4xx/5xx
-    resp.raise_for_status()
-    return resp
+    # resp.raise_for_status()
+    # return resp
+    return None
