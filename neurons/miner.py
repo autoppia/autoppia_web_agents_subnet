@@ -144,7 +144,6 @@ class Miner(BaseMinerNeuron):
         except Exception as e:
             ColoredLogger.error(
                 "Error occurred while printing in terminal TaskFeedback"
-            bt.logging.info(e)
             )
             raise e
 
