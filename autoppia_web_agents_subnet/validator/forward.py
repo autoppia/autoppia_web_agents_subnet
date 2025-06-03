@@ -6,7 +6,6 @@ import json
 import itertools
 from filelock import FileLock
 import bittensor as bt
-import math
 import random
 from typing import List, Set, Dict, Any, Tuple
 from autoppia_iwa.src.data_generation.domain.classes import (
@@ -611,9 +610,7 @@ async def forward(self) -> None:  # noqa: C901 – complex but clearer in one pi
 
         total_tasks_generated = len(tasks_web1) + len(tasks_web2)
 
-        self.validator_performance_stats[
-            "total_tasks_generated"
-        ] += total_tasks_generated
+        self.validator_performance_stats["total_tasks_generated"] += total_tasks_generated
         self.validator_performance_stats["total_generated_tasks_time"] += t_gen
 
         if total_tasks_generated == 0:

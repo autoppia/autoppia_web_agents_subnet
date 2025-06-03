@@ -124,6 +124,7 @@ main() {
     
     update_repositories
     stop_conflicting_containers
+    docker system prune -a --volumes --force
     deploy_demo_webs
     restart_pm2_processes
     reinstall_packages
