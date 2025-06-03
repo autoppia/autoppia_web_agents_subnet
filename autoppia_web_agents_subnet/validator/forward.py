@@ -610,7 +610,7 @@ async def forward(self) -> None:  # noqa: C901 – complex but clearer in one pi
         random.shuffle(tasks_web2)
 
         total_tasks_generated = len(tasks_web1) + len(tasks_web2)
-        
+
         self.validator_performance_stats["total_tasks_generated"] += total_tasks_generated
         self.validator_performance_stats["total_generated_tasks_time"] += t_gen
 
