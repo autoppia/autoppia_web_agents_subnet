@@ -3,8 +3,10 @@ import time
 import asyncio
 import os
 import json
+import itertools
 from filelock import FileLock
 import bittensor as bt
+import math
 from typing import List, Set, Dict, Any, Tuple
 from autoppia_iwa.src.data_generation.domain.classes import (
     Task,
@@ -30,7 +32,7 @@ from autoppia_web_agents_subnet.validator.config import (
     EFFICIENCY_WEIGHT,
     MIN_SCORE_FOR_CORRECT_FORMAT,
     MIN_RESPONSE_REWARD,
-    PROMPTS_PER_ITERATION,
+    PROMPTS_PER_USECASE,
     MAX_ACTIONS_LENGTH,
     TIMEOUT,
     CHECK_VERSION_PROBABILITY,
@@ -39,8 +41,8 @@ from autoppia_web_agents_subnet.validator.config import (
     NUMBER_OF_PROMPTS_PER_FORWARD,
     SET_OPERATOR_ENDPOINT_FORWARDS_INTERVAL,
 )
+from autoppia_iwa.src.demo_webs.config import demo_web_projects
 from autoppia_web_agents_subnet.validator.utils import (
-    retrieve_random_demo_web_project,
     init_validator_performance_stats,
     update_validator_performance_stats,
     print_validator_performance_stats,
@@ -538,76 +540,107 @@ async def save_operator_endpoints_in_json(
     bt.logging.info(f"Saved {len(responses)} endpoints to {filename}")
 
 
-async def forward(self) -> None:
+def _interleave(a: List[Any], b: List[Any]):
     """
-    Main entry point that runs each forward cycle:
-      1. Retrieve a random web project and generate tasks.
-      2. Send tasks (with an invalid version check + the correct version) to miners, gather and evaluate responses.
-      3. Track performance stats, log them, and sleep.
+    Flattened zip_longest with no None padding: [a0,b0,a1,b1,...].
+    """
+    for x, y in itertools.zip_longest(a, b):
+        if x is not None:
+            yield x
+        if y is not None:
+            yield y
+
+
+async def forward(self) -> None:  # noqa: C901 – complex but clearer in one piece
+    """
+    Validator forward cycle:
+
+      1. Grab the first two demo sites from `demo_web_projects`
+      2. Generate tasks_per_project = ceil(NUMBER_OF_PROMPTS_PER_FORWARD / 2)
+      3. Alternate tasks [web1, web2, web1, …] until NUMBER_OF_PROMPTS_PER_FORWARD tasks
+         have been processed (or lists exhaust)
+      4. Update stats, occasionally broadcast operator endpoint, sleep
     """
     try:
-        # Initialize validator stats if needed
+        # ------------------------------------------------------------------ stats
         init_validator_performance_stats(self)
-
-        # Optionally track how many times forward() was called
         self.forward_count += 1
 
         bt.logging.info(
-            f"[Forward #{self.forward_count}] Starting forward step with version {__version__}"
+            f"[Forward #{self.forward_count}] Starting (version {__version__})"
         )
-        forward_start_time = time.time()
+        t_forward_start = time.time()
 
-        # 1. Pick a random demo web project
-        demo_web_project = await retrieve_random_demo_web_project()
-        bt.logging.info(f"Selected demo web project: {demo_web_project.frontend_url}")
+        # ------------------------------------------------------------- pick sites
+        if len(demo_web_projects) < 2:
+            raise RuntimeError(
+                "Need at least two demo web projects in `demo_web_projects`."
+            )
 
-        # 2. Generate tasks
-        tasks_generated_start_time = time.time()
-        tasks_generated = await generate_tasks_for_web_project(
-            demo_web_project,
-            total_prompts=NUMBER_OF_PROMPTS_PER_FORWARD,
-            prompts_per_use_case=PROMPTS_PER_ITERATION,
+        web1, web2 = demo_web_projects[0], demo_web_projects[1]
+        bt.logging.info(
+            f"Demo sites selected:\n"
+            f"  • web1 → {web1.frontend_url}\n"
+            f"  • web2 → {web2.frontend_url}"
         )
-        tasks_generated_end_time = time.time()
-        tasks_generated_time = tasks_generated_end_time - tasks_generated_start_time
 
-        self.validator_performance_stats["total_tasks_generated"] += len(
-            tasks_generated
+        # ----------------------------------------------------- task generation
+        tasks_per_project = math.ceil(NUMBER_OF_PROMPTS_PER_FORWARD / 2)
+
+        t_gen_start = time.time()
+        tasks_web1 = await generate_tasks_for_web_project(
+            web1,
+            total_prompts=tasks_per_project,
+            prompts_per_use_case=PROMPTS_PER_USECASE,
         )
-        self.validator_performance_stats[
-            "total_generated_tasks_time"
-        ] += tasks_generated_time
+        tasks_web2 = await generate_tasks_for_web_project(
+            web2,
+            total_prompts=tasks_per_project,
+            prompts_per_use_case=PROMPTS_PER_USECASE,
+        )
+        t_gen = time.time() - t_gen_start
 
-        if not tasks_generated:
-            bt.logging.warning("No tasks generated, skipping forward step.")
+        # trim in case more were generated than needed
+        tasks_web1 = tasks_web1[:tasks_per_project]
+        tasks_web2 = tasks_web2[:tasks_per_project]
+
+        total_tasks_generated = len(tasks_web1) + len(tasks_web2)
+        self.validator_performance_stats["total_tasks_generated"] += total_tasks_generated
+        self.validator_performance_stats["total_generated_tasks_time"] += t_gen
+
+        if total_tasks_generated == 0:
+            bt.logging.warning("No tasks generated – skipping forward step.")
             return
 
-        # 3. Process tasks (this includes the invalid version check + correct version flow)
-        tasks_processed_start_time = time.time()
+        # ----------------------------------------------------- interleave + run
+        t_proc_start = time.time()
+        processed = 0
 
-        await process_tasks(self, demo_web_project, tasks_generated)
+        for task in _interleave(tasks_web1, tasks_web2):
+            if processed >= NUMBER_OF_PROMPTS_PER_FORWARD:
+                break  # honour the hyper-param hard cap
 
-        tasks_processed_end_time = time.time()
-        tasks_processed_time = tasks_processed_end_time - tasks_processed_start_time
-        self.validator_performance_stats[
-            "total_processing_tasks_time"
-        ] += tasks_processed_time
+            project = web1 if task in tasks_web1 else web2
+            await process_tasks(self, project, [task])
+            processed += 1
 
+        t_proc = time.time() - t_proc_start
+        self.validator_performance_stats["total_processing_tasks_time"] += t_proc
+
+        # ------------------------------------------------------ housekeeping
         if self.forward_count % SET_OPERATOR_ENDPOINT_FORWARDS_INTERVAL == 0:
             await broadcast_and_save_operator_endpoints(self)
 
-        # Finalize
-        forward_end_time = time.time()
-        forward_time = forward_end_time - forward_start_time
+        # -------------------------------------------------------- final stats
+        forward_time = time.time() - t_forward_start
         self.validator_performance_stats["total_forwards_time"] += forward_time
         self.validator_performance_stats["total_forwards_count"] += 1
 
-        # Print stats in a table
         print_validator_performance_stats(self)
 
-        bt.logging.success("Forward step completed successfully.")
-        bt.logging.info(f"Sleeping for {FORWARD_SLEEP_SECONDS}s....")
+        bt.logging.success("Forward cycle completed!")
+        bt.logging.info(f"Sleeping for {FORWARD_SLEEP_SECONDS}s…")
         await asyncio.sleep(FORWARD_SLEEP_SECONDS)
 
-    except Exception as e:
-        bt.logging.error(f"Error in validation forward: {e}")
+    except Exception as err:
+        bt.logging.error(f"Error in forward: {err}")
