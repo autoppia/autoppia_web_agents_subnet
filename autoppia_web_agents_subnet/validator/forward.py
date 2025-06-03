@@ -6,7 +6,6 @@ import json
 import itertools
 from filelock import FileLock
 import bittensor as bt
-import math
 import random
 from typing import List, Set, Dict, Any, Tuple
 from autoppia_iwa.src.data_generation.domain.classes import (
@@ -586,7 +585,7 @@ async def forward(self) -> None:  # noqa: C901 – complex but clearer in one pi
         )
 
         # ----------------------------------------------------- task generation
-        tasks_per_project = math.ceil(NUMBER_OF_PROMPTS_PER_FORWARD)
+        tasks_per_project = NUMBER_OF_PROMPTS_PER_FORWARD
 
         t_gen_start = time.time()
         tasks_web1 = await generate_tasks_for_web_project(
