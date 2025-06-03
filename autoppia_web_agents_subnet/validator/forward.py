@@ -7,6 +7,7 @@ import itertools
 from filelock import FileLock
 import bittensor as bt
 import math
+import random
 from typing import List, Set, Dict, Any, Tuple
 from autoppia_iwa.src.data_generation.domain.classes import (
     Task,
@@ -585,7 +586,7 @@ async def forward(self) -> None:  # noqa: C901 – complex but clearer in one pi
         )
 
         # ----------------------------------------------------- task generation
-        tasks_per_project = math.ceil(NUMBER_OF_PROMPTS_PER_FORWARD / 2)
+        tasks_per_project = math.ceil(NUMBER_OF_PROMPTS_PER_FORWARD)
 
         t_gen_start = time.time()
         tasks_web1 = await generate_tasks_for_web_project(
@@ -604,7 +605,12 @@ async def forward(self) -> None:  # noqa: C901 – complex but clearer in one pi
         tasks_web1 = tasks_web1[:tasks_per_project]
         tasks_web2 = tasks_web2[:tasks_per_project]
 
+        # 🆕 Shuffle so the order inside each project is random
+        random.shuffle(tasks_web1)
+        random.shuffle(tasks_web2)
+
         total_tasks_generated = len(tasks_web1) + len(tasks_web2)
+        
         self.validator_performance_stats["total_tasks_generated"] += total_tasks_generated
         self.validator_performance_stats["total_generated_tasks_time"] += t_gen
 
