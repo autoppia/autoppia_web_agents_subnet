@@ -20,7 +20,6 @@ from autoppia_iwa.src.shared.visualizator import SubnetVisualizer
 from .miner.stats import MinerStats
 
 # === new import ===
-from autoppia_web_agents_subnet.validator.leaderboard import log_task_to_leaderboard
 
 SAVE_SUCCESSFUL_TASK_IN_JSON = bool(
     strtobool(os.getenv("SAVE_SUCCESSFUL_TASK_IN_JSON", "false"))
@@ -140,24 +139,6 @@ class TaskFeedbackSynapse(Synapse):
         # optionally persist locally
         if SAVE_SUCCESSFUL_TASK_IN_JSON:
             self.save_to_json()
-
-        try:
-            # current_block = bt.wallet.get_current_block()
-            resp = log_task_to_leaderboard(
-                task_id=task.id,
-                success=self.score >= 1.0,
-                score=self.score,
-                duration=self.execution_time,
-                website=self.task_url,
-                validator_uid=int(self.validator_id),
-                miner_hotkey=self.miner_id,
-                miner_uid=int(self.miner_id),
-            )
-            console.print(
-                f"[bold green]Logged to leaderboard:[/bold green] {resp.status_code}"
-            )
-        except Exception as e:
-            console.print(f"[bold red]Failed to log to leaderboard:[/bold red] {e}")
 
     def save_to_json(self, filename: str = "feedback_tasks.json"):
         data = self.model_dump()
