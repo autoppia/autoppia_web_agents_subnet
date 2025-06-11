@@ -48,7 +48,7 @@ def send_task_to_leaderboard(
 def send_many_tasks_to_leaderboard(
     records: List[LeaderboardTaskRecord],
     endpoint: str = LEADERBOARD_TASKS_ENDPOINT,
-    timeout: int = 10,
+    timeout: int = 30,
 ) -> requests.Response:
     """
     POST multiple task records in one go to the leaderboard service.
