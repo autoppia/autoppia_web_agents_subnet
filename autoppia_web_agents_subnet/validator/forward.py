@@ -411,14 +411,6 @@ async def process_tasks(
         bt.logging.info(f"Miners final rewards: {rewards}")
         bt.logging.info(f"Rewards computed in {end_eval - start_eval:.2f}s.")
         # 🔍 Logs para inspeccionar todos los datos
-        bt.logging.info(f"--------------------DATA-----------------------")
-        bt.logging.info(f"Miner UIDs              : {validator}")
-        bt.logging.info(f"Miner UIDs              : {miner_uids}")
-        bt.logging.info(f"Task Solutions         : {task!r}")
-        bt.logging.info(f"Task Solutions         : {task_solutions!r}")
-        bt.logging.info(f"Execution Times        : {execution_times}")
-        bt.logging.info(f"Rewards                : {rewards}")
-        bt.logging.info(f"Evaluation Results     : {evaluation_results}")
 
         bt.logging.info(f"Rewards computed in {end_eval - start_eval:.2f}s.")
         # Update Validator Scores
@@ -448,9 +440,9 @@ async def process_tasks(
                     task_id=task.id,
                     task_prompt=task.prompt,
                     website=task.url,
-                    success=(rewards[i] >= 1.0),
-                    score=rewards[i],
-                    duration=execution_times[i],
+                    success=bool(float(rewards[i]) >= 1.0),
+                    score=float(rewards[i]),
+                    duration=float(execution_times[i]),
                 )
                 for i, miner_uid in enumerate(miner_uids)
             ]
