@@ -11,6 +11,7 @@ from autoppia_iwa.src.evaluation.classes import EvaluationResult
 from autoppia_iwa.src.demo_webs.classes import WebProject
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
+
 APPLY_WEIGHTS_VERSION_CHECK_PENALTY = False
 
 
@@ -114,9 +115,7 @@ def _normalize_action_lengths_for_valid_solutions(
     eff_factors = [0.0] * n
 
     valid_pairs = [
-        (l, idx)
-        for idx, l in enumerate(actions_lengths)
-        if raw_scores[idx] > 0
+        (l, idx) for idx, l in enumerate(actions_lengths) if raw_scores[idx] > 0
     ]
     if not valid_pairs:
         return eff_factors
@@ -195,7 +194,9 @@ def _process_evaluation_results(
     time_factors = _normalize_times_for_valid_solutions(execution_times, raw_scores)
 
     # Efficiency factor for solutions with raw_score>0
-    eff_factors = _normalize_action_lengths_for_valid_solutions(actions_lengths, raw_scores)
+    eff_factors = _normalize_action_lengths_for_valid_solutions(
+        actions_lengths, raw_scores
+    )
 
     for i, result in enumerate(detailed_results):
         # 1) Convert test_results_matrix to JSON-friendly shape
@@ -218,7 +219,9 @@ def _process_evaluation_results(
 
         # Enforce a minimum reward if raw_score >= min_correct_format_score
         if raw_score >= min_correct_format_score:
-            final_score_time_adjusted = max(final_score_time_adjusted, min_response_reward)
+            final_score_time_adjusted = max(
+                final_score_time_adjusted, min_response_reward
+            )
 
         rewards[i] = final_score_time_adjusted
 
@@ -229,7 +232,9 @@ def _process_evaluation_results(
             "random_clicker_score": float(result.random_clicker_score or 0.0),
             "time_factor": float(time_factor),
             "efficiency_factor": float(eff_factor),
-            "execution_time": float(execution_times[i]) if i < len(execution_times) else None,
+            "execution_time": (
+                float(execution_times[i]) if i < len(execution_times) else None
+            ),
             "actions_count": actions_lengths[i],
         }
         # If there's feedback with test counts, add it
@@ -240,7 +245,9 @@ def _process_evaluation_results(
                 "total_execution_time": float(
                     getattr(result.feedback, "total_execution_time", 0.0)
                 ),
-                "executed_actions": int(getattr(result.feedback, "executed_actions", 0)),
+                "executed_actions": int(
+                    getattr(result.feedback, "executed_actions", 0)
+                ),
                 "failed_actions": int(getattr(result.feedback, "failed_actions", 0)),
             }
 
@@ -256,7 +263,7 @@ async def get_rewards_with_details(
     task_solutions: List[TaskSolution],
     execution_times: List[float],
     time_weight: float = 0.2,
-    efficiency_weight: float = 0.15,         # NEW efficiency weight
+    efficiency_weight: float = 0.15,  # NEW efficiency weight
     min_correct_format_score: float = 0.1,
     min_response_reward: float = 0.0,
     invalid_version_responders: Optional[Set[int]] = None,

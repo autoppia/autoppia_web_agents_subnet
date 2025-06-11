@@ -53,6 +53,10 @@ from autoppia_web_agents_subnet.utils.uids import get_random_uids
 from autoppia_web_agents_subnet.validator.version import (
     check_miner_not_responding_to_invalid_version,
 )
+from autoppia_web_agents_subnet.validator.leaderboard import (
+    LeaderboardTaskRecord,
+    send_many_tasks_to_leaderboard,
+)
 
 
 async def generate_tasks_for_web_project(
@@ -406,7 +410,17 @@ async def process_tasks(
         end_eval = time.time()
         bt.logging.info(f"Miners final rewards: {rewards}")
         bt.logging.info(f"Rewards computed in {end_eval - start_eval:.2f}s.")
+        # 🔍 Logs para inspeccionar todos los datos
+        bt.logging.info(f"--------------------DATA-----------------------")
+        bt.logging.info(f"Miner UIDs              : {validator}")
+        bt.logging.info(f"Miner UIDs              : {miner_uids}")
+        bt.logging.info(f"Task Solutions         : {task!r}")
+        bt.logging.info(f"Task Solutions         : {task_solutions!r}")
+        bt.logging.info(f"Execution Times        : {execution_times}")
+        bt.logging.info(f"Rewards                : {rewards}")
+        bt.logging.info(f"Evaluation Results     : {evaluation_results}")
 
+        bt.logging.info(f"Rewards computed in {end_eval - start_eval:.2f}s.")
         # Update Validator Scores
         validator.update_scores(rewards, miner_uids)
 
@@ -422,7 +436,24 @@ async def process_tasks(
             test_results_matrices=test_results_matrices,
             evaluation_results=evaluation_results,
         )
-
+        # records = [
+        #     LeaderboardTaskRecord(
+        #         validator_uid=int(validator.uid),
+        #         miner_uid=miner_uid,
+        #         miner_hotkey=str(miner_uid),  # o tu hotkey real si la tienes
+        #         task_id=task.id,
+        #         website=task.url,
+        #         success=(rewards[i] >= 1.0),
+        #         score=rewards[i],
+        #         duration=execution_times[i],
+        #     )
+        #     for i, miner_uid in enumerate(miner_uids)
+        # ]
+        # try:
+        #     send_many_tasks_to_leaderboard(records=records)
+        #     bt.logging.info(f"Logged {len(records)} task(s) to leaderboard")
+        # except Exception as e:
+        #     bt.logging.error(f"Failed to log tasks to leaderboard: {e}")
         # 9) Aggregate the returned stats
         num_no_response += feedback_data["num_no_response"]
         num_success += feedback_data["num_success"]
@@ -610,7 +641,9 @@ async def forward(self) -> None:  # noqa: C901 – complex but clearer in one pi
 
         total_tasks_generated = len(tasks_web1) + len(tasks_web2)
 
-        self.validator_performance_stats["total_tasks_generated"] += total_tasks_generated
+        self.validator_performance_stats[
+            "total_tasks_generated"
+        ] += total_tasks_generated
         self.validator_performance_stats["total_generated_tasks_time"] += t_gen
 
         if total_tasks_generated == 0:
