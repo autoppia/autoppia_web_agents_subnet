@@ -11,6 +11,7 @@ class LeaderboardTaskRecord:
     miner_uid: int
     miner_hotkey: str
     task_id: str
+    task_prompt: str
     website: str
     success: bool = False
     score: float = 0.0
