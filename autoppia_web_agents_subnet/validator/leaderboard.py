@@ -56,7 +56,7 @@ def send_many_tasks_to_leaderboard(
     """
     # endpoint siempre acaba en /tasks
     bulk_url = f"{endpoint}/bulk/"
-    payload = {"tasks": [r.to_dict() for r in records]}
+    payload = [r.to_dict() for r in records]
     headers = {"Content-Type": "application/json"}
     resp = requests.post(bulk_url, json=payload, headers=headers, timeout=timeout)
     resp.raise_for_status()
