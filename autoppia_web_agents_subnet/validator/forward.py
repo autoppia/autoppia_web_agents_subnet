@@ -435,9 +435,9 @@ async def process_tasks(
             records = [
                 LeaderboardTaskRecord(
                     validator_uid=int(validator.uid),
-                    miner_uid=miner_uid,
+                    miner_uid=int(miner_uid),
                     miner_hotkey=miner_hotkeys[i],
-                    task_id=task.id,
+                    task_id=str(task.id),
                     task_prompt=task.prompt,
                     website=task.url,
                     success=bool(float(rewards[i]) >= 1.0),

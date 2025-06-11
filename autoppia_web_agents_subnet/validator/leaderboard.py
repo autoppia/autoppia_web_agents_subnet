@@ -1,6 +1,7 @@
 from dataclasses import dataclass, asdict
 from typing import Any, Dict, List
 import requests
+import numpy as np
 
 LEADERBOARD_TASKS_ENDPOINT = "https://api-leaderboard.autoppia.com/tasks"
 
@@ -18,7 +19,15 @@ class LeaderboardTaskRecord:
     duration: float = 0.0
 
     def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+        raw = asdict(self)
+        cleaned: Dict[str, Any] = {}
+        for k, v in raw.items():
+            # Convierte numpy.int64, numpy.float64, etc. a tipos nativos
+            if isinstance(v, np.generic):
+                cleaned[k] = v.item()
+            else:
+                cleaned[k] = v
+        return cleaned
 
 
 def send_task_to_leaderboard(
