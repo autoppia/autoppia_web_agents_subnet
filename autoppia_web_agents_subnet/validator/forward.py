@@ -436,25 +436,31 @@ async def process_tasks(
             test_results_matrices=test_results_matrices,
             evaluation_results=evaluation_results,
         )
-        # records = [
-        #     LeaderboardTaskRecord(
-        #         validator_uid=int(validator.uid),
-        #         miner_uid=miner_uid,
-        #         miner_hotkey=str(miner_uid),  # o tu hotkey real si la tienes
-        #         task_id=task.id,
-        #         website=task.url,
-        #         success=(rewards[i] >= 1.0),
-        #         score=rewards[i],
-        #         duration=execution_times[i],
-        #     )
-        #     for i, miner_uid in enumerate(miner_uids)
-        # ]
-        # try:
-        #     send_many_tasks_to_leaderboard(records=records)
-        #     bt.logging.info(f"Logged {len(records)} task(s) to leaderboard")
-        # except Exception as e:
-        #     bt.logging.error(f"Failed to log tasks to leaderboard: {e}")
-        # 9) Aggregate the returned stats
+
+        try:
+            miner_hotkeys = [validator.metagraph.hotkeys[uid] for uid in miner_uids]
+
+            records = [
+                LeaderboardTaskRecord(
+                    validator_uid=int(validator.uid),
+                    miner_uid=miner_uid,
+                    miner_hotkey=miner_hotkeys[i],
+                    task_id=task.id,
+                    task_prompt=task.prompt,
+                    website=task.url,
+                    success=(rewards[i] >= 1.0),
+                    score=rewards[i],
+                    duration=execution_times[i],
+                )
+                for i, miner_uid in enumerate(miner_uids)
+            ]
+
+            send_many_tasks_to_leaderboard(records)
+            bt.logging.info(f"Logged {len(records)} task(s) to leaderboard")
+        except Exception as e:
+            bt.logging.error(f"Failed to log tasks to leaderboard: {e}")
+
+        # TODO : I cannot visualize this stats
         num_no_response += feedback_data["num_no_response"]
         num_success += feedback_data["num_success"]
         num_wrong += feedback_data["num_wrong"]
