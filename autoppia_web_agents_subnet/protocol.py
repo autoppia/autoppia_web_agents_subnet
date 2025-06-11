@@ -149,7 +149,6 @@ class TaskFeedbackSynapse(Synapse):
                 score=self.score,
                 duration=self.execution_time,
                 website=self.task_url,
-                created_at=datetime.now(timezone.utc),
                 validator_uid=int(self.validator_id),
                 miner_hotkey=self.miner_id,
                 miner_uid=int(self.miner_id),
