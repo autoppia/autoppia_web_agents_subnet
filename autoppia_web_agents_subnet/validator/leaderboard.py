@@ -80,30 +80,46 @@ console = Console()
 def print_leaderboard_table(
     records: List[LeaderboardTaskRecord], task_prompt: str, web_project: str | None
 ):
-    title = f"[bold]Task:[/bold] {task_prompt}\n[bold]Site:[/bold] {web_project}"
-    table = Table(title=title, box=box.SIMPLE_HEAVY)
+    # Título con prompt + sitio
+    title = (
+        f"[bold white]Task:[/bold white] {task_prompt}    "
+        f"[bold white]Site:[/bold white] {web_project}"
+    )
 
-    table.add_column("Miner UID", justify="right", style="cyan", no_wrap=True)
+    # Tabla ligera, que se expande al ancho de la terminal
+    table = Table(
+        title=title,
+        box=box.SIMPLE,
+        show_header=True,
+        header_style="bold magenta",
+        expand=True,
+    )
+
+    table.add_column("Hotkey", justify="center", style="green")
+    table.add_column("Miner UID", justify="center", style="cyan", no_wrap=True)
     table.add_column("Success", justify="center")
+    table.add_column("Duration (s)", justify="center")
 
-    # Rows
+    # Filas
     for rec in records:
         table.add_row(
-            str(rec.miner_uid), "[green]✅[/green]" if rec.success else "[red]❌[/red]"
+            rec.miner_hotkey,
+            str(rec.miner_uid),
+            "[green]✅[/green]" if rec.success else "[red]❌[/red]",
+            f"{rec.duration:.2f}",
         )
 
     console.print(table)
 
-    # Metrics
+    # Métricas al pie
     total = len(records)
     successes = sum(1 for r in records if r.success)
     rate = (successes / total * 100) if total else 0.0
-    avg_duration = (sum(r.duration for r in records) / total) if total else 0.0
+    avg_dur = (sum(r.duration for r in records) / total) if total else 0.0
 
-    # Sum up
     console.print(
-        f"[bold]Total successes:[/bold] {successes}/{total}   "
-        f"[bold]Success rate:[/bold] {rate:.1f}%   "
-        f"[bold]Avg duration:[/bold] {avg_duration:.2f}s",
+        f"[bold white]Total successes:[/bold white] {successes}/{total}   "
+        f"[bold white]Success rate:[/bold white] {rate:.1f}%   "
+        f"[bold white]Avg duration:[/bold white] {avg_dur:.2f}s",
         style="yellow",
     )
