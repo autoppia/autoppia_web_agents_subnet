@@ -88,8 +88,8 @@ def print_leaderboard_table(
 ):
     # ────────── Tabla 1: Task Info ──────────
     info_table = Table(box=box.SIMPLE_HEAD, show_header=False, expand=True)
-    info_table.add_column("Field", style="bold white", no_wrap=True, width=12)
-    info_table.add_column("Value", style="white")
+    info_table.add_column("Field", style="bold cyan", no_wrap=True, width=12)
+    info_table.add_column("Value", style="cyan")
     info_table.add_row("Task:", task_prompt)
     info_table.add_row("Web Project:", web_project or "—")
     console.print(info_table)
@@ -102,9 +102,9 @@ def print_leaderboard_table(
         expand=True,
     )
     # Aseguramos que la columna Hotkey se expanda al máximo:
-    results.add_column("Hotkey", style="green", ratio=4, overflow="fold")
+    results.add_column("Hotkey", style="cyan", ratio=4, overflow="fold")
     results.add_column(
-        "Miner UID", style="cyan", ratio=1, justify="center", no_wrap=True
+        "Miner UID", style="greeb", ratio=1, justify="center", no_wrap=True
     )
     results.add_column("Success", ratio=1, justify="center")
     results.add_column("Duration (s)", ratio=1, justify="center")
