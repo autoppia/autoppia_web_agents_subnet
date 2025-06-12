@@ -22,9 +22,8 @@ if [ -z "$REPO_ROOT" ]; then
   exit 1
 fi
 
-# Paths for scripts (ensure this script lives in scripts/validator/update/)
+# Path to update script (ensure this script lives in scripts/validator/update/)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Use the update_deploy.sh entrypoint instead of update.sh
 UPDATE_SCRIPT="$SCRIPT_DIR/update_deploy.sh"
 
 ########################################
@@ -59,15 +58,14 @@ version_greater() {
 # Initial checks
 ########################################
 
-# Ensure the deploy updater exists and is executable
+# Ensure update script exists and is executable
 if [ ! -f "$UPDATE_SCRIPT" ]; then
   echo "Error: update_deploy.sh not found at $UPDATE_SCRIPT" >&2
   exit 1
 fi
-# Make sure it's executable
 chmod +x "$UPDATE_SCRIPT" || echo "[WARN] Failed to chmod +x $UPDATE_SCRIPT"
 
-# Ensure version file exists locally
+# Warn if version file missing
 if [ ! -f "$REPO_ROOT/$CONFIG_FILE" ]; then
   echo "Warning: version file not found: $CONFIG_FILE" >&2
 fi
@@ -88,11 +86,14 @@ while true; do
   if version_greater "$LOCAL_VERSION" "$REMOTE_VERSION"; then
     echo "[INFO] New version detected: remote=$REMOTE_VERSION, local=$LOCAL_VERSION. Invoking update_deploy.sh..."
     bash "$UPDATE_SCRIPT"
+    echo "[INFO] update_deploy.sh finished successfully"
     # After update, reset local branch to match origin/main
     git -C "$REPO_ROOT" reset --hard origin/main
+    echo "[INFO] Git reset to origin/main complete"
   else
     echo "[INFO] No update: local=$LOCAL_VERSION, remote=$REMOTE_VERSION"
   fi
 
+  echo "[INFO] Sleeping for $((SLEEP_INTERVAL/60)) minutes..."
   sleep "$SLEEP_INTERVAL"
 done
