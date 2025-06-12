@@ -15,8 +15,9 @@ SUBTENSOR_PARAM="--subtensor.network finney"  # change subtensor network param
 
 ########################################
 # Interval (seconds)
-# Adjust how often (in seconds) the script checks for a new version
-SLEEP_INTERVAL=${SLEEP_INTERVAL:-120}
+########################################
+# Adjust how often the script checks for a new version
+SLEEP_INTERVAL=120
 
 ########################################
 # Paths
@@ -35,23 +36,34 @@ UPDATE_SCRIPT="$SCRIPT_DIR/update_deploy.sh"
 # Helpers: version extraction & comparison
 ########################################
 extract_version() {
-  grep "^__version__" "$1" 2>/dev/null \
-    | head -n1 \
-    | sed -E 's/.*=[[:space:]]*["'"']?([^"'"']+)["'"']?.*/\1/'
+  # Extract __version__ value from file
+  grep "^__version__" "$1" 2>/dev/null | \
+    head -n1 | \
+    sed -E "s/.*=[[:space:]]*[\"']?([^\"']+)[\"']?.*/\1/"
 }
-get_local_version()  { extract_version "$REPO_ROOT/autoppia_web_agents_subnet/__init__.py"  || echo ""; }
-get_remote_version() { git -C "$REPO_ROOT" fetch origin main --quiet || return 1; \
-    git -C "$REPO_ROOT" show origin/main:"autoppia_web_agents_subnet/__init__.py" 2>/dev/null \
-      | extract_version /dev/stdin || echo ""; }
-version_greater() { [ -n "$1" ] && [ -n "$2" ] && \
-    [ "$(printf '%s\n' "$1" "$2" | sort -V | head -n1)" = "$1" ] && \
-    [ "$1" != "$2" ]; }
+
+get_local_version() {
+  extract_version "$REPO_ROOT/autoppia_web_agents_subnet/__init__.py" || echo ""
+}
+
+get_remote_version() {
+  git -C "$REPO_ROOT" fetch origin main --quiet || return 1
+  git -C "$REPO_ROOT" show origin/main:"autoppia_web_agents_subnet/__init__.py" 2>/dev/null | \
+    extract_version /dev/stdin || echo ""
+}
+
+version_greater() {
+  [ -z "$1" ] && return 1
+  [ -z "$2" ] && return 1
+  [ "$(printf '%s\n' "$1" "$2" | sort -V | head -n1)" = "$1" ] && \
+    [ "$1" != "$2" ]
+}
 
 ########################################
 # Sanity checks
 ########################################
 [ -f "$UPDATE_SCRIPT" ] || { echo "Error: update_deploy.sh not found at $UPDATE_SCRIPT" >&2; exit 1; }
-ochmod +x "$UPDATE_SCRIPT" || echo "[WARN] Could not chmod +x $UPDATE_SCRIPT"
+chmod +x "$UPDATE_SCRIPT" || echo "[WARN] Could not chmod +x $UPDATE_SCRIPT"
 
 echo "[INFO] Auto-update service starting in $REPO_ROOT"
 echo "[INFO] Using parameters: process=$PROCESS_NAME, wallet=$WALLET_NAME, hotkey=$WALLET_HOTKEY, subtensor='$SUBTENSOR_PARAM'"

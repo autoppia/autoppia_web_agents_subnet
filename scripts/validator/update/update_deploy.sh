@@ -21,8 +21,8 @@ step() {
 ########################################
 step "Loading configurable parameters"
 PROCESS_NAME="${PROCESS_NAME:-subnet-36-validator}"
-WALLET_NAME="${WALLET_NAME:-}"
-WALLET_HOTKEY="${WALLET_HOTKEY:-}"
+WALLET_NAME="${WALLET_NAME:-}"      # will prompt if empty
+WALLET_HOTKEY="${WALLET_HOTKEY:-}"  # will prompt if empty
 SUBTENSOR_PARAM="${SUBTENSOR_PARAM:---subtensor.network finney}"
 
 # Override via args
@@ -31,13 +31,19 @@ if [ $# -ge 2 ]; then WALLET_NAME="$2"; fi
 if [ $# -ge 3 ]; then WALLET_HOTKEY="$3"; fi
 if [ $# -ge 4 ]; then SUBTENSOR_PARAM="$4"; fi
 
-# Prompt for process name and credentials
-read -rp "Enter process name (default: ${PROCESS_NAME}): " input_process
-PROCESS_NAME="${input_process:-$PROCESS_NAME}"
-read -rp "Enter your coldkey name (default: ${WALLET_NAME}): " input_wallet
-WALLET_NAME="${input_wallet:-$WALLET_NAME}"
-read -rp "Enter your hotkey (default: ${WALLET_HOTKEY}): " input_hotkey
-WALLET_HOTKEY="${input_hotkey:-$WALLET_HOTKEY}"
+# Only prompt interactively for missing values
+if [ -t 0 ]; then
+  if [ -z "$PROCESS_NAME" ]; then
+    read -rp "Enter process name (default: subnet-36-validator): " input_process
+    PROCESS_NAME="${input_process:-subnet-36-validator}"
+  fi
+  if [ -z "$WALLET_NAME" ]; then
+    read -rp "Enter your coldkey name: " WALLET_NAME
+  fi
+  if [ -z "$WALLET_HOTKEY" ]; then
+    read -rp "Enter your hotkey: " WALLET_HOTKEY
+  fi
+fi
 
 echo
 
@@ -56,12 +62,12 @@ echo
 ########################################
 step "Updating repositories"
 pushd "$REPO_ROOT" > /dev/null
-echo "Pulling latest from main repository..."
-git pull origin main
-if [ -d autoppia_iwa_module ]; then
-  echo "Updating autoppia_iwa_module..."
-  (cd autoppia_iwa_module && git pull origin main)
-fi
+  echo "Pulling latest from main repository..."
+  git pull origin main
+  if [ -d autoppia_iwa_module ]; then
+    echo "Updating autoppia_iwa_module..."
+    (cd autoppia_iwa_module && git pull origin main)
+  fi
 popd > /dev/null
 echo
 
@@ -75,7 +81,6 @@ if [ ! -x "$DEPLOY_DEMO_WRAPPER" ]; then
   echo "Error: demo deploy wrapper not found or not executable: $DEPLOY_DEMO_WRAPPER" >&2
   exit 1
 fi
-
 bash "$DEPLOY_DEMO_WRAPPER"
 echo
 
