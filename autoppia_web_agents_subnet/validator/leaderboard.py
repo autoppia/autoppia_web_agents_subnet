@@ -70,48 +70,55 @@ async def send_many_tasks_to_leaderboard_async(
 
 
 ##------------------------------------VISUALIZATION------------------------------------##
+##------------------------------------ VISUALIZATION ------------------------------------##
 from rich.console import Console
 from rich.table import Table
 from rich import box
+from typing import List, Optional
 
-console = Console()
+console = Console(
+    force_terminal=True,  # Trata la salida como si fuera un TTY
+    color_system="truecolor",  # Usa el sistema de colores full
+    no_color=False,  # Asegúrate de NO desactivar el color
+)
 
 
 def print_leaderboard_table(
-    records: List[LeaderboardTaskRecord], task_prompt: str, web_project: str | None
+    records: List[LeaderboardTaskRecord], task_prompt: str, web_project: Optional[str]
 ):
-    # Título con prompt + sitio
-    title = (
-        f"[bold white]Task:[/bold white] {task_prompt}    "
-        f"[bold white]Site:[/bold white] {web_project}"
-    )
+    # ────────── Tabla 1: Task Info ──────────
+    info_table = Table(box=box.SIMPLE_HEAD, show_header=False, expand=True)
+    info_table.add_column("Field", style="bold white", no_wrap=True, width=12)
+    info_table.add_column("Value", style="white")
+    info_table.add_row("Task:", task_prompt)
+    info_table.add_row("Web Project:", web_project or "—")
+    console.print(info_table)
 
-    # Tabla ligera, que se expande al ancho de la terminal
-    table = Table(
-        title=title,
-        box=box.SIMPLE,
-        show_header=True,
-        header_style="bold magenta",
+    # ────────── Tabla 2: Miner Results ──────────
+    results = Table(
+        title="[bold magenta]Leaderboard Results[/bold magenta]",
+        box=box.SIMPLE_HEAVY,
+        header_style="bold cyan",
         expand=True,
     )
+    # Aseguramos que la columna Hotkey se expanda al máximo:
+    results.add_column("Hotkey", style="green", ratio=4, overflow="fold")
+    results.add_column(
+        "Miner UID", style="cyan", ratio=1, justify="center", no_wrap=True
+    )
+    results.add_column("Success", ratio=1, justify="center")
+    results.add_column("Duration (s)", ratio=1, justify="center")
 
-    table.add_column("Hotkey", justify="center", style="green")
-    table.add_column("Miner UID", justify="center", style="cyan", no_wrap=True)
-    table.add_column("Success", justify="center")
-    table.add_column("Duration (s)", justify="center")
-
-    # Filas
     for rec in records:
-        table.add_row(
+        results.add_row(
             rec.miner_hotkey,
             str(rec.miner_uid),
             "[green]✅[/green]" if rec.success else "[red]❌[/red]",
             f"{rec.duration:.2f}",
         )
+    console.print(results)
 
-    console.print(table)
-
-    # Métricas al pie
+    # ────────── Métricas finales ──────────
     total = len(records)
     successes = sum(1 for r in records if r.success)
     rate = (successes / total * 100) if total else 0.0
