@@ -24,7 +24,7 @@ class LeaderboardTaskRecord:
         raw: Dict[str, Any] = asdict(self)
         cleaned: Dict[str, Any] = {}
         for k, v in raw.items():
-            # Convert numpy types to native
+            # Convert numpy types to native Python types
             if isinstance(v, np.generic):
                 cleaned[k] = v.item()
             else:
@@ -59,6 +59,11 @@ async def send_many_tasks_to_leaderboard_async(
     doesn’t block your event loop.
     """
     loop = asyncio.get_running_loop()
+    # Esto se ejecuta en un ThreadPoolExecutor, no bloquea el loop principal
     await loop.run_in_executor(
-        None, send_many_tasks_to_leaderboard, records, endpoint, timeout
+        None,
+        send_many_tasks_to_leaderboard,
+        records,
+        endpoint,
+        timeout,
     )

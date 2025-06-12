@@ -447,7 +447,20 @@ async def process_tasks(
                     )
                 )
             # fire-and-forget
-            asyncio.create_task(send_many_tasks_to_leaderboard_async(records))
+            task = asyncio.create_task(
+                send_many_tasks_to_leaderboard_async(records, timeout=300)
+            )
+            task.add_done_callback(
+                lambda fut: (
+                    bt.logging.info(
+                        f"Leaderboard logs sent successfully ({len(records)} records)."
+                    )
+                    if not fut.exception()
+                    else bt.logging.error(
+                        f"Error sending leaderboard logs: {fut.exception()}"
+                    )
+                )
+            )
             bt.logging.info(f"Dispatched {len(records)} leaderboard logs in background")
         except Exception as e:
             bt.logging.error(f"Failed scheduling leaderboard send: {e}")
