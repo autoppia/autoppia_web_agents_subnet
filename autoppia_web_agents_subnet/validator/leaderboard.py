@@ -67,3 +67,43 @@ async def send_many_tasks_to_leaderboard_async(
         endpoint,
         timeout,
     )
+
+
+##------------------------------------VISUALIZATION------------------------------------##
+from rich.console import Console
+from rich.table import Table
+from rich import box
+
+console = Console()
+
+
+def print_leaderboard_table(
+    records: List[LeaderboardTaskRecord], task_prompt: str, web_project: str | None
+):
+    title = f"[bold]Task:[/bold] {task_prompt}\n[bold]Site:[/bold] {web_project}"
+    table = Table(title=title, box=box.SIMPLE_HEAVY)
+
+    table.add_column("Miner UID", justify="right", style="cyan", no_wrap=True)
+    table.add_column("Success", justify="center")
+
+    # Rows
+    for rec in records:
+        table.add_row(
+            str(rec.miner_uid), "[green]✅[/green]" if rec.success else "[red]❌[/red]"
+        )
+
+    console.print(table)
+
+    # Metrics
+    total = len(records)
+    successes = sum(1 for r in records if r.success)
+    rate = (successes / total * 100) if total else 0.0
+    avg_duration = (sum(r.duration for r in records) / total) if total else 0.0
+
+    # Sum up
+    console.print(
+        f"[bold]Total successes:[/bold] {successes}/{total}   "
+        f"[bold]Success rate:[/bold] {rate:.1f}%   "
+        f"[bold]Avg duration:[/bold] {avg_duration:.2f}s",
+        style="yellow",
+    )
