@@ -346,7 +346,7 @@ async def process_tasks(
         task_start_time = time.time()
         ColoredLogger.info(
             f"Task #{index} (URL: {task.url}, ID: {task.id}): {task.prompt}. TESTS: {task.tests}",
-            ColoredLogger.GRAY,
+            ColoredLogger.CYAN,
         )
 
         # 1) Choose a random subset of miners.In this case the whole subnet.
