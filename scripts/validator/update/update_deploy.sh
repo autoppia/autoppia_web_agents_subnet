@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# update.sh - Force update and redeploy regardless of version check.
-# Rollback functionality removed.
+# update_deploy.sh - Force update and redeploy regardless of version check.
 
 set -euo pipefail
 IFS=$'\n\t'
@@ -9,19 +8,16 @@ IFS=$'\n\t'
 # 1. Configurable parameters
 ########################################
 
-# Default values (can be overridden via environment variables)
 PROCESS_NAME="${PROCESS_NAME:-subnet-36-validator}"
 WALLET_NAME="${WALLET_NAME:-}"
 WALLET_HOTKEY="${WALLET_HOTKEY:-}"
 SUBTENSOR_PARAM="${SUBTENSOR_PARAM:---subtensor.network finney}"
 
-# Override defaults with positional arguments
 [ $# -ge 1 ] && PROCESS_NAME="$1"
 [ $# -ge 2 ] && WALLET_NAME="$2"
 [ $# -ge 3 ] && WALLET_HOTKEY="$3"
 [ $# -ge 4 ] && SUBTENSOR_PARAM="$4"
 
-# Prompt user for sensitive data if missing
 if [ -z "$WALLET_NAME" ]; then
   read -rp "Enter your coldkey name (WALLET_NAME): " WALLET_NAME
 fi
@@ -40,14 +36,11 @@ echo
 # 2. Script and repo roots
 ########################################
 
-# Function to resolve the script's directory
-dir_of_script() {
-  local src="${BASH_SOURCE[0]}"
-  while [ -h "$src" ]; do src="$(readlink "$src")"; done
-  echo "$(cd "$(dirname "$src")" && pwd)"
-}
-SCRIPT_DIR="$(dir_of_script)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Determine this script's directory
+SCRIPT_SOURCE="${BASH_SOURCE[0]:-$0}"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_SOURCE")" && pwd)"
+# update_deploy.sh está en scripts/validator/update,
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 ########################################
 # 3. Update and deploy function
@@ -81,7 +74,9 @@ update_and_deploy() {
   fi
 
   echo "[INFO] Installing updated code..."
-  source validator_env/bin/activate
+
+  source "$REPO_ROOT/validator_env/bin/activate"
+
   pip install -e .
   pip install -e autoppia_iwa_module || true
 
