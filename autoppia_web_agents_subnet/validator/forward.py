@@ -55,6 +55,7 @@ from autoppia_web_agents_subnet.validator.version import (
 )
 from autoppia_web_agents_subnet.validator.leaderboard import (
     LeaderboardTaskRecord,
+    print_leaderboard_table,
     send_many_tasks_to_leaderboard_async,
 )
 
@@ -512,6 +513,7 @@ def _schedule_leaderboard_logging(
 
         # 3) Dispara la tarea en background
         coro = send_many_tasks_to_leaderboard_async(records, timeout=timeout)
+        print_leaderboard_table(records, task_obj.prompt, task_obj.web_project_id)
         send_task = asyncio.create_task(coro)
         send_task.add_done_callback(
             lambda fut: (
