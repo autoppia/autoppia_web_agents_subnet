@@ -428,43 +428,14 @@ async def process_tasks(
             test_results_matrices=test_results_matrices,
             evaluation_results=evaluation_results,
         )
+        _schedule_leaderboard_logging(
+            validator,
+            miner_uids,
+            execution_times,
+            task,
+            evaluation_results,
+        )
 
-        try:
-            miner_hotkeys = [validator.metagraph.hotkeys[uid] for uid in miner_uids]
-            records = []
-            for i, miner_uid in enumerate(miner_uids):
-                records.append(
-                    LeaderboardTaskRecord(
-                        validator_uid=int(validator.uid),
-                        miner_uid=int(miner_uid),
-                        miner_hotkey=miner_hotkeys[i],
-                        task_id=str(task.id),
-                        task_prompt=task.prompt,
-                        website=task.url,
-                        success=(rewards[i] >= 1.0),
-                        score=float(rewards[i]),
-                        duration=float(execution_times[i]),
-                    )
-                )
-            # fire-and-forget
-            bt.logging.info(f"EVALUATION RESULTS {evaluation_results[0]}")
-            task = asyncio.create_task(
-                send_many_tasks_to_leaderboard_async(records, timeout=300)
-            )
-            task.add_done_callback(
-                lambda fut: (
-                    bt.logging.info(
-                        f"Leaderboard logs sent successfully ({len(records)} records)."
-                    )
-                    if not fut.exception()
-                    else bt.logging.error(
-                        f"Error sending leaderboard logs: {fut.exception()}"
-                    )
-                )
-            )
-            bt.logging.info(f"Dispatched {len(records)} leaderboard logs in background")
-        except Exception as e:
-            bt.logging.error(f"Failed scheduling leaderboard send: {e}")
         # TODO : I cannot visualize this stats
         num_no_response += feedback_data["num_no_response"]
         num_success += feedback_data["num_success"]
@@ -505,6 +476,63 @@ async def process_tasks(
         sum_of_evaluation_times=sum_of_evaluation_times,
         sum_of_avg_scores=sum_of_avg_scores,
     )
+
+
+def _schedule_leaderboard_logging(
+    validator,
+    miner_uids: List[int],
+    execution_times: List[float],
+    task_obj: Task,
+    evaluation_results: List[dict],
+    timeout: int = 300,
+) -> None:
+    """
+    Send tasks to the leaderboard service in the background.
+    """
+    try:
+        miner_hotkeys = [validator.metagraph.hotkeys[uid] for uid in miner_uids]
+
+        records = []
+        for i, miner_uid in enumerate(miner_uids):
+            records.append(
+                LeaderboardTaskRecord(
+                    validator_uid=int(validator.uid),
+                    miner_uid=int(miner_uid),
+                    miner_hotkey=miner_hotkeys[i],
+                    task_id=str(task_obj.id),
+                    task_prompt=task_obj.prompt,
+                    website=task_obj.url,
+                    success=(evaluation_results[i]["final_score"] >= 1.0),
+                    score=float(evaluation_results[i]["final_score"]),
+                    duration=float(execution_times[i]),
+                )
+            )
+            bt.logging.info(
+                f"EVALUATION RESULT miner {miner_uid}: {evaluation_results[i]['final_score']}"
+            )
+
+        # 3) Dispara la tarea en background
+        coro = send_many_tasks_to_leaderboard_async(records, timeout=timeout)
+        send_task = asyncio.create_task(coro)
+        send_task.add_done_callback(
+            lambda fut: (
+                ColoredLogger.info(
+                    "Tasks saved successfully in the leaderboard", ColoredLogger.GREEN
+                )
+                if not fut.exception()
+                else ColoredLogger.info(
+                    f"Error sending leaderboard logs: {fut.exception()}",
+                    ColoredLogger.RED,
+                )
+            )
+        )
+        ColoredLogger.info(
+            f"Dispatched: {len(records)} leaderboard logs in background",
+            ColoredLogger.GREEN,
+        )
+
+    except Exception as e:
+        bt.logging.error(f"Failed scheduling leaderboard send: {e}")
 
 
 async def broadcast_and_save_operator_endpoints(validator) -> None:
