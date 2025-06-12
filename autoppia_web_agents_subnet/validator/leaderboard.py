@@ -104,7 +104,7 @@ def print_leaderboard_table(
     # Aseguramos que la columna Hotkey se expanda al máximo:
     results.add_column("Hotkey", style="cyan", ratio=4, overflow="fold")
     results.add_column(
-        "Miner UID", style="greeb", ratio=1, justify="center", no_wrap=True
+        "Miner UID", style="green", ratio=1, justify="center", no_wrap=True
     )
     results.add_column("Success", ratio=1, justify="center")
     results.add_column("Duration (s)", ratio=1, justify="center")
