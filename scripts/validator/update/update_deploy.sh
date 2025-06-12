@@ -73,7 +73,7 @@ echo
 ########################################
 
 # First, try your top-level wrapper if present
-DEPLOY_DEMO_WRAPPER="$REPO_ROOT/scripts/demo-webs/deploy_demo_webs.sh"
+DEPLOY_DEMO_WRAPPER="$REPO_ROOT/scripts/validator/demo-webs/deploy_demo_webs.sh"
 echo "[INFO] Looking for top-level demo deploy wrapper at: $DEPLOY_DEMO_WRAPPER"
 if [ -x "$DEPLOY_DEMO_WRAPPER" ]; then
   echo "[INFO] Executing top-level demo deploy wrapper: $DEPLOY_DEMO_WRAPPER"
