@@ -55,7 +55,7 @@ from autoppia_web_agents_subnet.validator.version import (
 )
 from autoppia_web_agents_subnet.validator.leaderboard import (
     LeaderboardTaskRecord,
-    send_many_tasks_to_leaderboard,
+    send_many_tasks_to_leaderboard_async,
 )
 
 
@@ -431,27 +431,26 @@ async def process_tasks(
 
         try:
             miner_hotkeys = [validator.metagraph.hotkeys[uid] for uid in miner_uids]
-
-            records = [
-                LeaderboardTaskRecord(
-                    validator_uid=int(validator.uid),
-                    miner_uid=int(miner_uid),
-                    miner_hotkey=miner_hotkeys[i],
-                    task_id=str(task.id),
-                    task_prompt=task.prompt,
-                    website=task.url,
-                    success=bool(float(rewards[i]) >= 1.0),
-                    score=float(rewards[i]),
-                    duration=float(execution_times[i]),
+            records = []
+            for i, miner_uid in enumerate(miner_uids):
+                records.append(
+                    LeaderboardTaskRecord(
+                        validator_uid=int(validator.uid),
+                        miner_uid=int(miner_uid),
+                        miner_hotkey=miner_hotkeys[i],
+                        task_id=str(task.id),
+                        task_prompt=task.prompt,
+                        website=task.url,
+                        success=(rewards[i] >= 1.0),
+                        score=float(rewards[i]),
+                        duration=float(execution_times[i]),
+                    )
                 )
-                for i, miner_uid in enumerate(miner_uids)
-            ]
-
-            send_many_tasks_to_leaderboard(records)
-            bt.logging.info(f"Logged {len(records)} task(s) to leaderboard")
+            # fire-and-forget
+            asyncio.create_task(send_many_tasks_to_leaderboard_async(records))
+            bt.logging.info(f"Dispatched {len(records)} leaderboard logs in background")
         except Exception as e:
-            bt.logging.error(f"Failed to log tasks to leaderboard: {e}")
-
+            bt.logging.error(f"Failed scheduling leaderboard send: {e}")
         # TODO : I cannot visualize this stats
         num_no_response += feedback_data["num_no_response"]
         num_success += feedback_data["num_success"]
