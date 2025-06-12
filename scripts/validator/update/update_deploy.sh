@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # update_deploy.sh - Force update and redeploy regardless of version check.
-# Updates validator and redeploys web demos (cleanup + redeploy).
+# Updates validator and always invokes the top-level demo deploy wrapper.
 
 set -euo pipefail
 IFS=$'\n\t'
@@ -47,7 +47,6 @@ SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_SOURCE")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 echo "[INFO] Repo root detected at: $REPO_ROOT"
-
 echo
 
 ########################################
@@ -69,33 +68,21 @@ popd > /dev/null
 echo
 
 ########################################
-# 4. Deploy web demos
+# 4. Deploy web demos via wrapper
 ########################################
 
-# First, try your top-level wrapper if present
 DEPLOY_DEMO_WRAPPER="$REPO_ROOT/scripts/validator/demo-webs/deploy_demo_webs.sh"
-echo "[INFO] Looking for top-level demo deploy wrapper at: $DEPLOY_DEMO_WRAPPER"
-if [ -x "$DEPLOY_DEMO_WRAPPER" ]; then
-  echo "[INFO] Executing top-level demo deploy wrapper: $DEPLOY_DEMO_WRAPPER"
-  bash "$DEPLOY_DEMO_WRAPPER"
-else
-  # Fallback: call module scripts directly
-  DEMO_SCRIPT_DIR="$REPO_ROOT/autoppia_iwa_module/modules/webs_demo/scripts"
-  if [ -d "$DEMO_SCRIPT_DIR" ]; then
-    echo "[INFO] No top-level wrapper found. Performing fallback deploy in $DEMO_SCRIPT_DIR"
-    pushd "$DEMO_SCRIPT_DIR" > /dev/null
-    chmod +x install_docker.sh setup.sh
-    echo "[INFO] Running install_docker.sh (cleanup volumes)..."
-    ./install_docker.sh
-    echo "[INFO] Running setup.sh -y (deploy demos)..."
-    ./setup.sh -y
-    popd > /dev/null
-  else
-    echo "[WARN] Demo script directory not found: $DEMO_SCRIPT_DIR"
-  fi
+echo "[INFO] Looking for demo deploy wrapper at: $DEPLOY_DEMO_WRAPPER"
+
+if [ ! -x "$DEPLOY_DEMO_WRAPPER" ]; then
+  echo "Error: demo deploy wrapper not found or not executable: $DEPLOY_DEMO_WRAPPER" >&2
+  exit 1
 fi
 
+echo "[INFO] Executing demo deploy wrapper: $DEPLOY_DEMO_WRAPPER"
+bash "$DEPLOY_DEMO_WRAPPER"
 echo
+
 ########################################
 # 5. Install and restart validator
 ########################################
