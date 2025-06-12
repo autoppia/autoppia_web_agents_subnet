@@ -21,13 +21,13 @@ if [ $# -ge 3 ]; then WALLET_HOTKEY="$3"; fi
 if [ $# -ge 4 ]; then SUBTENSOR_PARAM="$4"; fi
 
 # Prompt for process name
-read -rp "Enter process name [${PROCESS_NAME}]: " input_process
+read -rp "Enter process name (default: ${PROCESS_NAME}): " input_process
 PROCESS_NAME="${input_process:-$PROCESS_NAME}"
 
 # Prompt for wallet/hotkey
-read -rp "Enter your coldkey name (WALLET_NAME) [${WALLET_NAME}]: " input_wallet
+read -rp "Enter your coldkey name (default: ${WALLET_NAME}): " input_wallet
 WALLET_NAME="${input_wallet:-$WALLET_NAME}"
-read -rp "Enter your hotkey (WALLET_HOTKEY) [${WALLET_HOTKEY}]: " input_hotkey
+read -rp "Enter your hotkey (default: ${WALLET_HOTKEY}): " input_hotkey
 WALLET_HOTKEY="${input_hotkey:-$WALLET_HOTKEY}"
 
 echo "[INFO] Using parameters:"
