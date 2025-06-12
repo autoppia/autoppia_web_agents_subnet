@@ -1,7 +1,9 @@
+import asyncio
 from dataclasses import dataclass, asdict
 from typing import Any, Dict, List
-import requests
+
 import numpy as np
+import requests
 
 LEADERBOARD_TASKS_ENDPOINT = "https://api-leaderboard.autoppia.com/tasks"
 
@@ -19,30 +21,15 @@ class LeaderboardTaskRecord:
     duration: float = 0.0
 
     def to_dict(self) -> Dict[str, Any]:
-        raw = asdict(self)
+        raw: Dict[str, Any] = asdict(self)
         cleaned: Dict[str, Any] = {}
         for k, v in raw.items():
-            # Convierte numpy.int64, numpy.float64, etc. a tipos nativos
+            # Convert numpy types to native
             if isinstance(v, np.generic):
                 cleaned[k] = v.item()
             else:
                 cleaned[k] = v
         return cleaned
-
-
-def send_task_to_leaderboard(
-    record: LeaderboardTaskRecord,
-    endpoint: str = LEADERBOARD_TASKS_ENDPOINT,
-    timeout: int = 5,
-) -> requests.Response:
-    """
-    POST a new task execution record to the leaderboard service (single).
-    """
-    payload = record.to_dict()
-    headers = {"Content-Type": "application/json"}
-    resp = requests.post(f"{endpoint}/", json=payload, headers=headers, timeout=timeout)
-    resp.raise_for_status()
-    return resp
 
 
 def send_many_tasks_to_leaderboard(
@@ -52,12 +39,26 @@ def send_many_tasks_to_leaderboard(
 ) -> requests.Response:
     """
     POST multiple task records in one go to the leaderboard service.
-    Hits the /tasks/bulk/ endpoint with {"tasks": [...]}
+    Hits the /tasks/bulk/ endpoint with a JSON array.
     """
-    # endpoint siempre acaba en /tasks
     bulk_url = f"{endpoint}/bulk/"
     payload = [r.to_dict() for r in records]
     headers = {"Content-Type": "application/json"}
     resp = requests.post(bulk_url, json=payload, headers=headers, timeout=timeout)
     resp.raise_for_status()
     return resp
+
+
+async def send_many_tasks_to_leaderboard_async(
+    records: List[LeaderboardTaskRecord],
+    endpoint: str = LEADERBOARD_TASKS_ENDPOINT,
+    timeout: int = 30,
+) -> None:
+    """
+    Async wrapper: dispatch send_many_tasks_to_leaderboard in a thread so it
+    doesn’t block your event loop.
+    """
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(
+        None, send_many_tasks_to_leaderboard, records, endpoint, timeout
+    )
