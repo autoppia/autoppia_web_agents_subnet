@@ -447,6 +447,7 @@ async def process_tasks(
                     )
                 )
             # fire-and-forget
+            bt.logging.info(f"EVALUATION RESULTS {evaluation_results[0]}")
             task = asyncio.create_task(
                 send_many_tasks_to_leaderboard_async(records, timeout=300)
             )
