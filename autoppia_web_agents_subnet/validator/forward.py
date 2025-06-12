@@ -248,10 +248,10 @@ async def send_feedback_synapse_to_miners(
 
     feedback_tasks = []
     for axon, feedback_synapse in zip(miner_axons, feedback_list):
-        ColoredLogger.info(
-            f"Sending TaskFeedbackSynapse to miners in parallel --> {feedback_synapse}",
-            ColoredLogger.BLUE,
-        )
+        # ColoredLogger.info(
+        #     f"Sending TaskFeedbackSynapse to miners in parallel --> {feedback_synapse}",
+        #     ColoredLogger.BLUE,
+        # )
         feedback_tasks.append(
             asyncio.create_task(
                 validator.dendrite(
@@ -265,7 +265,10 @@ async def send_feedback_synapse_to_miners(
 
     # Wait for all feedback requests to complete
     results = await asyncio.gather(*feedback_tasks)
-    bt.logging.info("Feedback responses received from miners")
+    ColoredLogger.info(
+        f"Feedback responses received from miners",
+        ColoredLogger.BLUE,
+    )
     return results
 
 
@@ -340,15 +343,14 @@ async def process_tasks(
 
     for index, task in enumerate(tasks_generated):
         task_start_time = time.time()
-        bt.logging.debug(
-            f"Task #{index} (URL: {task.url}, ID: {task.id}): {task.prompt}"
+        ColoredLogger.info(
+            f"Task #{index} (URL: {task.url}, ID: {task.id}): {task.prompt}. TESTS: {task.tests}",
+            ColoredLogger.GRAY,
         )
-        bt.logging.debug(f"Task tests: {task.tests}")
 
         # 1) Choose a random subset of miners.In this case the whole subnet.
         miner_uids = get_random_uids(validator, k=SAMPLE_SIZE)
 
-        bt.logging.info(f"Miner UIDs chosen: {miner_uids}")
         miner_axons = [validator.metagraph.axons[uid] for uid in miner_uids]
 
         # 2) Build the normal synapse structure (correct version is set during sending)
@@ -506,9 +508,6 @@ def _schedule_leaderboard_logging(
                     score=float(evaluation_results[i]["final_score"]),
                     duration=float(execution_times[i]),
                 )
-            )
-            bt.logging.info(
-                f"EVALUATION RESULT miner {miner_uid}: {evaluation_results[i]['final_score']}"
             )
 
         # 3) Dispara la tarea en background
