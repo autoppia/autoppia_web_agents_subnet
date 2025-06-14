@@ -599,15 +599,17 @@ async def save_operator_endpoints_in_json(
     bt.logging.info(f"Saved {len(responses)} endpoints to {filename}")
 
 
-def _interleave(a: List[Any], b: List[Any]):
+def _interleave(*lists: List[Any]):
     """
-    Flattened zip_longest with no None padding: [a0,b0,a1,b1,...].
+    Interleaves multiple lists like [a1, a2], [b1, b2] → [a1, b1, a2, b2], skipping None.
+    Accepts any number of lists.
     """
-    for x, y in itertools.zip_longest(a, b):
-        if x is not None:
-            yield x
-        if y is not None:
-            yield y
+    return (
+        item
+        for group in itertools.zip_longest(*lists)
+        for item in group
+        if item is not None
+    )
 
 
 def _split_tasks_evenly(total_tasks: int, num_projects: int) -> list[int]:
