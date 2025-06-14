@@ -61,7 +61,7 @@ from autoppia_web_agents_subnet.validator.leaderboard import (
 
 
 async def generate_tasks_for_web_project(
-    demo_web_project: WebProject, total_prompts: int, prompts_per_use_case: int
+    demo_web_project: WebProject, num_use_cases: int, prompts_per_use_case: int
 ) -> List[Task]:
     """
     Creates up to `total_prompts` tasks for the specified web project using the TaskGenerationPipeline.
@@ -75,36 +75,24 @@ async def generate_tasks_for_web_project(
     config = TaskGenerationConfig(
         # save_task_in_db=False,
         prompts_per_use_case=prompts_per_use_case,
+        num_use_cases=num_use_cases,
     )
     pipeline = TaskGenerationPipeline(config=config, web_project=demo_web_project)
 
     start_time = time.time()
 
-    all_generated_tasks = []
-
-    # Keep calling pipeline.generate() until we have at least total_prompts tasks
-    while len(all_generated_tasks) < total_prompts:
-        new_tasks = await pipeline.generate()
-
-        # If no new tasks are returned, break out to avoid an infinite loop
-        if not new_tasks:
-            break
-
-        all_generated_tasks.extend(new_tasks)
-
-    # Trim the list to exactly total_prompts if we have more
-    tasks_to_return = all_generated_tasks[:total_prompts]
+    all_generated_tasks = await pipeline.generate()
 
     ColoredLogger.info(
-        f"Generated {len(tasks_to_return)} tasks in {time.time() - start_time:.2f}s",
+        f"Generated {len(all_generated_tasks)} tasks for project {demo_web_project.name} in {time.time() - start_time:.2f}s",
         ColoredLogger.YELLOW,
     )
 
     # Log the prompts for debugging/inspection
-    for task in tasks_to_return:
+    for task in all_generated_tasks:
         bt.logging.info(f"Task prompt: {task.prompt}")
 
-    return tasks_to_return
+    return all_generated_tasks
 
 
 def get_task_solution_from_synapse(
@@ -622,18 +610,55 @@ def _interleave(a: List[Any], b: List[Any]):
             yield y
 
 
-async def forward(self) -> None:  # noqa: C901 – complex but clearer in one piece
+def _split_tasks_evenly(total_tasks: int, num_projects: int) -> list[int]:
+    """
+    Evenly distributes `total_tasks` across `num_projects`,
+    assigning the remainder one-by-one to the first few.
+    """
+    base = total_tasks // num_projects
+    extra = total_tasks % num_projects
+    return [base + 1 if i < extra else base for i in range(num_projects)]
+
+
+async def generate_tasks_limited_use_cases(
+    project: WebProject,
+    total_tasks: int,
+    prompts_per_use_case: int,
+    num_use_cases: int,
+) -> list[Task]:
+    """
+    Generates a limited number of tasks for a given web project, using a specific number of use cases.
+
+    Args:
+        project: The web project to generate tasks for.
+        total_tasks: Max number of tasks to return.
+        prompts_per_use_case: Prompts to generate per use case.
+        num_use_cases: Number of random use cases to sample from the project.
+
+    Returns:
+        A list of Task instances.
+    """
+    config = TaskGenerationConfig(
+        prompts_per_use_case=prompts_per_use_case,
+        generate_local_tasks=False,
+        generate_global_tasks=True,
+        final_task_limit=total_tasks,
+        num_use_cases=num_use_cases,
+    )
+    pipeline = TaskGenerationPipeline(web_project=project, config=config)
+    return await pipeline.generate()
+
+
+async def forward(self) -> None:  # noqa: C901
     """
     Validator forward cycle:
 
-      1. Grab the first two demo sites from `demo_web_projects`
-      2. Generate tasks_per_project = ceil(NUMBER_OF_PROMPTS_PER_FORWARD / 2)
-      3. Alternate tasks [web1, web2, web1, …] until NUMBER_OF_PROMPTS_PER_FORWARD tasks
-         have been processed (or lists exhaust)
-      4. Update stats, occasionally broadcast operator endpoint, sleep
+    1. Evenly distribute NUMBER_OF_PROMPTS_PER_FORWARD across all demo_web_projects
+    2. For each project, generate that number of tasks using a limited number of use cases
+    3. Interleave tasks from all projects and process up to the defined cap
+    4. Update performance stats and optionally broadcast operator endpoint
     """
     try:
-        # ------------------------------------------------------------------ stats
         init_validator_performance_stats(self)
         self.forward_count += 1
 
@@ -642,56 +667,32 @@ async def forward(self) -> None:  # noqa: C901 – complex but clearer in one pi
         )
         t_forward_start = time.time()
 
-        # ------------------------------------------------------------- pick sites
-        if len(demo_web_projects) < 2:
-            raise RuntimeError(
-                "Need at least two demo web projects in `demo_web_projects`."
-            )
+        num_projects = len(demo_web_projects)
+        if num_projects < 1:
+            raise RuntimeError("At least one demo web project is required.")
 
-        web1, web2, web3 = (
-            demo_web_projects[0],
-            demo_web_projects[1],
-            demo_web_projects[2],
+        # Total number of prompts and how many use cases to sample per project
+        task_distribution = _split_tasks_evenly(
+            NUMBER_OF_PROMPTS_PER_FORWARD, num_projects
         )
-        bt.logging.info(
-            f"Demo sites selected:\n"
-            f"  • web1 → {web1.frontend_url}\n"
-            f"  • web2 → {web2.frontend_url}\n"
-            f"  • web3 → {web3.frontend_url}"
-        )
-
-        # ----------------------------------------------------- task generation
-        tasks_per_project = NUMBER_OF_PROMPTS_PER_FORWARD
+        use_cases_per_project = max(1, NUMBER_OF_PROMPTS_PER_FORWARD // num_projects)
 
         t_gen_start = time.time()
-        tasks_web1 = await generate_tasks_for_web_project(
-            web1,
-            total_prompts=tasks_per_project,
-            prompts_per_use_case=PROMPTS_PER_USECASE,
-        )
-        tasks_web2 = await generate_tasks_for_web_project(
-            web2,
-            total_prompts=tasks_per_project,
-            prompts_per_use_case=PROMPTS_PER_USECASE,
-        )
-        tasks_web3 = await generate_tasks_for_web_project(
-            web3,
-            total_prompts=tasks_per_project,
-            prompts_per_use_case=PROMPTS_PER_USECASE,
-        )
+        all_tasks = []
+
+        for project, num_tasks in zip(demo_web_projects, task_distribution):
+            bt.logging.info(f"Generating {num_tasks} tasks for project {project.name}")
+            project_tasks = await generate_tasks_limited_use_cases(
+                project,
+                total_tasks=num_tasks,
+                prompts_per_use_case=PROMPTS_PER_USECASE,
+                num_use_cases=use_cases_per_project,
+            )
+            random.shuffle(project_tasks)
+            all_tasks.append(project_tasks)
+
         t_gen = time.time() - t_gen_start
-
-        # trim in case more were generated than needed
-        tasks_web1 = tasks_web1[:tasks_per_project]
-        tasks_web2 = tasks_web2[:tasks_per_project]
-        tasks_web3 = tasks_web3[:tasks_per_project]
-
-        # 🆕 Shuffle so the order inside each project is random
-        random.shuffle(tasks_web1)
-        random.shuffle(tasks_web2)
-        random.shuffle(tasks_web3)
-
-        total_tasks_generated = len(tasks_web1) + len(tasks_web2) + len(tasks_web3)
+        total_tasks_generated = sum(len(t) for t in all_tasks)
 
         self.validator_performance_stats[
             "total_tasks_generated"
@@ -702,32 +703,34 @@ async def forward(self) -> None:  # noqa: C901 – complex but clearer in one pi
             bt.logging.warning("No tasks generated – skipping forward step.")
             return
 
-        # ----------------------------------------------------- interleave + run
+        # -------------------- Process tasks
         t_proc_start = time.time()
         processed = 0
 
-        for task in _interleave(tasks_web1, tasks_web2):
+        for task in _interleave(*all_tasks):
             if processed >= NUMBER_OF_PROMPTS_PER_FORWARD:
-                break  # honour the hyper-param hard cap
+                break
 
-            project = web1 if task in tasks_web1 else web2
-            await process_tasks(self, project, [task])
+            for project, project_tasks in zip(demo_web_projects, all_tasks):
+                if task in project_tasks:
+                    await process_tasks(self, project, [task])
+                    break
+
             processed += 1
 
         t_proc = time.time() - t_proc_start
         self.validator_performance_stats["total_processing_tasks_time"] += t_proc
 
-        # ------------------------------------------------------ housekeeping
+        # -------------------- Optional: broadcast operator endpoint
         if self.forward_count % SET_OPERATOR_ENDPOINT_FORWARDS_INTERVAL == 0:
             await broadcast_and_save_operator_endpoints(self)
 
-        # -------------------------------------------------------- final stats
+        # -------------------- Final stats
         forward_time = time.time() - t_forward_start
         self.validator_performance_stats["total_forwards_time"] += forward_time
         self.validator_performance_stats["total_forwards_count"] += 1
 
         print_validator_performance_stats(self)
-
         bt.logging.success("Forward cycle completed!")
         bt.logging.info(f"Sleeping for {FORWARD_SLEEP_SECONDS}s…")
         await asyncio.sleep(FORWARD_SLEEP_SECONDS)
