@@ -648,11 +648,16 @@ async def forward(self) -> None:  # noqa: C901 – complex but clearer in one pi
                 "Need at least two demo web projects in `demo_web_projects`."
             )
 
-        web1, web2 = demo_web_projects[0], demo_web_projects[1]
+        web1, web2, web3 = (
+            demo_web_projects[0],
+            demo_web_projects[1],
+            demo_web_projects[2],
+        )
         bt.logging.info(
             f"Demo sites selected:\n"
             f"  • web1 → {web1.frontend_url}\n"
-            f"  • web2 → {web2.frontend_url}"
+            f"  • web2 → {web2.frontend_url}\n"
+            f"  • web3 → {web3.frontend_url}"
         )
 
         # ----------------------------------------------------- task generation
@@ -669,17 +674,24 @@ async def forward(self) -> None:  # noqa: C901 – complex but clearer in one pi
             total_prompts=tasks_per_project,
             prompts_per_use_case=PROMPTS_PER_USECASE,
         )
+        tasks_web3 = await generate_tasks_for_web_project(
+            web3,
+            total_prompts=tasks_per_project,
+            prompts_per_use_case=PROMPTS_PER_USECASE,
+        )
         t_gen = time.time() - t_gen_start
 
         # trim in case more were generated than needed
         tasks_web1 = tasks_web1[:tasks_per_project]
         tasks_web2 = tasks_web2[:tasks_per_project]
+        tasks_web3 = tasks_web3[:tasks_per_project]
 
         # 🆕 Shuffle so the order inside each project is random
         random.shuffle(tasks_web1)
         random.shuffle(tasks_web2)
+        random.shuffle(tasks_web3)
 
-        total_tasks_generated = len(tasks_web1) + len(tasks_web2)
+        total_tasks_generated = len(tasks_web1) + len(tasks_web2) + len(tasks_web3)
 
         self.validator_performance_stats[
             "total_tasks_generated"
