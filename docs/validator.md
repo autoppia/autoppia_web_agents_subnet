@@ -177,21 +177,39 @@ pm2 start neurons/validator.py \
 
 Enable automatic updates with safe rollback:
 
+#### **Edit Script Configuration (Recommended)**
+
+**Step 1**: Edit the auto-update script with your validator details:
+
 ```bash
-chmod +x scripts/validator/update/auto_update_validator.sh
-pm2 start --name auto_update_validator \
-  --interpreter /bin/bash \
-  ./scripts/validator/update/auto_update_validator.sh \
-  -- subnet-36-validator your_actual_coldkey your_actual_hotkey
+nano scripts/validator/update/auto_update_deploy.sh
 ```
 
-⚠️ **Important**: Edit the script with your actual PM2 process name and wallet keys before running.
+**Step 2**: Modify these configuration lines in the script:
 
-**Features**:
+```bash
+# Change these lines to match your setup:
+PROCESS_NAME="subnet-36-validator"      # Your PM2 process name
+WALLET_NAME="your_coldkey"              # Your actual coldkey
+WALLET_HOTKEY="your_hotkey"             # Your actual hotkey
+SUBTENSOR_PARAM="--subtensor.network finney"  # Subtensor network
+```
 
-- ✅ Automatic version checking (every 5 minutes)
-- ✅ Safe deployment with rollback
+**Step 3**: Start the auto-update service:
+
+```bash
+chmod +x scripts/validator/update/auto_update_deploy.sh
+pm2 start --name auto_update_validator \
+  --interpreter /bin/bash \
+  scripts/validator/update/auto_update_deploy.sh
+```
+
+**Auto-Update Features**:
+
+- ✅ Automatic version checking (every 2 minutes by default)
+- ✅ Safe deployment with rollback capability
 - ✅ Zero-downtime updates
+- ✅ Configurable check intervals
 
 ### **Manual Updates**
 
@@ -224,3 +242,4 @@ Need help? Contact our team on Discord:
 - 🐳 **Dependencies**: Demo webs require Docker and Docker Compose
 - 🌍 **Scalability**: All components support distributed deployment across multiple machines
 - 🔒 **Security**: Ensure proper firewall configuration for remote deployments
+- 🔄 **Auto-Updates**: Option 1 (editing script) is recommended as it persists configuration across restarts
