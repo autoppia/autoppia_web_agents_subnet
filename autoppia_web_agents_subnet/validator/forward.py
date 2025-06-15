@@ -713,10 +713,7 @@ async def forward(self) -> None:  # noqa: C901
                 break
 
             for project, project_tasks in zip(demo_web_projects, all_tasks):
-                ColoredLogger.info(
-                    f"Processing {total_tasks_generated} tasks across {num_projects} projects. TASK {task}",
-                    ColoredLogger.PURPLE,
-                )
+
                 if task in project_tasks:
                     await process_tasks(self, project, [task])
                     break
