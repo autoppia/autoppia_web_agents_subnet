@@ -17,7 +17,7 @@ SUBTENSOR_PARAM="--subtensor.network finney"  # change subtensor network param
 # Interval (seconds)
 ########################################
 # Adjust how often the script checks for a new version
-SLEEP_INTERVAL=120
+SLEEP_INTERVAL=600
 
 ########################################
 # Paths
