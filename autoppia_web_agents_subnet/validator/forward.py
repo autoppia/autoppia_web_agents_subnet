@@ -708,7 +708,10 @@ async def forward(self) -> None:  # noqa: C901
         # -------------------- Process tasks
         t_proc_start = time.time()
         processed = 0
-
+        ColoredLogger.info(
+            f"Processing {total_tasks_generated} tasks across {num_projects} projects. ALL TASKS {all_tasks}",
+            ColoredLogger.PURPLE,
+        )
         for task in _interleave(*all_tasks):
             if processed >= NUMBER_OF_PROMPTS_PER_FORWARD:
                 break
