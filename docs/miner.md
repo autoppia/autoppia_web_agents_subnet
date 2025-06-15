@@ -163,8 +163,8 @@ python3 autoppia_iwa_module/modules/llm_local/tests/test.py
 ### **2. Demo Web Projects** 🌐
 
 ```bash
-chmod +x autoppia_iwa_module/modules/webs_demo/setup.sh
-./autoppia_iwa_module/modules/webs_demo/setup.sh
+chmod +x autoppia_iwa_module/modules/webs_demo/scripts/setup.sh
+./autoppia_iwa_module/modules/webs_demo/scripts/setup.sh
 ```
 
 **This script:**
