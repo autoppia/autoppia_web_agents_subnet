@@ -49,14 +49,27 @@ USE_APIFIED_AGENT="false"  # Set to "true" for custom Agent API deployment
 
 ### **3. System Setup**
 
-#### **Standard Setup** (Ubuntu Jammy/Noble)
+#### **Install Python & System Dependencies**
+
+Run the following to install all required dependencies:
+
+```bash
+chmod +x scripts/miner/install_dependencies.sh
+./scripts/miner/install_dependencies.sh
+```
+
+#### **Standard Environment Setup (Ubuntu 22.04+ e.g., Jammy/Noble)**
+
+To configure the system environment and install core components:
 
 ```bash
 chmod +x scripts/miner/setup.sh
 ./scripts/miner/setup.sh
 ```
 
-#### **RunPod/Docker Environment**
+#### **RunPod / Docker-Based Setup**
+
+If you're running inside a RunPod or Docker container:
 
 ```bash
 chmod +x scripts/miner/runpod_setup.sh
