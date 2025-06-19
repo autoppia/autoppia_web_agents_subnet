@@ -26,7 +26,7 @@ from autoppia_web_agents_subnet.base.miner import BaseMinerNeuron
 from autoppia_web_agents_subnet.protocol import (
     TaskSynapse,
     TaskFeedbackSynapse,
-    SetOperatorEndpointSynapse
+    SetOperatorEndpointSynapse,
 )
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.miner.stats import MinerStats
@@ -42,7 +42,7 @@ from autoppia_iwa.config.config import (
     AGENT_NAME,
     AGENT_PORT,
     USE_APIFIED_AGENT,
-    OPERATOR_ENDPOINT
+    OPERATOR_ENDPOINT,
 )
 
 # from autoppia_web_agents_subnet.utils.weights_version import is_version_in_range
@@ -107,12 +107,15 @@ class Miner(BaseMinerNeuron):
             )
             task_for_agent = task.prepare_for_agent(str(self.uid))
 
-            ColoredLogger.info(f"Task Prompt: {task_for_agent.prompt}", ColoredLogger.BLUE)
+            ColoredLogger.info(
+                f"Task Prompt: {task_for_agent.prompt}", ColoredLogger.BLUE
+            )
             bt.logging.info("Generating actions....")
 
             # Process the task
             task_solution = await self.agent.solve_task(task=task_for_agent)
-            actions: List[BaseAction] = task_solution.actions
+            task_solution.web_agent_id = str(self.uid)
+            actions: List[BaseAction] = task_solution.replace_web_agent_id()
 
             self.show_actions(actions)
 
@@ -178,10 +181,8 @@ class Miner(BaseMinerNeuron):
     async def _common_blacklist(
         self,
         synapse: typing.Union[
-            TaskSynapse,
-            TaskFeedbackSynapse,
-            SetOperatorEndpointSynapse
-        ]
+            TaskSynapse, TaskFeedbackSynapse, SetOperatorEndpointSynapse
+        ],
     ) -> typing.Tuple[bool, str]:
         """
         Shared blacklist logic used by forward, feedback, and set_organic_endpoint.
@@ -238,10 +239,8 @@ class Miner(BaseMinerNeuron):
     async def _common_priority(
         self,
         synapse: typing.Union[
-            TaskSynapse,
-            TaskFeedbackSynapse,
-            SetOperatorEndpointSynapse
-        ]
+            TaskSynapse, TaskFeedbackSynapse, SetOperatorEndpointSynapse
+        ],
     ) -> float:
         """
         Shared priority logic used by forward, feedback, and set_organic_endpoint.
