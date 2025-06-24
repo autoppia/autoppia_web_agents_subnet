@@ -480,8 +480,8 @@ def _schedule_leaderboard_logging(
     timeout: int = 300,
 ) -> None:
     """
-    Assemble the LeaderboardTaskRecord objects for each miner and send them to
-    the leaderboard service asynchronously (fire-and-forget).
+    Build LeaderboardTaskRecord objects and send them in the background.
+    All Pydantic actions are converted to plain dicts so they are JSON-serialisable.
     """
     try:
         miner_hotkeys = [validator.metagraph.hotkeys[uid] for uid in miner_uids]
@@ -489,6 +489,11 @@ def _schedule_leaderboard_logging(
 
         records: list[LeaderboardTaskRecord] = []
         for i, miner_uid in enumerate(miner_uids):
+            # --- Convert actions ---
+            actions_serialised = [
+                action.model_dump() for action in task_solutions[i].actions
+            ]
+
             records.append(
                 LeaderboardTaskRecord(
                     validator_uid=int(validator.uid),
@@ -499,21 +504,23 @@ def _schedule_leaderboard_logging(
                     task_prompt=task_obj.prompt,
                     website=task_obj.url,
                     use_case=task_obj.use_case.name,
-                    actions=task_solutions[i].actions,
+                    actions=actions_serialised,
                     success=evaluation_results[i]["final_score"] >= 1.0,
                     score=float(evaluation_results[i]["final_score"]),
                     duration=float(execution_times[i]),
                 )
             )
 
-        # 3) Dispatch the send-to-leaderboard coroutine in the background
+        # Fire-and-forget send
         coro = send_many_tasks_to_leaderboard_async(records, timeout=timeout)
         print_leaderboard_table(records, task_obj.prompt, task_obj.web_project_id)
 
-        send_task = asyncio.create_task(coro)
-        send_task.add_done_callback(
+        task = asyncio.create_task(coro)
+        task.add_done_callback(
             lambda fut: (
-                ColoredLogger.info("Tasks saved successfully", ColoredLogger.GREEN)
+                ColoredLogger.info(
+                    "Leaderboard logs saved successfully.", ColoredLogger.GREEN
+                )
                 if not fut.exception()
                 else ColoredLogger.info(
                     f"Error sending leaderboard logs: {fut.exception()}",
