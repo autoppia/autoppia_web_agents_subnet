@@ -12,10 +12,13 @@ LEADERBOARD_TASKS_ENDPOINT = "https://api-leaderboard.autoppia.com/tasks"
 class LeaderboardTaskRecord:
     validator_uid: int
     miner_uid: int
+    miner_coldkey: str
     miner_hotkey: str
     task_id: str
     task_prompt: str
     website: str
+    use_case: str
+    actions: Dict[str, Any]
     success: bool = False
     score: float = 0.0
     duration: float = 0.0

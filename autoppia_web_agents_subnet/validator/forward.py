@@ -425,6 +425,7 @@ async def process_tasks(
             execution_times,
             task,
             evaluation_results,
+            task_solutions,
         )
 
         # TODO : I cannot visualize this stats
@@ -475,39 +476,44 @@ def _schedule_leaderboard_logging(
     execution_times: List[float],
     task_obj: Task,
     evaluation_results: List[dict],
+    task_solutions: List[TaskSolution],
     timeout: int = 300,
 ) -> None:
     """
-    Send tasks to the leaderboard service in the background.
+    Assemble the LeaderboardTaskRecord objects for each miner and send them to
+    the leaderboard service asynchronously (fire-and-forget).
     """
     try:
         miner_hotkeys = [validator.metagraph.hotkeys[uid] for uid in miner_uids]
+        miner_coldkeys = [validator.metagraph.coldkeys[uid] for uid in miner_uids]
 
-        records = []
+        records: list[LeaderboardTaskRecord] = []
         for i, miner_uid in enumerate(miner_uids):
             records.append(
                 LeaderboardTaskRecord(
                     validator_uid=int(validator.uid),
                     miner_uid=int(miner_uid),
                     miner_hotkey=miner_hotkeys[i],
+                    miner_coldkey=miner_coldkeys[i],
                     task_id=str(task_obj.id),
                     task_prompt=task_obj.prompt,
                     website=task_obj.url,
-                    success=(evaluation_results[i]["final_score"] >= 1.0),
+                    use_case=task_obj.use_case.name,
+                    actions=task_solutions[i].actions,
+                    success=evaluation_results[i]["final_score"] >= 1.0,
                     score=float(evaluation_results[i]["final_score"]),
                     duration=float(execution_times[i]),
                 )
             )
 
-        # 3) Dispara la tarea en background
+        # 3) Dispatch the send-to-leaderboard coroutine in the background
         coro = send_many_tasks_to_leaderboard_async(records, timeout=timeout)
         print_leaderboard_table(records, task_obj.prompt, task_obj.web_project_id)
+
         send_task = asyncio.create_task(coro)
         send_task.add_done_callback(
             lambda fut: (
-                ColoredLogger.info(
-                    "Tasks saved successfully in the leaderboard", ColoredLogger.GREEN
-                )
+                ColoredLogger.info("Tasks saved successfully", ColoredLogger.GREEN)
                 if not fut.exception()
                 else ColoredLogger.info(
                     f"Error sending leaderboard logs: {fut.exception()}",
@@ -516,7 +522,7 @@ def _schedule_leaderboard_logging(
             )
         )
         ColoredLogger.info(
-            f"Dispatched: {len(records)} leaderboard logs in background",
+            f"Dispatched {len(records)} leaderboard records in background.",
             ColoredLogger.GREEN,
         )
 
