@@ -148,7 +148,13 @@ def print_leaderboard_table(
         header_style="bold cyan",
         expand=True,
     )
-    coldkey_table.add_column("Coldkey", style="cyan", ratio=6, no_wrap=True)
+    coldkey_table.add_column(
+        "Coldkey",
+        style="cyan",
+        width=15,
+        overflow="ellipsis",
+        no_wrap=True,
+    )
     coldkey_table.add_column("Total hotkeys", justify="right")
     coldkey_table.add_column("Total tasks", justify="right")
     coldkey_table.add_column("Successes", justify="right")
