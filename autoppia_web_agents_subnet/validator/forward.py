@@ -58,7 +58,10 @@ from autoppia_web_agents_subnet.validator.leaderboard import (
     print_leaderboard_table,
     send_many_tasks_to_leaderboard_async,
 )
-from stats_persistence import update_coldkey_stats_json, print_coldkey_resume
+from autoppia_web_agents_subnet.validator.stats_persistence import (
+    update_coldkey_stats_json,
+    print_coldkey_resume,
+)
 
 
 async def generate_tasks_for_web_project(
