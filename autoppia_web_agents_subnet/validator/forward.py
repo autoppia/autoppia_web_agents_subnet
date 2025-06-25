@@ -58,6 +58,7 @@ from autoppia_web_agents_subnet.validator.leaderboard import (
     print_leaderboard_table,
     send_many_tasks_to_leaderboard_async,
 )
+from stats_persistence import update_coldkey_stats_json, print_coldkey_resume
 
 
 async def generate_tasks_for_web_project(
@@ -514,6 +515,8 @@ def _schedule_leaderboard_logging(
         # Fire-and-forget send
         coro = send_many_tasks_to_leaderboard_async(records, timeout=timeout)
         print_leaderboard_table(records, task_obj.prompt, task_obj.web_project_id)
+        update_coldkey_stats_json(records)
+        print_coldkey_resume()
 
         task = asyncio.create_task(coro)
         task.add_done_callback(
