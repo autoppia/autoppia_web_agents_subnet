@@ -507,6 +507,7 @@ def _schedule_leaderboard_logging(
                     task_id=str(task_obj.id),
                     task_prompt=task_obj.prompt,
                     website=task_obj.url,
+                    web_project=task_obj.web_project_id,
                     use_case=task_obj.use_case.name,
                     actions=actions_serialised,
                     success=evaluation_results[i]["final_score"] >= 1.0,

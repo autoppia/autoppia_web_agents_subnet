@@ -1,115 +1,112 @@
-# stats_persistence.py
+# stats_persistence.py  – snapshot por Coldkey > Web > Use-case
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Tuple, List, Set
+from typing import Dict, List, Tuple, Set
 
-# Ajusta el import a tu estructura real
-from .leaderboard import (
-    LeaderboardTaskRecord,
-)  # ← cambia “.” si el módulo está en otro paquete
+# Ajusta el import si tu estructura es distinta
+from .leaderboard import LeaderboardTaskRecord
 
-# -----------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Config
-# -----------------------------------------------------------------------
-STATS_FILE = Path("coldkey_usecase_stats.json")  # (sin la ‘k’ duplicada)
-AggKey = Tuple[str, str]  # (coldkey, use_case)
+# ---------------------------------------------------------------------------
+STATS_FILE = Path("coldkey_web_usecase_stats.json")  # snapshot
+AggKey = Tuple[str, str, str]  # (coldkey, web, use_case)
 
 
-# -----------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # Data block
-# -----------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 @dataclass
 class StatBlock:
     tasks: int = 0
     successes: int = 0
     duration_sum: float = 0.0
-    hotkeys: Set[str] = None  # unique hotkeys for coldkey
+    hotkeys: Set[str] = field(default_factory=set)  # unique hotkeys
 
-    def __post_init__(self):
-        if self.hotkeys is None:
-            self.hotkeys = set()
-
+    # helpers ---------------------------------------------------------------
     def add(self, success: bool, duration: float, hotkey: str) -> None:
         self.tasks += 1
-        if success:
-            self.successes += 1
+        self.successes += int(success)
         self.duration_sum += duration
         self.hotkeys.add(hotkey)
+
+    @property
+    def success_rate(self) -> float:
+        return self.successes / self.tasks if self.tasks else 0.0
 
     @property
     def avg_duration(self) -> float:
         return self.duration_sum / self.tasks if self.tasks else 0.0
 
 
-# -----------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # load / save helpers
-# -----------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 def load_stats() -> Dict[AggKey, StatBlock]:
-    """Load snapshot; return empty dict if file is missing/empty."""
     if not STATS_FILE.exists():
         return {}
 
-    with STATS_FILE.open() as f:
-        try:
-            raw = json.load(f)
-        except json.JSONDecodeError:
-            return {}
+    try:
+        raw = json.loads(STATS_FILE.read_text())
+    except json.JSONDecodeError:
+        return {}
 
     stats: Dict[AggKey, StatBlock] = {}
-    for key, data in raw.get("stats", {}).items():
-        coldkey, use_case = key.split("|", 1)
-        stats[(coldkey, use_case)] = StatBlock(
-            tasks=data["tasks"],
-            successes=data["successes"],
-            duration_sum=data["duration_sum"],
-            hotkeys=set(data["hotkeys"]),
-        )
+    for ck, webs in raw.get("stats", {}).items():
+        for web, ucs in webs.items():
+            for uc, data in ucs.items():
+                stats[(ck, web, uc)] = StatBlock(
+                    tasks=data["tasks"],
+                    successes=data["successes"],
+                    duration_sum=data["duration_sum"],
+                    hotkeys=set(data["hotkeys"]),
+                )
     return stats
 
 
 def save_stats(stats: Dict[AggKey, StatBlock]) -> None:
-    """Overwrite the JSON snapshot with current state."""
-    # Crea la carpeta si no existe
     STATS_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-    STATS_FILE.write_text(
-        json.dumps(
-            {
-                "stats": {
-                    f"{ck}|{uc}": {
-                        "tasks": blk.tasks,
-                        "successes": blk.successes,
-                        "duration_sum": blk.duration_sum,
-                        "hotkeys": sorted(blk.hotkeys),
-                    }
-                    for (ck, uc), blk in stats.items()
-                    if blk.tasks > 0
-                }
-            },
-            indent=2,
-        )
-    )
+    # serialise as coldkey > web > use_case
+    nested: Dict[str, Dict[str, Dict[str, Dict]]] = {}
+    for (ck, web, uc), blk in stats.items():
+        nested.setdefault(ck, {}).setdefault(web, {})[uc] = {
+            "tasks": blk.tasks,
+            "successes": blk.successes,
+            "duration_sum": blk.duration_sum,
+            "hotkeys": sorted(blk.hotkeys),
+        }
+
+    STATS_FILE.write_text(json.dumps({"stats": nested}, indent=2))
 
 
-# -----------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 # live update
-# -----------------------------------------------------------------------
+# ---------------------------------------------------------------------------
 def update_coldkey_stats_json(records: List[LeaderboardTaskRecord]) -> None:
-    """Add a new batch of tasks to the snapshot (no time-based reset)."""
+    """
+    Actualiza el snapshot con el lote actual y **elimina** cualquier coldkey que
+    no aparezca en el lote (se considera desaparecido).
+    """
     stats = load_stats()
 
+    # --- purgar coldkeys ausentes en el lote ---
+    current_coldkeys: set[str] = {r.miner_coldkey for r in records}
+    stats = {k: v for k, v in stats.items() if k[0] in current_coldkeys}
+
+    # --- aplicar lote ---
     for rec in records:
-        key = (rec.miner_coldkey, rec.use_case)
+        key = (rec.miner_coldkey, rec.web_project, rec.use_case)
         blk = stats.setdefault(key, StatBlock())
         blk.add(rec.success, rec.duration, rec.miner_hotkey)
 
     save_stats(stats)
 
 
-# -----------------------------------------------------------------------
-# pretty print with Rich
-# -----------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# pretty print
+# ---------------------------------------------------------------------------
 from rich.console import Console
 from rich.table import Table, box
 
@@ -121,31 +118,32 @@ def print_coldkey_resume() -> None:
         return
 
     tbl = Table(
-        title="[bold magenta]Snapshot by Coldkey & Use-Case[/bold magenta]",
+        title="[bold magenta]Snapshot by Coldkey / Web / Use-case[/bold magenta]",
         box=box.SIMPLE_HEAVY,
         header_style="bold cyan",
         expand=True,
     )
     tbl.add_column("Coldkey", style="cyan", width=15, overflow="ellipsis", no_wrap=True)
+    tbl.add_column("Web", style="cyan", width=14, overflow="ellipsis", no_wrap=True)
     tbl.add_column(
         "Use-case", style="cyan", width=18, overflow="ellipsis", no_wrap=True
     )
-    tbl.add_column("Hotkeys", justify="right")
+    tbl.add_column("Hotk", justify="right")
     tbl.add_column("Tasks", justify="right")
-    tbl.add_column("Successes", justify="right")
-    tbl.add_column("Success %", justify="right")
+    tbl.add_column("Succ", justify="right")
+    tbl.add_column("Succ %", justify="right")
     tbl.add_column("Avg dur s", justify="right")
 
-    for (ck, uc), blk in sorted(stats.items()):
-        rate = blk.successes / blk.tasks * 100 if blk.tasks else 0.0
+    for (ck, web, uc), blk in sorted(stats.items()):
         tbl.add_row(
             ck[:15] + ("…" if len(ck) > 15 else ""),
+            web[:14] + ("…" if len(web) > 14 else ""),
             uc[:18] + ("…" if len(uc) > 18 else ""),
             str(len(blk.hotkeys)),
             str(blk.tasks),
             str(blk.successes),
-            f"{rate:.1f}",
-            f"{blk.avg_duration:.2f}",
+            f"{blk.success_rate * 100:5.1f}",
+            f"{blk.avg_duration:7.2f}",
         )
 
     Console().print(tbl)

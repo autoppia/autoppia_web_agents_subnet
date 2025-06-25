@@ -17,6 +17,7 @@ class LeaderboardTaskRecord:
     task_id: str
     task_prompt: str
     website: str
+    web_project: str
     use_case: str
     actions: Dict[str, Any]
     success: bool = False
