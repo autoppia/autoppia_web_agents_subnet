@@ -110,11 +110,17 @@ def update_coldkey_stats_json(records: List[LeaderboardTaskRecord]) -> None:
 from rich.console import Console
 from rich.table import Table, box
 
+console = Console(
+    force_terminal=True,  # Trata la salida como si fuera un TTY
+    color_system="truecolor",  # Usa el sistema de colores full
+    no_color=False,  # Asegúrate de NO desactivar el color
+)
+
 
 def print_coldkey_resume() -> None:
     stats = load_stats()
     if not stats:
-        Console().print("[bold red]Snapshot vacío[/bold red]")
+        console.print("[bold red]Snapshot vacío[/bold red]")
         return
 
     tbl = Table(
@@ -123,27 +129,29 @@ def print_coldkey_resume() -> None:
         header_style="bold cyan",
         expand=True,
     )
-    tbl.add_column("Coldkey", style="cyan", width=15, overflow="ellipsis", no_wrap=True)
-    tbl.add_column("Web", style="cyan", width=14, overflow="ellipsis", no_wrap=True)
-    tbl.add_column(
-        "Use-case", style="cyan", width=18, overflow="ellipsis", no_wrap=True
-    )
+
+    # Texto ---------------------------------------------------------------
+    tbl.add_column("Coldkey", style="cyan", ratio=6, overflow="ellipsis", no_wrap=True)
+    tbl.add_column("Web", style="cyan", width=10, no_wrap=True)
+    tbl.add_column("Use-case", style="cyan", width=12, no_wrap=True)
+
+    # Números -------------------------------------------------------------
     tbl.add_column("Hotk", justify="right")
     tbl.add_column("Tasks", justify="right")
     tbl.add_column("Succ", justify="right")
-    tbl.add_column("Succ %", justify="right")
-    tbl.add_column("Avg dur s", justify="right")
+    tbl.add_column("Rate %", justify="right")
+    tbl.add_column("Avg s", justify="right")
 
     for (ck, web, uc), blk in sorted(stats.items()):
         tbl.add_row(
-            ck[:15] + ("…" if len(ck) > 15 else ""),
-            web[:14] + ("…" if len(web) > 14 else ""),
-            uc[:18] + ("…" if len(uc) > 18 else ""),
+            ck,  # se recorta con ellipsis si hace falta
+            web,
+            uc,
             str(len(blk.hotkeys)),
             str(blk.tasks),
             str(blk.successes),
-            f"{blk.success_rate * 100:5.1f}",
-            f"{blk.avg_duration:7.2f}",
+            f"{blk.success_rate*100:5.1f}",
+            f"{blk.avg_duration:6.2f}",
         )
 
-    Console().print(tbl)
+    console.print(tbl)
