@@ -72,12 +72,12 @@ async def send_many_tasks_to_leaderboard_async(
     )
 
 
-##------------------------------------VISUALIZATION------------------------------------##
 ##------------------------------------ VISUALIZATION ------------------------------------##
 from rich.console import Console
 from rich.table import Table
 from rich import box
 from typing import List, Optional
+from collections import defaultdict
 
 console = Console(
     force_terminal=True,  # Trata la salida como si fuera un TTY
@@ -111,7 +111,7 @@ def print_leaderboard_table(
         "Miner UID", style="green", ratio=1, justify="center", no_wrap=True
     )
     results.add_column("Success", ratio=1, justify="center")
-    results.add_column("Duration (s)", ratio=1, justify="center")
+    results.add_column("Duration (s)", ratio=1, justify="center", overflow="fold")
 
     for rec in records:
         results.add_row(
@@ -135,3 +135,48 @@ def print_leaderboard_table(
         f"[bold white]Avg duration:[/bold white] {avg_dur:.2f}s",
         style="yellow",
     )
+
+    # ────────── Métricas por Coldkey ──────────
+
+    coldkey_groups: dict[str, List[LeaderboardTaskRecord]] = defaultdict(list)
+    for rec in records:
+        coldkey_groups[rec.miner_coldkey].append(rec)
+
+    coldkey_table = Table(
+        title="[bold magenta]Per-Coldkey Averages[/bold magenta]",
+        box=box.SIMPLE_HEAVY,
+        header_style="bold cyan",
+        expand=True,
+    )
+    coldkey_table.add_column("Coldkey", style="cyan", overflow="fold", ratio=4)
+    coldkey_table.add_column("Total hotkeys", justify="right")
+    coldkey_table.add_column("Total tasks", justify="right")
+    coldkey_table.add_column("Successes", justify="right")
+    coldkey_table.add_column("Success rate %", justify="right")
+    coldkey_table.add_column("Avg duration s", justify="right")
+
+    for coldkey, ck_records in coldkey_groups.items():
+        total_ck_tasks = len(ck_records)
+        total_ck_successes = sum(1 for r in ck_records if r.success)
+        success_rate_ck = (
+            total_ck_successes / total_ck_tasks * 100 if total_ck_tasks else 0.0
+        )
+        avg_duration_ck = (
+            sum(r.duration for r in ck_records) / total_ck_tasks
+            if total_ck_tasks
+            else 0.0
+        )
+        # número único de hotkeys asociadas a este coldkey
+        unique_hotkeys = {r.miner_hotkey for r in ck_records}
+        total_hotkeys_ck = len(unique_hotkeys)
+
+        coldkey_table.add_row(
+            coldkey,
+            str(total_hotkeys_ck),
+            str(total_ck_tasks),
+            str(total_ck_successes),
+            f"{success_rate_ck:.1f}",
+            f"{avg_duration_ck:.2f}",
+        )
+
+    console.print(coldkey_table)
