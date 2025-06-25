@@ -105,6 +105,7 @@ def print_leaderboard_table(
         expand=True,
     )
     # Aseguramos que la columna Hotkey se expanda al máximo:
+    results.add_column("Coldkey", style="cyan", ratio=4, overflow="fold")
     results.add_column("Hotkey", style="cyan", ratio=4, overflow="fold")
     results.add_column(
         "Miner UID", style="green", ratio=1, justify="center", no_wrap=True
@@ -114,6 +115,7 @@ def print_leaderboard_table(
 
     for rec in records:
         results.add_row(
+            rec.miner_coldkey,
             rec.miner_hotkey,
             str(rec.miner_uid),
             "[green]✅[/green]" if rec.success else "[red]❌[/red]",

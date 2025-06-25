@@ -237,10 +237,10 @@ async def send_feedback_synapse_to_miners(
 
     feedback_tasks = []
     for axon, feedback_synapse in zip(miner_axons, feedback_list):
-        ColoredLogger.info(
-            f"Sending TaskFeedbackSynapse to miners in parallel --> {feedback_synapse}",
-            ColoredLogger.BLUE,
-        )
+        # ColoredLogger.info(
+        #     f"Sending TaskFeedbackSynapse to miners in parallel --> {feedback_synapse}",
+        #     ColoredLogger.BLUE,
+        # )
         feedback_tasks.append(
             asyncio.create_task(
                 validator.dendrite(
