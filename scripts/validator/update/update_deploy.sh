@@ -64,13 +64,20 @@ step "Updating repositories"
 pushd "$REPO_ROOT" > /dev/null
   echo "Pulling latest from main repository..."
   git pull origin main
+
+  # Update autoppia_iwa_module if present
   if [ -d autoppia_iwa_module ]; then
     echo "Updating autoppia_iwa_module..."
     (cd autoppia_iwa_module && git pull origin main)
   fi
+
+  # Update modules/webs_demo if present
+  if [ -d modules/webs_demo ]; then
+    echo "Updating modules/webs_demo..."
+    (cd modules/webs_demo && git pull origin main)
+  fi
 popd > /dev/null
 echo
-
 ########################################
 # 4. Deploy web demos via wrapper
 ########################################
