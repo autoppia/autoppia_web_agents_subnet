@@ -65,19 +65,22 @@ pushd "$REPO_ROOT" > /dev/null
   echo "Pulling latest from main repository..."
   git pull origin main
 
-  # Update autoppia_iwa_module if present
+  # Update autoppia_iwa_module (and its nested webs_demo) if present
   if [ -d autoppia_iwa_module ]; then
     echo "Updating autoppia_iwa_module..."
-    (cd autoppia_iwa_module && git pull origin main)
-  fi
+    (
+      cd autoppia_iwa_module && git pull origin main
 
-  # Update modules/webs_demo if present
-  if [ -d modules/webs_demo ]; then
-    echo "Updating modules/webs_demo..."
-    (cd modules/webs_demo && git pull origin main)
+      # Inside autoppia_iwa_module, update the nested modules/webs_demo repo if present
+      if [ -d modules/webs_demo ]; then
+        echo "Updating modules/webs_demo inside autoppia_iwa_module..."
+        (cd modules/webs_demo && git pull origin main)
+      fi
+    )
   fi
 popd > /dev/null
 echo
+
 ########################################
 # 4. Deploy web demos via wrapper
 ########################################
