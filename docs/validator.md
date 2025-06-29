@@ -217,12 +217,9 @@ Update all components manually:
 
 ```bash
 # Complete update
-chmod +x scripts/validator/update/full_update.sh
-./scripts/validator/update/full_update.sh
+chmod +x scripts/validator/update/update_deploy.sh
+./scripts/validator/update/update_deploy.sh
 
-# Or forced update with rollback
-chmod +x scripts/validator/update/update.sh
-./scripts/validator/update/update.sh
 ```
 
 ---
