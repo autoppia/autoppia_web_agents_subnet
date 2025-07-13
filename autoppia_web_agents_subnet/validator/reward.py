@@ -229,7 +229,6 @@ def _process_evaluation_results(
             "raw_score": float(result.raw_score or 0.0),
             "final_score": float(raw_score),
             "reward_score": float(final_score_time_adjusted),
-            "random_clicker_score": float(result.random_clicker_score or 0.0),
             "time_factor": float(time_factor),
             "efficiency_factor": float(eff_factor),
             "execution_time": (
