@@ -22,6 +22,8 @@ from autoppia_web_agents_subnet.protocol import (
     TaskSynapse,
     SetOperatorEndpointSynapse,
 )
+import math
+
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet import __version__
 from autoppia_web_agents_subnet.validator.config import (
@@ -639,7 +641,10 @@ def _split_tasks_evenly(total_tasks: int, num_projects: int) -> list[int]:
     """
     base = total_tasks // num_projects
     extra = total_tasks % num_projects
-    return [base + 1 if i < extra else base for i in range(num_projects)]
+    distribution = [base] * num_projects
+    for i in range(1, extra + 1):
+        distribution[-i] += 1
+    return distribution
 
 
 async def generate_tasks_limited_use_cases(
@@ -697,7 +702,9 @@ async def forward(self) -> None:  # noqa: C901
         task_distribution = _split_tasks_evenly(
             NUMBER_OF_PROMPTS_PER_FORWARD, num_projects
         )
-        use_cases_per_project = max(1, NUMBER_OF_PROMPTS_PER_FORWARD // num_projects)
+        use_cases_per_project = max(
+            1, math.ceil(NUMBER_OF_PROMPTS_PER_FORWARD / num_projects)
+        )
 
         t_gen_start = time.time()
         all_tasks = []
