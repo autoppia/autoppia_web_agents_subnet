@@ -667,7 +667,6 @@ async def generate_tasks_limited_use_cases(
     """
     config = TaskGenerationConfig(
         prompts_per_use_case=prompts_per_use_case,
-        generate_local_tasks=False,
         generate_global_tasks=True,
         final_task_limit=total_tasks,
         num_use_cases=num_use_cases,
