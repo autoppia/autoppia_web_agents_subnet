@@ -8,16 +8,3 @@ __spec_version__ = (
     + (10 * int(version_split[1]))
     + (1 * int(version_split[2]))
 )
-
-import sys
-from pathlib import Path
-
-src_path = Path(__file__).resolve().parent / "src"
-
-if src_path.is_dir() and str(src_path) not in sys.path:
-    sys.path.append(str(src_path))
-
-# Import all submodules.
-from . import protocol
-from . import base
-from . import validator
