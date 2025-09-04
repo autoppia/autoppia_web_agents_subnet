@@ -2,14 +2,13 @@ import sys
 import time
 from pathlib import Path
 
+# If this keep working without this delete it!
+# sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import bittensor as bt
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 from autoppia_web_agents_subnet.base.validator import BaseValidatorNeuron
 from autoppia_web_agents_subnet.validator.forward import forward
 from autoppia_web_agents_subnet.base.utils.config import config
-
 from autoppia_iwa.src.bootstrap import AppBootstrap
 from loguru import logger
 
