@@ -1,6 +1,4 @@
-import sys
 import time
-from pathlib import Path
 
 # If this keep working without this delete it!
 # sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -11,6 +9,9 @@ from autoppia_web_agents_subnet.validator.forward import forward
 from autoppia_web_agents_subnet.base.utils.config import config
 from autoppia_iwa.src.bootstrap import AppBootstrap
 from loguru import logger
+from autoppia_web_agents_subnet.validator.leaderboard_api.utils import (
+    send_validator_run_info,
+)
 
 
 class Validator(BaseValidatorNeuron):
@@ -22,6 +23,11 @@ class Validator(BaseValidatorNeuron):
 
         bt.logging.info("load_state()")
         self.load_state()
+
+        try:
+            send_validator_run_info(self)
+        except Exception as e:
+            bt.logging.warning(f"Failed to send validator_run_info: {e}")
 
     async def forward(self):
         return await forward(self)
