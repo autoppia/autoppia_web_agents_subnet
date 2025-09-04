@@ -5,7 +5,7 @@ from typing import Any, Dict, List
 import numpy as np
 import requests
 
-LEADERBOARD_TASKS_ENDPOINT = "https://api-leaderboard.autoppia.com/tasks"
+from autoppia_web_agents_subnet.config import LEADERBOARD_TASKS_ENDPOINT
 
 
 @dataclass
@@ -73,7 +73,7 @@ async def send_many_tasks_to_leaderboard_async(
     )
 
 
-##------------------------------------ VISUALIZATION ------------------------------------##
+# ------------------------------------ VISUALIZATION ------------------------------------#
 from rich.console import Console
 from rich.table import Table
 from rich import box

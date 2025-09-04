@@ -31,7 +31,7 @@ from autoppia_web_agents_subnet.base.utils.weight_utils import (
     process_weights_for_netuid,
     convert_weights_and_uids_for_emit,
 )
-from autoppia_web_agents_subnet.utils.config import add_validator_args
+from autoppia_web_agents_subnet.base.utils.config import add_validator_args
 
 
 class BaseValidatorNeuron(BaseNeuron):

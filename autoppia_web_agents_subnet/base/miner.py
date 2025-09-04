@@ -20,12 +20,15 @@ import asyncio
 import threading
 import argparse
 import traceback
-
+import typing
 import bittensor as bt
-
 from autoppia_web_agents_subnet.base.neuron import BaseNeuron
-from autoppia_web_agents_subnet.utils.config import add_miner_args
-
+from autoppia_web_agents_subnet.base.utils.config import add_miner_args
+from autoppia_web_agents_subnet.protocol import (
+    TaskSynapse,
+    TaskFeedbackSynapse,
+    SetOperatorEndpointSynapse,
+)
 from typing import Union
 
 
@@ -142,7 +145,7 @@ class BaseMinerNeuron(BaseNeuron):
             exit()
 
         # In case of unforeseen errors, the miner will log the error and continue operations.
-        except Exception as e:
+        except Exception:
             bt.logging.error(traceback.format_exc())
 
     def run_in_background_thread(self):
@@ -204,7 +207,101 @@ class BaseMinerNeuron(BaseNeuron):
     def set_weights(self):
         pass
 
+        # ╭─────────────────────────── REPUTATION ─────────────────────────────╮
+
     @classmethod
     def add_args(cls, parser: argparse.ArgumentParser):
         super().add_args(parser)
         add_miner_args(cls, parser)
+
+# ╭─────────────────────────── Blacklists ─────────────────────────────╮
+
+    async def blacklist_feedback(
+        self, synapse: TaskFeedbackSynapse
+    ) -> typing.Tuple[bool, str]:
+        return await self._common_blacklist(synapse)
+
+    async def blacklist_set_organic_endpoint(
+        self, synapse: SetOperatorEndpointSynapse
+    ) -> typing.Tuple[bool, str]:
+        return await self._common_blacklist(synapse)
+
+    async def _common_blacklist(
+        self,
+        synapse: typing.Union[
+            TaskSynapse, TaskFeedbackSynapse, SetOperatorEndpointSynapse
+        ],
+    ) -> typing.Tuple[bool, str]:
+        """
+        Shared blacklist logic used by forward, feedback, and set_organic_endpoint.
+        Returns a tuple: (bool, str).
+        """
+        if synapse.dendrite is None or synapse.dendrite.hotkey is None:
+            bt.logging.warning("Received a request without a dendrite or hotkey.")
+            return True, "Missing dendrite or hotkey"
+
+        validator_hotkey = synapse.dendrite.hotkey
+
+        # Ensure hotkey is recognized
+        if (
+            not self.config.blacklist.allow_non_registered
+            and validator_hotkey not in self.metagraph.hotkeys
+        ):
+            bt.logging.warning(f"Unrecognized hotkey: {validator_hotkey}")
+            return True, f"Unrecognized hotkey: {validator_hotkey}"
+
+        uid = self.metagraph.hotkeys.index(validator_hotkey)
+
+        # Optionally force only validators
+        if self.config.blacklist.force_validator_permit:
+            if not self.metagraph.validator_permit[uid]:
+                bt.logging.warning(f"Blacklisted Non-Validator {validator_hotkey}")
+                return True, f"Non-validator hotkey: {validator_hotkey}"
+
+        # Check minimum stake
+        stake = self.metagraph.S[uid]
+        min_stake = self.config.blacklist.minimum_stake_requirement
+        if stake < min_stake:
+            bt.logging.warning(f"Blacklisted insufficient stake: {validator_hotkey}")
+            return (
+                True,
+                f"Insufficient stake ({stake} < {min_stake}) for {validator_hotkey}",
+            )
+
+        return False, f"Hotkey recognized: {validator_hotkey}"
+       # ---------------------------------------------------------------------
+
+# ╭─────────────────────────── Priority ─────────────────────────────╮
+
+    async def priority(self, synapse: TaskSynapse) -> float:
+        return await self._common_priority(synapse)
+
+    async def priority_feedback(self, synapse: TaskFeedbackSynapse) -> float:
+        return await self._common_priority(synapse)
+
+    async def priority_set_organic_endpoint(
+        self, synapse: SetOperatorEndpointSynapse
+    ) -> float:
+        return await self._common_priority(synapse)
+
+    async def _common_priority(
+        self,
+        synapse: typing.Union[
+            TaskSynapse, TaskFeedbackSynapse, SetOperatorEndpointSynapse
+        ],
+    ) -> float:
+        """
+        Shared priority logic used by forward, feedback, and set_organic_endpoint.
+        Returns a float indicating the priority value.
+        """
+        if synapse.dendrite is None or synapse.dendrite.hotkey is None:
+            bt.logging.warning("Received a request without a dendrite or hotkey.")
+            return 0.0
+
+        validator_hotkey = synapse.dendrite.hotkey
+        if validator_hotkey not in self.metagraph.hotkeys:
+            # Not recognized => zero priority
+            return 0.0
+
+        caller_uid = self.metagraph.hotkeys.index(validator_hotkey)
+        return float(self.metagraph.S[caller_uid])
