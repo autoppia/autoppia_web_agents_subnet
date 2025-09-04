@@ -38,11 +38,11 @@ from autoppia_web_agents_subnet.utils.random import get_random_uids
 from autoppia_web_agents_subnet.validator.version import (
     check_miner_not_responding_to_invalid_version,
 )
-from autoppia_web_agents_subnet.validator.leaderboard_api.leaderboard_visualization import (
+from autoppia_web_agents_subnet.validator.leaderboard_api.visualization import (
     LeaderboardTaskRecord,
     print_leaderboard_table,
 )
-from autoppia_web_agents_subnet.validator.leaderboard_api.leaderboard_tasks import (
+from autoppia_web_agents_subnet.validator.leaderboard_api.tasks import (
     send_many_tasks_to_leaderboard_async,
 )
 from autoppia_web_agents_subnet.validator.stats import (

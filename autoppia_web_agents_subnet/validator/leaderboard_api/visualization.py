@@ -1,5 +1,5 @@
 from typing import List
-from .leaderboard_tasks import LeaderboardTaskRecord
+from .tasks import LeaderboardTaskRecord
 
 
 # ------------------------------------ VISUALIZATION ------------------------------------#
