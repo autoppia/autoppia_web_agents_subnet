@@ -1,5 +1,5 @@
 import os
-from distutils.util import strtobool  
+from distutils.util import strtobool
 from pathlib import Path
 
 
@@ -34,6 +34,9 @@ LEADERBOARD_ENDPOINT = os.getenv(
     "LEADERBOARD_ENDPOINT", "https://leaderboard-api.autoppia.com"
 )
 LEADERBOARD_TASKS_ENDPOINT = "https://api-leaderboard.autoppia.com/tasks"
+LEADERBOARD_VALIDATOR_RUNS_ENDPOINT = (
+    "https://api-leaderboard.autoppia.com/validator-runs"
+)
 
 SAVE_SUCCESSFUL_TASK_IN_JSON = bool(
     strtobool(os.getenv("SAVE_SUCCESSFUL_TASK_IN_JSON", "false"))
