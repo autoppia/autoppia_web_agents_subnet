@@ -1,6 +1,6 @@
 import bittensor as bt
 from autoppia_web_agents_subnet import __version__
-from autoppia_web_agents_subnet.validator.leaderboard_api.leaderboard_runs import (
+from autoppia_web_agents_subnet.validator.leaderboard_api.validator_runs import (
     upsert_validator_info,
 )
 from autoppia_iwa_module.autoppia_iwa.config.config import (
