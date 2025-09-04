@@ -1,13 +1,157 @@
-from autoppia_iwa.src.data_generation.domain.classes import Task
-from autoppia_iwa.src.demo_webs.classes import WebProject
-from autoppia_iwa.src.demo_webs.utils import initialize_demo_webs_projects
-from autoppia_iwa.src.demo_webs.config import demo_web_projects
-from autoppia_web_agents_subnet.protocol import TaskSynapse, SetOperatorEndpointSynapse
-from autoppia_web_agents_subnet.utils.logging import ColoredLogger
-import copy
-import random
+# stats_persistence.py  – snapshot por Coldkey > Web > Use-case
+import json
+from dataclasses import dataclass, field
+from typing import Dict, List, Tuple, Set
 import bittensor as bt
-from typing import List
+
+# Ajusta el import si tu estructura es distinta
+from .leaderboard import LeaderboardTaskRecord
+
+from autoppia_web_agents_subnet.validator.config import STATS_FILE
+AggKey = Tuple[str, str, str]  # (coldkey, web, use_case)
+
+
+# ---------------------------------------------------------------------------
+# Data block
+# ---------------------------------------------------------------------------
+@dataclass
+class StatBlock:
+    tasks: int = 0
+    successes: int = 0
+    duration_sum: float = 0.0
+    hotkeys: Set[str] = field(default_factory=set)  # unique hotkeys
+
+    # helpers ---------------------------------------------------------------
+    def add(self, success: bool, duration: float, hotkey: str) -> None:
+        self.tasks += 1
+        self.successes += int(success)
+        self.duration_sum += duration
+        self.hotkeys.add(hotkey)
+
+    @property
+    def success_rate(self) -> float:
+        return self.successes / self.tasks if self.tasks else 0.0
+
+    @property
+    def avg_duration(self) -> float:
+        return self.duration_sum / self.tasks if self.tasks else 0.0
+
+
+# ---------------------------------------------------------------------------
+# load / save helpers
+# ---------------------------------------------------------------------------
+def load_stats() -> Dict[AggKey, StatBlock]:
+    if not STATS_FILE.exists():
+        return {}
+
+    try:
+        raw = json.loads(STATS_FILE.read_text())
+    except json.JSONDecodeError:
+        return {}
+
+    stats: Dict[AggKey, StatBlock] = {}
+    for ck, webs in raw.get("stats", {}).items():
+        for web, ucs in webs.items():
+            for uc, data in ucs.items():
+                stats[(ck, web, uc)] = StatBlock(
+                    tasks=data["tasks"],
+                    successes=data["successes"],
+                    duration_sum=data["duration_sum"],
+                    hotkeys=set(data["hotkeys"]),
+                )
+    return stats
+
+
+def save_stats(stats: Dict[AggKey, StatBlock]) -> None:
+    STATS_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+    # serialise as coldkey > web > use_case
+    nested: Dict[str, Dict[str, Dict[str, Dict]]] = {}
+    for (ck, web, uc), blk in stats.items():
+        nested.setdefault(ck, {}).setdefault(web, {})[uc] = {
+            "tasks": blk.tasks,
+            "successes": blk.successes,
+            "duration_sum": blk.duration_sum,
+            "hotkeys": sorted(blk.hotkeys),
+        }
+
+    STATS_FILE.write_text(json.dumps({"stats": nested}, indent=2))
+
+
+# ---------------------------------------------------------------------------
+# live update
+# ---------------------------------------------------------------------------
+def update_coldkey_stats_json(records: List[LeaderboardTaskRecord]) -> None:
+    """
+    Actualiza el snapshot con el lote actual y **elimina** cualquier coldkey que
+    no aparezca en el lote (se considera desaparecido).
+    """
+    stats = load_stats()
+
+    # --- purgar coldkeys ausentes en el lote ---
+    current_coldkeys: set[str] = {r.miner_coldkey for r in records}
+    stats = {k: v for k, v in stats.items() if k[0] in current_coldkeys}
+
+    # --- aplicar lote ---
+    for rec in records:
+        key = (rec.miner_coldkey, rec.web_project, rec.use_case)
+        blk = stats.setdefault(key, StatBlock())
+        blk.add(rec.success, rec.duration, rec.miner_hotkey)
+
+    save_stats(stats)
+
+
+# ---------------------------------------------------------------------------
+# pretty print
+# ---------------------------------------------------------------------------
+from rich.console import Console
+from rich.table import Table, box
+
+console = Console(
+    force_terminal=True,  # Trata la salida como si fuera un TTY
+    color_system="truecolor",  # Usa el sistema de colores full
+    no_color=False,  # Asegúrate de NO desactivar el color
+)
+
+
+def print_coldkey_resume() -> None:
+    stats = load_stats()
+    if not stats:
+        console.print("[bold red]Snapshot vacío[/bold red]")
+        return
+
+    tbl = Table(
+        title="[bold magenta]Snapshot by Coldkey / Web / Use-case[/bold magenta]",
+        box=box.SIMPLE_HEAVY,
+        header_style="bold cyan",
+        expand=True,
+    )
+
+    # Texto ---------------------------------------------------------------
+    tbl.add_column("Coldkey", style="cyan", ratio=6, overflow="ellipsis", no_wrap=True)
+    tbl.add_column("Web", style="cyan", width=10, no_wrap=True)
+    tbl.add_column("Use-case", style="cyan", width=12, no_wrap=True)
+
+    # Números -------------------------------------------------------------
+    tbl.add_column("Hotk", justify="right")
+    tbl.add_column("Tasks", justify="right")
+    tbl.add_column("Succ", justify="right")
+    tbl.add_column("Rate %", justify="right")
+    tbl.add_column("Avg s", justify="right")
+
+    for (ck, web, uc), blk in sorted(stats.items()):
+        tbl.add_row(
+            ck,  # se recorta con ellipsis si hace falta
+            web,
+            uc,
+            str(len(blk.hotkeys)),
+            str(blk.tasks),
+            str(blk.successes),
+            f"{blk.success_rate*100:5.1f}",
+            f"{blk.avg_duration:6.2f}",
+        )
+
+    console.print(tbl)
 
 
 def init_validator_performance_stats(validator) -> None:
@@ -156,135 +300,3 @@ def print_validator_performance_stats(validator) -> None:
 
     console.print(table)
     console.print()  # extra newline
-
-
-# async def update_miner_stats_and_scores(
-#     validator,
-#     rewards: np.ndarray,
-#     miner_uids: List[int],
-#     execution_times: List[float],
-#     task: Task,
-# ) -> float:
-#     """
-#     Updates scores for miners based on computed rewards, updates local miner_stats,
-#     and returns the time it took to evaluate miners.
-#     """
-#     evaluation_time = 0.0
-#     if rewards is not None:
-#         evaluation_time_start = time.time()
-#         bt.logging.info("Scores updated for miners")
-
-#         for i, miner_uid in enumerate(miner_uids):
-#             miner_uid = int(miner_uid)
-#             score_value = rewards[i] if rewards[i] is not None else 0.0
-#             exec_time_value = (
-#                 execution_times[i] if execution_times[i] is not None else TIMEOUT
-#             )
-#             success = score_value >= TIME_WEIGHT
-#             if miner_uid not in validator.miner_stats:
-#                 validator.miner_stats[miner_uid] = MinerStats()
-
-#             validator.miner_stats[miner_uid].update(
-#                 score=float(score_value),
-#                 execution_time=float(exec_time_value),
-#                 evaluation_time=(time.time() - evaluation_time_start),
-#                 last_task=task,
-#                 success=success,
-#             )
-#             validator.miner_stats["aggregated"].update(
-#                 score=float(score_value),
-#                 execution_time=float(exec_time_value),
-#                 evaluation_time=(time.time() - evaluation_time_start),
-#                 last_task=task,
-#                 success=success,
-#             )
-#         evaluation_time_end = time.time()
-#         evaluation_time = evaluation_time_end - evaluation_time_start
-#     return evaluation_time
-
-
-async def retrieve_random_demo_web_project() -> WebProject:
-    """
-    Retrieves a random demo web project from the available ones.
-    Raises an Exception if none are available.
-    """
-    web_projects = await initialize_demo_webs_projects(demo_web_projects)
-    bt.logging.debug(f"Retrieved {len(web_projects)} demo web projects.")
-    if not web_projects:
-        raise Exception("No demo web projects available.")
-    project = random.choice(web_projects)
-    ColoredLogger.info(
-        f"Generating tasks for Web Project: '{project.name}'",
-        ColoredLogger.YELLOW,
-    )
-    return project
-
-
-async def dendrite_with_retries(
-    dendrite: bt.dendrite,
-    axons: list,
-    synapse: TaskSynapse | SetOperatorEndpointSynapse,
-    deserialize: bool,
-    timeout: float,
-    retries=1,
-) -> List[TaskSynapse | SetOperatorEndpointSynapse | None] | None:
-    res: List[TaskSynapse | SetOperatorEndpointSynapse | None] = [None] * len(axons)
-    idx = list(range(len(axons)))
-    axons = axons.copy()
-
-    try:
-        for attempt in range(retries):
-            responses: List[TaskSynapse | SetOperatorEndpointSynapse] = await dendrite(
-                axons=axons, synapse=synapse, deserialize=deserialize, timeout=timeout
-            )
-
-            new_idx = []
-            new_axons = []
-            for i, response in enumerate(responses):
-                if (
-                    response.dendrite.status_code is not None
-                    and int(response.dendrite.status_code) == 422
-                ):
-                    if attempt == retries - 1:
-                        res[idx[i]] = response
-                        bt.logging.info(
-                            "Wasn't able to get answers from axon {} after {} attempts".format(
-                                axons[i], retries
-                            )
-                        )
-                    else:
-                        new_idx.append(idx[i])
-                        new_axons.append(axons[i])
-                else:
-                    res[idx[i]] = response
-
-            if len(new_idx):
-                bt.logging.info(
-                    "Found {} synapses with broken pipe, retrying them".format(
-                        len(new_idx)
-                    )
-                )
-            else:
-                break
-
-            idx = new_idx
-            axons = new_axons
-
-        assert all(el is not None for el in res)
-        return res
-
-    except Exception as e:
-        bt.logging.error(f"Error while sending synapse with dendrite with retries {e}")
-
-
-def prepare_for_feedback(task) -> Task:
-    cleaned_task = copy.deepcopy(task)
-    cleaned_task.use_case = None
-    cleaned_task.milestones = None
-    cleaned_task.interactive_elements = None
-    cleaned_task.screenshot = None
-    cleaned_task.screenshot_description = None
-    cleaned_task.html = None
-    cleaned_task.clean_html = None
-
-    return cleaned_task

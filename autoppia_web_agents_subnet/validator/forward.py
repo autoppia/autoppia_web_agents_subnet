@@ -3,10 +3,10 @@ import time
 import asyncio
 import os
 import json
-import itertools
-from filelock import FileLock
 import bittensor as bt
 import random
+import math
+from autoppia_web_agents_subnet.utils.random import interleave, split_tasks_evenly
 from typing import List, Set, Dict, Any, Tuple
 from autoppia_iwa.src.data_generation.domain.classes import (
     Task,
@@ -22,11 +22,32 @@ from autoppia_web_agents_subnet.protocol import (
     TaskSynapse,
     SetOperatorEndpointSynapse,
 )
-import math
-
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet import __version__
-from autoppia_web_agents_subnet.validator.config import (
+from filelock import FileLock
+
+from autoppia_iwa.src.demo_webs.config import demo_web_projects
+from autoppia_web_agents_subnet.validator.stats import (
+    init_validator_performance_stats,
+    update_validator_performance_stats,
+    print_validator_performance_stats,
+)
+from autoppia_web_agents_subnet.utils.dendrite import dendrite_with_retries
+from autoppia_web_agents_subnet.validator.rewards import get_rewards_with_details
+from autoppia_web_agents_subnet.utils.random import get_random_uids
+from autoppia_web_agents_subnet.validator.version import (
+    check_miner_not_responding_to_invalid_version,
+)
+from autoppia_web_agents_subnet.validator.leaderboard import (
+    LeaderboardTaskRecord,
+    print_leaderboard_table,
+    send_many_tasks_to_leaderboard_async,
+)
+from autoppia_web_agents_subnet.validator.stats import (
+    update_coldkey_stats_json,
+    print_coldkey_resume,
+)
+from autoppia_web_agents_subnet.config import (
     FORWARD_SLEEP_SECONDS,
     SAMPLE_SIZE,
     TASK_SLEEP,
@@ -42,27 +63,6 @@ from autoppia_web_agents_subnet.validator.config import (
     CHECK_VERSION_SYNAPSE,
     NUMBER_OF_PROMPTS_PER_FORWARD,
     SET_OPERATOR_ENDPOINT_FORWARDS_INTERVAL,
-)
-from autoppia_iwa.src.demo_webs.config import demo_web_projects
-from autoppia_web_agents_subnet.validator.utils import (
-    init_validator_performance_stats,
-    update_validator_performance_stats,
-    print_validator_performance_stats,
-    dendrite_with_retries,
-)
-from autoppia_web_agents_subnet.validator.reward import get_rewards_with_details
-from autoppia_web_agents_subnet.utils.uids import get_random_uids
-from autoppia_web_agents_subnet.validator.version import (
-    check_miner_not_responding_to_invalid_version,
-)
-from autoppia_web_agents_subnet.validator.leaderboard import (
-    LeaderboardTaskRecord,
-    print_leaderboard_table,
-    send_many_tasks_to_leaderboard_async,
-)
-from autoppia_web_agents_subnet.validator.stats_persistence import (
-    update_coldkey_stats_json,
-    print_coldkey_resume,
 )
 
 
@@ -261,7 +261,7 @@ async def send_feedback_synapse_to_miners(
     # Wait for all feedback requests to complete
     results = await asyncio.gather(*feedback_tasks)
     ColoredLogger.info(
-        f"Feedback responses received from miners",
+        "Feedback responses received from miners",
         ColoredLogger.BLUE,
     )
     return results
@@ -410,8 +410,6 @@ async def process_tasks(
         # 🔍 Logs para inspeccionar todos los datos
 
         bt.logging.info(f"Rewards computed in {end_eval - start_eval:.2f}s.")
-        # Update Validator Scores
-        validator.update_scores(rewards, miner_uids)
 
         # 8) Handle feedback & stats
         feedback_data = await handle_feedback_and_validator_stats(
@@ -462,6 +460,9 @@ async def process_tasks(
         f"Total tasks processed: {tasks_count}, total time: {total_duration:.2f}s, "
         f"average time per task: {avg_task_time:.2f}s"
     )
+
+    # Update Validator Scores
+    validator.update_scores(rewards, miner_uids)
 
     # Update validator-level stats
     update_validator_performance_stats(
@@ -621,32 +622,6 @@ async def save_operator_endpoints_in_json(
     bt.logging.info(f"Saved {len(responses)} endpoints to {filename}")
 
 
-def _interleave(*lists: List[Any]):
-    """
-    Interleaves multiple lists like [a1, a2], [b1, b2] → [a1, b1, a2, b2], skipping None.
-    Accepts any number of lists.
-    """
-    return (
-        item
-        for group in itertools.zip_longest(*lists)
-        for item in group
-        if item is not None
-    )
-
-
-def _split_tasks_evenly(total_tasks: int, num_projects: int) -> list[int]:
-    """
-    Evenly distributes `total_tasks` across `num_projects`,
-    assigning the remainder one-by-one to the first few.
-    """
-    base = total_tasks // num_projects
-    extra = total_tasks % num_projects
-    distribution = [base] * num_projects
-    for i in range(1, extra + 1):
-        distribution[-i] += 1
-    return distribution
-
-
 async def generate_tasks_limited_use_cases(
     project: WebProject,
     total_tasks: int,
@@ -698,7 +673,7 @@ async def forward(self) -> None:  # noqa: C901
             raise RuntimeError("At least one demo web project is required.")
 
         # Total number of prompts and how many use cases to sample per project
-        task_distribution = _split_tasks_evenly(
+        task_distribution = split_tasks_evenly(
             NUMBER_OF_PROMPTS_PER_FORWARD, num_projects
         )
         use_cases_per_project = max(
@@ -734,7 +709,7 @@ async def forward(self) -> None:  # noqa: C901
         # -------------------- Process tasks
         t_proc_start = time.time()
         processed = 0
-        for task in _interleave(*all_tasks):
+        for task in interleave(*all_tasks):
             if processed >= NUMBER_OF_PROMPTS_PER_FORWARD:
                 break
 

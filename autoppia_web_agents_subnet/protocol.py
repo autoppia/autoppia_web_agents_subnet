@@ -1,11 +1,8 @@
 # file: autoppia_iwa/src/execution/synapses.py
 
-import os
 import json
 import time
-from datetime import datetime, timezone
 from pathlib import Path
-from distutils.util import strtobool
 from filelock import FileLock
 from typing import Any, Dict, List, Optional
 
@@ -18,13 +15,7 @@ from autoppia_iwa.src.data_generation.domain.classes import Task, TestUnion
 from autoppia_iwa.src.execution.actions.actions import AllActionsUnion
 from autoppia_iwa.src.shared.visualizator import SubnetVisualizer
 from .miner.stats import MinerStats
-
-# === new import ===
-
-SAVE_SUCCESSFUL_TASK_IN_JSON = bool(
-    strtobool(os.getenv("SAVE_SUCCESSFUL_TASK_IN_JSON", "false"))
-)
-SUCCESSFUL_TASKS_JSON_FILENAME = "successful_tasks.json"
+from autoppia_web_agents_subnet.config import SAVE_SUCCESSFUL_TASK_IN_JSON
 
 
 class TaskSynapse(Synapse):
