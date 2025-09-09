@@ -695,20 +695,23 @@ async def generate_tasks_limited_use_cases(
 
 async def forward(self) -> None:  # noqa: C901
     """
-    Forward cycle:
-      - Generate NUMBER_OF_PROMPTS_PER_FORWARD tasks across projects.
-      - Process tasks (interleaved), accumulating per-UID sums and counts returned by process_tasks.
-      - At the end, compute per-UID MEAN reward and update scores ONCE.
-      - Uses the configured alpha (we do NOT overwrite it).
+    Generate tasks, process interleaved, accumulate per-UID sums/counts,
+    then update scores ONCE with per-UID MEAN. Minimal, explicit logs:
+      - per task: UID <WATCH_UID_TASK> reward & times
+      - before update: UID <WATCH_UID_FINAL> forward mean (used in update_scores)
     """
     try:
         import numpy as np
 
+        WATCH_UID_TASK = int(os.getenv("WATCH_UID_TASK", "17"))  # UID to log per task
+        WATCH_UID_FINAL = int(
+            os.getenv("WATCH_UID_FINAL", "18")
+        )  # UID to log before update
+
         init_validator_performance_stats(self)
         self.forward_count += 1
-
         bt.logging.info(
-            f"[Forward #{self.forward_count}] Starting (version {__version__})"
+            f"[forward #{self.forward_count}] start (version {__version__})"
         )
         t_forward_start = time.time()
 
@@ -725,10 +728,8 @@ async def forward(self) -> None:  # noqa: C901
         )
 
         # 1) Generate tasks
-        t_gen_start = time.time()
         all_tasks: list[list[Task]] = []
         for project, num_tasks in zip(demo_web_projects, task_distribution):
-            bt.logging.info(f"Generating {num_tasks} tasks for project {project.name}")
             project_tasks = await generate_tasks_limited_use_cases(
                 project,
                 total_tasks=num_tasks,
@@ -738,24 +739,17 @@ async def forward(self) -> None:  # noqa: C901
             random.shuffle(project_tasks)
             all_tasks.append(project_tasks)
 
-        t_gen = time.time() - t_gen_start
         total_tasks_generated = sum(len(t) for t in all_tasks)
-        self.validator_performance_stats[
-            "total_tasks_generated"
-        ] += total_tasks_generated
-        self.validator_performance_stats["total_generated_tasks_time"] += t_gen
-
         if total_tasks_generated == 0:
-            bt.logging.warning("No tasks generated – skipping forward step.")
+            bt.logging.warning("No tasks generated – skipping forward.")
             return
 
-        # 2) Forward-level accumulators (per-UID)
+        # 2) Forward-level accumulators
         metagraph_n = self.metagraph.n
         batch_sum = np.zeros(metagraph_n, dtype=np.float32)
         batch_count = np.zeros(metagraph_n, dtype=np.int32)
 
-        # 3) Interleave and process tasks (no score updates inside)
-        t_proc_start = time.time()
+        # 3) Process tasks (interleaved) with minimal per-task log
         processed = 0
         for task in _interleave(*all_tasks):
             if processed >= NUMBER_OF_PROMPTS_PER_FORWARD:
@@ -763,50 +757,64 @@ async def forward(self) -> None:  # noqa: C901
 
             for project, project_tasks in zip(demo_web_projects, all_tasks):
                 if task in project_tasks:
-
-                    # You can pass [task] or a small list of tasks here; both are supported.
+                    # process one task: returns (sum_inc, count_inc) sized metagraph.n
                     sum_inc, count_inc = await process_tasks(self, project, [task])
 
+                    # accumulate
                     batch_sum += sum_inc
                     batch_count += count_inc
-                    bt.logging.info(
-                        f"TASK PROCCESSED ... batch_sum: {sum_inc} UIDS:{batch_count}"
-                    )
+
+                    # --- Per-task log for watched UID
+                    if 0 <= WATCH_UID_TASK < metagraph_n:
+                        sampled = bool(count_inc[WATCH_UID_TASK] > 0)
+                        reward = float(sum_inc[WATCH_UID_TASK]) if sampled else 0.0
+                        times_now = int(batch_count[WATCH_UID_TASK])
+                        bt.logging.info(
+                            f"[task {processed+1}/{NUMBER_OF_PROMPTS_PER_FORWARD}] "
+                            f"UID {WATCH_UID_TASK}: reward={reward:.3f} | times={times_now} | sampled={'yes' if sampled else 'no'}"
+                        )
                     break
 
             processed += 1
 
-        t_proc = time.time() - t_proc_start
-        self.validator_performance_stats["total_processing_tasks_time"] += t_proc
-
-        # 4) Single score update at the end (per-UID mean over this forward)
-        mask = batch_count > 0  # UIDs that appeared at least once in this forward
+        # 4) Single score update at the end (per-UID mean)
+        mask = batch_count > 0
         if np.any(mask):
             avg_rewards = np.zeros_like(batch_sum, dtype=np.float32)
             avg_rewards[mask] = batch_sum[mask] / batch_count[mask]
-            uids = np.where(mask)[0].tolist()
-            bt.logging.info(f"Updating scores ... AVG: {avg_rewards[mask]} UIDS:{uids}")
 
+            # log watched UID's forward mean just before updating
+            if 0 <= WATCH_UID_FINAL < metagraph_n:
+                if batch_count[WATCH_UID_FINAL] > 0:
+                    mean_val = float(avg_rewards[WATCH_UID_FINAL])
+                    bt.logging.info(
+                        f"[update] UID {WATCH_UID_FINAL}: forward_mean={mean_val:.3f}"
+                    )
+                else:
+                    bt.logging.info(
+                        f"[update] UID {WATCH_UID_FINAL}: forward_mean=NA (not seen)"
+                    )
+
+            uids = np.where(mask)[0].tolist()
             async with self.lock:
                 self.update_scores(avg_rewards[mask], uids)
-
-            bt.logging.info(f"Updated scores for {len(uids)} uids (mean-per-forward).")
+            bt.logging.info(f"[update] updated_uids={len(uids)}")
         else:
-            bt.logging.warning("No rewards accumulated this forward; scores unchanged.")
+            bt.logging.warning("[update] no rewards this forward; scores unchanged.")
 
-        # 5) Optional: broadcast operator endpoint every N forwards.
+        # 5) Optional: maintenance
         if self.forward_count % SET_OPERATOR_ENDPOINT_FORWARDS_INTERVAL == 0:
             await broadcast_and_save_operator_endpoints(self)
 
-        # 6) Final stats and pacing
+        # 6) Wrap up
         forward_time = time.time() - t_forward_start
         self.validator_performance_stats["total_forwards_time"] += forward_time
         self.validator_performance_stats["total_forwards_count"] += 1
-
         print_validator_performance_stats(self)
         bt.logging.success("Forward cycle completed!")
-        bt.logging.info(f"Sleeping for {FORWARD_SLEEP_SECONDS}s…")
-        await asyncio.sleep(FORWARD_SLEEP_SECONDS)
+        if FORWARD_SLEEP_SECONDS > 0:
+            bt.logging.info(f"Sleeping for {FORWARD_SLEEP_SECONDS}s…")
+            await asyncio.sleep(FORWARD_SLEEP_SECONDS)
 
     except Exception as err:
         bt.logging.error(f"Error in forward: {err}")
