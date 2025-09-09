@@ -338,5 +338,4 @@ async def get_rewards_with_details(
             evaluation_results=evaluation_results,
         )
 
-    bt.logging.info(f"Detailed evaluation complete. Rewards: {rewards}")
     return rewards, test_results_matrices, evaluation_results

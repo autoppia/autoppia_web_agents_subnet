@@ -763,10 +763,15 @@ async def forward(self) -> None:  # noqa: C901
 
             for project, project_tasks in zip(demo_web_projects, all_tasks):
                 if task in project_tasks:
+
                     # You can pass [task] or a small list of tasks here; both are supported.
                     sum_inc, count_inc = await process_tasks(self, project, [task])
+
                     batch_sum += sum_inc
                     batch_count += count_inc
+                    bt.logging.info(
+                        f"TASK PROCCESSED ... batch_sum: {sum_inc} UIDS:{batch_count}"
+                    )
                     break
 
             processed += 1
@@ -780,6 +785,7 @@ async def forward(self) -> None:  # noqa: C901
             avg_rewards = np.zeros_like(batch_sum, dtype=np.float32)
             avg_rewards[mask] = batch_sum[mask] / batch_count[mask]
             uids = np.where(mask)[0].tolist()
+            bt.logging.info(f"Updating scores ... AVG: {avg_rewards[mask]} UIDS:{uids}")
 
             async with self.lock:
                 self.update_scores(avg_rewards[mask], uids)
