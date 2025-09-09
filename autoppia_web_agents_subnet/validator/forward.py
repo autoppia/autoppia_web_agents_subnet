@@ -696,17 +696,14 @@ async def generate_tasks_limited_use_cases(
 async def forward(self) -> None:  # noqa: C901
     """
     Generate tasks, process interleaved, accumulate per-UID sums/counts,
-    then update scores ONCE with per-UID MEAN. Minimal, explicit logs:
-      - per task: UID <WATCH_UID_TASK> reward & times
-      - before update: UID <WATCH_UID_FINAL> forward mean (used in update_scores)
+    then update scores ONCE with per-UID MEAN.
+
+    Logs (ALL UIDs, one line per UID):
+      - per task:   "[task i/N] UID <id>: reward=<this_task> | times=<count_so_far>"
+      - pre-update: "[update] UID <id>: forward_mean=<mean_or_NA>"
     """
     try:
         import numpy as np
-
-        WATCH_UID_TASK = int(os.getenv("WATCH_UID_TASK", "17"))  # UID to log per task
-        WATCH_UID_FINAL = int(
-            os.getenv("WATCH_UID_FINAL", "18")
-        )  # UID to log before update
 
         init_validator_performance_stats(self)
         self.forward_count += 1
@@ -749,7 +746,7 @@ async def forward(self) -> None:  # noqa: C901
         batch_sum = np.zeros(metagraph_n, dtype=np.float32)
         batch_count = np.zeros(metagraph_n, dtype=np.int32)
 
-        # 3) Process tasks (interleaved) with minimal per-task log
+        # 3) Process tasks (interleaved) and log ONE LINE PER UID per task
         processed = 0
         for task in _interleave(*all_tasks):
             if processed >= NUMBER_OF_PROMPTS_PER_FORWARD:
@@ -757,56 +754,58 @@ async def forward(self) -> None:  # noqa: C901
 
             for project, project_tasks in zip(demo_web_projects, all_tasks):
                 if task in project_tasks:
-                    # process one task: returns (sum_inc, count_inc) sized metagraph.n
+                    # returns arrays sized metagraph.n
                     sum_inc, count_inc = await process_tasks(self, project, [task])
 
-                    # accumulate
+                    # accumulate first (so times reflect the new count)
                     batch_sum += sum_inc
                     batch_count += count_inc
 
-                    # --- Per-task log for watched UID
-                    if 0 <= WATCH_UID_TASK < metagraph_n:
-                        sampled = bool(count_inc[WATCH_UID_TASK] > 0)
-                        reward = float(sum_inc[WATCH_UID_TASK]) if sampled else 0.0
-                        times_now = int(batch_count[WATCH_UID_TASK])
+                    # --- per-task logs: one line per UID
+                    task_idx = processed + 1
+                    for uid in range(metagraph_n):
+                        reward_val = float(
+                            sum_inc[uid]
+                        )  # this task's reward for uid (0 if not sampled)
+                        times_now = int(
+                            batch_count[uid]
+                        )  # total times seen in this forward
                         bt.logging.info(
-                            f"[task {processed+1}/{NUMBER_OF_PROMPTS_PER_FORWARD}] "
-                            f"UID {WATCH_UID_TASK}: reward={reward:.3f} | times={times_now} | sampled={'yes' if sampled else 'no'}"
+                            f"[task {task_idx}/{NUMBER_OF_PROMPTS_PER_FORWARD}] "
+                            f"UID {uid}: reward={reward_val:.3f} | times={times_now}"
                         )
                     break
 
             processed += 1
 
-        # 4) Single score update at the end (per-UID mean)
+        # 4) Single score update at end (per-UID mean over this forward)
         mask = batch_count > 0
         if np.any(mask):
             avg_rewards = np.zeros_like(batch_sum, dtype=np.float32)
             avg_rewards[mask] = batch_sum[mask] / batch_count[mask]
 
-            # log watched UID's forward mean just before updating
-            if 0 <= WATCH_UID_FINAL < metagraph_n:
-                if batch_count[WATCH_UID_FINAL] > 0:
-                    mean_val = float(avg_rewards[WATCH_UID_FINAL])
+            # --- pre-update logs: one line per UID with forward mean (or NA)
+            for uid in range(metagraph_n):
+                if batch_count[uid] > 0:
                     bt.logging.info(
-                        f"[update] UID {WATCH_UID_FINAL}: forward_mean={mean_val:.3f}"
+                        f"[update] UID {uid}: forward_mean={float(avg_rewards[uid]):.3f}"
                     )
                 else:
-                    bt.logging.info(
-                        f"[update] UID {WATCH_UID_FINAL}: forward_mean=NA (not seen)"
-                    )
+                    bt.logging.info(f"[update] UID {uid}: forward_mean=NA")
 
-            uids = np.where(mask)[0].tolist()
+            # update scores using the means for UIDs that appeared
+            uids_update = np.where(mask)[0].tolist()
             async with self.lock:
-                self.update_scores(avg_rewards[mask], uids)
-            bt.logging.info(f"[update] updated_uids={len(uids)}")
+                self.update_scores(avg_rewards[mask], uids_update)
+            bt.logging.info(f"[update] updated_uids={len(uids_update)}")
         else:
             bt.logging.warning("[update] no rewards this forward; scores unchanged.")
 
-        # 5) Optional: maintenance
+        # 5) Optional maintenance
         if self.forward_count % SET_OPERATOR_ENDPOINT_FORWARDS_INTERVAL == 0:
             await broadcast_and_save_operator_endpoints(self)
 
-        # 6) Wrap up
+        # 6) Done
         forward_time = time.time() - t_forward_start
         self.validator_performance_stats["total_forwards_time"] += forward_time
         self.validator_performance_stats["total_forwards_count"] += 1
