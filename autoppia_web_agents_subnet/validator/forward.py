@@ -320,15 +320,35 @@ async def handle_feedback_and_validator_stats(
 
 async def process_tasks(
     validator, web_project: WebProject, tasks_generated: List[Task]
-) -> None:
+) -> tuple["np.ndarray", "np.ndarray"]:
     """
-    Sends tasks to sampled miners, gathers responses, evaluates them, and delegates
-    feedback/stats logic to a separate helper method. Also aggregates task-level stats.
-    """
-    total_time_start = time.time()
-    tasks_count = 0
-    tasks_total_time = 0.0
+    Processes one or more tasks (tasks_generated can have len >= 1).
+    For each task:
+      - Sends the TaskSynapse to miners
+      - Evaluates into rewards
+      - Sends feedback & logs leaderboard/statistics
 
+    Returns:
+      (sum_per_uid, count_per_uid)
+      where:
+        sum_per_uid  : float32 array (size = metagraph.n) with the sum of rewards per UID
+        count_per_uid: int32   array (size = metagraph.n) with how many tasks this UID appeared in
+
+    NOTE:
+      - This function does NOT call update_scores(). The caller (forward) will
+        combine these aggregates across the whole forward and update once.
+    """
+    import numpy as np
+
+    metagraph_n = validator.metagraph.n
+    sum_per_uid = np.zeros(metagraph_n, dtype=np.float32)
+    count_per_uid = np.zeros(metagraph_n, dtype=np.int32)
+
+    total_time_start = time.time()
+    tasks_total_time = 0.0
+    tasks_count = 0
+
+    # Optional per-forward stats (not required for the aggregator)
     num_success = 0
     num_wrong = 0
     num_no_response = 0
@@ -343,12 +363,11 @@ async def process_tasks(
             ColoredLogger.CYAN,
         )
 
-        # 1) Choose a random subset of miners.In this case the whole subnet.
+        # 1) Sample miners (SAMPLE_SIZE is effectively the whole subnet for you).
         miner_uids = get_random_uids(validator, k=SAMPLE_SIZE)
-
         miner_axons = [validator.metagraph.axons[uid] for uid in miner_uids]
 
-        # 2) Build the normal synapse structure (correct version is set during sending)
+        # 2) Build the task synapse
         task_synapse = TaskSynapse(
             prompt=task.prompt,
             url=task.url,
@@ -357,7 +376,7 @@ async def process_tasks(
             actions=[],
         )
 
-        # 3) Test the version check by sending an intentionally WRONG version
+        # 3) Version check with intentionally WRONG version (detect/penalize)
         version_responses = await check_miner_not_responding_to_invalid_version(
             validator,
             task_synapse=copy.deepcopy(task_synapse),
@@ -366,14 +385,12 @@ async def process_tasks(
             timeout=CHECK_VERSION_SYNAPSE,
         )
 
-        # 4) Figure out which miners responded incorrectly (non-empty actions to invalid version)
         invalid_version_responders: Set[int] = set()
         for i, vresp in enumerate(version_responses):
             if vresp and hasattr(vresp, "actions") and vresp.actions:
-                # This miner responded to the WRONG version with non-empty actions => penalize
                 invalid_version_responders.add(miner_uids[i])
 
-        # 5) Now actually send the correct version
+        # 4) Send the correct version to miners
         bt.logging.info("Sending Task Synapses To Miners")
         responses = await send_task_synapse_to_miners(
             validator,
@@ -382,12 +399,12 @@ async def process_tasks(
             timeout=TIMEOUT,
         )
 
-        # 6) Convert responses into TaskSolutions
+        # 5) Convert responses to TaskSolutions + collect times
         task_solutions, execution_times = collect_task_solutions(
             task, responses, miner_uids
         )
 
-        # 7) Evaluate solutions & compute rewards
+        # 6) Evaluate and compute rewards
         start_eval = time.time()
         rewards, test_results_matrices, evaluation_results = (
             await get_rewards_with_details(
@@ -403,17 +420,17 @@ async def process_tasks(
                 efficiency_weight=EFFICIENCY_WEIGHT,
             )
         )
-
         end_eval = time.time()
         bt.logging.info(f"Miners final rewards: {rewards}")
         bt.logging.info(f"Rewards computed in {end_eval - start_eval:.2f}s.")
-        # 🔍 Logs para inspeccionar todos los datos
 
-        bt.logging.info(f"Rewards computed in {end_eval - start_eval:.2f}s.")
-        # Update Validator Scores
-        validator.update_scores(rewards, miner_uids)
+        # 7) Aggregate into per-UID sums and counts
+        #    (aligns rewards with miner_uids; other UIDs remain 0 for this task)
+        r = np.asarray(rewards, dtype=np.float32)
+        sum_per_uid[miner_uids] += r
+        count_per_uid[miner_uids] += 1
 
-        # 8) Handle feedback & stats
+        # 8) Feedback & stats logging
         feedback_data = await handle_feedback_and_validator_stats(
             validator=validator,
             task=task,
@@ -434,7 +451,7 @@ async def process_tasks(
             task_solutions,
         )
 
-        # TODO : I cannot visualize this stats
+        # Per-task metrics (optional)
         num_no_response += feedback_data["num_no_response"]
         num_success += feedback_data["num_success"]
         num_wrong += feedback_data["num_wrong"]
@@ -442,28 +459,26 @@ async def process_tasks(
         sum_of_evaluation_times += feedback_data["evaluation_time"]
         sum_of_avg_scores += feedback_data["avg_score_for_task"]
 
-        # Log iteration timing
+        # Timing & pacing
         task_end_time = time.time()
-        task_duration = task_end_time - task_start_time
         tasks_count += 1
-        tasks_total_time += task_duration
+        tasks_total_time += task_end_time - task_start_time
 
         ColoredLogger.info(
-            f"Task iteration time: {task_duration:.2f}s, avg miner request: {feedback_data['avg_miner_time']:.2f}s.",
+            f"Task iteration time: {task_end_time - task_start_time:.2f}s, "
+            f"avg miner request: {feedback_data['avg_miner_time']:.2f}s.",
             ColoredLogger.YELLOW,
         )
         bt.logging.info(f"Sleeping for {TASK_SLEEP}s....")
         await asyncio.sleep(TASK_SLEEP)
 
+    # Optional summary logs for this call
     end_time = time.time()
-    total_duration = end_time - total_time_start
     avg_task_time = tasks_total_time / tasks_count if tasks_count else 0.0
     bt.logging.info(
-        f"Total tasks processed: {tasks_count}, total time: {total_duration:.2f}s, "
-        f"average time per task: {avg_task_time:.2f}s"
+        f"Processed {tasks_count} tasks in {end_time - total_time_start:.2f}s, "
+        f"avg per task: {avg_task_time:.2f}s"
     )
-
-    # Update validator-level stats
     update_validator_performance_stats(
         validator=validator,
         tasks_count=tasks_count,
@@ -474,6 +489,9 @@ async def process_tasks(
         sum_of_evaluation_times=sum_of_evaluation_times,
         sum_of_avg_scores=sum_of_avg_scores,
     )
+
+    # Return per-UID aggregates for the caller to combine across the forward
+    return sum_per_uid, count_per_uid
 
 
 def _schedule_leaderboard_logging(
@@ -677,14 +695,15 @@ async def generate_tasks_limited_use_cases(
 
 async def forward(self) -> None:  # noqa: C901
     """
-    Validator forward cycle:
-
-    1. Evenly distribute NUMBER_OF_PROMPTS_PER_FORWARD across all demo_web_projects
-    2. For each project, generate that number of tasks using a limited number of use cases
-    3. Interleave tasks from all projects and process up to the defined cap
-    4. Update performance stats and optionally broadcast operator endpoint
+    Forward cycle:
+      - Generate NUMBER_OF_PROMPTS_PER_FORWARD tasks across projects.
+      - Process tasks (interleaved), accumulating per-UID sums and counts returned by process_tasks.
+      - At the end, compute per-UID MEAN reward and update scores ONCE.
+      - Uses the configured alpha (we do NOT overwrite it).
     """
     try:
+        import numpy as np
+
         init_validator_performance_stats(self)
         self.forward_count += 1
 
@@ -697,7 +716,7 @@ async def forward(self) -> None:  # noqa: C901
         if num_projects < 1:
             raise RuntimeError("At least one demo web project is required.")
 
-        # Total number of prompts and how many use cases to sample per project
+        # Split total prompts across projects
         task_distribution = _split_tasks_evenly(
             NUMBER_OF_PROMPTS_PER_FORWARD, num_projects
         )
@@ -705,9 +724,9 @@ async def forward(self) -> None:  # noqa: C901
             1, math.ceil(NUMBER_OF_PROMPTS_PER_FORWARD / num_projects)
         )
 
+        # 1) Generate tasks
         t_gen_start = time.time()
-        all_tasks = []
-
+        all_tasks: list[list[Task]] = []
         for project, num_tasks in zip(demo_web_projects, task_distribution):
             bt.logging.info(f"Generating {num_tasks} tasks for project {project.name}")
             project_tasks = await generate_tasks_limited_use_cases(
@@ -721,7 +740,6 @@ async def forward(self) -> None:  # noqa: C901
 
         t_gen = time.time() - t_gen_start
         total_tasks_generated = sum(len(t) for t in all_tasks)
-
         self.validator_performance_stats[
             "total_tasks_generated"
         ] += total_tasks_generated
@@ -731,7 +749,12 @@ async def forward(self) -> None:  # noqa: C901
             bt.logging.warning("No tasks generated – skipping forward step.")
             return
 
-        # -------------------- Process tasks
+        # 2) Forward-level accumulators (per-UID)
+        metagraph_n = self.metagraph.n
+        batch_sum = np.zeros(metagraph_n, dtype=np.float32)
+        batch_count = np.zeros(metagraph_n, dtype=np.int32)
+
+        # 3) Interleave and process tasks (no score updates inside)
         t_proc_start = time.time()
         processed = 0
         for task in _interleave(*all_tasks):
@@ -739,9 +762,11 @@ async def forward(self) -> None:  # noqa: C901
                 break
 
             for project, project_tasks in zip(demo_web_projects, all_tasks):
-
                 if task in project_tasks:
-                    await process_tasks(self, project, [task])
+                    # You can pass [task] or a small list of tasks here; both are supported.
+                    sum_inc, count_inc = await process_tasks(self, project, [task])
+                    batch_sum += sum_inc
+                    batch_count += count_inc
                     break
 
             processed += 1
@@ -749,11 +774,25 @@ async def forward(self) -> None:  # noqa: C901
         t_proc = time.time() - t_proc_start
         self.validator_performance_stats["total_processing_tasks_time"] += t_proc
 
-        # -------------------- Optional: broadcast operator endpoint
+        # 4) Single score update at the end (per-UID mean over this forward)
+        mask = batch_count > 0  # UIDs that appeared at least once in this forward
+        if np.any(mask):
+            avg_rewards = np.zeros_like(batch_sum, dtype=np.float32)
+            avg_rewards[mask] = batch_sum[mask] / batch_count[mask]
+            uids = np.where(mask)[0].tolist()
+
+            async with self.lock:
+                self.update_scores(avg_rewards[mask], uids)
+
+            bt.logging.info(f"Updated scores for {len(uids)} uids (mean-per-forward).")
+        else:
+            bt.logging.warning("No rewards accumulated this forward; scores unchanged.")
+
+        # 5) Optional: broadcast operator endpoint every N forwards.
         if self.forward_count % SET_OPERATOR_ENDPOINT_FORWARDS_INTERVAL == 0:
             await broadcast_and_save_operator_endpoints(self)
 
-        # -------------------- Final stats
+        # 6) Final stats and pacing
         forward_time = time.time() - t_forward_start
         self.validator_performance_stats["total_forwards_time"] += forward_time
         self.validator_performance_stats["total_forwards_count"] += 1
