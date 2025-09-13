@@ -86,8 +86,8 @@ install_modules() {
 }
 
 install_bittensor() {
-  info_msg "Installing Bittensor v9.6.0 and CLI v9.4.2..."
-  pip install bittensor==9.6.0 bittensor-cli==9.4.2 \
+  info_msg "Installing Bittensor v9.9.0 and CLI v9.4.2..."
+  pip install bittensor==9.9.0 bittensor-cli==9.4.2 \
     || handle_error "Failed to install Bittensor"
   success_msg "Bittensor installed."
 }
