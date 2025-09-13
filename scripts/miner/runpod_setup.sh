@@ -189,10 +189,10 @@ install_autoppia_iwa() {
 # Uses the official install script for Bittensor.
 # ---------------------------------------------------------
 install_bittensor() {
-  echo -e "\e[34m[INFO]\e[0m Installing Bittensor library and CLI v9.6.0..."
-  pip install bittensor==9.6.0 bittensor-cli==9.4.2\
+  echo -e "\e[34m[INFO]\e[0m Installing Bittensor library and CLI v9.9.0..."
+  pip install bittensor==9.9.0 bittensor-cli==9.4.2\
     || handle_error "Failed to install Bittensor library and/or CLI"
-  success_msg "Bittensor 9.6.0 and CLI installed."
+  success_msg "Bittensor 9.9.0 and CLI installed."
 }
 
 
