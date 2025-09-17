@@ -157,51 +157,6 @@ def print_validator_performance_stats(validator) -> None:
     console.print()  # extra newline
 
 
-# async def update_miner_stats_and_scores(
-#     validator,
-#     rewards: np.ndarray,
-#     miner_uids: List[int],
-#     execution_times: List[float],
-#     task: Task,
-# ) -> float:
-#     """
-#     Updates scores for miners based on computed rewards, updates local miner_stats,
-#     and returns the time it took to evaluate miners.
-#     """
-#     evaluation_time = 0.0
-#     if rewards is not None:
-#         evaluation_time_start = time.time()
-#         bt.logging.info("Scores updated for miners")
-
-#         for i, miner_uid in enumerate(miner_uids):
-#             miner_uid = int(miner_uid)
-#             score_value = rewards[i] if rewards[i] is not None else 0.0
-#             exec_time_value = (
-#                 execution_times[i] if execution_times[i] is not None else TIMEOUT
-#             )
-#             success = score_value >= TIME_WEIGHT
-#             if miner_uid not in validator.miner_stats:
-#                 validator.miner_stats[miner_uid] = MinerStats()
-
-#             validator.miner_stats[miner_uid].update(
-#                 score=float(score_value),
-#                 execution_time=float(exec_time_value),
-#                 evaluation_time=(time.time() - evaluation_time_start),
-#                 last_task=task,
-#                 success=success,
-#             )
-#             validator.miner_stats["aggregated"].update(
-#                 score=float(score_value),
-#                 execution_time=float(exec_time_value),
-#                 evaluation_time=(time.time() - evaluation_time_start),
-#                 last_task=task,
-#                 success=success,
-#             )
-#         evaluation_time_end = time.time()
-#         evaluation_time = evaluation_time_end - evaluation_time_start
-#     return evaluation_time
-
-
 async def retrieve_random_demo_web_project() -> WebProject:
     """
     Retrieves a random demo web project from the available ones.
