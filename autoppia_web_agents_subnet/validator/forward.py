@@ -19,45 +19,41 @@ from autoppia_web_agents_subnet.validator.config import (
     PROMPTS_PER_USECASE,
     SET_OPERATOR_ENDPOINT_FORWARDS_INTERVAL,
 )
-from autoppia_web_agents_subnet.validator.utils import (
+from autoppia_web_agents_subnet.validator.forward_stats import (  # <--- usa tu nuevo módulo
     init_validator_performance_stats,
+    finalize_forward_stats,
     print_validator_performance_stats,
 )
 from autoppia_web_agents_subnet.validator.forward_utils import (
     interleave_tasks,
     split_tasks_evenly,
     generate_tasks_limited_use_cases,
-    evaluate_task_all_miners,  # evaluate each task against ALL miners
+    evaluate_task_all_miners,  # devuelve (rewards_vec, avg_miner_time)
     broadcast_and_save_operator_endpoints,
 )
 
-SUCCESS_THRESHOLD = 0  # success if reward >= this value
+SUCCESS_THRESHOLD = 0  # success if reward > 0
 
 
 async def forward(self) -> None:
     """
     Forward orchestration (all miners, success-ratio):
       1) Generate N tasks across projects.
-      2) For each task: evaluate against ALL miners, accumulate successes.
-      3) After all tasks: update scores ONCE with success_ratio = successes / tasks_processed.
+      2) For each task: evaluate ALL miners, accumulate successes and avg times.
+      3) After all tasks: update scores ONCE with success_ratio = successes / tasks_processed,
+         then log forward summary and cumulative totals.
     """
     try:
         init_validator_performance_stats(self)
         self.forward_count += 1
-        bt.logging.info(
-            f"[forward #{self.forward_count}] start (version {__version__})"
-        )
+        bt.logging.info(f"[forward #{self.forward_count}] start (version {__version__})")
         t_forward_start = time.time()
 
         num_projects = len(demo_web_projects)
 
         # 1) Generate tasks per project
-        task_distribution = split_tasks_evenly(
-            NUMBER_OF_PROMPTS_PER_FORWARD, num_projects
-        )
-        use_cases_per_project = max(
-            1, math.ceil(NUMBER_OF_PROMPTS_PER_FORWARD / num_projects)
-        )
+        task_distribution = split_tasks_evenly(NUMBER_OF_PROMPTS_PER_FORWARD, num_projects)
+        use_cases_per_project = max(1, math.ceil(NUMBER_OF_PROMPTS_PER_FORWARD / num_projects))
 
         all_tasks: list[list[Task]] = []
         for project, num_tasks in zip(demo_web_projects, task_distribution):
@@ -73,30 +69,36 @@ async def forward(self) -> None:
         # 2) Success counters per UID (each task goes to ALL miners)
         n = self.metagraph.n
         successes = np.zeros(n, dtype=np.int32)
-        tasks_processed = 0
+
+        # Per-forward accumulators
+        tasks_sent = 0
+        tasks_success = 0  # tasks with at least one miner reward > 0
+        sum_avg_response_times = 0.0  # sum of per-task avg(miner) response time (seconds)
 
         for task in interleave_tasks(*all_tasks):
-            if tasks_processed >= NUMBER_OF_PROMPTS_PER_FORWARD:
+            if tasks_sent >= NUMBER_OF_PROMPTS_PER_FORWARD:
                 break
 
             # Find project and evaluate this task for ALL miners
             for project, project_tasks in zip(demo_web_projects, all_tasks):
                 if task in project_tasks:
-                    rewards_vec = await evaluate_task_all_miners(self, project, task)
+                    rewards_vec, avg_time = await evaluate_task_all_miners(self, project, task)
+                    # success if reward > 0
                     successes += (rewards_vec > SUCCESS_THRESHOLD).astype(np.int32)
-                    tasks_processed += 1
-                    break  # move to next task
+
+                    tasks_sent += 1
+                    sum_avg_response_times += float(avg_time)
+                    if np.any(rewards_vec > SUCCESS_THRESHOLD):
+                        tasks_success += 1
+                    break  # next task
 
         # 3) Single score update at the end: success ratio (e.g., 6/9, 8/9, ...)
-        if tasks_processed > 0:
-            success_ratio = successes.astype(np.float32) / float(tasks_processed)
+        if tasks_sent > 0:
+            success_ratio = successes.astype(np.float32) / float(tasks_sent)
 
             # Optional: per-UID compact logs
             for uid in range(n):
-                bt.logging.info(
-                    f"[update] UID {uid}: successes={int(successes[uid])}/{tasks_processed} "
-                    f"=> ratio={float(success_ratio[uid]):.3f}"
-                )
+                bt.logging.info(f"[update] UID {uid}: successes={int(successes[uid])}/{tasks_sent} " f"=> ratio={float(success_ratio[uid]):.3f}")
 
             uids_update = list(range(n))
             async with self.lock:
@@ -111,10 +113,17 @@ async def forward(self) -> None:
 
         # 5) Wrap-up + global metrics
         forward_time = time.time() - t_forward_start
-        self.validator_performance_stats["total_forwards_time"] += forward_time
-        self.validator_performance_stats["total_forwards_count"] += 1
 
+        # Persist + print summaries (forward + cumulative)
+        summary = finalize_forward_stats(
+            self,
+            tasks_sent=tasks_sent,
+            tasks_success=tasks_success,
+            sum_avg_response_times=sum_avg_response_times,
+            forward_time=forward_time,
+        )
         print_validator_performance_stats(self)
+
         bt.logging.success("Forward cycle completed!")
 
         if FORWARD_SLEEP_SECONDS > 0:
