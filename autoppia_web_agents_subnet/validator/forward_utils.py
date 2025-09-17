@@ -7,7 +7,8 @@ import json
 import os
 import time
 from typing import Any, Dict, Iterable, List, Set, Tuple
-
+from numpy.typing import NDArray
+import numpy as np
 import bittensor as bt
 from filelock import FileLock
 
@@ -70,12 +71,7 @@ def interleave_tasks(*lists: List[Any]) -> Iterable[Any]:
       [a1, a2], [b1, b2] -> a1, b1, a2, b2
     Skips None values if any lists are ragged.
     """
-    return (
-        item
-        for group in itertools.zip_longest(*lists)
-        for item in group
-        if item is not None
-    )
+    return (item for group in itertools.zip_longest(*lists) for item in group if item is not None)
 
 
 def split_tasks_evenly(total_tasks: int, num_projects: int) -> List[int]:
@@ -155,15 +151,9 @@ def collect_task_solutions(
             )
         except Exception as e:
             bt.logging.error(f"Miner response format error: {e}")
-            task_solutions.append(
-                TaskSolution(task_id=task.id, actions=[], web_agent_id=str(miner_uid))
-            )
+            task_solutions.append(TaskSolution(task_id=task.id, actions=[], web_agent_id=str(miner_uid)))
 
-        if (
-            response
-            and hasattr(response.dendrite, "process_time")
-            and response.dendrite.process_time is not None
-        ):
+        if response and hasattr(response.dendrite, "process_time") and response.dendrite.process_time is not None:
             execution_times.append(response.dendrite.process_time)
         else:
             execution_times.append(TIMEOUT)
@@ -174,9 +164,7 @@ def collect_task_solutions(
 # ─────────────────────────────────────────────────────────────────────────────
 # Synapse sending
 # ─────────────────────────────────────────────────────────────────────────────
-async def send_task_synapse_to_miners(
-    validator, miner_axons, task_synapse: TaskSynapse, timeout: int
-) -> List[TaskSynapse]:
+async def send_task_synapse_to_miners(validator, miner_axons, task_synapse: TaskSynapse, timeout: int) -> List[TaskSynapse]:
     """
     Send a TaskSynapse (with correct version) and return the responses.
     """
@@ -221,12 +209,8 @@ async def send_feedback_synapse_to_miners(
                 execution_time=execution_times[i],
                 tests=task.tests,
                 actions=task_solutions[i].actions if i < len(task_solutions) else [],
-                test_results_matrix=(
-                    test_results_matrices[i] if i < len(test_results_matrices) else None
-                ),
-                evaluation_result=(
-                    evaluation_results[i] if i < len(evaluation_results) else None
-                ),
+                test_results_matrix=(test_results_matrices[i] if i < len(test_results_matrices) else None),
+                evaluation_result=(evaluation_results[i] if i < len(evaluation_results) else None),
             )
         )
 
@@ -235,14 +219,7 @@ async def send_feedback_synapse_to_miners(
         ColoredLogger.BLUE,
     )
 
-    tasks = [
-        asyncio.create_task(
-            validator.dendrite(
-                axons=[axon], synapse=fb, deserialize=True, timeout=FEEDBACK_TIMEOUT
-            )
-        )
-        for axon, fb in zip(miner_axons, feedback_list)
-    ]
+    tasks = [asyncio.create_task(validator.dendrite(axons=[axon], synapse=fb, deserialize=True, timeout=FEEDBACK_TIMEOUT)) for axon, fb in zip(miner_axons, feedback_list)]
     await asyncio.gather(*tasks)
     ColoredLogger.info("Feedback responses received from miners", ColoredLogger.BLUE)
 
@@ -295,11 +272,7 @@ def _schedule_leaderboard_logging(
         task = asyncio.create_task(coro)
         task.add_done_callback(
             lambda fut: ColoredLogger.info(
-                (
-                    "Leaderboard logs saved successfully."
-                    if not fut.exception()
-                    else f"Error sending leaderboard logs: {fut.exception()}"
-                ),
+                ("Leaderboard logs saved successfully." if not fut.exception() else f"Error sending leaderboard logs: {fut.exception()}"),
                 ColoredLogger.GREEN if not fut.exception() else ColoredLogger.RED,
             )
         )
@@ -318,7 +291,7 @@ async def evaluate_task_all_miners(
     validator,
     web_project: WebProject,
     task: Task,
-):
+) -> NDArray[np.float32]:
     """
     Evaluate ONE task against ALL miners and return a float32 vector of rewards
     aligned to metagraph UIDs (length = validator.metagraph.n).
@@ -354,14 +327,10 @@ async def evaluate_task_all_miners(
 
     # Send the correct version to ALL miners
     bt.logging.info("Sending Task Synapse to ALL miners")
-    responses = await send_task_synapse_to_miners(
-        validator, miner_axons, task_synapse, timeout=TIMEOUT
-    )
+    responses = await send_task_synapse_to_miners(validator, miner_axons, task_synapse, timeout=TIMEOUT)
 
     # Convert responses to TaskSolutions + process times
-    task_solutions, execution_times = collect_task_solutions(
-        task, responses, miner_uids
-    )
+    task_solutions, execution_times = collect_task_solutions(task, responses, miner_uids)
 
     # Evaluate and compute rewards
     rewards, test_results_matrices, evaluation_results = await get_rewards_with_details(
@@ -404,9 +373,7 @@ async def evaluate_task_all_miners(
     if rewards_vec.shape[0] != n:
         # Defensive padding/truncation if something unexpected happens
         padded = np.zeros(n, dtype=np.float32)
-        padded[: min(n, rewards_vec.shape[0])] = rewards_vec[
-            : min(n, rewards_vec.shape[0])
-        ]
+        padded[: min(n, rewards_vec.shape[0])] = rewards_vec[: min(n, rewards_vec.shape[0])]
         rewards_vec = padded
 
     return rewards_vec
@@ -415,9 +382,7 @@ async def evaluate_task_all_miners(
 # ─────────────────────────────────────────────────────────────────────────────
 # Per-task processing loop (sampling-based; kept for compatibility)
 # ─────────────────────────────────────────────────────────────────────────────
-async def process_tasks(
-    validator, web_project: WebProject, tasks_generated: List[Task]
-):
+async def process_tasks(validator, web_project: WebProject, tasks_generated: List[Task]):
     """
     Send, evaluate, feedback, and accumulate per-UID sums/counts.
     Returns (sum_per_uid, count_per_uid) with shape (metagraph.n,).
@@ -451,9 +416,7 @@ async def process_tasks(
         miner_axons = [validator.metagraph.axons[uid] for uid in miner_uids]
 
         # 2) Build task synapse
-        task_synapse = TaskSynapse(
-            prompt=task.prompt, url=task.url, html="", screenshot="", actions=[]
-        )
+        task_synapse = TaskSynapse(prompt=task.prompt, url=task.url, html="", screenshot="", actions=[])
 
         # 3) Version-check with intentionally wrong version (optional)
         version_responses = await check_miner_not_responding_to_invalid_version(
@@ -470,30 +433,24 @@ async def process_tasks(
 
         # 4) Send the correct version to miners
         bt.logging.info("Sending Task Synapses To Miners")
-        responses = await send_task_synapse_to_miners(
-            validator, miner_axons, task_synapse, timeout=TIMEOUT
-        )
+        responses = await send_task_synapse_to_miners(validator, miner_axons, task_synapse, timeout=TIMEOUT)
 
         # 5) Responses → TaskSolution + process times
-        task_solutions, execution_times = collect_task_solutions(
-            task, responses, miner_uids
-        )
+        task_solutions, execution_times = collect_task_solutions(task, responses, miner_uids)
 
         # 6) Evaluate & get rewards
         start_eval = time.time()
-        rewards, test_results_matrices, evaluation_results = (
-            await get_rewards_with_details(
-                validator,
-                web_project=web_project,
-                task=task,
-                task_solutions=task_solutions,
-                execution_times=execution_times,
-                time_weight=TIME_WEIGHT,
-                efficiency_weight=EFFICIENCY_WEIGHT,
-                min_correct_format_score=MIN_SCORE_FOR_CORRECT_FORMAT,
-                min_response_reward=MIN_RESPONSE_REWARD,
-                invalid_version_responders=invalid_version_responders,
-            )
+        rewards, test_results_matrices, evaluation_results = await get_rewards_with_details(
+            validator,
+            web_project=web_project,
+            task=task,
+            task_solutions=task_solutions,
+            execution_times=execution_times,
+            time_weight=TIME_WEIGHT,
+            efficiency_weight=EFFICIENCY_WEIGHT,
+            min_correct_format_score=MIN_SCORE_FOR_CORRECT_FORMAT,
+            min_response_reward=MIN_RESPONSE_REWARD,
+            invalid_version_responders=invalid_version_responders,
         )
         bt.logging.info(f"Miners final rewards: {rewards}")
         bt.logging.info(f"Rewards computed in {time.time() - start_eval:.2f}s.")
@@ -520,12 +477,8 @@ async def process_tasks(
         num_success += len(ok_idx)
         num_wrong += len([rr for rr in rewards if 0.0 < rr < 1.0])
         num_no_response += sum(1 for sol in task_solutions if not sol.actions)
-        avg_miner_time = (
-            (sum(execution_times) / len(execution_times)) if execution_times else 0.0
-        )
-        avg_score_for_task = (
-            float(sum(rewards) / len(rewards)) if len(rewards) > 0 else 0.0
-        )
+        avg_miner_time = (sum(execution_times) / len(execution_times)) if execution_times else 0.0
+        avg_score_for_task = float(sum(rewards) / len(rewards)) if len(rewards) > 0 else 0.0
         sum_of_avg_response_times += avg_miner_time
         sum_of_avg_scores += avg_score_for_task
 
@@ -552,9 +505,7 @@ async def process_tasks(
     # Quick summary for this processing block
     end_time = time.time()
     avg_task_time = tasks_total_time / tasks_count if tasks_count else 0.0
-    bt.logging.info(
-        f"Processed {tasks_count} tasks in {end_time - total_time_start:.2f}s, avg per task: {avg_task_time:.2f}s"
-    )
+    bt.logging.info(f"Processed {tasks_count} tasks in {end_time - total_time_start:.2f}s, avg per task: {avg_task_time:.2f}s")
 
     update_validator_performance_stats(
         validator=validator,
@@ -577,9 +528,7 @@ async def broadcast_and_save_operator_endpoints(validator) -> None:
     """
     Broadcast a SetOperatorEndpointSynapse and persist responses to JSON.
     """
-    operator_synapse = SetOperatorEndpointSynapse(
-        version=__version__, endpoint="https://your-validator-endpoint.com"
-    )
+    operator_synapse = SetOperatorEndpointSynapse(version=__version__, endpoint="https://your-validator-endpoint.com")
     bt.logging.info("Broadcasting SetOperatorEndpointSynapse...")
 
     miner_uids = get_random_uids(validator, k=SAMPLE_SIZE)

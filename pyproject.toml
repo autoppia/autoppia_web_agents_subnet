@@ -1,0 +1,6 @@
+# pyproject.toml
+[tool.black]
+line-length = 200
+# opcional:
+# target-version = ["py311"]
+# skip-string-normalization = true
