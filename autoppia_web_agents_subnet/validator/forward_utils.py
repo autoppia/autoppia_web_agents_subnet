@@ -40,6 +40,7 @@ from autoppia_web_agents_subnet.validator.config import (
     SAMPLE_SIZE,
     TASK_SLEEP,
     TIMEOUT,
+    SUCCESS_THRESHOLD,
     TIME_WEIGHT,
 )
 from autoppia_web_agents_subnet.validator.leaderboard import (
@@ -52,9 +53,7 @@ from autoppia_web_agents_subnet.validator.stats_persistence import (
     update_coldkey_stats_json,
     print_coldkey_resume,
 )
-from autoppia_web_agents_subnet.validator.utils import (
-    update_validator_performance_stats,  # kept for compatibility (used by process_tasks)
-)
+
 from autoppia_web_agents_subnet.utils.dendrite import dendrite_with_retries
 from autoppia_web_agents_subnet.validator.version import (
     check_miner_not_responding_to_invalid_version,
@@ -240,8 +239,9 @@ def _schedule_leaderboard_logging(
         records: List[LeaderboardTaskRecord] = []
         for i, miner_uid in enumerate(miner_uids):
             score = float(evaluation_results[i].get("final_score", 0.0)) if i < len(evaluation_results) else 0.0
-            success = score >= 1.0
+            success = score > SUCCESS_THRESHOLD  # aligns with SUCCESS_THRESHOLD = 0 in forward.py
             actions_serialized = [a.model_dump() for a in task_solutions[i].actions] if i < len(task_solutions) else []
+            duration_val = float(execution_times[i]) if i < len(execution_times) else 0.0
 
             records.append(
                 LeaderboardTaskRecord(
@@ -257,7 +257,7 @@ def _schedule_leaderboard_logging(
                     actions=actions_serialized,
                     success=success,
                     score=score,
-                    duration=float(execution_times[i]) if i < len(execution_times) else 0.0,
+                    duration=duration_val,
                 )
             )
 
@@ -313,7 +313,7 @@ async def evaluate_task_all_miners(
         timeout=CHECK_VERSION_SYNAPSE,
     )
     invalid_version_responders: Set[int] = set()
-    for i, vresp in enumerate(version_responses):
+    for i, vresp in enumerate(version_responses or []):
         if vresp and hasattr(vresp, "actions") and vresp.actions:
             invalid_version_responders.add(miner_uids[i])
 
@@ -373,6 +373,7 @@ async def process_tasks(validator, web_project: WebProject, tasks_generated: Lis
     """
     Sampling-based pipeline kept for compatibility with previous flows.
     Returns (sum_per_uid, count_per_uid) with shape (metagraph.n,).
+    NOTE: This function no longer updates forward-level stats; use forward_stats.py from forward.py.
     """
     import numpy as np
 
@@ -380,12 +381,8 @@ async def process_tasks(validator, web_project: WebProject, tasks_generated: Lis
     sum_per_uid = np.zeros(metagraph_n, dtype=np.float32)
     count_per_uid = np.zeros(metagraph_n, dtype=np.int32)
 
-    total_time_start = time.time()
     tasks_total_time = 0.0
     tasks_count = 0
-
-    num_success = num_wrong = num_no_response = 0
-    sum_of_avg_response_times = sum_of_evaluation_times = sum_of_avg_scores = 0.0
 
     for index, task in enumerate(tasks_generated):
         t0_task = time.time()
@@ -404,7 +401,7 @@ async def process_tasks(validator, web_project: WebProject, tasks_generated: Lis
             timeout=CHECK_VERSION_SYNAPSE,
         )
         invalid_version_responders: Set[int] = set()
-        for i, vresp in enumerate(version_responses):
+        for i, vresp in enumerate(version_responses or []):
             if vresp and hasattr(vresp, "actions") and vresp.actions:
                 invalid_version_responders.add(miner_uids[i])
 
@@ -413,7 +410,6 @@ async def process_tasks(validator, web_project: WebProject, tasks_generated: Lis
 
         task_solutions, execution_times = collect_task_solutions(task, responses, miner_uids)
 
-        start_eval = time.time()
         rewards, test_results_matrices, evaluation_results = await get_rewards_with_details(
             validator,
             web_project=web_project,
@@ -427,7 +423,6 @@ async def process_tasks(validator, web_project: WebProject, tasks_generated: Lis
             invalid_version_responders=invalid_version_responders,
         )
         bt.logging.info(f"Miners final rewards: {rewards}")
-        bt.logging.info(f"Rewards computed in {time.time() - start_eval:.2f}s.")
 
         r = np.asarray(rewards, dtype=np.float32)
         sum_per_uid[miner_uids] += r
@@ -445,39 +440,16 @@ async def process_tasks(validator, web_project: WebProject, tasks_generated: Lis
             execution_times=execution_times,
         )
 
-        ok_idx = [i for i, rr in enumerate(rewards) if rr >= 1.0]
-        num_success += len(ok_idx)
-        num_wrong += len([rr for rr in rewards if 0.0 < rr < 1.0])
-        num_no_response += sum(1 for sol in task_solutions if not sol.actions)
-        avg_miner_time = (sum(execution_times) / len(execution_times)) if execution_times else 0.0
-        avg_score_for_task = float(sum(rewards) / len(rewards)) if len(rewards) > 0 else 0.0
-        sum_of_avg_response_times += avg_miner_time
-        sum_of_avg_scores += avg_score_for_task
-
         _schedule_leaderboard_logging(validator, miner_uids, execution_times, task, evaluation_results, task_solutions)
 
         tasks_count += 1
         tasks_total_time += time.time() - t0_task
-        ColoredLogger.info(f"Task iteration time: {time.time() - t0_task:.2f}s, avg miner request: {avg_miner_time:.2f}s.", ColoredLogger.YELLOW)
+        ColoredLogger.info(f"Task iteration time: {time.time() - t0_task:.2f}s.", ColoredLogger.YELLOW)
 
         bt.logging.info(f"Sleeping for {TASK_SLEEP}s....")
         await asyncio.sleep(TASK_SLEEP)
 
-    end_time = time.time()
-    avg_task_time = tasks_total_time / tasks_count if tasks_count else 0.0
-    bt.logging.info(f"Processed {tasks_count} tasks in {end_time - total_time_start:.2f}s, avg per task: {avg_task_time:.2f}s")
-
-    update_validator_performance_stats(
-        validator=validator,
-        tasks_count=tasks_count,
-        num_success=num_success,
-        num_wrong=num_wrong,
-        num_no_response=num_no_response,
-        sum_of_avg_response_times=sum_of_avg_response_times,
-        sum_of_evaluation_times=sum_of_evaluation_times,
-        sum_of_avg_scores=sum_of_avg_scores,
-    )
-
+    bt.logging.info(f"Processed {tasks_count} sampled tasks; avg per task: {(tasks_total_time / tasks_count) if tasks_count else 0.0:.2f}s")
     return sum_per_uid, count_per_uid
 
 

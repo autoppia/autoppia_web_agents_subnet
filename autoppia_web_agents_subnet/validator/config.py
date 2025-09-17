@@ -17,10 +17,10 @@ MAX_ACTIONS_LENGTH = 45
 NUM_URLS = 1
 PROMPTS_PER_USECASE = 1
 NUMBER_OF_PROMPTS_PER_FORWARD = 1
+SUCCESS_THRESHOLD = 0  # success if reward > 0
+
 SET_OPERATOR_ENDPOINT_FORWARDS_INTERVAL = 10
-LEADERBOARD_ENDPOINT = os.getenv(
-    "LEADERBOARD_ENDPOINT", "https://leaderboard-api.autoppia.com"
-)
+LEADERBOARD_ENDPOINT = os.getenv("LEADERBOARD_ENDPOINT", "https://leaderboard-api.autoppia.com")
 
 
 def read_config() -> bt.config:
