@@ -1,12 +1,23 @@
-# autoppia_web_agents_subnet/validator/utils.py
+# autoppia_web_agents_subnet/validator/forward_stats.py
 from __future__ import annotations
+
 from typing import Any, Dict
 import bittensor as bt
+
+# Pretty tables
+from rich.console import Console
+from rich.table import Table, box
+
+console = Console(
+    force_terminal=True,  # render as if TTY
+    color_system="truecolor",  # full color
+    no_color=False,
+)
 
 
 def init_validator_performance_stats(validator) -> None:
     """
-    Initializes stats storage on the validator once.
+    Initialize stats storage on the validator once.
     """
     if hasattr(validator, "validator_performance_stats"):
         return
@@ -84,32 +95,86 @@ def finalize_forward_stats(
     return {"forward": forward_snapshot, "totals": totals}
 
 
+def _format_secs(secs: float) -> str:
+    if secs < 60:
+        return f"{secs:.3f}s"
+    m, s = divmod(secs, 60)
+    if m < 60:
+        return f"{int(m)}m {s:05.2f}s"
+    h, m = divmod(int(m), 60)
+    return f"{h}h {m}m {s:05.2f}s"
+
+
 def print_validator_performance_stats(validator) -> None:
     """
-    Pretty print last-forward and cumulative stats.
+    Pretty print last-forward (table) and cumulative totals (table).
     """
     s = validator.validator_performance_stats
     lf = s.get("last_forward", {})
-    bt.logging.info(
-        "[Forward summary] "
-        f"sent={lf.get('tasks_sent',0)} | "
-        f"success={lf.get('tasks_success',0)} | "
-        f"failed={lf.get('tasks_failed',0)} | "
-        f"avg_task_time={lf.get('avg_response_time_per_task',0.0):.3f}s | "
-        f"forward_time={lf.get('forward_time',0.0):.3f}s"
+
+    # ----- Forward summary table -----
+    f_sent = int(lf.get("tasks_sent", 0))
+    f_succ = int(lf.get("tasks_success", 0))
+    f_fail = int(lf.get("tasks_failed", 0))
+    f_rate = (f_succ / f_sent) if f_sent > 0 else 0.0
+    f_avg_task = float(lf.get("avg_response_time_per_task", 0.0))
+    f_time = float(lf.get("forward_time", 0.0))
+
+    forward_tbl = Table(
+        title="[bold magenta]Forward summary[/bold magenta]",
+        box=box.SIMPLE_HEAVY,
+        header_style="bold cyan",
+        expand=True,
+    )
+    forward_tbl.add_column("Sent", justify="right")
+    forward_tbl.add_column("Success", justify="right", style="green")
+    forward_tbl.add_column("Failed", justify="right", style="red")
+    forward_tbl.add_column("Success %", justify="right")
+    forward_tbl.add_column("Avg task time", justify="right")
+    forward_tbl.add_column("Forward time", justify="right")
+
+    forward_tbl.add_row(
+        str(f_sent),
+        str(f_succ),
+        str(f_fail),
+        f"{f_rate*100:5.1f}",
+        _format_secs(f_avg_task),
+        _format_secs(f_time),
     )
 
-    # cumulative
-    total_sent = s.get("total_tasks_sent", 0)
-    total_succ = s.get("total_tasks_success", 0)
-    total_fail = s.get("total_tasks_failed", 0)
+    # ----- Cumulative table -----
+    total_sent = int(s.get("total_tasks_sent", 0))
+    total_succ = int(s.get("total_tasks_success", 0))
+    total_fail = int(s.get("total_tasks_failed", 0))
     overall_avg = s["total_sum_of_avg_response_times"] / s["overall_tasks_processed"] if s.get("overall_tasks_processed", 0) > 0 else 0.0
     success_rate = (total_succ / total_sent) if total_sent > 0 else 0.0
+    fwd_count = int(s.get("total_forwards_count", 0))
+    total_time = float(s.get("total_forwards_time", 0.0))
 
-    bt.logging.info(
-        "[Cumulative] "
-        f"forwards={s.get('total_forwards_count',0)} | "
-        f"total_time={s.get('total_forwards_time',0.0):.3f}s | "
-        f"sent={total_sent} | success={total_succ} | failed={total_fail} | "
-        f"avg_task_time={overall_avg:.3f}s | success_rate={success_rate:.3%}"
+    totals_tbl = Table(
+        title="[bold magenta]Cumulative totals[/bold magenta]",
+        box=box.SIMPLE_HEAVY,
+        header_style="bold cyan",
+        expand=True,
     )
+    totals_tbl.add_column("Forwards", justify="right")
+    totals_tbl.add_column("Total time", justify="right")
+    totals_tbl.add_column("Sent", justify="right")
+    totals_tbl.add_column("Success", justify="right", style="green")
+    totals_tbl.add_column("Failed", justify="right", style="red")
+    totals_tbl.add_column("Success %", justify="right")
+    totals_tbl.add_column("Avg task time", justify="right")
+
+    totals_tbl.add_row(
+        str(fwd_count),
+        _format_secs(total_time),
+        str(total_sent),
+        str(total_succ),
+        str(total_fail),
+        f"{success_rate*100:5.1f}",
+        _format_secs(overall_avg),
+    )
+
+    # Print both tables
+    console.print(forward_tbl)
+    console.print(totals_tbl)
