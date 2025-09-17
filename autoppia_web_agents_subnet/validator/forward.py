@@ -1,3 +1,4 @@
+# autoppia_web_agents_subnet/validator/forward.py
 from __future__ import annotations
 
 import asyncio
@@ -10,6 +11,7 @@ import numpy as np
 
 from autoppia_web_agents_subnet import __version__
 from autoppia_iwa.src.demo_webs.config import demo_web_projects
+from autoppia_iwa.src.data_generation.domain.classes import Task
 
 from autoppia_web_agents_subnet.validator.config import (
     FORWARD_SLEEP_SECONDS,
@@ -25,17 +27,19 @@ from autoppia_web_agents_subnet.validator.forward_utils import (
     interleave_tasks,
     split_tasks_evenly,
     generate_tasks_limited_use_cases,
-    process_tasks,
+    evaluate_task_all_miners,  # evaluate each task against ALL miners
     broadcast_and_save_operator_endpoints,
 )
+
+SUCCESS_THRESHOLD = 0  # success if reward >= this value
 
 
 async def forward(self) -> None:
     """
-    Forward orchestration:
-      1) Generate N tasks split across projects.
-      2) Process tasks in an interleaved order.
-      3) Update scores ONCE using the per-UID mean reward within this forward.
+    Forward orchestration (all miners, success-ratio):
+      1) Generate N tasks across projects.
+      2) For each task: evaluate against ALL miners, accumulate successes.
+      3) After all tasks: update scores ONCE with success_ratio = successes / tasks_processed.
     """
     try:
         init_validator_performance_stats(self)
@@ -46,10 +50,8 @@ async def forward(self) -> None:
         t_forward_start = time.time()
 
         num_projects = len(demo_web_projects)
-        if num_projects < 1:
-            raise RuntimeError("At least one demo web project is required.")
 
-        # 1) Task generation per project
+        # 1) Generate tasks per project
         task_distribution = split_tasks_evenly(
             NUMBER_OF_PROMPTS_PER_FORWARD, num_projects
         )
@@ -57,7 +59,7 @@ async def forward(self) -> None:
             1, math.ceil(NUMBER_OF_PROMPTS_PER_FORWARD / num_projects)
         )
 
-        all_tasks: list[list] = []
+        all_tasks: list[list[Task]] = []
         for project, num_tasks in zip(demo_web_projects, task_distribution):
             project_tasks = await generate_tasks_limited_use_cases(
                 project,
@@ -68,74 +70,46 @@ async def forward(self) -> None:
             random.shuffle(project_tasks)
             all_tasks.append(project_tasks)
 
-        total_tasks_generated = sum(len(t) for t in all_tasks)
-        if total_tasks_generated == 0:
-            bt.logging.warning("No tasks generated – skipping forward.")
-            return
+        # 2) Success counters per UID (each task goes to ALL miners)
+        n = self.metagraph.n
+        successes = np.zeros(n, dtype=np.int32)
+        tasks_processed = 0
 
-        # 2) Per-UID accumulators (we'll update scores once at the end)
-        metagraph_n = self.metagraph.n
-        batch_sum = np.zeros(metagraph_n, dtype=np.float32)
-        batch_count = np.zeros(metagraph_n, dtype=np.int32)
-
-        processed = 0
         for task in interleave_tasks(*all_tasks):
-            if processed >= NUMBER_OF_PROMPTS_PER_FORWARD:
+            if tasks_processed >= NUMBER_OF_PROMPTS_PER_FORWARD:
                 break
 
-            # Find the project that owns this task
+            # Find project and evaluate this task for ALL miners
             for project, project_tasks in zip(demo_web_projects, all_tasks):
                 if task in project_tasks:
-                    sum_inc, count_inc = await process_tasks(self, project, [task])
+                    rewards_vec = await evaluate_task_all_miners(self, project, task)
+                    successes += (rewards_vec > SUCCESS_THRESHOLD).astype(np.int32)
+                    tasks_processed += 1
+                    break  # move to next task
 
-                    # accumulate first so "times" reflect the new count
-                    batch_sum += sum_inc
-                    batch_count += count_inc
+        # 3) Single score update at the end: success ratio (e.g., 6/9, 8/9, ...)
+        if tasks_processed > 0:
+            success_ratio = successes.astype(np.float32) / float(tasks_processed)
 
-                    # per-task log line per UID
-                    task_idx = processed + 1
-                    for uid in range(metagraph_n):
-                        reward_val = float(
-                            sum_inc[uid]
-                        )  # reward on THIS task (0 if not sampled)
-                        times_now = int(
-                            batch_count[uid]
-                        )  # total times seen in this forward
-                        bt.logging.info(
-                            f"[task {task_idx}/{NUMBER_OF_PROMPTS_PER_FORWARD}] "
-                            f"UID {uid}: reward={reward_val:.3f} | times={times_now}"
-                        )
-                    break
+            # Optional: per-UID compact logs
+            for uid in range(n):
+                bt.logging.info(
+                    f"[update] UID {uid}: successes={int(successes[uid])}/{tasks_processed} "
+                    f"=> ratio={float(success_ratio[uid]):.3f}"
+                )
 
-            processed += 1
-
-        # 3) Single score update at the end (mean per UID over this forward)
-        mask = batch_count > 0
-        if np.any(mask):
-            avg_rewards = np.zeros_like(batch_sum, dtype=np.float32)
-            avg_rewards[mask] = batch_sum[mask] / batch_count[mask]
-
-            # pre-update logs: one line per UID with forward mean (or NA)
-            for uid in range(metagraph_n):
-                if batch_count[uid] > 0:
-                    bt.logging.info(
-                        f"[update] UID {uid}: forward_mean={float(avg_rewards[uid]):.3f}"
-                    )
-                else:
-                    bt.logging.info(f"[update] UID {uid}: forward_mean=NA")
-
-            uids_update = np.where(mask)[0].tolist()
+            uids_update = list(range(n))
             async with self.lock:
-                self.update_scores(avg_rewards[mask], uids_update)
+                self.update_scores(success_ratio, uids_update)
             bt.logging.info(f"[update] updated_uids={len(uids_update)}")
         else:
-            bt.logging.warning("[update] no rewards this forward; scores unchanged.")
+            bt.logging.warning("[update] no tasks processed; scores unchanged.")
 
         # 4) Optional maintenance
         if self.forward_count % SET_OPERATOR_ENDPOINT_FORWARDS_INTERVAL == 0:
             await broadcast_and_save_operator_endpoints(self)
 
-        # 5) Done + global forward metrics
+        # 5) Wrap-up + global metrics
         forward_time = time.time() - t_forward_start
         self.validator_performance_stats["total_forwards_time"] += forward_time
         self.validator_performance_stats["total_forwards_count"] += 1

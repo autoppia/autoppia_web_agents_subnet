@@ -4,9 +4,7 @@ from __future__ import annotations
 import asyncio
 import itertools
 import json
-import math
 import os
-import random
 import time
 from typing import Any, Dict, Iterable, List, Set, Tuple
 
@@ -53,8 +51,10 @@ from autoppia_web_agents_subnet.validator.stats_persistence import (
     print_coldkey_resume,
 )
 from autoppia_web_agents_subnet.validator.utils import (
-    dendrite_with_retries,
     update_validator_performance_stats,
+)
+from autoppia_web_agents_subnet.utils.dendrite import (
+    dendrite_with_retries,
 )
 from autoppia_web_agents_subnet.validator.version import (
     check_miner_not_responding_to_invalid_version,
@@ -67,7 +67,7 @@ from autoppia_web_agents_subnet.validator.version import (
 def interleave_tasks(*lists: List[Any]) -> Iterable[Any]:
     """
     Interleave multiple lists:
-      [a1, a2], [b1, b2]  ->  a1, b1, a2, b2
+      [a1, a2], [b1, b2] -> a1, b1, a2, b2
     Skips None values if any lists are ragged.
     """
     return (
@@ -281,8 +281,8 @@ def _schedule_leaderboard_logging(
                     web_project=task_obj.web_project_id,
                     use_case=task_obj.use_case.name,
                     actions=[a.model_dump() for a in task_solutions[i].actions],
-                    success=evaluation_results[i]["final_score"] >= 1.0,
-                    score=float(evaluation_results[i]["final_score"]),
+                    success=evaluation_results[i].get("final_score", 0.0) >= 1.0,
+                    score=float(evaluation_results[i].get("final_score", 0.0)),
                     duration=float(execution_times[i]),
                 )
             )
@@ -312,7 +312,108 @@ def _schedule_leaderboard_logging(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Per-task processing loop
+# All-miners evaluation (one task → rewards vector for ALL UIDs)
+# ─────────────────────────────────────────────────────────────────────────────
+async def evaluate_task_all_miners(
+    validator,
+    web_project: WebProject,
+    task: Task,
+):
+    """
+    Evaluate ONE task against ALL miners and return a float32 vector of rewards
+    aligned to metagraph UIDs (length = validator.metagraph.n).
+    """
+    import numpy as np
+
+    n = validator.metagraph.n
+    miner_uids: List[int] = list(range(n))
+    miner_axons = [validator.metagraph.axons[uid] for uid in miner_uids]
+
+    # Build task synapse
+    task_synapse = TaskSynapse(
+        prompt=task.prompt,
+        url=task.url,
+        html="",
+        screenshot="",
+        actions=[],
+        version=validator.version,
+    )
+
+    # Optional: version check with intentionally wrong version
+    version_responses = await check_miner_not_responding_to_invalid_version(
+        validator,
+        task_synapse=TaskSynapse(**task_synapse.model_dump()),  # shallow copy
+        miner_axons=miner_axons,
+        probability=CHECK_VERSION_PROBABILITY,
+        timeout=CHECK_VERSION_SYNAPSE,
+    )
+    invalid_version_responders: Set[int] = set()
+    for i, vresp in enumerate(version_responses):
+        if vresp and hasattr(vresp, "actions") and vresp.actions:
+            invalid_version_responders.add(miner_uids[i])
+
+    # Send the correct version to ALL miners
+    bt.logging.info("Sending Task Synapse to ALL miners")
+    responses = await send_task_synapse_to_miners(
+        validator, miner_axons, task_synapse, timeout=TIMEOUT
+    )
+
+    # Convert responses to TaskSolutions + process times
+    task_solutions, execution_times = collect_task_solutions(
+        task, responses, miner_uids
+    )
+
+    # Evaluate and compute rewards
+    rewards, test_results_matrices, evaluation_results = await get_rewards_with_details(
+        validator,
+        web_project=web_project,
+        task=task,
+        task_solutions=task_solutions,
+        execution_times=execution_times,
+        time_weight=TIME_WEIGHT,
+        efficiency_weight=EFFICIENCY_WEIGHT,
+        min_correct_format_score=MIN_SCORE_FOR_CORRECT_FORMAT,
+        min_response_reward=MIN_RESPONSE_REWARD,
+        invalid_version_responders=invalid_version_responders,
+    )
+    bt.logging.info(f"Miners final rewards: {rewards}")
+
+    # Feedback + leaderboard logging
+    await send_feedback_synapse_to_miners(
+        validator=validator,
+        miner_axons=miner_axons,
+        miner_uids=miner_uids,
+        task=task,
+        task_solutions=task_solutions,
+        test_results_matrices=test_results_matrices,
+        evaluation_results=evaluation_results,
+        rewards=rewards,
+        execution_times=execution_times,
+    )
+    _schedule_leaderboard_logging(
+        validator,
+        miner_uids,
+        execution_times,
+        task,
+        evaluation_results,
+        task_solutions,
+    )
+
+    # Return rewards aligned to ALL UIDs (we used range(n), so order matches)
+    rewards_vec = np.asarray(rewards, dtype=np.float32)
+    if rewards_vec.shape[0] != n:
+        # Defensive padding/truncation if something unexpected happens
+        padded = np.zeros(n, dtype=np.float32)
+        padded[: min(n, rewards_vec.shape[0])] = rewards_vec[
+            : min(n, rewards_vec.shape[0])
+        ]
+        rewards_vec = padded
+
+    return rewards_vec
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Per-task processing loop (sampling-based; kept for compatibility)
 # ─────────────────────────────────────────────────────────────────────────────
 async def process_tasks(
     validator, web_project: WebProject, tasks_generated: List[Task]
@@ -320,6 +421,9 @@ async def process_tasks(
     """
     Send, evaluate, feedback, and accumulate per-UID sums/counts.
     Returns (sum_per_uid, count_per_uid) with shape (metagraph.n,).
+
+    NOTE: This uses sampling (SAMPLE_SIZE). If you always evaluate ALL miners,
+    prefer `evaluate_task_all_miners(...)` above for a simpler flow.
     """
     import numpy as np
 
@@ -394,7 +498,7 @@ async def process_tasks(
         bt.logging.info(f"Miners final rewards: {rewards}")
         bt.logging.info(f"Rewards computed in {time.time() - start_eval:.2f}s.")
 
-        # 7) Aggregate per-UID
+        # 7) Aggregate per-UID (only for sampled UIDs)
         r = np.asarray(rewards, dtype=np.float32)
         sum_per_uid[miner_uids] += r
         count_per_uid[miner_uids] += 1
@@ -438,8 +542,7 @@ async def process_tasks(
         tasks_count += 1
         tasks_total_time += time.time() - t0_task
         ColoredLogger.info(
-            f"Task iteration time: {time.time() - t0_task:.2f}s, "
-            f"avg miner request: {avg_miner_time:.2f}s.",
+            f"Task iteration time: {time.time() - t0_task:.2f}s, avg miner request: {avg_miner_time:.2f}s.",
             ColoredLogger.YELLOW,
         )
 
@@ -450,8 +553,7 @@ async def process_tasks(
     end_time = time.time()
     avg_task_time = tasks_total_time / tasks_count if tasks_count else 0.0
     bt.logging.info(
-        f"Processed {tasks_count} tasks in {end_time - total_time_start:.2f}s, "
-        f"avg per task: {avg_task_time:.2f}s"
+        f"Processed {tasks_count} tasks in {end_time - total_time_start:.2f}s, avg per task: {avg_task_time:.2f}s"
     )
 
     update_validator_performance_stats(

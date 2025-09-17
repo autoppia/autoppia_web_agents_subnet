@@ -1,8 +1,6 @@
 {
-    "python.analysis.extraPaths": [
-      "${workspaceFolder}/autoppia_iwa_module"
-    ],
-    "python.autoComplete.extraPaths": [
-      "${workspaceFolder}/autoppia_iwa_module"
-    ]
-  }
+  "python.analysis.extraPaths": ["${workspaceFolder}/autoppia_iwa_module"],
+  "python.autoComplete.extraPaths": ["${workspaceFolder}/autoppia_iwa_module"],
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "ms-python.black-formatter"
+}
