@@ -225,8 +225,8 @@ class BaseValidatorNeuron(BaseNeuron):
         # Compute raw_weights safely
         raw_weights = self.scores / norm
 
-        bt.logging.debug("raw_weights", raw_weights)
-        bt.logging.debug("raw_weight_uids", str(self.metagraph.uids.tolist()))
+        bt.logging.info("raw_weights", raw_weights)
+        bt.logging.info("raw_weight_uids", str(self.metagraph.uids.tolist()))
         # Process the raw weights to final_weights via subtensor limitations.
         (
             processed_weight_uids,
@@ -246,8 +246,8 @@ class BaseValidatorNeuron(BaseNeuron):
             uint_uids,
             uint_weights,
         ) = convert_weights_and_uids_for_emit(uids=processed_weight_uids, weights=processed_weights)
-        bt.logging.debug("uint_weights", uint_weights)
-        bt.logging.debug("uint_uids", uint_uids)
+        bt.logging.info("uint_weights", uint_weights)
+        bt.logging.info("uint_uids", uint_uids)
 
         # Set the weights on chain via our subtensor connection.
         result, msg = self.subtensor.set_weights(
