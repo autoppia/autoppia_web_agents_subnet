@@ -68,11 +68,7 @@ def _normalize_times_for_valid_solutions(
     n = len(execution_times)
     time_factors = [0.0] * n
 
-    valid_pairs = [
-        (t, idx)
-        for idx, t in enumerate(execution_times)
-        if t is not None and raw_scores[idx] > 0
-    ]
+    valid_pairs = [(t, idx) for idx, t in enumerate(execution_times) if t is not None and raw_scores[idx] > 0]
     if not valid_pairs:
         return time_factors
 
@@ -114,9 +110,7 @@ def _normalize_action_lengths_for_valid_solutions(
     n = len(actions_lengths)
     eff_factors = [0.0] * n
 
-    valid_pairs = [
-        (l, idx) for idx, l in enumerate(actions_lengths) if raw_scores[idx] > 0
-    ]
+    valid_pairs = [(l, idx) for idx, l in enumerate(actions_lengths) if raw_scores[idx] > 0]
     if not valid_pairs:
         return eff_factors
 
@@ -186,17 +180,13 @@ def _process_evaluation_results(
        - If raw_score <= 0 => final_score=0.0
        - If raw_score >= min_correct_format_score => enforce min_response_reward
     """
-    raw_scores = [
-        (r.final_score if r.final_score is not None else 0.0) for r in detailed_results
-    ]
+    raw_scores = [(r.final_score if r.final_score is not None else 0.0) for r in detailed_results]
 
     # Time factor for solutions with raw_score>0
     time_factors = _normalize_times_for_valid_solutions(execution_times, raw_scores)
 
     # Efficiency factor for solutions with raw_score>0
-    eff_factors = _normalize_action_lengths_for_valid_solutions(
-        actions_lengths, raw_scores
-    )
+    eff_factors = _normalize_action_lengths_for_valid_solutions(actions_lengths, raw_scores)
 
     for i, result in enumerate(detailed_results):
         # 1) Convert test_results_matrix to JSON-friendly shape
@@ -208,20 +198,14 @@ def _process_evaluation_results(
         eff_factor = eff_factors[i]
 
         if raw_score > 0:
-            combined_score = (
-                (1.0 - time_weight - efficiency_weight) * raw_score
-                + time_weight * time_factor
-                + efficiency_weight * eff_factor
-            )
+            combined_score = (1.0 - time_weight - efficiency_weight) * raw_score + time_weight * time_factor + efficiency_weight * eff_factor
             final_score_time_adjusted = max(0.0, min(combined_score, 1.0))
         else:
             final_score_time_adjusted = 0.0
 
         # Enforce a minimum reward if raw_score >= min_correct_format_score
         if raw_score >= min_correct_format_score:
-            final_score_time_adjusted = max(
-                final_score_time_adjusted, min_response_reward
-            )
+            final_score_time_adjusted = max(final_score_time_adjusted, min_response_reward)
 
         rewards[i] = final_score_time_adjusted
 
@@ -231,9 +215,7 @@ def _process_evaluation_results(
             "reward_score": float(final_score_time_adjusted),
             "time_factor": float(time_factor),
             "efficiency_factor": float(eff_factor),
-            "execution_time": (
-                float(execution_times[i]) if i < len(execution_times) else None
-            ),
+            "execution_time": (float(execution_times[i]) if i < len(execution_times) else None),
             "actions_count": actions_lengths[i],
         }
         # If there's feedback with test counts, add it
@@ -241,12 +223,8 @@ def _process_evaluation_results(
             eval_dict["feedback"] = {
                 "passed_tests": int(getattr(result.feedback, "passed_tests", 0)),
                 "failed_tests": int(getattr(result.feedback, "failed_tests", 0)),
-                "total_execution_time": float(
-                    getattr(result.feedback, "total_execution_time", 0.0)
-                ),
-                "executed_actions": int(
-                    getattr(result.feedback, "executed_actions", 0)
-                ),
+                "total_execution_time": float(getattr(result.feedback, "total_execution_time", 0.0)),
+                "executed_actions": int(getattr(result.feedback, "executed_actions", 0)),
                 "failed_actions": int(getattr(result.feedback, "failed_actions", 0)),
             }
 
@@ -275,9 +253,7 @@ async def get_rewards_with_details(
 
     We now also incorporate an 'efficiency_factor' weighted at 15%, based on the number of actions.
     """
-    bt.logging.info(
-        f"Evaluating {len(task_solutions)} task solutions with detailed results"
-    )
+    bt.logging.info(f"Evaluating {len(task_solutions)} task solutions with detailed results:  {task_solutions}")
 
     evaluator_config = EvaluatorConfig(
         # save_results_in_db=False,
@@ -295,11 +271,7 @@ async def get_rewards_with_details(
 
     try:
         # Evaluate solutions
-        detailed_results: List[EvaluationResult] = (
-            await evaluator.evaluate_task_solutions(
-                task=task, task_solutions=task_solutions
-            )
-        )
+        detailed_results: List[EvaluationResult] = await evaluator.evaluate_task_solutions(task=task, task_solutions=task_solutions)
 
         (
             rewards,
