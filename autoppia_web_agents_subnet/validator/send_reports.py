@@ -188,12 +188,23 @@ def send_email(cfg, subject, body):
     msg["From"] = cfg["from_email"]
     msg["To"] = ", ".join(cfg["to_emails"])
 
-    with smtplib.SMTP(cfg["smtp_host"], cfg["smtp_port"]) as server:
-        if cfg["starttls"]:
-            server.starttls()
-        if cfg["smtp_user"] and cfg["smtp_pass"]:
-            server.login(cfg["smtp_user"], cfg["smtp_pass"])
-        server.sendmail(cfg["from_email"], cfg["to_emails"], msg.as_string())
+    use_ssl = (cfg["smtp_port"] == 465) and (not cfg["starttls"])
+    if use_ssl:
+        import smtplib
+
+        with smtplib.SMTP_SSL(cfg["smtp_host"], cfg["smtp_port"]) as server:
+            if cfg["smtp_user"] and cfg["smtp_pass"]:
+                server.login(cfg["smtp_user"], cfg["smtp_pass"])
+            server.sendmail(cfg["from_email"], cfg["to_emails"], msg.as_string())
+    else:
+        import smtplib
+
+        with smtplib.SMTP(cfg["smtp_host"], cfg["smtp_port"]) as server:
+            if cfg["starttls"]:
+                server.starttls()
+            if cfg["smtp_user"] and cfg["smtp_pass"]:
+                server.login(cfg["smtp_user"], cfg["smtp_pass"])
+            server.sendmail(cfg["from_email"], cfg["to_emails"], msg.as_string())
 
 
 def main():

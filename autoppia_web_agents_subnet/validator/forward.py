@@ -141,6 +141,32 @@ async def forward(self) -> None:
             miner_attempts=miner_attempts_total,
             forward_id=self.forward_count,
         )
+
+        # ⬇️⬇️⬇️ BLOQUE NUEVO: guardar registro por forward para send_reports.py
+        try:
+            import json, os
+            from pathlib import Path
+
+            reports_dir = Path(os.getenv("REPORTS_DIR", "forward_reports"))
+            reports_dir.mkdir(parents=True, exist_ok=True)
+
+            avg_response_time = (sum_avg_response_times / tasks_sent) if tasks_sent else 0.0
+            record = {
+                "forward_id": int(self.forward_count),
+                "tasks_sent": int(tasks_sent),
+                "miner_successes": int(miner_successes_total),
+                "miner_attempts": int(miner_attempts_total),
+                "forward_time": float(forward_time),
+                "avg_response_time": float(avg_response_time),
+                "summary": summary,
+            }
+            with open(reports_dir / "forward_summary.jsonl", "a", encoding="utf-8") as f:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+            bt.logging.info("forward_summary.jsonl actualizado.")
+        except Exception as e:
+            bt.logging.warning(f"No pude guardar forward_summary.jsonl: {e}")
+        # ⬆️⬆️⬆️ FIN BLOQUE NUEVO
+
         print_forward_tables(self.validator_performance_stats)
 
         bt.logging.success("Forward cycle completed!")
