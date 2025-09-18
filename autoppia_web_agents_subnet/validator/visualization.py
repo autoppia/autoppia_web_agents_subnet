@@ -73,8 +73,8 @@ def print_forward_tables(stats: Dict[str, Any]) -> None:
         padding=(0, 1),
     )
     # Columnas reducidas para 80 chars
-    forward_tbl.add_column("Sent", justify="right", width=5)
-    forward_tbl.add_column("OK", justify="right", style="green", width=4)
+    forward_tbl.add_column("T. Sent", justify="right", width=5)
+    forward_tbl.add_column("", justify="right", style="green", width=4)
     forward_tbl.add_column("Fail", justify="right", style="red", width=5)
     forward_tbl.add_column("OK%", justify="right", width=6)
     forward_tbl.add_column("M.OK", justify="right", width=8)
@@ -86,9 +86,9 @@ def print_forward_tables(stats: Dict[str, Any]) -> None:
         str(f_sent),
         str(f_succ),
         str(f_fail),
-        f"{f_rate*100:.0f}",
+        f"{f_rate*100:.2f}",
         f"{sols_ok}/{sols_attempts}",
-        f"{sols_rate*100:.0f}",
+        f"{sols_rate*100:.2f}",
         _format_secs(f_avg_task)[:6],
         _format_secs(f_time)[:7],
     )
@@ -130,9 +130,9 @@ def print_forward_tables(stats: Dict[str, Any]) -> None:
         str(total_sent),
         str(total_succ),
         str(total_fail),
-        f"{success_rate*100:.0f}",
+        f"{success_rate*100:.2f}",
         f"{sols_total_ok}/{sols_total_attempts}"[:8],
-        f"{sols_total_rate*100:.0f}",
+        f"{sols_total_rate*100:.2f}",
         _format_secs(overall_avg)[:6],
     )
     console.print(totals_tbl)
@@ -146,7 +146,6 @@ def print_leaderboard_table(records: List[LeaderboardTaskRecord], task_prompt: s
     # Detectar el ancho REAL de la terminal
     try:
         terminal_width = shutil.get_terminal_size().columns
-        print(f"Terminal detectada: {terminal_width} columnas")
     except:
         terminal_width = 80
 
@@ -185,7 +184,7 @@ def print_leaderboard_table(records: List[LeaderboardTaskRecord], task_prompt: s
             rec.miner_hotkey[:10] + ".." if len(rec.miner_hotkey) > 12 else rec.miner_hotkey,
             str(rec.miner_uid),
             "✅" if rec.success else "❌",
-            str(acts),
+            f"{acts:.1f}",
             f"{rec.score:.2f}",
             f"{rec.duration:.1f}",
         )
@@ -200,10 +199,10 @@ def print_leaderboard_table(records: List[LeaderboardTaskRecord], task_prompt: s
 
     console.print(
         f"[bold white]Total successes:[/bold white] {successes}/{total}   "
-        f"[bold white]Success rate:[/bold white] {rate:.1f}%   "
+        f"[bold white]Success rate:[/bold white] {rate:.2f}%   "
         f"[bold white]Avg duration:[/bold white] {avg_dur:.2f}s   "
         f"[bold white]Avg reward:[/bold white] {avg_reward:.2f}   "
-        f"[bold white]Avg actions:[/bold white] {avg_actions:.2f}",
+        f"[bold white]Avg actions:[/bold white] {avg_actions:.1f}",
         style="yellow",
     )
 
@@ -243,7 +242,7 @@ def print_leaderboard_table(records: List[LeaderboardTaskRecord], task_prompt: s
             str(total_hotkeys_ck),
             str(total_ck_tasks),
             str(total_ck_successes),
-            f"{success_rate_ck:.0f}%",
+            f"{success_rate_ck:.2f}%",
             f"{avg_duration_ck:.1f}",
             f"{avg_reward_ck:.2f}",
             f"{avg_actions_ck:.1f}",
@@ -298,8 +297,8 @@ def print_coldkey_resume() -> None:
             str(len(blk.hotkeys)),
             str(blk.tasks),
             str(blk.successes),
-            f"{blk.success_rate*100:.0f}",
-            f"{blk.avg_reward:.1f}",
+            f"{blk.success_rate*100:.2f}",
+            f"{blk.avg_reward:.2f}",
             f"{blk.avg_actions:.1f}",
             f"{blk.avg_duration:.1f}",
         )
@@ -340,8 +339,8 @@ def print_coldkey_resume() -> None:
             str(len(acc.hotkeys)),
             str(acc.tasks),
             str(acc.successes),
-            f"{acc.success_rate*100:.0f}%",
-            f"{acc.avg_reward:.1f}",
+            f"{acc.success_rate*100:.2f}%",
+            f"{acc.avg_reward:.2f}",
             f"{acc.avg_actions:.1f}",
             f"{acc.avg_duration:.1f}",
         )
