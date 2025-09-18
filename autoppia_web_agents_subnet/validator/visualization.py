@@ -51,11 +51,10 @@ def print_forward_tables(stats: Dict[str, Any]) -> None:
     f_time = float(lf.get("forward_time", 0.0))
 
     # “Solutions OK / %” (más claro que “Miner OK”)
-    sols_ok = int(lf.get("num_success", 0))
-    sols_wrong = int(lf.get("num_wrong", 0))
-    sols_noresp = int(lf.get("num_no_response", 0))
-    sols_attempts = sols_ok + sols_wrong + sols_noresp
-    sols_rate = (sols_ok / max(1, sols_attempts)) if sols_attempts > 0 else 0.0
+    # “Miner OK / %” usando lo que guarda finalize_forward_stats
+    sols_ok = int(lf.get("miner_successes", 0))
+    sols_attempts = int(lf.get("miner_attempts", 0))
+    sols_rate = (sols_ok / sols_attempts) if sols_attempts > 0 else 0.0
 
     forward_tbl = Table(
         title="[bold magenta]Forward summary[/bold magenta]",
