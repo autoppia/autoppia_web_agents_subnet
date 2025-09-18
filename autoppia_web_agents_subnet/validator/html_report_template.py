@@ -1,9 +1,34 @@
 def render_html_report(fwd_table_data, table_global_data, table_cwu_data, task_table_data, task_summary_data, host, now):
+    # Paleta de colores suaves (se repite si hay más proyectos que colores)
+    COLOR_PALETTE = [
+        "#e3f2fd",  # light blue
+        "#f1f8e9",  # light green
+        "#fff3e0",  # light orange
+        "#fce4ec",  # light pink
+        "#ede7f6",  # light purple
+        "#e0f7fa",  # light cyan
+        "#f9fbe7",  # light lime
+        "#fbe9e7",  # light coral
+        "#f3e5f5",  # light violet
+        "#e8f5e9",  # light mint
+        "#edeff0",  # light gray
+        "#fffde7",  # light yellow
+    ]
+
+    project_color_map = {}
+
+    def get_project_color(project: str) -> str:
+        """Assign a consistent color for each project automatically."""
+        if project not in project_color_map:
+            idx = len(project_color_map) % len(COLOR_PALETTE)
+            project_color_map[project] = COLOR_PALETTE[idx]
+        return project_color_map[project]
+
     def render_html_table(headers, rows, title=""):
         if not rows:
-            return f"<p><b>{title}:</b> (sin datos)</p>"
+            return f"<p><b>{title}:</b> (no data)</p>"
 
-        # Ordenar Coldkey Global por Hotk desc (columna 1)
+        # Sort Coldkey Global by Hotk (column 1) descending
         if title == "Coldkey Global":
             try:
                 rows = sorted(rows, key=lambda r: int(r[1]), reverse=True)
@@ -13,27 +38,43 @@ def render_html_report(fwd_table_data, table_global_data, table_cwu_data, task_t
         table_html = f"<h2>{title}</h2><table>"
         table_html += "<thead><tr>" + "".join(f"<th>{h}</th>" for h in headers) + "</tr></thead>"
         table_html += "<tbody>"
+
         for r in rows:
             row_html = ""
+            bg_style = ""
+
+            # Background color by Web project (if column exists)
+            if "Web" in headers:
+                try:
+                    web_idx = headers.index("Web")
+                    web_val = str(r[web_idx])
+                    if web_val:
+                        bg_style = f"background-color:{get_project_color(web_val.lower())};"
+                except Exception:
+                    pass
+
             for cell in r:
                 txt = str(cell)
-                style = ""
-                # Colorear porcentajes
+                style = bg_style
+
+                # Color percentages
                 if "%" in txt:
                     try:
                         val = float(txt.replace("%", ""))
                         if val <= 25:
-                            style = "color:#b71c1c;font-weight:bold;"  # rojo
+                            style += "color:#b71c1c;font-weight:bold;"  # red
                         elif val <= 50:
-                            style = "color:#e65100;font-weight:bold;"  # naranja
+                            style += "color:#e65100;font-weight:bold;"  # orange
                         elif val <= 75:
-                            style = "color:#f9a825;font-weight:bold;"  # ámbar
+                            style += "color:#f9a825;font-weight:bold;"  # amber
                         else:
-                            style = "color:#1b5e20;font-weight:bold;"  # verde
+                            style += "color:#1b5e20;font-weight:bold;"  # green
                     except Exception:
                         pass
+
                 row_html += f"<td style='{style}'>{txt}</td>"
             table_html += f"<tr>{row_html}</tr>"
+
         table_html += "</tbody></table>"
         return table_html
 
@@ -80,12 +121,12 @@ def render_html_report(fwd_table_data, table_global_data, table_cwu_data, task_t
   </style>
 </head>
 <body>
-  <h1>📊 Autoppia Web Agents – Reporte</h1>
-  <p><b>Fecha:</b> {now} &nbsp;&nbsp; <b>Host:</b> {host}</p>
+  <h1>📊 Autoppia Web Agents – Report</h1>
+  <p><b>Date:</b> {now} &nbsp;&nbsp; <b>Host:</b> {host}</p>
 
   {render_html_table(*fwd_table_data, title="Forward Totals")}
-  {render_html_table(*task_table_data, title="Tareas del último Forward")}
-  {render_html_table(*task_summary_data, title="Resumen Global de Tareas")}
+  {render_html_table(*task_table_data, title="Last Forward Tasks")}
+  {render_html_table(*task_summary_data, title="Global Task Summary")}
   {render_html_table(*table_global_data, title="Coldkey Global")}
   {render_html_table(*table_cwu_data, title="Coldkey / Web / Use-case")}
 </body>
