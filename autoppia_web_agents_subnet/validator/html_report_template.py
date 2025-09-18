@@ -43,20 +43,17 @@ def render_html_report(fwd_table_data, table_global_data, table_cwu_data, task_t
             row_html = ""
             bg_style = ""
 
-            # Background color by Web project (if column exists)
-            web_idx = None
-            coldkey_idx = None
-            if "Web" in headers:
+            # Detect indices
+            web_idx = headers.index("Web") if "Web" in headers else None
+            coldkey_idx = headers.index("Coldkey") if "Coldkey" in headers else None
+            hotk_idx = headers.index("Hotk") if "Hotk" in headers else None
+
+            # Background color by Web project
+            if web_idx is not None:
                 try:
-                    web_idx = headers.index("Web")
                     web_val = str(r[web_idx])
                     if web_val:
                         bg_style = f"background-color:{get_project_color(web_val.lower())};"
-                except Exception:
-                    pass
-            if "Coldkey" in headers:
-                try:
-                    coldkey_idx = headers.index("Coldkey")
                 except Exception:
                     pass
 
@@ -72,10 +69,15 @@ def render_html_report(fwd_table_data, table_global_data, table_cwu_data, task_t
                 if web_idx is not None and i == web_idx:
                     txt = f"<b>{txt}</b>"
 
+                # Bold for Hotk column
+                if hotk_idx is not None and i == hotk_idx:
+                    txt = f"<b>{txt}</b>"
+
                 # Color percentages
                 if "%" in txt:
                     try:
-                        val = float(txt.replace("%", "").replace("<b>", "").replace("</b>", "").replace("<i>", "").replace("</i>", ""))
+                        clean_txt = txt.replace("%", "").replace("<b>", "").replace("</b>", "").replace("<i>", "").replace("</i>", "")
+                        val = float(clean_txt)
                         if val <= 25:
                             style += "color:#b71c1c;font-weight:bold;"  # red
                         elif val <= 50:
