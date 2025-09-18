@@ -1,9 +1,9 @@
-def render_html_report(fwd_table_data, table_global_data, table_cwu_data, host, now):
+def render_html_report(fwd_table_data, table_global_data, table_cwu_data, task_table_data, task_summary_data, host, now):
     def render_html_table(headers, rows, title=""):
         if not rows:
             return f"<p><b>{title}:</b> (sin datos)</p>"
 
-        # Orden especial: si es Coldkey Global → ordenar por Hotk desc (col=1)
+        # Ordenar Coldkey Global por Hotk desc (columna 1)
         if title == "Coldkey Global":
             try:
                 rows = sorted(rows, key=lambda r: int(r[1]), reverse=True)
@@ -15,26 +15,24 @@ def render_html_report(fwd_table_data, table_global_data, table_cwu_data, host, 
         table_html += "<tbody>"
         for r in rows:
             row_html = ""
-            for i, c in enumerate(r):
-                cell = str(c)
+            for cell in r:
+                txt = str(cell)
                 style = ""
-
-                # Detectar si la columna es un porcentaje
-                if "%" in cell:
+                # Colorear porcentajes
+                if "%" in txt:
                     try:
-                        val = float(cell.replace("%", ""))
+                        val = float(txt.replace("%", ""))
                         if val <= 25:
-                            style = "color: #b71c1c; font-weight:bold;"  # rojo
+                            style = "color:#b71c1c;font-weight:bold;"  # rojo
                         elif val <= 50:
-                            style = "color: #e65100; font-weight:bold;"  # naranja
+                            style = "color:#e65100;font-weight:bold;"  # naranja
                         elif val <= 75:
-                            style = "color: #f9a825; font-weight:bold;"  # amarillo/ámbar
+                            style = "color:#f9a825;font-weight:bold;"  # ámbar
                         else:
-                            style = "color: #1b5e20; font-weight:bold;"  # verde
+                            style = "color:#1b5e20;font-weight:bold;"  # verde
                     except Exception:
                         pass
-
-                row_html += f"<td style='{style}'>{cell}</td>"
+                row_html += f"<td style='{style}'>{txt}</td>"
             table_html += f"<tr>{row_html}</tr>"
         table_html += "</tbody></table>"
         return table_html
@@ -83,11 +81,12 @@ def render_html_report(fwd_table_data, table_global_data, table_cwu_data, host, 
 </head>
 <body>
   <h1>📊 Autoppia Web Agents – Reporte</h1>
-  <p><b>Fecha:</b> {now} <br><b>Host:</b> {host}</p>
+  <p><b>Fecha:</b> {now} &nbsp;&nbsp; <b>Host:</b> {host}</p>
 
   {render_html_table(*fwd_table_data, title="Forward Totals")}
+  {render_html_table(*task_table_data, title="Tareas del último Forward")}
+  {render_html_table(*task_summary_data, title="Resumen Global de Tareas")}
   {render_html_table(*table_global_data, title="Coldkey Global")}
   {render_html_table(*table_cwu_data, title="Coldkey / Web / Use-case")}
-
 </body>
 </html>"""

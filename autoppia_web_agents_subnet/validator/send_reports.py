@@ -1,19 +1,14 @@
 #!/usr/bin/env python3
-# send_reports.py
-import os
-import json
-import smtplib
-import socket
+import os, json, smtplib, socket
 from pathlib import Path
 from datetime import datetime
-from collections import defaultdict
+from collections import defaultdict, Counter
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-# Importar template HTML
 from html_report_template import render_html_report
 
-# 1) Cargar .env  (pip install python-dotenv)
+# 1) .env
 try:
     from dotenv import load_dotenv
 
@@ -21,13 +16,13 @@ try:
 except Exception:
     pass
 
-# 2) Rutas de entrada
-REPORTS_DIR = Path(os.getenv("REPORTS_DIR", "reports"))
+# 2) Paths
+REPORTS_DIR = Path(os.getenv("REPORTS_DIR", "forward_reports"))
 FORWARD_JSONL = REPORTS_DIR / "forward_summary.jsonl"
 COLDKEY_SNAPSHOT = Path("coldkey_web_usecase_stats.json")
 
 
-# 3) Config del email desde .env
+# 3) Config SMTP
 def load_cfg():
     to_emails = [e.strip() for e in os.getenv("SMTP_TO", "").split(",") if e.strip()]
     return {
@@ -41,140 +36,121 @@ def load_cfg():
     }
 
 
-# 4) Utilidades
-def safe_float(x, default=0.0):
-    try:
-        return float(x)
-    except Exception:
-        return default
-
-
-def safe_int(x, default=0):
+# Utils
+def safe_int(x, d=0):
     try:
         return int(x)
-    except Exception:
-        return default
+    except:
+        return d
 
 
-def pct(numer, denom):
-    return (numer / denom * 100.0) if denom else 0.0
+def safe_float(x, d=0.0):
+    try:
+        return float(x)
+    except:
+        return d
 
 
-# ---------- Normalizador de líneas ----------
-def _normalize_line(rec: dict):
-    if "last_forward" in rec or "totals" in rec:
-        lf = rec.get("last_forward", {}) or rec.get("forward", {})
-        fid = safe_int(lf.get("forward_id", -1), -1)
-        tasks_sent = safe_int(lf.get("tasks_sent", 0))
-        fwd_time = safe_float(lf.get("forward_time", 0.0))
-        miner_succ = safe_int(lf.get("miner_successes", 0))
-        miner_atts = safe_int(lf.get("miner_attempts", 0))
-        avg_resp = None
-        avg_per_task = (fwd_time / tasks_sent) if tasks_sent else 0.0
-        miner_pct = pct(miner_succ, miner_atts)
-        return (fid, tasks_sent, fwd_time, miner_succ, miner_atts, avg_resp, avg_per_task, miner_pct)
-    else:
-        fid = safe_int(rec.get("forward_id", -1), -1)
-        tasks_sent = safe_int(rec.get("tasks_sent", 0))
-        fwd_time = safe_float(rec.get("forward_time", 0.0))
-        miner_succ = safe_int(rec.get("miner_successes", 0))
-        miner_atts = safe_int(rec.get("miner_attempts", 0))
-        avg_resp = rec.get("avg_response_time", None)
-        avg_resp = safe_float(avg_resp, 0.0) if avg_resp is not None else None
-        avg_per_task = (fwd_time / tasks_sent) if tasks_sent else 0.0
-        miner_pct = pct(miner_succ, miner_atts)
-        return (fid, tasks_sent, fwd_time, miner_succ, miner_atts, avg_resp, avg_per_task, miner_pct)
+def pct(n, d):
+    return (n / d * 100) if d else 0.0
 
 
-# 5) Cargar totales de forward
+# ---------- Forward Totals ----------
 def load_forward_totals():
-    totals = {
-        "forwards": 0,
-        "tasks_sent": 0,
-        "miner_successes": 0,
-        "miner_attempts": 0,
-        "forward_time_sum": 0.0,
-        "avg_response_time_sum": 0.0,
-        "avg_response_time_count": 0,
-    }
-    per_forward_rows = []
-
+    totals = {"forwards": 0, "tasks_sent": 0, "miner_successes": 0, "miner_attempts": 0, "forward_time_sum": 0.0}
+    per_rows = []
     if FORWARD_JSONL.exists():
         for line in FORWARD_JSONL.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
             try:
-                raw = json.loads(line)
-            except Exception:
+                rec = json.loads(line)
+            except:
                 continue
-            fid, tasks_sent, fwd_time, miner_succ, miner_atts, avg_resp, avg_per_task, miner_pct = _normalize_line(raw)
+            lf = rec.get("last_forward", {})
+            fid = safe_int(lf.get("forward_id", -1))
+            ts = safe_int(lf.get("tasks_sent", 0))
+            ft = safe_float(lf.get("forward_time", 0.0))
+            ms = safe_int(lf.get("miner_successes", 0))
+            ma = safe_int(lf.get("miner_attempts", 0))
             totals["forwards"] += 1
-            totals["tasks_sent"] += tasks_sent
-            totals["miner_successes"] += miner_succ
-            totals["miner_attempts"] += miner_atts
-            totals["forward_time_sum"] += fwd_time
-            if avg_resp is not None:
-                totals["avg_response_time_sum"] += safe_float(avg_resp, 0.0)
-                totals["avg_response_time_count"] += 1
-            per_forward_rows.append([fid, tasks_sent, miner_succ, miner_atts, f"{miner_pct:.1f}%", f"{avg_per_task:.2f}s", f"{fwd_time:.2f}s"])
-
-    miner_success_rate = pct(totals["miner_successes"], totals["miner_attempts"])
-    avg_forward_time = (totals["forward_time_sum"] / totals["forwards"]) if totals["forwards"] else 0.0
-    avg_response_time = (totals["avg_response_time_sum"] / totals["avg_response_time_count"]) if totals["avg_response_time_count"] else 0.0
-    avg_time_per_task_overall = (totals["forward_time_sum"] / totals["tasks_sent"]) if totals["tasks_sent"] else 0.0
-
+            totals["tasks_sent"] += ts
+            totals["miner_successes"] += ms
+            totals["miner_attempts"] += ma
+            totals["forward_time_sum"] += ft
+            per_rows.append([fid, ts, ms, ma, f"{pct(ms,ma):.1f}%", f"{(ft/ts if ts else 0):.2f}s", f"{ft:.2f}s"])
     headers = ["Forward", "Tasks", "Successes", "Attempts", "Miner%", "Avg/task", "Forward Time"]
-    total_row = ["TOTAL", totals["tasks_sent"], totals["miner_successes"], totals["miner_attempts"], f"{miner_success_rate:.1f}%", f"{avg_time_per_task_overall:.2f}s", f"{avg_forward_time:.2f}s"]
-    rows = per_forward_rows + [total_row]
-
-    summary = {
-        "total_forwards": totals["forwards"],
-        "total_tasks_sent": totals["tasks_sent"],
-        "avg_time_per_task_overall": f"{avg_time_per_task_overall:.2f}s",
-        "miner_percentage": f"{miner_success_rate:.1f}%",
-        "avg_forward_time": f"{avg_forward_time:.2f}s",
-        "avg_response_time": f"{avg_response_time:.2f}s",
-    }
-    return summary, (headers, rows)
+    total_row = [
+        "TOTAL",
+        totals["tasks_sent"],
+        totals["miner_successes"],
+        totals["miner_attempts"],
+        f"{pct(totals['miner_successes'],totals['miner_attempts']):.1f}%",
+        f"{(totals['forward_time_sum']/totals['tasks_sent'] if totals['tasks_sent'] else 0):.2f}s",
+        f"{(totals['forward_time_sum']/totals['forwards'] if totals['forwards'] else 0):.2f}s",
+    ]
+    return (headers, per_rows + [total_row])
 
 
-# 6) Tablas: Coldkey global y Coldkey/Web/Use-case
+# ---------- Coldkey tables ----------
 def load_coldkey_tables():
     if not COLDKEY_SNAPSHOT.exists():
         return (["Coldkey", "Hotk", "Tasks", "Succ", "Rate %", "Avg s"], []), (["Coldkey", "Web", "Use-case", "Hotk", "Tasks", "Succ", "Rate %", "Avg s"], [])
     try:
         data = json.loads(COLDKEY_SNAPSHOT.read_text(encoding="utf-8"))
-    except Exception:
+    except:
         return (["Coldkey", "Hotk", "Tasks", "Succ", "Rate %", "Avg s"], []), (["Coldkey", "Web", "Use-case", "Hotk", "Tasks", "Succ", "Rate %", "Avg s"], [])
     stats = data.get("stats", {})
-    agg_by_ck = defaultdict(lambda: {"tasks": 0, "succ": 0, "dur": 0.0, "hotkeys": set()})
-    rows_cwu, rows_global = [], []
+    agg = defaultdict(lambda: {"tasks": 0, "succ": 0, "dur": 0.0, "hotkeys": set()})
+    rows_cwu = []
+    rows_global = []
     for ck, webs in stats.items():
         for web, ucs in webs.items():
             for uc, blk in ucs.items():
-                tasks = safe_int(blk.get("tasks", 0))
-                succ = safe_int(blk.get("successes", 0))
-                dur = safe_float(blk.get("duration_sum", 0.0))
-                hotk = set(blk.get("hotkeys", []))
-                rate = (succ / tasks * 100) if tasks else 0.0
-                avgd = (dur / tasks) if tasks else 0.0
-                rows_cwu.append([ck, web, uc, len(hotk), tasks, succ, f"{rate:.1f}%", f"{avgd:.2f}"])
-                agg_by_ck[ck]["tasks"] += tasks
-                agg_by_ck[ck]["succ"] += succ
-                agg_by_ck[ck]["dur"] += dur
-                agg_by_ck[ck]["hotkeys"] |= hotk
-    for ck, a in sorted(agg_by_ck.items()):
-        tasks = a["tasks"]
-        succ = a["succ"]
-        rate = (succ / tasks * 100) if tasks else 0.0
-        avgd = (a["dur"] / tasks) if tasks else 0.0
-        rows_global.append([ck, len(a["hotkeys"]), tasks, succ, f"{rate:.1f}%", f"{avgd:.2f}"])
-    headers_global = ["Coldkey", "Hotk", "Tasks", "Succ", "Rate %", "Avg s"]
-    headers_cwu = ["Coldkey", "Web", "Use-case", "Hotk", "Tasks", "Succ", "Rate %", "Avg s"]
-    return (headers_global, rows_global), (headers_cwu, rows_cwu)
+                t = safe_int(blk.get("tasks", 0))
+                s = safe_int(blk.get("successes", 0))
+                d = safe_float(blk.get("duration_sum", 0.0))
+                hk = set(blk.get("hotkeys", []))
+                rows_cwu.append([ck, web, uc, len(hk), t, s, f"{pct(s,t):.1f}%", f"{(d/t if t else 0):.2f}"])
+                agg[ck]["tasks"] += t
+                agg[ck]["succ"] += s
+                agg[ck]["dur"] += d
+                agg[ck]["hotkeys"] |= hk
+    for ck, a in sorted(agg.items()):
+        rows_global.append([ck, len(a["hotkeys"]), a["tasks"], a["succ"], f"{pct(a['succ'],a['tasks']):.1f}%", f"{(a['dur']/a['tasks'] if a['tasks'] else 0):.2f}"])
+    return (["Coldkey", "Hotk", "Tasks", "Succ", "Rate %", "Avg s"], rows_global), (["Coldkey", "Web", "Use-case", "Hotk", "Tasks", "Succ", "Rate %", "Avg s"], rows_cwu)
 
 
-# 7) envío
+# ---------- Tareas del último forward ----------
+def load_last_forward_tasks():
+    if not FORWARD_JSONL.exists():
+        return (["Web", "Use-case", "Prompt"], [])
+    try:
+        last = json.loads(FORWARD_JSONL.read_text(encoding="utf-8").splitlines()[-1])
+    except Exception:
+        return (["Web", "Use-case", "Prompt"], [])
+    tasks = last.get("tasks", [])
+    rows = [[t.get("web_project", ""), t.get("use_case", ""), t.get("prompt", "")] for t in tasks]
+    return (["Web", "Use-case", "Prompt"], rows)
+
+
+# ---------- Resumen global de tareas ----------
+def summarize_task_types():
+    if not FORWARD_JSONL.exists():
+        return (["Web", "Use-case", "Tasks Sent"], [])
+    counts = Counter()
+    for line in FORWARD_JSONL.read_text(encoding="utf-8").splitlines():
+        try:
+            rec = json.loads(line)
+        except:
+            continue
+        for t in rec.get("tasks", []):
+            counts[(t.get("web_project", ""), t.get("use_case", ""))] += 1
+    rows = [[w, uc, c] for (w, uc), c in counts.items()]
+    return (["Web", "Use-case", "Tasks Sent"], rows)
+
+
+# ---------- Envío ----------
 def send_email(cfg, subject, body_html, body_text=""):
     if not cfg["to_emails"]:
         print("⚠️  SMTP_TO vacío. No hay destinatarios.")
@@ -183,10 +159,8 @@ def send_email(cfg, subject, body_html, body_text=""):
     msg["Subject"] = subject
     msg["From"] = cfg["from_email"]
     msg["To"] = ", ".join(cfg["to_emails"])
-    part1 = MIMEText(body_text or "Reporte en HTML adjunto.", "plain", _charset="utf-8")
-    part2 = MIMEText(body_html, "html", _charset="utf-8")
-    msg.attach(part1)
-    msg.attach(part2)
+    msg.attach(MIMEText(body_text or "Reporte en HTML adjunto.", "plain", "utf-8"))
+    msg.attach(MIMEText(body_html, "html", "utf-8"))
     use_ssl = (cfg["smtp_port"] == 465) and (not cfg["starttls"])
     if use_ssl:
         with smtplib.SMTP_SSL(cfg["smtp_host"], cfg["smtp_port"]) as server:
@@ -206,13 +180,18 @@ def main():
     cfg = load_cfg()
     host = socket.gethostname()
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    fwd_summary, fwd_table_data = load_forward_totals()
+
+    fwd_table_data = load_forward_totals()
     table_global_data, table_cwu_data = load_coldkey_tables()
+    task_table_data = load_last_forward_tasks()
+    task_summary_data = summarize_task_types()
+
     body_html = render_html_report(
-        json.dumps(fwd_summary, ensure_ascii=False, indent=2),
         fwd_table_data,
         table_global_data,
         table_cwu_data,
+        task_table_data,
+        task_summary_data,
         host,
         now,
     )
@@ -224,5 +203,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-# pm2 start "python3 autoppia_web_agents_subnet/validator/send_reports.py" --name autoppia-send-reports --cron "0 * * * *" --no-autorestart

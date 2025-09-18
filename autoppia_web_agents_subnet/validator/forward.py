@@ -34,7 +34,7 @@ from autoppia_web_agents_subnet.validator.forward_utils import (
     generate_tasks_limited_use_cases,
     evaluate_task_all_miners,  # devuelve (rewards_vec, avg_miner_time)
     broadcast_and_save_operator_endpoints,
-    save_forward_report,
+    save_forward_report,  # 👈 guardado centralizado (last_forward/totals/tasks)
 )
 
 
@@ -47,6 +47,7 @@ async def forward(self) -> None:
       1) Generate N tasks across projects.
       2) For each task: evaluate ALL miners, accumulate rewards.
       3) After all tasks: update scores with average rewards per miner.
+      4) Guardar en JSONL: last_forward, totals y lista de 'tasks' (web, use-case, prompt).
     """
     try:
         init_validator_performance_stats(self)
@@ -81,6 +82,9 @@ async def forward(self) -> None:
             bt.logging.warning("No tasks generated – skipping forward.")
             return
 
+        # Para el reporte: lista de tareas enviadas (web, use-case, prompt)
+        sent_tasks_records: list[dict] = []
+
         # 2) Acumular REWARDS
         n = self.metagraph.n
         accumulated_rewards = np.zeros(n, dtype=np.float32)
@@ -107,9 +111,11 @@ async def forward(self) -> None:
 
             rewards_vec, avg_time = await evaluate_task_all_miners(self, project, task)
 
+            # Acumular recompensas/participaciones
             accumulated_rewards += rewards_vec
             tasks_evaluated_per_miner += (rewards_vec >= 0).astype(np.int32)
 
+            # Éxitos/Intentos
             successes_mask = (rewards_vec > SUCCESS_THRESHOLD).astype(np.int32)
             miner_successes_total += int(np.sum(successes_mask))
             miner_attempts_total += rewards_vec.shape[0]
@@ -118,6 +124,15 @@ async def forward(self) -> None:
             sum_avg_response_times += float(avg_time)
             if np.any(rewards_vec > SUCCESS_THRESHOLD):
                 tasks_success += 1
+
+            # Añadir tarea para el reporte
+            sent_tasks_records.append(
+                {
+                    "web_project": getattr(task, "web_project_id", ""),
+                    "use_case": getattr(getattr(task, "use_case", None), "name", ""),
+                    "prompt": getattr(task, "prompt", ""),
+                }
+            )
 
         # 3) Actualizar scores con rewards promedio
         if tasks_sent > 0:
@@ -150,16 +165,14 @@ async def forward(self) -> None:
             forward_id=self.forward_count,
         )
 
-        avg_response_time = (sum_avg_response_times / tasks_sent) if tasks_sent else 0.0
-        save_forward_report(
-            self.forward_count,
-            tasks_sent,
-            miner_successes_total,
-            miner_attempts_total,
-            forward_time,
-            avg_response_time,
-            summary,
-        )
+        # Guardar JSONL con last_forward, totals y tasks (vía forward_utils.save_forward_report)
+        try:
+            save_forward_report(
+                summary=summary,
+                tasks=sent_tasks_records,  # 👈 lista de tareas del forward
+            )
+        except Exception as e:
+            bt.logging.warning(f"No pude guardar forward_summary.jsonl: {e}")
 
         print_forward_tables(self.validator_performance_stats)
         bt.logging.success("Forward cycle completed!")

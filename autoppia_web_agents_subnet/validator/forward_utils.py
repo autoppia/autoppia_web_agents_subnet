@@ -427,31 +427,77 @@ async def save_operator_endpoints_in_json(
 # ───────────────────────────────────────────────
 # Helper para guardar resumen por forward
 # ───────────────────────────────────────────────
-def save_forward_report(
-    forward_id: int,
-    tasks_sent: int,
-    miner_successes: int,
-    miner_attempts: int,
-    forward_time: float,
-    avg_response_time: float,
-    summary: dict,
-) -> None:
+
+import os
+import json
+from pathlib import Path
+from collections import Counter
+import bittensor as bt
+
+
+def save_forward_report(summary: dict, tasks: list[dict] | None = None) -> None:
+    ...
+
+    """
+    Escribe una línea JSON con ÚNICAMENTE:
+      {
+        "last_forward": {
+            ...campos snapshot del forward...,
+            "tasks": [ {web_project, use_case, prompt}, ... ],
+            "task_counts_by_type": [ {web, use_case, tasks}, ... ]
+        },
+        "totals": {
+            ...campos acumulados...,
+            "task_counts_by_type": [ {web, use_case, tasks}, ... ]
+        }
+      }
+    """
     try:
         reports_dir = Path(os.getenv("REPORTS_DIR", "forward_reports"))
         reports_dir.mkdir(parents=True, exist_ok=True)
+        jsonl_path = reports_dir / "forward_summary.jsonl"
 
+        # --- snapshot base del forward y acumulados que vienen de summary ---
+        last_forward = dict(summary.get("forward", {}))
+        totals = dict(summary.get("totals", {}))
+
+        # --- tasks del forward + conteo por tipo en ESTE forward ---
+        tasks = tasks or []
+        fwd_counts = Counter((t.get("web_project", ""), t.get("use_case", "")) for t in tasks)
+        last_forward["tasks"] = tasks
+        last_forward["task_counts_by_type"] = [{"web": w, "use_case": uc, "tasks": c} for (w, uc), c in sorted(fwd_counts.items())]
+
+        # --- conteo ACUMULADO por tipo (leyendo JSONL anterior) ---
+        total_counts = Counter()
+        if jsonl_path.exists():
+            for line in jsonl_path.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except Exception:
+                    continue
+                # soporta formatos previos (tasks a nivel raíz o en last_forward)
+                prev_tasks = rec.get("tasks", []) or rec.get("last_forward", {}).get("tasks", [])
+                for t in prev_tasks:
+                    total_counts[(t.get("web_project", ""), t.get("use_case", ""))] += 1
+
+        # sumar también las tasks de este forward
+        for (w, uc), c in fwd_counts.items():
+            total_counts[(w, uc)] += c
+
+        totals["task_counts_by_type"] = [{"web": w, "use_case": uc, "tasks": c} for (w, uc), c in sorted(total_counts.items())]
+
+        # --- construir registro SOLO con last_forward y totals ---
         record = {
-            "forward_id": int(forward_id),
-            "tasks_sent": int(tasks_sent),
-            "miner_successes": int(miner_successes),
-            "miner_attempts": int(miner_attempts),
-            "forward_time": float(forward_time),
-            "avg_response_time": float(avg_response_time),
-            "summary": summary,
+            "last_forward": last_forward,
+            "totals": totals,
         }
-        with open(reports_dir / "forward_summary.jsonl", "a", encoding="utf-8") as f:
+
+        with open(jsonl_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
-        bt.logging.info("forward_summary.jsonl actualizado.")
+        bt.logging.info("forward_summary.jsonl actualizado (last_forward + totals + tasks en last_forward).")
     except Exception as e:
         bt.logging.warning(f"No pude guardar forward_summary.jsonl: {e}")
