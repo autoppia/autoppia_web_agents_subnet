@@ -6,16 +6,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Set
 
-# Para snapshot por coldkey/web/use-case
-STATS_FILE = Path("coldkey_web_usecase_stats.json")
-AggKey = Tuple[str, str, str]  # (coldkey, web, use_case)
 
-
-# ========================== Forward (en memoria) =============================
+# ========================== Forward (in-memory) =============================
 def init_validator_performance_stats(validator) -> None:
-    """
-    Inicializa el storage en memoria de métricas por forward (si no existe).
-    """
     if hasattr(validator, "validator_performance_stats"):
         return
     validator.validator_performance_stats = {
@@ -27,6 +20,9 @@ def init_validator_performance_stats(validator) -> None:
         "total_tasks_failed": 0,
         "total_sum_of_avg_response_times": 0.0,
         "overall_tasks_processed": 0,
+        # ACUMULADO (miners)
+        "total_miner_successes": 0,
+        "total_miner_attempts": 0,
         # ÚLTIMO FORWARD (snapshot)
         "last_forward": {
             "tasks_sent": 0,
@@ -34,6 +30,10 @@ def init_validator_performance_stats(validator) -> None:
             "tasks_failed": 0,
             "avg_response_time_per_task": 0.0,
             "forward_time": 0.0,
+            # miners
+            "miner_successes": 0,
+            "miner_attempts": 0,
+            "miner_success_rate": 0.0,
         },
     }
 
@@ -45,14 +45,13 @@ def finalize_forward_stats(
     tasks_success: int,
     sum_avg_response_times: float,
     forward_time: float,
+    miner_successes: int = 0,
+    miner_attempts: int = 0,
 ) -> Dict[str, Any]:
-    """
-    Cierra las métricas de un forward: snapshot + actualización de acumulados.
-    Devuelve {"forward": {...}, "totals": {...}}.
-    """
     stats = validator.validator_performance_stats
     tasks_failed = max(0, tasks_sent - tasks_success)
     avg_resp_time = (sum_avg_response_times / tasks_sent) if tasks_sent > 0 else 0.0
+    miner_rate = (miner_successes / miner_attempts) if miner_attempts > 0 else 0.0
 
     # Snapshot del forward
     forward_snapshot = {
@@ -61,6 +60,9 @@ def finalize_forward_stats(
         "tasks_failed": tasks_failed,
         "avg_response_time_per_task": avg_resp_time,
         "forward_time": forward_time,
+        "miner_successes": miner_successes,
+        "miner_attempts": miner_attempts,
+        "miner_success_rate": miner_rate,
     }
     stats["last_forward"] = forward_snapshot
 
@@ -73,8 +75,12 @@ def finalize_forward_stats(
     stats["total_sum_of_avg_response_times"] += sum_avg_response_times
     stats["overall_tasks_processed"] += tasks_sent
 
+    stats["total_miner_successes"] += miner_successes
+    stats["total_miner_attempts"] += miner_attempts
+
     totals_avg_resp = stats["total_sum_of_avg_response_times"] / stats["overall_tasks_processed"] if stats["overall_tasks_processed"] > 0 else 0.0
     totals_success_rate = stats["total_tasks_success"] / stats["total_tasks_sent"] if stats["total_tasks_sent"] > 0 else 0.0
+    totals_miner_rate = stats["total_miner_successes"] / stats["total_miner_attempts"] if stats["total_miner_attempts"] > 0 else 0.0
     totals = {
         "forwards_count": stats["total_forwards_count"],
         "total_time": stats["total_forwards_time"],
@@ -83,13 +89,19 @@ def finalize_forward_stats(
         "tasks_failed": stats["total_tasks_failed"],
         "avg_response_time_per_task": totals_avg_resp,
         "success_rate": totals_success_rate,
+        "miner_successes": stats["total_miner_successes"],
+        "miner_attempts": stats["total_miner_attempts"],
+        "miner_success_rate": totals_miner_rate,
     }
     return {"forward": forward_snapshot, "totals": totals}
 
 
 # ====================== Snapshot Coldkey/Web/Use-case ========================
+STATS_FILE = Path("coldkey_web_usecase_stats.json")
+AggKey = Tuple[str, str, str]  # (coldkey, web, use_case)
+
+
 def _actions_len(actions_obj: Any) -> int:
-    """Tamaño robusto de acciones (list / dict / None)."""
     if actions_obj is None:
         return 0
     if isinstance(actions_obj, list):
@@ -138,12 +150,10 @@ class StatBlock:
 def load_stats() -> Dict[AggKey, StatBlock]:
     if not STATS_FILE.exists():
         return {}
-
     try:
         raw = json.loads(STATS_FILE.read_text())
     except json.JSONDecodeError:
         return {}
-
     stats: Dict[AggKey, StatBlock] = {}
     for ck, webs in raw.get("stats", {}).items():
         for web, ucs in webs.items():
@@ -161,7 +171,6 @@ def load_stats() -> Dict[AggKey, StatBlock]:
 
 def save_stats(stats: Dict[AggKey, StatBlock]) -> None:
     STATS_FILE.parent.mkdir(parents=True, exist_ok=True)
-
     nested: Dict[str, Dict[str, Dict[str, Dict]]] = {}
     for (ck, web, uc), blk in stats.items():
         nested.setdefault(ck, {}).setdefault(web, {})[uc] = {
@@ -172,26 +181,16 @@ def save_stats(stats: Dict[AggKey, StatBlock]) -> None:
             "actions_sum": blk.actions_sum,
             "hotkeys": sorted(blk.hotkeys),
         }
-
     STATS_FILE.write_text(json.dumps({"stats": nested}, indent=2))
 
 
-# Para mantener la firma que usas en forward_utils.py
 from .leaderboard import LeaderboardTaskRecord
 
 
 def update_coldkey_stats_json(records: List[LeaderboardTaskRecord]) -> None:
-    """
-    Actualiza el snapshot con el lote actual y PURGA cualquier coldkey que no
-    aparezca en el lote.
-    """
     stats = load_stats()
-
-    # purgar coldkeys ausentes
     current_coldkeys: set[str] = {r.miner_coldkey for r in records}
     stats = {k: v for k, v in stats.items() if k[0] in current_coldkeys}
-
-    # aplicar lote
     for rec in records:
         key = (rec.miner_coldkey, rec.web_project, rec.use_case)
         blk = stats.setdefault(key, StatBlock())
@@ -202,5 +201,4 @@ def update_coldkey_stats_json(records: List[LeaderboardTaskRecord]) -> None:
             actions_len=_actions_len(rec.actions),
             hotkey=rec.miner_hotkey,
         )
-
     save_stats(stats)

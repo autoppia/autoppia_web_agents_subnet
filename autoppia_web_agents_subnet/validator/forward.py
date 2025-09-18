@@ -70,6 +70,9 @@ async def forward(self) -> None:
         tasks_success = 0  # tasks with at least one miner reward > 0
         sum_avg_response_times = 0.0  # sum of per-task avg(miner) response time (seconds)
 
+        miner_successes_total = 0
+        miner_attempts_total = 0
+
         for task in interleave_tasks(*all_tasks):
             if tasks_sent >= NUMBER_OF_PROMPTS_PER_FORWARD:
                 break
@@ -78,7 +81,11 @@ async def forward(self) -> None:
             for project, project_tasks in zip(demo_web_projects, all_tasks):
                 if task in project_tasks:
                     rewards_vec, avg_time = await evaluate_task_all_miners(self, project, task)
-                    successes += (rewards_vec > SUCCESS_THRESHOLD).astype(np.int32)
+                    successes_mask = (rewards_vec > SUCCESS_THRESHOLD).astype(np.int32)
+                    successes += successes_mask
+
+                    miner_successes_total += int(np.sum(successes_mask))
+                    miner_attempts_total += rewards_vec.shape[0]
 
                     tasks_sent += 1
                     sum_avg_response_times += float(avg_time)
@@ -114,6 +121,8 @@ async def forward(self) -> None:
             tasks_success=tasks_success,
             sum_avg_response_times=sum_avg_response_times,
             forward_time=forward_time,
+            miner_successes=miner_successes_total,
+            miner_attempts=miner_attempts_total,
         )
         print_forward_tables(self.validator_performance_stats)
 
