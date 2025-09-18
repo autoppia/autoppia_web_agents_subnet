@@ -76,12 +76,12 @@ def print_forward_tables(stats: Dict[str, Any]) -> None:
         show_lines=False,
         padding=(0, 1),
     )
-    forward_tbl.add_column("Fwd#", justify="right", width=5)  # Forward ID
-    forward_tbl.add_column("Sent", justify="right", width=6)  # Tareas enviadas
-    forward_tbl.add_column("Time", justify="right", width=9)  # Time total
+    forward_tbl.add_column("ID#", justify="right", width=5)  # Forward ID
+    forward_tbl.add_column("Tasks Sent", justify="right", width=6)  # Tareas enviadas
+    forward_tbl.add_column("Total Time", justify="right", width=9)  # Time total
     forward_tbl.add_column("Avg/task", justify="right", width=9)  # AVG time per task
-    forward_tbl.add_column("M.OK", justify="right", width=9)  # "ok/attempts"
-    forward_tbl.add_column("M%", justify="right", width=7)  # Porcentaje
+    forward_tbl.add_column("Miner.OK", justify="right", width=9)  # "ok/attempts"
+    forward_tbl.add_column("Miner%", justify="right", width=7)  # Porcentaje
 
     forward_tbl.add_row(
         str(fwd_id),
@@ -118,8 +118,8 @@ def print_forward_tables(stats: Dict[str, Any]) -> None:
     totals_tbl.add_column("Avg/fwd", justify="right", width=9)  # avg de tiempo por forward
     totals_tbl.add_column("Tasks", justify="right", width=7)  # total tareas enviadas
     totals_tbl.add_column("Tasks/fwd", justify="right", width=10)  # avg tareas por forward
-    totals_tbl.add_column("M.OK", justify="right", width=9)  # ok/attempts acumulado
-    totals_tbl.add_column("M%", justify="right", width=7)  # porcentaje acumulado
+    totals_tbl.add_column("Miner.OK", justify="right", width=9)  # ok/attempts acumulado
+    totals_tbl.add_column("Miner%", justify="right", width=7)  # porcentaje acumulado
 
     totals_tbl.add_row(
         str(total_fwds),
