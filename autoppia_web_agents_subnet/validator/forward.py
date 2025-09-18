@@ -49,7 +49,7 @@ async def forward(self) -> None:
         # 1) Generate tasks per project
         task_distribution = split_tasks_evenly(NUMBER_OF_PROMPTS_PER_FORWARD, num_projects)
         use_cases_per_project = max(1, math.ceil(NUMBER_OF_PROMPTS_PER_FORWARD / num_projects))
-        bt.logging.info(f"Generating {NUMBER_OF_PROMPTS_PER_FORWARD} tasks across {num_projects} projects: {task_distribution} tasks/project, {use_cases_per_project} use-cases/project.")
+        bt.logging.info(f"Generating {NUMBER_OF_PROMPTS_PER_FORWARD} tasks across {num_projects} projects: {task_distribution}, {use_cases_per_project} use-cases/project.")
         all_tasks: list[list[Task]] = []
         for project, num_tasks in zip(demo_web_projects, task_distribution):
             if num_tasks <= 0:
