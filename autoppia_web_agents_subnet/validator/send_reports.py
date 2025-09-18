@@ -60,19 +60,6 @@ def pct(numer, denom):
     return (numer / denom * 100.0) if denom else 0.0
 
 
-def render_table(headers, rows):
-    if not rows:
-        return "(sin datos)"
-    widths = [len(h) for h in headers]
-    for r in rows:
-        for i, c in enumerate(r):
-            widths[i] = max(widths[i], len(str(c)))
-    sep = "+" + "+".join("-" * (w + 2) for w in widths) + "+"
-    line_h = "|" + "|".join(f" {headers[i]:<{widths[i]}} " for i in range(len(headers))) + "|"
-    line_rows = ["|" + "|".join(f" {str(r[i]):<{widths[i]}} " for i in range(len(headers))) + "|" for r in rows]
-    return "\n".join([sep, line_h, sep] + line_rows + [sep])
-
-
 # ---------- Normalizador de líneas ----------
 def _normalize_line(rec: dict):
     if "last_forward" in rec or "totals" in rec:
@@ -138,7 +125,7 @@ def load_forward_totals():
 
     headers = ["Forward", "Tasks", "Successes", "Attempts", "Miner%", "Avg/task", "Forward Time"]
     total_row = ["TOTAL", totals["tasks_sent"], totals["miner_successes"], totals["miner_attempts"], f"{miner_success_rate:.1f}%", f"{avg_time_per_task_overall:.2f}s", f"{avg_forward_time:.2f}s"]
-    table_per_forward = render_table(headers, per_forward_rows + [total_row])
+    rows = per_forward_rows + [total_row]
 
     summary = {
         "total_forwards": totals["forwards"],
@@ -148,20 +135,20 @@ def load_forward_totals():
         "avg_forward_time": f"{avg_forward_time:.2f}s",
         "avg_response_time": f"{avg_response_time:.2f}s",
     }
-    return summary, table_per_forward
+    return summary, (headers, rows)
 
 
 # 6) Tablas: Coldkey global y Coldkey/Web/Use-case
 def load_coldkey_tables():
     if not COLDKEY_SNAPSHOT.exists():
-        return "(no existe coldkey_web_usecase_stats.json)", "(no existe coldkey_web_usecase_stats.json)"
+        return (["Coldkey", "Hotk", "Tasks", "Succ", "Rate %", "Avg s"], []), (["Coldkey", "Web", "Use-case", "Hotk", "Tasks", "Succ", "Rate %", "Avg s"], [])
     try:
         data = json.loads(COLDKEY_SNAPSHOT.read_text(encoding="utf-8"))
     except Exception:
-        return "(error leyendo snapshot)", "(error leyendo snapshot)"
+        return (["Coldkey", "Hotk", "Tasks", "Succ", "Rate %", "Avg s"], []), (["Coldkey", "Web", "Use-case", "Hotk", "Tasks", "Succ", "Rate %", "Avg s"], [])
     stats = data.get("stats", {})
     agg_by_ck = defaultdict(lambda: {"tasks": 0, "succ": 0, "dur": 0.0, "hotkeys": set()})
-    rows_cwu = []
+    rows_cwu, rows_global = [], []
     for ck, webs in stats.items():
         for web, ucs in webs.items():
             for uc, blk in ucs.items():
@@ -176,16 +163,15 @@ def load_coldkey_tables():
                 agg_by_ck[ck]["succ"] += succ
                 agg_by_ck[ck]["dur"] += dur
                 agg_by_ck[ck]["hotkeys"] |= hotk
-    rows_global = []
     for ck, a in sorted(agg_by_ck.items()):
         tasks = a["tasks"]
         succ = a["succ"]
         rate = (succ / tasks * 100) if tasks else 0.0
         avgd = (a["dur"] / tasks) if tasks else 0.0
         rows_global.append([ck, len(a["hotkeys"]), tasks, succ, f"{rate:.1f}%", f"{avgd:.2f}"])
-    table_global = render_table(["Coldkey", "Hotk", "Tasks", "Succ", "Rate %", "Avg s"], rows_global)
-    table_cwu = render_table(["Coldkey", "Web", "Use-case", "Hotk", "Tasks", "Succ", "Rate %", "Avg s"], rows_cwu)
-    return table_global, table_cwu
+    headers_global = ["Coldkey", "Hotk", "Tasks", "Succ", "Rate %", "Avg s"]
+    headers_cwu = ["Coldkey", "Web", "Use-case", "Hotk", "Tasks", "Succ", "Rate %", "Avg s"]
+    return (headers_global, rows_global), (headers_cwu, rows_cwu)
 
 
 # 7) envío
@@ -220,9 +206,16 @@ def main():
     cfg = load_cfg()
     host = socket.gethostname()
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
-    fwd_summary, fwd_table = load_forward_totals()
-    table_global, table_cwu = load_coldkey_tables()
-    body_html = render_html_report(json.dumps(fwd_summary, ensure_ascii=False, indent=2), fwd_table, table_global, table_cwu, host, now)
+    fwd_summary, fwd_table_data = load_forward_totals()
+    table_global_data, table_cwu_data = load_coldkey_tables()
+    body_html = render_html_report(
+        json.dumps(fwd_summary, ensure_ascii=False, indent=2),
+        fwd_table_data,
+        table_global_data,
+        table_cwu_data,
+        host,
+        now,
+    )
     body_text = f"Autoppia Web Agents Report – {now}\nVer versión HTML."
     subject = f"[Autoppia] Reporte horario – {now}"
     send_email(cfg, subject, body_html, body_text)

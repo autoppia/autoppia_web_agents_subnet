@@ -1,4 +1,20 @@
-def render_html_report(fwd_summary, fwd_table, table_global, table_cwu, host, now):
+def render_html_report(fwd_summary, fwd_table_data, table_global_data, table_cwu_data, host, now):
+    # fwd_summary es un dict (totales resumidos)
+    # fwd_table_data = (headers, rows)
+    # table_global_data = (headers, rows)
+    # table_cwu_data = (headers, rows)
+
+    def render_html_table(headers, rows, title=""):
+        if not rows:
+            return f"<p><b>{title}:</b> (sin datos)</p>"
+        table_html = f"<h2>{title}</h2><table>"
+        table_html += "<thead><tr>" + "".join(f"<th>{h}</th>" for h in headers) + "</tr></thead>"
+        table_html += "<tbody>"
+        for r in rows:
+            table_html += "<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>"
+        table_html += "</tbody></table>"
+        return table_html
+
     return f"""<!DOCTYPE html>
 <html>
 <head>
@@ -18,9 +34,9 @@ def render_html_report(fwd_summary, fwd_table, table_global, table_cwu, host, no
     }}
     h2 {{
       color: #6a1b9a;
+      margin-top: 30px;
       border-bottom: 2px solid #ccc;
       padding-bottom: 4px;
-      margin-top: 30px;
     }}
     table {{
       border-collapse: collapse;
@@ -36,7 +52,7 @@ def render_html_report(fwd_summary, fwd_table, table_global, table_cwu, host, no
       background-color: #6a1b9a;
       color: white;
     }}
-    tr:nth-child(even) {{
+    tr:nth-child(even) td {{
       background-color: #f2f2f2;
     }}
     .summary-block {{
@@ -46,10 +62,6 @@ def render_html_report(fwd_summary, fwd_table, table_global, table_cwu, host, no
       margin-bottom: 25px;
       font-family: monospace;
     }}
-    pre {{
-      white-space: pre-wrap;
-      word-wrap: break-word;
-    }}
   </style>
 </head>
 <body>
@@ -57,18 +69,11 @@ def render_html_report(fwd_summary, fwd_table, table_global, table_cwu, host, no
   <p><b>Fecha:</b> {now} <br><b>Host:</b> {host}</p>
 
   <h2>Resumen Global</h2>
-  <div class="summary-block">
-    <pre>{fwd_summary}</pre>
-  </div>
+  <div class="summary-block"><pre>{fwd_summary}</pre></div>
 
-  <h2>Forward Totals</h2>
-  <pre>{fwd_table}</pre>
-
-  <h2>Coldkey Global</h2>
-  <pre>{table_global}</pre>
-
-  <h2>Coldkey / Web / Use-case</h2>
-  <pre>{table_cwu}</pre>
+  {render_html_table(*fwd_table_data, title="Forward Totals")}
+  {render_html_table(*table_global_data, title="Coldkey Global")}
+  {render_html_table(*table_cwu_data, title="Coldkey / Web / Use-case")}
 
 </body>
 </html>"""
