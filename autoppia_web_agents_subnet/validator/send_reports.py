@@ -129,7 +129,10 @@ def load_last_forward_tasks():
         last = json.loads(FORWARD_JSONL.read_text(encoding="utf-8").splitlines()[-1])
     except Exception:
         return (["Web", "Use-case", "Prompt"], [])
-    tasks = last.get("tasks", [])
+
+    # Buscar tasks dentro de last_forward (nuevo formato) o a nivel raíz (legacy)
+    tasks = last.get("tasks", []) or last.get("last_forward", {}).get("tasks", [])
+
     rows = [[t.get("web_project", ""), t.get("use_case", ""), t.get("prompt", "")] for t in tasks]
     return (["Web", "Use-case", "Prompt"], rows)
 
@@ -144,7 +147,9 @@ def summarize_task_types():
             rec = json.loads(line)
         except:
             continue
-        for t in rec.get("tasks", []):
+        # mirar tasks en root o dentro de last_forward
+        all_tasks = rec.get("tasks", []) or rec.get("last_forward", {}).get("tasks", [])
+        for t in all_tasks:
             counts[(t.get("web_project", ""), t.get("use_case", ""))] += 1
     rows = [[w, uc, c] for (w, uc), c in counts.items()]
     return (["Web", "Use-case", "Tasks Sent"], rows)
