@@ -7,6 +7,7 @@ import json
 import os
 import time
 from typing import Any, Dict, Iterable, List, Set, Tuple
+from pathlib import Path
 
 import numpy as np
 from numpy.typing import NDArray
@@ -421,3 +422,36 @@ async def save_operator_endpoints_in_json(
             json.dump(existing, f, indent=4)
 
     bt.logging.info(f"Saved {len(responses)} endpoints to {filename}")
+
+
+# ───────────────────────────────────────────────
+# Helper para guardar resumen por forward
+# ───────────────────────────────────────────────
+def save_forward_report(
+    forward_id: int,
+    tasks_sent: int,
+    miner_successes: int,
+    miner_attempts: int,
+    forward_time: float,
+    avg_response_time: float,
+    summary: dict,
+) -> None:
+    try:
+        reports_dir = Path(os.getenv("REPORTS_DIR", "forward_reports"))
+        reports_dir.mkdir(parents=True, exist_ok=True)
+
+        record = {
+            "forward_id": int(forward_id),
+            "tasks_sent": int(tasks_sent),
+            "miner_successes": int(miner_successes),
+            "miner_attempts": int(miner_attempts),
+            "forward_time": float(forward_time),
+            "avg_response_time": float(avg_response_time),
+            "summary": summary,
+        }
+        with open(reports_dir / "forward_summary.jsonl", "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+        bt.logging.info("forward_summary.jsonl actualizado.")
+    except Exception as e:
+        bt.logging.warning(f"No pude guardar forward_summary.jsonl: {e}")

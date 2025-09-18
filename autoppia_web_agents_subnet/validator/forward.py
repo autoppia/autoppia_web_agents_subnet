@@ -5,6 +5,9 @@ import asyncio
 import math
 import random
 import time
+import json
+import os
+from pathlib import Path
 
 import bittensor as bt
 import numpy as np
@@ -24,25 +27,26 @@ from autoppia_web_agents_subnet.validator.stats import (
     init_validator_performance_stats,
     finalize_forward_stats,
 )
-from autoppia_web_agents_subnet.validator.visualization import (
-    print_forward_tables,
-)
+from autoppia_web_agents_subnet.validator.visualization import print_forward_tables
 from autoppia_web_agents_subnet.validator.forward_utils import (
     interleave_tasks,
     split_tasks_evenly,
     generate_tasks_limited_use_cases,
     evaluate_task_all_miners,  # devuelve (rewards_vec, avg_miner_time)
     broadcast_and_save_operator_endpoints,
+    save_forward_report,
 )
 
 
+# ───────────────────────────────────────────────
+# Forward principal
+# ───────────────────────────────────────────────
 async def forward(self) -> None:
     """
-    Forward orchestration (all miners, success-ratio):
+    Forward orchestration (all miners, average rewards):
       1) Generate N tasks across projects.
-      2) For each task: evaluate ALL miners, accumulate successes and avg times.
-      3) After all tasks: update scores ONCE with success_ratio = successes / tasks_processed,
-         then log forward summary and cumulative totals.
+      2) For each task: evaluate ALL miners, accumulate rewards.
+      3) After all tasks: update scores with average rewards per miner.
     """
     try:
         init_validator_performance_stats(self)
@@ -68,7 +72,7 @@ async def forward(self) -> None:
                 prompts_per_use_case=PROMPTS_PER_USECASE,
                 num_use_cases=use_cases_per_project,
             )
-            if project_tasks:  # 🔥 solo guardar si realmente hay tasks
+            if project_tasks:
                 random.shuffle(project_tasks)
                 all_tasks.append(project_tasks)
                 projects_with_tasks.append(project)
@@ -77,15 +81,14 @@ async def forward(self) -> None:
             bt.logging.warning("No tasks generated – skipping forward.")
             return
 
-        # 2) Success counters per UID (each task goes to ALL miners)
+        # 2) Acumular REWARDS
         n = self.metagraph.n
-        successes = np.zeros(n, dtype=np.int32)
+        accumulated_rewards = np.zeros(n, dtype=np.float32)
+        tasks_evaluated_per_miner = np.zeros(n, dtype=np.int32)
 
-        # Per-forward accumulators
         tasks_sent = 0
         tasks_success = 0
         sum_avg_response_times = 0.0
-
         miner_successes_total = 0
         miner_attempts_total = 0
 
@@ -93,21 +96,21 @@ async def forward(self) -> None:
             if tasks_sent >= NUMBER_OF_PROMPTS_PER_FORWARD:
                 break
 
-            # ✅ encontrar el proyecto correcto por identidad
             project = None
             for p, project_tasks in zip(projects_with_tasks, all_tasks):
                 if any(t is task for t in project_tasks):
                     project = p
                     break
-
             if project is None:
                 bt.logging.warning(f"No project found for task {getattr(task, 'id', 'unknown')}")
                 continue
 
             rewards_vec, avg_time = await evaluate_task_all_miners(self, project, task)
-            successes_mask = (rewards_vec > SUCCESS_THRESHOLD).astype(np.int32)
-            successes += successes_mask
 
+            accumulated_rewards += rewards_vec
+            tasks_evaluated_per_miner += (rewards_vec >= 0).astype(np.int32)
+
+            successes_mask = (rewards_vec > SUCCESS_THRESHOLD).astype(np.int32)
             miner_successes_total += int(np.sum(successes_mask))
             miner_attempts_total += rewards_vec.shape[0]
 
@@ -116,13 +119,18 @@ async def forward(self) -> None:
             if np.any(rewards_vec > SUCCESS_THRESHOLD):
                 tasks_success += 1
 
-        # 3) Single score update at the end
+        # 3) Actualizar scores con rewards promedio
         if tasks_sent > 0:
-            success_ratio = successes.astype(np.float32) / float(tasks_sent)
+            tasks_evaluated_per_miner = np.maximum(tasks_evaluated_per_miner, 1)
+            average_rewards = accumulated_rewards / tasks_evaluated_per_miner.astype(np.float32)
+
+            bt.logging.info(f"Average rewards - Min: {average_rewards.min():.4f}, " f"Max: {average_rewards.max():.4f}, Mean: {average_rewards.mean():.4f}")
+
             uids_update = list(range(n))
             async with self.lock:
-                self.update_scores(success_ratio, uids_update)
-            bt.logging.info(f"[update] updated_uids={len(uids_update)}")
+                self.update_scores(average_rewards, uids_update)
+
+            bt.logging.info(f"[update] updated_uids={len(uids_update)} with average rewards")
         else:
             bt.logging.warning("[update] no tasks processed; scores unchanged.")
 
@@ -130,7 +138,7 @@ async def forward(self) -> None:
         if self.forward_count % SET_OPERATOR_ENDPOINT_FORWARDS_INTERVAL == 0:
             await broadcast_and_save_operator_endpoints(self)
 
-        # 5) Wrap-up + global metrics
+        # 5) Wrap-up
         forward_time = time.time() - t_forward_start
         summary = finalize_forward_stats(
             self,
@@ -142,33 +150,18 @@ async def forward(self) -> None:
             forward_id=self.forward_count,
         )
 
-        # ⬇️⬇️⬇️ BLOQUE NUEVO: guardar registro por forward para send_reports.py
-        try:
-            import json, os
-            from pathlib import Path
-
-            reports_dir = Path(os.getenv("REPORTS_DIR", "forward_reports"))
-            reports_dir.mkdir(parents=True, exist_ok=True)
-
-            avg_response_time = (sum_avg_response_times / tasks_sent) if tasks_sent else 0.0
-            record = {
-                "forward_id": int(self.forward_count),
-                "tasks_sent": int(tasks_sent),
-                "miner_successes": int(miner_successes_total),
-                "miner_attempts": int(miner_attempts_total),
-                "forward_time": float(forward_time),
-                "avg_response_time": float(avg_response_time),
-                "summary": summary,
-            }
-            with open(reports_dir / "forward_summary.jsonl", "a", encoding="utf-8") as f:
-                f.write(json.dumps(record, ensure_ascii=False) + "\n")
-            bt.logging.info("forward_summary.jsonl actualizado.")
-        except Exception as e:
-            bt.logging.warning(f"No pude guardar forward_summary.jsonl: {e}")
-        # ⬆️⬆️⬆️ FIN BLOQUE NUEVO
+        avg_response_time = (sum_avg_response_times / tasks_sent) if tasks_sent else 0.0
+        save_forward_report(
+            self.forward_count,
+            tasks_sent,
+            miner_successes_total,
+            miner_attempts_total,
+            forward_time,
+            avg_response_time,
+            summary,
+        )
 
         print_forward_tables(self.validator_performance_stats)
-
         bt.logging.success("Forward cycle completed!")
 
         if FORWARD_SLEEP_SECONDS > 0:
