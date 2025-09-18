@@ -44,6 +44,7 @@ def render_html_report(fwd_table_data, table_global_data, table_cwu_data, task_t
             bg_style = ""
 
             # Background color by Web project (if column exists)
+            web_idx = None
             if "Web" in headers:
                 try:
                     web_idx = headers.index("Web")
@@ -53,14 +54,18 @@ def render_html_report(fwd_table_data, table_global_data, table_cwu_data, task_t
                 except Exception:
                     pass
 
-            for cell in r:
+            for i, cell in enumerate(r):
                 txt = str(cell)
                 style = bg_style
+
+                # Highlight Web column in bold
+                if web_idx is not None and i == web_idx:
+                    txt = f"<b>{txt}</b>"
 
                 # Color percentages
                 if "%" in txt:
                     try:
-                        val = float(txt.replace("%", ""))
+                        val = float(txt.replace("%", "").replace("<b>", "").replace("</b>", ""))
                         if val <= 25:
                             style += "color:#b71c1c;font-weight:bold;"  # red
                         elif val <= 50:
@@ -121,8 +126,7 @@ def render_html_report(fwd_table_data, table_global_data, table_cwu_data, task_t
   </style>
 </head>
 <body>
-  <h1>📊 Autoppia Web Agents – Report</h1>
-  <p><b>Date:</b> {now} &nbsp;&nbsp; <b>Host:</b> {host}</p>
+  <h1>📊 Autoppia Web Agents – Report {now}</h1>
 
   {render_html_table(*fwd_table_data, title="Forward Totals")}
   {render_html_table(*task_table_data, title="Last Forward Tasks")}
