@@ -45,24 +45,28 @@ def print_forward_tables(stats: Dict[str, Any]) -> None:
     # Detectar ancho de terminal
     try:
         terminal_width = shutil.get_terminal_size().columns
-    except:
+    except Exception:
         terminal_width = 80
 
     console = Console(width=terminal_width, force_terminal=True)
 
     lf = stats.get("last_forward", {})
 
-    # ------------Forward summary-----------------
+    # ------------ Forward summary (del ÚLTIMO forward) ------------
+    # Campos:
+    # - Forward ID
+    # - Tareas enviadas en ese forward
+    # - Time total
+    # - AVG time per task
+    # - Miners OK -> "ok/attempts"
+    # - Miner %
+    fwd_id = int(lf.get("forward_id", stats.get("total_forwards_count", 0)))
     f_sent = int(lf.get("tasks_sent", 0))
-    f_succ = int(lf.get("tasks_success", 0))
-    f_fail = int(lf.get("tasks_failed", 0))
-    f_rate = (f_succ / max(1, f_sent)) if f_sent > 0 else 0.0
-    f_avg_task = float(lf.get("avg_response_time_per_task", 0.0))
     f_time = float(lf.get("forward_time", 0.0))
-
-    sols_ok = int(lf.get("miner_successes", 0))
-    sols_attempts = int(lf.get("miner_attempts", 0))
-    sols_rate = (sols_ok / sols_attempts) if sols_attempts > 0 else 0.0
+    f_avg_per_task = float(lf.get("avg_time_per_task", 0.0))
+    f_min_ok = int(lf.get("miner_successes", 0))
+    f_min_att = int(lf.get("miner_attempts", 0))
+    f_min_rate = (f_min_ok / f_min_att) if f_min_att > 0 else 0.0
 
     forward_tbl = Table(
         title="[bold magenta]Forward summary[/bold magenta]",
@@ -72,38 +76,34 @@ def print_forward_tables(stats: Dict[str, Any]) -> None:
         show_lines=False,
         padding=(0, 1),
     )
-    # Columnas reducidas para 80 chars
-    forward_tbl.add_column("T. Sent", justify="right", width=5)
-    forward_tbl.add_column("", justify="right", style="green", width=4)
-    forward_tbl.add_column("Fail", justify="right", style="red", width=5)
-    forward_tbl.add_column("OK%", justify="right", width=6)
-    forward_tbl.add_column("M.OK", justify="right", width=8)
-    forward_tbl.add_column("M%", justify="right", width=6)
-    forward_tbl.add_column("Avg", justify="right", width=6)
-    forward_tbl.add_column("Time", justify="right", width=7)
+    forward_tbl.add_column("Fwd#", justify="right", width=5)  # Forward ID
+    forward_tbl.add_column("Sent", justify="right", width=6)  # Tareas enviadas
+    forward_tbl.add_column("Time", justify="right", width=9)  # Time total
+    forward_tbl.add_column("Avg/task", justify="right", width=9)  # AVG time per task
+    forward_tbl.add_column("M.OK", justify="right", width=9)  # "ok/attempts"
+    forward_tbl.add_column("M%", justify="right", width=7)  # Porcentaje
 
     forward_tbl.add_row(
+        str(fwd_id),
         str(f_sent),
-        str(f_succ),
-        str(f_fail),
-        f"{f_rate*100:.2f}",
-        f"{sols_ok}/{sols_attempts}",
-        f"{sols_rate*100:.2f}",
-        _format_secs(f_avg_task)[:6],
-        _format_secs(f_time)[:7],
+        _format_secs(f_time),
+        f"{f_avg_per_task:.2f}s",
+        f"{f_min_ok}/{f_min_att}",
+        f"{(f_min_rate*100):.2f}%",
     )
     console.print(forward_tbl)
 
-    # -----------------Cumulative---------------------
-    total_sent = int(stats.get("total_tasks_sent", 0))
-    total_succ = int(stats.get("total_tasks_success", 0))
-    total_fail = int(stats.get("total_tasks_failed", 0))
-    overall_avg = stats["total_sum_of_avg_response_times"] / stats["overall_tasks_processed"] if stats.get("overall_tasks_processed", 0) > 0 else 0.0
-    success_rate = (total_succ / max(1, total_sent)) if total_sent > 0 else 0.0
+    # ----------------- Cumulative totals (acumulado) -----------------
+    total_fwds = int(stats.get("total_forwards_count", 0))
+    total_time = float(stats.get("total_forwards_time", 0.0))
+    avg_time_per_fwd = (total_time / total_fwds) if total_fwds > 0 else 0.0
 
-    sols_total_ok = total_succ
-    sols_total_attempts = total_sent
-    sols_total_rate = (sols_total_ok / max(1, sols_total_attempts)) if sols_total_attempts > 0 else 0.0
+    total_sent = int(stats.get("total_tasks_sent", 0))
+    avg_tasks_per_fwd = (total_sent / total_fwds) if total_fwds > 0 else 0.0
+
+    total_min_ok = int(stats.get("total_miners_successes", 0))
+    total_min_att = int(stats.get("total_miners_attempts", 0))
+    total_min_rate = (total_min_ok / total_min_att) if total_min_att > 0 else 0.0
 
     totals_tbl = Table(
         title="[bold magenta]Cumulative totals[/bold magenta]",
@@ -113,27 +113,22 @@ def print_forward_tables(stats: Dict[str, Any]) -> None:
         show_lines=False,
         padding=(0, 1),
     )
-    # Columnas reducidas para 80 chars
-    totals_tbl.add_column("Fwd", justify="right", width=4)
-    totals_tbl.add_column("Time", justify="right", width=7)
-    totals_tbl.add_column("Sent", justify="right", width=5)
-    totals_tbl.add_column("OK", justify="right", style="green", width=4)
-    totals_tbl.add_column("Fail", justify="right", style="red", width=5)
-    totals_tbl.add_column("OK%", justify="right", width=6)
-    totals_tbl.add_column("M.OK", justify="right", width=8)
-    totals_tbl.add_column("M%", justify="right", width=6)
-    totals_tbl.add_column("Avg", justify="right", width=6)
+    totals_tbl.add_column("Fwds", justify="right", width=6)  # total de forwards
+    totals_tbl.add_column("Time", justify="right", width=9)  # total de tiempo
+    totals_tbl.add_column("Avg/fwd", justify="right", width=9)  # avg de tiempo por forward
+    totals_tbl.add_column("Tasks", justify="right", width=7)  # total tareas enviadas
+    totals_tbl.add_column("Tasks/fwd", justify="right", width=10)  # avg tareas por forward
+    totals_tbl.add_column("M.OK", justify="right", width=9)  # ok/attempts acumulado
+    totals_tbl.add_column("M%", justify="right", width=7)  # porcentaje acumulado
 
     totals_tbl.add_row(
-        str(int(stats.get("total_forwards_count", 0))),
-        _format_secs(float(stats.get("total_forwards_time", 0.0)))[:7],
+        str(total_fwds),
+        _format_secs(total_time),
+        f"{avg_time_per_fwd:.2f}s",
         str(total_sent),
-        str(total_succ),
-        str(total_fail),
-        f"{success_rate*100:.2f}",
-        f"{sols_total_ok}/{sols_total_attempts}"[:8],
-        f"{sols_total_rate*100:.2f}",
-        _format_secs(overall_avg)[:6],
+        f"{avg_tasks_per_fwd:.2f}",
+        f"{total_min_ok}/{total_min_att}",
+        f"{(total_min_rate*100):.2f}%",
     )
     console.print(totals_tbl)
 

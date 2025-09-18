@@ -9,31 +9,29 @@ from typing import Any, Dict, List, Tuple, Set
 
 # ========================== Forward (in-memory) =============================
 def init_validator_performance_stats(validator) -> None:
+    """
+    Inicializa el diccionario de stats si no existe. Los campos
+    están alineados con la UI de print_forward_tables.
+    """
     if hasattr(validator, "validator_performance_stats"):
         return
+
     validator.validator_performance_stats = {
-        # ACUMULADO
+        # ACUMULADO (para la tabla Cumulative)
         "total_forwards_count": 0,
         "total_forwards_time": 0.0,
         "total_tasks_sent": 0,
-        "total_tasks_success": 0,
-        "total_tasks_failed": 0,
-        "total_sum_of_avg_response_times": 0.0,
-        "overall_tasks_processed": 0,
-        # ACUMULADO (miners)
-        "total_miner_successes": 0,
-        "total_miner_attempts": 0,
-        # ÚLTIMO FORWARD (snapshot)
+        # NUEVOS acumuladores para "Miners OK" (ok/attempts) y su %
+        "total_miners_successes": 0,
+        "total_miners_attempts": 0,
+        # Snapshot del último forward (para la tabla Forward summary)
         "last_forward": {
-            "tasks_sent": 0,
-            "tasks_success": 0,
-            "tasks_failed": 0,
-            "avg_response_time_per_task": 0.0,
-            "forward_time": 0.0,
-            # miners
-            "miner_successes": 0,
-            "miner_attempts": 0,
-            "miner_success_rate": 0.0,
+            "forward_id": 0,  # id del forward (ej. self.forward_count)
+            "tasks_sent": 0,  # tareas enviadas en ese forward
+            "forward_time": 0.0,  # tiempo total del forward (s)
+            "avg_time_per_task": 0.0,  # media de tiempo por tarea (s)
+            "miner_successes": 0,  # miners OK (ok)
+            "miner_attempts": 0,  # miners attempts (attempts)
         },
     }
 
@@ -42,58 +40,48 @@ def finalize_forward_stats(
     validator,
     *,
     tasks_sent: int,
-    tasks_success: int,
-    sum_avg_response_times: float,
-    forward_time: float,
-    miner_successes: int = 0,
-    miner_attempts: int = 0,
+    sum_avg_response_times: float,  # suma de avg_miner_time por tarea (para media por tarea)
+    forward_time: float,  # tiempo total del forward (s)
+    miner_successes: int = 0,  # miners OK (sumados en el forward)
+    miner_attempts: int = 0,  # miners intentos (sumados en el forward)
+    forward_id: int | None = None,  # id del forward (self.forward_count)
 ) -> Dict[str, Any]:
+    """
+    Actualiza acumulados y snapshot del último forward.
+    Devuelve un pequeño resumen por si el caller lo quiere loguear.
+    """
     stats = validator.validator_performance_stats
-    tasks_failed = max(0, tasks_sent - tasks_success)
-    avg_resp_time = (sum_avg_response_times / tasks_sent) if tasks_sent > 0 else 0.0
-    miner_rate = (miner_successes / miner_attempts) if miner_attempts > 0 else 0.0
 
-    # Snapshot del forward
-    forward_snapshot = {
-        "tasks_sent": tasks_sent,
-        "tasks_success": tasks_success,
-        "tasks_failed": tasks_failed,
-        "avg_response_time_per_task": avg_resp_time,
-        "forward_time": forward_time,
-        "miner_successes": miner_successes,
-        "miner_attempts": miner_attempts,
-        "miner_success_rate": miner_rate,
+    # Medias
+    avg_time_per_task = (sum_avg_response_times / tasks_sent) if tasks_sent > 0 else 0.0
+
+    # --- Snapshot del último forward ---
+    stats["last_forward"] = {
+        "forward_id": int(forward_id) if forward_id is not None else int(stats.get("total_forwards_count", 0) + 1),
+        "tasks_sent": int(tasks_sent),
+        "forward_time": float(forward_time),
+        "avg_time_per_task": float(avg_time_per_task),
+        "miner_successes": int(miner_successes),
+        "miner_attempts": int(miner_attempts),
     }
-    stats["last_forward"] = forward_snapshot
 
-    # Acumulado
+    # --- Acumulados ---
     stats["total_forwards_count"] += 1
-    stats["total_forwards_time"] += forward_time
-    stats["total_tasks_sent"] += tasks_sent
-    stats["total_tasks_success"] += tasks_success
-    stats["total_tasks_failed"] += tasks_failed
-    stats["total_sum_of_avg_response_times"] += sum_avg_response_times
-    stats["overall_tasks_processed"] += tasks_sent
+    stats["total_forwards_time"] += float(forward_time)
+    stats["total_tasks_sent"] += int(tasks_sent)
 
-    stats["total_miner_successes"] += miner_successes
-    stats["total_miner_attempts"] += miner_attempts
+    stats["total_miners_successes"] += int(miner_successes)
+    stats["total_miners_attempts"] += int(miner_attempts)
 
-    totals_avg_resp = stats["total_sum_of_avg_response_times"] / stats["overall_tasks_processed"] if stats["overall_tasks_processed"] > 0 else 0.0
-    totals_success_rate = stats["total_tasks_success"] / stats["total_tasks_sent"] if stats["total_tasks_sent"] > 0 else 0.0
-    totals_miner_rate = stats["total_miner_successes"] / stats["total_miner_attempts"] if stats["total_miner_attempts"] > 0 else 0.0
+    # (Opcional) Devolver un resumen útil
     totals = {
         "forwards_count": stats["total_forwards_count"],
         "total_time": stats["total_forwards_time"],
         "tasks_sent": stats["total_tasks_sent"],
-        "tasks_success": stats["total_tasks_success"],
-        "tasks_failed": stats["total_tasks_failed"],
-        "avg_response_time_per_task": totals_avg_resp,
-        "success_rate": totals_success_rate,
-        "miner_successes": stats["total_miner_successes"],
-        "miner_attempts": stats["total_miner_attempts"],
-        "miner_success_rate": totals_miner_rate,
+        "miners_ok": stats["total_miners_successes"],
+        "miners_attempts": stats["total_miners_attempts"],
     }
-    return {"forward": forward_snapshot, "totals": totals}
+    return {"forward": stats["last_forward"], "totals": totals}
 
 
 # ====================== Snapshot Coldkey/Web/Use-case ========================
@@ -184,13 +172,19 @@ def save_stats(stats: Dict[AggKey, StatBlock]) -> None:
     STATS_FILE.write_text(json.dumps({"stats": nested}, indent=2))
 
 
+# Import tardío para evitar ciclos
 from .leaderboard import LeaderboardTaskRecord
 
 
 def update_coldkey_stats_json(records: List[LeaderboardTaskRecord]) -> None:
+    """
+    Aplica el lote actual de records y purga coldkeys no presentes,
+    acumulando tasks, successes, duration_sum, reward_sum y actions_sum.
+    """
     stats = load_stats()
     current_coldkeys: set[str] = {r.miner_coldkey for r in records}
     stats = {k: v for k, v in stats.items() if k[0] in current_coldkeys}
+
     for rec in records:
         key = (rec.miner_coldkey, rec.web_project, rec.use_case)
         blk = stats.setdefault(key, StatBlock())

@@ -119,11 +119,11 @@ async def forward(self) -> None:
         summary = finalize_forward_stats(
             self,
             tasks_sent=tasks_sent,
-            tasks_success=tasks_success,
             sum_avg_response_times=sum_avg_response_times,
             forward_time=forward_time,
             miner_successes=miner_successes_total,
             miner_attempts=miner_attempts_total,
+            forward_id=self.forward_count,  # ← AÑADIDO
         )
         print_forward_tables(self.validator_performance_stats)
 
