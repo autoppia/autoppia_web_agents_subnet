@@ -131,6 +131,21 @@ def print_forward_tables(stats: Dict[str, Any]) -> None:
 
 # -------------------- leaderboard per-task UI -------------------
 def print_leaderboard_table(records: List[LeaderboardTaskRecord], task_prompt: str, web_project: Optional[str]):
+    from rich.console import Console
+    import shutil
+
+    # Detectar el ancho REAL de la terminal
+    try:
+        terminal_width = shutil.get_terminal_size().columns
+        print(f"Terminal detectada: {terminal_width} columnas")
+    except:
+        terminal_width = 100
+        print(f"No pude detectar terminal, usando: {terminal_width} columnas")
+
+    # Usar el ancho real detectado
+    console = Console(width=terminal_width, force_terminal=True)
+    print(f"Rich configurado con: {console.width} columnas\n")
+
     info_table = Table(box=box.SIMPLE_HEAD, show_header=False, expand=True)
     info_table.add_column("Field", style="bold cyan", no_wrap=True, width=12)
     info_table.add_column("Value", style="cyan")
@@ -146,25 +161,26 @@ def print_leaderboard_table(records: List[LeaderboardTaskRecord], task_prompt: s
         show_lines=False,
         padding=(0, 1),
     )
-    # Código original pero con columnas más estrechas para que quepa todo
-    results.add_column("Coldkey", style="cyan", width=18, no_wrap=True, overflow="ellipsis")
-    results.add_column("Hotkey", style="cyan", width=18, no_wrap=True, overflow="ellipsis")
-    results.add_column("Miner UID", style="green", justify="center", no_wrap=True, min_width=7)
-    results.add_column("Succes", justify="center", no_wrap=True, min_width=6)
-    results.add_column("Actio", justify="right", no_wrap=True, min_width=5)
-    results.add_column("Reward", justify="right", no_wrap=True, min_width=7)
-    results.add_column("Dur s", justify="right", no_wrap=True, min_width=7)
+
+    # Columnas ajustadas para que quepan en ~100 caracteres
+    results.add_column("Coldkey", style="cyan", width=12, no_wrap=True, overflow="ellipsis")
+    results.add_column("Hotkey", style="cyan", width=12, no_wrap=True, overflow="ellipsis")
+    results.add_column("UID", style="green", justify="center", width=4)
+    results.add_column("✓", justify="center", width=3)
+    results.add_column("Act", justify="right", width=4)
+    results.add_column("Rew", justify="right", width=6)
+    results.add_column("Dur", justify="right", width=6)
 
     for rec in records:
         acts = _actions_len(rec.actions)
         results.add_row(
-            rec.miner_coldkey,
-            rec.miner_hotkey,
+            rec.miner_coldkey[:10] + ".." if len(rec.miner_coldkey) > 12 else rec.miner_coldkey,
+            rec.miner_hotkey[:10] + ".." if len(rec.miner_hotkey) > 12 else rec.miner_hotkey,
             str(rec.miner_uid),
-            "[green]✅[/green]" if rec.success else "[red]❌[/red]",
+            "✅" if rec.success else "❌",
             str(acts),
             f"{rec.score:.2f}",
-            f"{rec.duration:.2f}",
+            f"{rec.duration:.1f}",
         )
     console.print(results)
 
@@ -196,14 +212,14 @@ def print_leaderboard_table(records: List[LeaderboardTaskRecord], task_prompt: s
         show_lines=False,
         padding=(0, 1),
     )
-    coldkey_table.add_column("Coldkey", style="cyan", width=20, no_wrap=True, overflow="ellipsis")
-    coldkey_table.add_column("Total hotkeys", justify="right", no_wrap=True, min_width=12)
-    coldkey_table.add_column("Total tasks", justify="right", no_wrap=True, min_width=10)
-    coldkey_table.add_column("Successes", justify="right", no_wrap=True, min_width=9)
-    coldkey_table.add_column("Success %", justify="right", no_wrap=True, min_width=9)
-    coldkey_table.add_column("Avg duration s", justify="right", no_wrap=True, min_width=13)
-    coldkey_table.add_column("Avg reward", justify="right", no_wrap=True, min_width=10)
-    coldkey_table.add_column("Avg actions", justify="right", no_wrap=True, min_width=11)
+    coldkey_table.add_column("Coldkey", style="cyan", width=14, no_wrap=True, overflow="ellipsis")
+    coldkey_table.add_column("Hotkeys", justify="right", width=8)
+    coldkey_table.add_column("Tasks", justify="right", width=6)
+    coldkey_table.add_column("OK", justify="right", width=4)
+    coldkey_table.add_column("OK%", justify="right", width=6)
+    coldkey_table.add_column("Dur", justify="right", width=6)
+    coldkey_table.add_column("Rew", justify="right", width=6)
+    coldkey_table.add_column("Act", justify="right", width=6)
 
     for coldkey, ck_records in coldkey_groups.items():
         total_ck_tasks = len(ck_records)
@@ -216,14 +232,14 @@ def print_leaderboard_table(records: List[LeaderboardTaskRecord], task_prompt: s
         total_hotkeys_ck = len(unique_hotkeys)
 
         coldkey_table.add_row(
-            coldkey,
+            coldkey[:12] + ".." if len(coldkey) > 14 else coldkey,
             str(total_hotkeys_ck),
             str(total_ck_tasks),
             str(total_ck_successes),
-            f"{success_rate_ck:.1f}",
-            f"{avg_duration_ck:.2f}",
+            f"{success_rate_ck:.0f}%",
+            f"{avg_duration_ck:.1f}",
             f"{avg_reward_ck:.2f}",
-            f"{avg_actions_ck:.2f}",
+            f"{avg_actions_ck:.1f}",
         )
 
     console.print(coldkey_table)
