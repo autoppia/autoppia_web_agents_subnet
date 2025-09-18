@@ -9,7 +9,7 @@ from rich.table import Table
 from rich import box
 
 from .leaderboard import LeaderboardTaskRecord
-from .stats import load_stats, StatBlock
+from .stats import load_stats, StatBlock  # StatBlock con avg_* calculados
 
 console = Console(force_terminal=True, color_system="truecolor", no_color=False)
 
@@ -37,6 +37,95 @@ def _actions_len(obj: Any) -> int:
     return 0
 
 
+# ---------------------- forward summary UI ---------------------
+def print_forward_tables(stats: Dict[str, Any]) -> None:
+    lf = stats.get("last_forward", {})
+
+    # ------------Forward summary-----------------
+    f_sent = int(lf.get("tasks_sent", 0))
+    f_succ = int(lf.get("tasks_success", 0))
+    f_fail = int(lf.get("tasks_failed", 0))
+    f_rate = (f_succ / f_sent) if f_sent > 0 else 0.0
+    f_avg_task = float(lf.get("avg_response_time_per_task", 0.0))
+    f_time = float(lf.get("forward_time", 0.0))
+    m_ok = int(lf.get("miner_successes", 0))
+    m_att = int(lf.get("miner_attempts", 0))
+    m_rate = float(lf.get("miner_success_rate", 0.0))
+
+    forward_tbl = Table(
+        title="[bold magenta]Forward summary[/bold magenta]",
+        box=box.SIMPLE_HEAVY,
+        header_style="bold cyan",
+        expand=True,
+        show_lines=False,
+        padding=(0, 1),
+    )
+    forward_tbl.add_column("Sent", justify="right", no_wrap=True, min_width=6)
+    forward_tbl.add_column("Success", justify="right", style="green", no_wrap=True, min_width=8)
+    forward_tbl.add_column("Failed", justify="right", style="red", no_wrap=True, min_width=8)
+    forward_tbl.add_column("Success %", justify="right", no_wrap=True, min_width=10)
+    forward_tbl.add_column("Miner OK", justify="right", no_wrap=True, min_width=10)
+    forward_tbl.add_column("Miner %", justify="right", no_wrap=True, min_width=8)
+    forward_tbl.add_column("Avg task time", justify="right", no_wrap=True, min_width=14)
+    forward_tbl.add_column("Forward time", justify="right", no_wrap=True, min_width=12)
+
+    forward_tbl.add_row(
+        str(f_sent),
+        str(f_succ),
+        str(f_fail),
+        f"{f_rate*100:5.1f}",
+        f"{m_ok}/{m_att}",
+        f"{m_rate*100:5.1f}",
+        _format_secs(f_avg_task),
+        _format_secs(f_time),
+    )
+    console.print(forward_tbl)
+
+    # -----------------Cumulative---------------------
+    total_sent = int(stats.get("total_tasks_sent", 0))
+    total_succ = int(stats.get("total_tasks_success", 0))
+    total_fail = int(stats.get("total_tasks_failed", 0))
+    overall_avg = stats["total_sum_of_avg_response_times"] / stats["overall_tasks_processed"] if stats.get("overall_tasks_processed", 0) > 0 else 0.0
+    success_rate = (total_succ / total_sent) if total_sent > 0 else 0.0
+    fwd_count = int(stats.get("total_forwards_count", 0))
+    total_time = float(stats.get("total_forwards_time", 0.0))
+    mt_ok = int(stats.get("total_miner_successes", 0))
+    mt_att = int(stats.get("total_miner_attempts", 0))
+    mt_rate = (mt_ok / mt_att) if mt_att > 0 else 0.0
+
+    totals_tbl = Table(
+        title="[bold magenta]Cumulative totals[/bold magenta]",
+        box=box.SIMPLE_HEAVY,
+        header_style="bold cyan",
+        expand=True,
+        show_lines=False,
+        padding=(0, 1),
+    )
+    totals_tbl.add_column("Forwards", justify="right", no_wrap=True, min_width=8)
+    totals_tbl.add_column("Total time", justify="right", no_wrap=True, min_width=12)
+    totals_tbl.add_column("Sent", justify="right", no_wrap=True, min_width=6)
+    totals_tbl.add_column("Success", justify="right", style="green", no_wrap=True, min_width=8)
+    totals_tbl.add_column("Failed", justify="right", style="red", no_wrap=True, min_width=8)
+    totals_tbl.add_column("Success %", justify="right", no_wrap=True, min_width=10)
+    totals_tbl.add_column("Miners OK", justify="right", no_wrap=True, min_width=10)
+    totals_tbl.add_column("Miners %", justify="right", no_wrap=True, min_width=9)
+    totals_tbl.add_column("Avg task time", justify="right", no_wrap=True, min_width=14)
+
+    totals_tbl.add_row(
+        str(fwd_count),
+        _format_secs(total_time),
+        str(total_sent),
+        str(total_succ),
+        str(total_fail),
+        f"{success_rate*100:5.1f}",
+        f"{mt_ok}/{mt_att}",
+        f"{mt_rate*100:5.1f}",
+        _format_secs(overall_avg),
+    )
+
+    console.print(totals_tbl)
+
+
 # -------------------- leaderboard per-task UI -------------------
 def print_leaderboard_table(records: List[LeaderboardTaskRecord], task_prompt: str, web_project: Optional[str]):
     info_table = Table(box=box.SIMPLE_HEAD, show_header=False, expand=True)
@@ -46,14 +135,15 @@ def print_leaderboard_table(records: List[LeaderboardTaskRecord], task_prompt: s
     info_table.add_row("Web Project:", web_project or "—")
     console.print(info_table)
 
-    # Tabla resultados individuales
     results = Table(
         title="[bold magenta]Task Results[/bold magenta]",
         box=box.SIMPLE_HEAVY,
         header_style="bold cyan",
         expand=True,
+        show_lines=False,
         padding=(0, 1),
     )
+    # ⬇️ Coldkey/Hotkey: 1 línea, 20 chars (… si hace falta)
     results.add_column("Coldkey", style="cyan", width=20, no_wrap=True, overflow="ellipsis")
     results.add_column("Hotkey", style="cyan", width=20, no_wrap=True, overflow="ellipsis")
     results.add_column("Miner UID", style="green", justify="center", no_wrap=True, min_width=7)
@@ -75,7 +165,6 @@ def print_leaderboard_table(records: List[LeaderboardTaskRecord], task_prompt: s
         )
     console.print(results)
 
-    # Totales y promedios
     total = len(records)
     successes = sum(1 for r in records if r.success)
     rate = (successes / total * 100) if total else 0.0
@@ -92,7 +181,6 @@ def print_leaderboard_table(records: List[LeaderboardTaskRecord], task_prompt: s
         style="yellow",
     )
 
-    # Agrupado por coldkey
     coldkey_groups: dict[str, List[LeaderboardTaskRecord]] = defaultdict(list)
     for rec in records:
         coldkey_groups[rec.miner_coldkey].append(rec)
@@ -102,6 +190,7 @@ def print_leaderboard_table(records: List[LeaderboardTaskRecord], task_prompt: s
         box=box.SIMPLE_HEAVY,
         header_style="bold cyan",
         expand=True,
+        show_lines=False,
         padding=(0, 1),
     )
     coldkey_table.add_column("Coldkey", style="cyan", width=20, no_wrap=True, overflow="ellipsis")
@@ -144,6 +233,7 @@ def print_coldkey_resume() -> None:
         console.print("[bold red]Snapshot vacío[/bold red]")
         return
 
+    # -----------Detalle (Coldkey / Web / Use-case)----------------
     tbl = Table(
         title="[bold magenta]Summary by Coldkey / Web / Use-case[/bold magenta]",
         box=box.SIMPLE_HEAVY,
@@ -178,7 +268,7 @@ def print_coldkey_resume() -> None:
 
     console.print(tbl)
 
-    # Totales por coldkey
+    # ----------Per-coldkey total tasks-----------------
     agg_by_ck: Dict[str, StatBlock] = {}
     for (ck, web, uc), blk in stats.items():
         acc = agg_by_ck.setdefault(ck, StatBlock())
