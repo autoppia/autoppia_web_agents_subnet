@@ -45,6 +45,7 @@ def render_html_report(fwd_table_data, table_global_data, table_cwu_data, task_t
 
             # Background color by Web project (if column exists)
             web_idx = None
+            coldkey_idx = None
             if "Web" in headers:
                 try:
                     web_idx = headers.index("Web")
@@ -53,19 +54,28 @@ def render_html_report(fwd_table_data, table_global_data, table_cwu_data, task_t
                         bg_style = f"background-color:{get_project_color(web_val.lower())};"
                 except Exception:
                     pass
+            if "Coldkey" in headers:
+                try:
+                    coldkey_idx = headers.index("Coldkey")
+                except Exception:
+                    pass
 
             for i, cell in enumerate(r):
                 txt = str(cell)
                 style = bg_style
 
-                # Highlight Web column in bold
+                # Italic for Coldkey column
+                if coldkey_idx is not None and i == coldkey_idx:
+                    txt = f"<i>{txt}</i>"
+
+                # Bold for Web column
                 if web_idx is not None and i == web_idx:
                     txt = f"<b>{txt}</b>"
 
                 # Color percentages
                 if "%" in txt:
                     try:
-                        val = float(txt.replace("%", "").replace("<b>", "").replace("</b>", ""))
+                        val = float(txt.replace("%", "").replace("<b>", "").replace("</b>", "").replace("<i>", "").replace("</i>", ""))
                         if val <= 25:
                             style += "color:#b71c1c;font-weight:bold;"  # red
                         elif val <= 50:
