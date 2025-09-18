@@ -1,17 +1,41 @@
-def render_html_report(fwd_summary, fwd_table_data, table_global_data, table_cwu_data, host, now):
-    # fwd_summary es un dict (totales resumidos)
-    # fwd_table_data = (headers, rows)
-    # table_global_data = (headers, rows)
-    # table_cwu_data = (headers, rows)
-
+def render_html_report(fwd_table_data, table_global_data, table_cwu_data, host, now):
     def render_html_table(headers, rows, title=""):
         if not rows:
             return f"<p><b>{title}:</b> (sin datos)</p>"
+
+        # Orden especial: si es Coldkey Global → ordenar por Hotk desc (col=1)
+        if title == "Coldkey Global":
+            try:
+                rows = sorted(rows, key=lambda r: int(r[1]), reverse=True)
+            except Exception:
+                pass
+
         table_html = f"<h2>{title}</h2><table>"
         table_html += "<thead><tr>" + "".join(f"<th>{h}</th>" for h in headers) + "</tr></thead>"
         table_html += "<tbody>"
         for r in rows:
-            table_html += "<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>"
+            row_html = ""
+            for i, c in enumerate(r):
+                cell = str(c)
+                style = ""
+
+                # Detectar si la columna es un porcentaje
+                if "%" in cell:
+                    try:
+                        val = float(cell.replace("%", ""))
+                        if val <= 25:
+                            style = "color: #b71c1c; font-weight:bold;"  # rojo
+                        elif val <= 50:
+                            style = "color: #e65100; font-weight:bold;"  # naranja
+                        elif val <= 75:
+                            style = "color: #f9a825; font-weight:bold;"  # amarillo/ámbar
+                        else:
+                            style = "color: #1b5e20; font-weight:bold;"  # verde
+                    except Exception:
+                        pass
+
+                row_html += f"<td style='{style}'>{cell}</td>"
+            table_html += f"<tr>{row_html}</tr>"
         table_html += "</tbody></table>"
         return table_html
 
@@ -55,21 +79,11 @@ def render_html_report(fwd_summary, fwd_table_data, table_global_data, table_cwu
     tr:nth-child(even) td {{
       background-color: #f2f2f2;
     }}
-    .summary-block {{
-      background: #fff8e1;
-      border: 1px solid #ffe082;
-      padding: 15px;
-      margin-bottom: 25px;
-      font-family: monospace;
-    }}
   </style>
 </head>
 <body>
   <h1>📊 Autoppia Web Agents – Reporte</h1>
   <p><b>Fecha:</b> {now} <br><b>Host:</b> {host}</p>
-
-  <h2>Resumen Global</h2>
-  <div class="summary-block"><pre>{fwd_summary}</pre></div>
 
   {render_html_table(*fwd_table_data, title="Forward Totals")}
   {render_html_table(*table_global_data, title="Coldkey Global")}
