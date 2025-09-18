@@ -13,7 +13,13 @@ from autoppia_web_agents_subnet import __version__
 from autoppia_iwa.src.demo_webs.config import demo_web_projects
 from autoppia_iwa.src.data_generation.domain.classes import Task
 
-from autoppia_web_agents_subnet.validator.config import FORWARD_SLEEP_SECONDS, NUMBER_OF_PROMPTS_PER_FORWARD, PROMPTS_PER_USECASE, SET_OPERATOR_ENDPOINT_FORWARDS_INTERVAL, SUCCESS_THRESHOLD
+from autoppia_web_agents_subnet.validator.config import (
+    FORWARD_SLEEP_SECONDS,
+    NUMBER_OF_PROMPTS_PER_FORWARD,
+    PROMPTS_PER_USECASE,
+    SET_OPERATOR_ENDPOINT_FORWARDS_INTERVAL,
+    SUCCESS_THRESHOLD,
+)
 from autoppia_web_agents_subnet.validator.stats import (
     init_validator_performance_stats,
     finalize_forward_stats,
@@ -49,8 +55,10 @@ async def forward(self) -> None:
         # 1) Generate tasks per project
         task_distribution = split_tasks_evenly(NUMBER_OF_PROMPTS_PER_FORWARD, num_projects)
         use_cases_per_project = max(1, math.ceil(NUMBER_OF_PROMPTS_PER_FORWARD / num_projects))
-        bt.logging.info(f"Generating {NUMBER_OF_PROMPTS_PER_FORWARD} tasks across {num_projects} projects: {task_distribution}, {use_cases_per_project} use-cases/project.")
+        bt.logging.info(f"Generating {NUMBER_OF_PROMPTS_PER_FORWARD} tasks across {num_projects} projects: " f"{task_distribution}, {use_cases_per_project} use-cases/project.")
+
         all_tasks: list[list[Task]] = []
+        projects_with_tasks = []
         for project, num_tasks in zip(demo_web_projects, task_distribution):
             if num_tasks <= 0:
                 continue
@@ -60,8 +68,14 @@ async def forward(self) -> None:
                 prompts_per_use_case=PROMPTS_PER_USECASE,
                 num_use_cases=use_cases_per_project,
             )
-            random.shuffle(project_tasks)
-            all_tasks.append(project_tasks)
+            if project_tasks:  # 🔥 solo guardar si realmente hay tasks
+                random.shuffle(project_tasks)
+                all_tasks.append(project_tasks)
+                projects_with_tasks.append(project)
+
+        if not all_tasks:
+            bt.logging.warning("No tasks generated – skipping forward.")
+            return
 
         # 2) Success counters per UID (each task goes to ALL miners)
         n = self.metagraph.n
@@ -69,38 +83,42 @@ async def forward(self) -> None:
 
         # Per-forward accumulators
         tasks_sent = 0
-        tasks_success = 0  # tasks with at least one miner reward > 0
-        sum_avg_response_times = 0.0  # sum of per-task avg(miner) response time (seconds)
+        tasks_success = 0
+        sum_avg_response_times = 0.0
 
         miner_successes_total = 0
         miner_attempts_total = 0
+
         for task in interleave_tasks(*all_tasks):
             if tasks_sent >= NUMBER_OF_PROMPTS_PER_FORWARD:
                 break
 
-            # Find project and evaluate this task for ALL miners
-            for project, project_tasks in zip(demo_web_projects, all_tasks):
-                if task in project_tasks:
-                    rewards_vec, avg_time = await evaluate_task_all_miners(self, project, task)
-                    successes_mask = (rewards_vec > SUCCESS_THRESHOLD).astype(np.int32)
-                    successes += successes_mask
-
-                    miner_successes_total += int(np.sum(successes_mask))
-                    miner_attempts_total += rewards_vec.shape[0]
-
-                    tasks_sent += 1
-                    sum_avg_response_times += float(avg_time)
-                    if np.any(rewards_vec > SUCCESS_THRESHOLD):
-                        tasks_success += 1
+            # ✅ encontrar el proyecto correcto por identidad
+            project = None
+            for p, project_tasks in zip(projects_with_tasks, all_tasks):
+                if any(t is task for t in project_tasks):
+                    project = p
                     break
 
-        # 3) Single score update at the end: success ratio (e.g., 6/9, 8/9, ...)
+            if project is None:
+                bt.logging.warning(f"No project found for task {getattr(task, 'id', 'unknown')}")
+                continue
+
+            rewards_vec, avg_time = await evaluate_task_all_miners(self, project, task)
+            successes_mask = (rewards_vec > SUCCESS_THRESHOLD).astype(np.int32)
+            successes += successes_mask
+
+            miner_successes_total += int(np.sum(successes_mask))
+            miner_attempts_total += rewards_vec.shape[0]
+
+            tasks_sent += 1
+            sum_avg_response_times += float(avg_time)
+            if np.any(rewards_vec > SUCCESS_THRESHOLD):
+                tasks_success += 1
+
+        # 3) Single score update at the end
         if tasks_sent > 0:
             success_ratio = successes.astype(np.float32) / float(tasks_sent)
-
-            # # Optional: per-UID compact logs
-            # for uid in range(n):
-            #     bt.logging.info(f"[update] UID {uid}: successes={int(successes[uid])}/{tasks_sent} => ratio={float(success_ratio[uid]):.3f}")
             uids_update = list(range(n))
             async with self.lock:
                 self.update_scores(success_ratio, uids_update)
@@ -114,8 +132,6 @@ async def forward(self) -> None:
 
         # 5) Wrap-up + global metrics
         forward_time = time.time() - t_forward_start
-
-        # Persist + print summaries (forward + cumulative)
         summary = finalize_forward_stats(
             self,
             tasks_sent=tasks_sent,
@@ -123,7 +139,7 @@ async def forward(self) -> None:
             forward_time=forward_time,
             miner_successes=miner_successes_total,
             miner_attempts=miner_attempts_total,
-            forward_id=self.forward_count,  # ← AÑADIDO
+            forward_id=self.forward_count,
         )
         print_forward_tables(self.validator_performance_stats)
 

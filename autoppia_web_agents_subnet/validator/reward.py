@@ -253,7 +253,7 @@ async def get_rewards_with_details(
 
     We now also incorporate an 'efficiency_factor' weighted at 15%, based on the number of actions.
     """
-    bt.logging.info(f"Evaluating {len(task_solutions)} task solutions with detailed results:  {task_solutions}")
+    bt.logging.info(f"Evaluating {len(task_solutions)} web_project:  {web_project.backend_url}")
 
     evaluator_config = EvaluatorConfig(
         # save_results_in_db=False,
