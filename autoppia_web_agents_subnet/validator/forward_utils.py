@@ -45,15 +45,16 @@ from autoppia_web_agents_subnet.validator.config import (
 )
 from autoppia_web_agents_subnet.validator.leaderboard import (
     LeaderboardTaskRecord,
-    print_leaderboard_table,
     send_many_tasks_to_leaderboard_async,
 )
 from autoppia_web_agents_subnet.validator.reward import get_rewards_with_details
-from autoppia_web_agents_subnet.validator.stats_persistence import (
+from autoppia_web_agents_subnet.validator.forward_stats import (
     update_coldkey_stats_json,
+)
+from autoppia_web_agents_subnet.validator.visualization import (
+    print_leaderboard_table,
     print_coldkey_resume,
 )
-
 from autoppia_web_agents_subnet.utils.dendrite import dendrite_with_retries
 from autoppia_web_agents_subnet.validator.version import (
     check_miner_not_responding_to_invalid_version,

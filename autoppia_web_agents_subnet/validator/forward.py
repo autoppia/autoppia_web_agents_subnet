@@ -13,16 +13,13 @@ from autoppia_web_agents_subnet import __version__
 from autoppia_iwa.src.demo_webs.config import demo_web_projects
 from autoppia_iwa.src.data_generation.domain.classes import Task
 
-from autoppia_web_agents_subnet.validator.config import (
-    FORWARD_SLEEP_SECONDS,
-    NUMBER_OF_PROMPTS_PER_FORWARD,
-    PROMPTS_PER_USECASE,
-    SET_OPERATOR_ENDPOINT_FORWARDS_INTERVAL,
-)
+from autoppia_web_agents_subnet.validator.config import FORWARD_SLEEP_SECONDS, NUMBER_OF_PROMPTS_PER_FORWARD, PROMPTS_PER_USECASE, SET_OPERATOR_ENDPOINT_FORWARDS_INTERVAL, SUCCESS_THRESHOLD
 from autoppia_web_agents_subnet.validator.forward_stats import (  # <--- usa tu nuevo módulo
     init_validator_performance_stats,
     finalize_forward_stats,
-    print_validator_performance_stats,
+)
+from autoppia_web_agents_subnet.validator.visualization import (  # <--- usa tu nuevo módulo
+    print_forward_tables,
 )
 from autoppia_web_agents_subnet.validator.forward_utils import (
     interleave_tasks,
@@ -31,8 +28,6 @@ from autoppia_web_agents_subnet.validator.forward_utils import (
     evaluate_task_all_miners,  # devuelve (rewards_vec, avg_miner_time)
     broadcast_and_save_operator_endpoints,
 )
-
-SUCCESS_THRESHOLD = 0  # success if reward > 0
 
 
 async def forward(self) -> None:
@@ -98,8 +93,7 @@ async def forward(self) -> None:
 
             # Optional: per-UID compact logs
             for uid in range(n):
-                bt.logging.info(f"[update] UID {uid}: successes={int(successes[uid])}/{tasks_sent} " f"=> ratio={float(success_ratio[uid]):.3f}")
-
+                bt.logging.info(f"[update] UID {uid}: successes={int(successes[uid])}/{tasks_sent} => ratio={float(success_ratio[uid]):.3f}")
             uids_update = list(range(n))
             async with self.lock:
                 self.update_scores(success_ratio, uids_update)
@@ -122,7 +116,7 @@ async def forward(self) -> None:
             sum_avg_response_times=sum_avg_response_times,
             forward_time=forward_time,
         )
-        print_validator_performance_stats(self)
+        print_forward_tables(self.validator_performance_stats)
 
         bt.logging.success("Forward cycle completed!")
 
