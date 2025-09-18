@@ -42,15 +42,20 @@ def print_forward_tables(stats: Dict[str, Any]) -> None:
     lf = stats.get("last_forward", {})
 
     # ------------Forward summary-----------------
+    # intents = éxitos + fallos + sin respuesta (si no vienen, cae a 0)
     f_sent = int(lf.get("tasks_sent", 0))
     f_succ = int(lf.get("tasks_success", 0))
     f_fail = int(lf.get("tasks_failed", 0))
-    f_rate = (f_succ / f_sent) if f_sent > 0 else 0.0
+    f_rate = (f_succ / max(1, f_sent)) if f_sent > 0 else 0.0
     f_avg_task = float(lf.get("avg_response_time_per_task", 0.0))
     f_time = float(lf.get("forward_time", 0.0))
-    m_ok = int(lf.get("miner_successes", 0))
-    m_att = int(lf.get("miner_attempts", 0))
-    m_rate = float(lf.get("miner_success_rate", 0.0))
+
+    # “Solutions OK / %” (más claro que “Miner OK”)
+    sols_ok = int(lf.get("num_success", 0))
+    sols_wrong = int(lf.get("num_wrong", 0))
+    sols_noresp = int(lf.get("num_no_response", 0))
+    sols_attempts = sols_ok + sols_wrong + sols_noresp
+    sols_rate = (sols_ok / max(1, sols_attempts)) if sols_attempts > 0 else 0.0
 
     forward_tbl = Table(
         title="[bold magenta]Forward summary[/bold magenta]",
@@ -63,19 +68,19 @@ def print_forward_tables(stats: Dict[str, Any]) -> None:
     forward_tbl.add_column("Sent", justify="right", no_wrap=True, min_width=6)
     forward_tbl.add_column("Success", justify="right", style="green", no_wrap=True, min_width=8)
     forward_tbl.add_column("Failed", justify="right", style="red", no_wrap=True, min_width=8)
-    forward_tbl.add_column("Success %", justify="right", no_wrap=True, min_width=10)
-    forward_tbl.add_column("Miner OK", justify="right", no_wrap=True, min_width=10)
-    forward_tbl.add_column("Miner %", justify="right", no_wrap=True, min_width=8)
-    forward_tbl.add_column("Avg task time", justify="right", no_wrap=True, min_width=14)
+    forward_tbl.add_column("Success %", justify="right", no_wrap=True, min_width=9)
+    forward_tbl.add_column("Miner OK", justify="right", no_wrap=True, min_width=12)
+    forward_tbl.add_column("Miner %", justify="right", no_wrap=True, min_width=11)
+    forward_tbl.add_column("Avg task", justify="right", no_wrap=True, min_width=9)
     forward_tbl.add_column("Forward time", justify="right", no_wrap=True, min_width=12)
 
     forward_tbl.add_row(
         str(f_sent),
         str(f_succ),
         str(f_fail),
-        f"{f_rate*100:5.1f}",
-        f"{m_ok}/{m_att}",
-        f"{m_rate*100:5.1f}",
+        f"{f_rate*100:4.1f}",
+        f"{sols_ok}/{sols_attempts}",
+        f"{sols_rate*100:4.1f}",
         _format_secs(f_avg_task),
         _format_secs(f_time),
     )
@@ -86,12 +91,12 @@ def print_forward_tables(stats: Dict[str, Any]) -> None:
     total_succ = int(stats.get("total_tasks_success", 0))
     total_fail = int(stats.get("total_tasks_failed", 0))
     overall_avg = stats["total_sum_of_avg_response_times"] / stats["overall_tasks_processed"] if stats.get("overall_tasks_processed", 0) > 0 else 0.0
-    success_rate = (total_succ / total_sent) if total_sent > 0 else 0.0
-    fwd_count = int(stats.get("total_forwards_count", 0))
-    total_time = float(stats.get("total_forwards_time", 0.0))
-    mt_ok = int(stats.get("total_miner_successes", 0))
-    mt_att = int(stats.get("total_miner_attempts", 0))
-    mt_rate = (mt_ok / mt_att) if mt_att > 0 else 0.0
+    success_rate = (total_succ / max(1, total_sent)) if total_sent > 0 else 0.0
+
+    # Acumulado de soluciones (éxitos/total enviados)
+    sols_total_ok = total_succ
+    sols_total_attempts = total_sent
+    sols_total_rate = (sols_total_ok / max(1, sols_total_attempts)) if sols_total_attempts > 0 else 0.0
 
     totals_tbl = Table(
         title="[bold magenta]Cumulative totals[/bold magenta]",
@@ -106,23 +111,22 @@ def print_forward_tables(stats: Dict[str, Any]) -> None:
     totals_tbl.add_column("Sent", justify="right", no_wrap=True, min_width=6)
     totals_tbl.add_column("Success", justify="right", style="green", no_wrap=True, min_width=8)
     totals_tbl.add_column("Failed", justify="right", style="red", no_wrap=True, min_width=8)
-    totals_tbl.add_column("Success %", justify="right", no_wrap=True, min_width=10)
-    totals_tbl.add_column("Miners OK", justify="right", no_wrap=True, min_width=10)
-    totals_tbl.add_column("Miners %", justify="right", no_wrap=True, min_width=9)
-    totals_tbl.add_column("Avg task time", justify="right", no_wrap=True, min_width=14)
+    totals_tbl.add_column("Success %", justify="right", no_wrap=True, min_width=9)
+    totals_tbl.add_column("Miner", justify="right", no_wrap=True, min_width=11)
+    totals_tbl.add_column("Miner %", justify="right", no_wrap=True, min_width=11)
+    totals_tbl.add_column("Avg task", justify="right", no_wrap=True, min_width=9)
 
     totals_tbl.add_row(
-        str(fwd_count),
-        _format_secs(total_time),
+        str(int(stats.get("total_forwards_count", 0))),
+        _format_secs(float(stats.get("total_forwards_time", 0.0))),
         str(total_sent),
         str(total_succ),
         str(total_fail),
-        f"{success_rate*100:5.1f}",
-        f"{mt_ok}/{mt_att}",
-        f"{mt_rate*100:5.1f}",
+        f"{success_rate*100:4.1f}",
+        f"{sols_total_ok}/{sols_total_attempts}",
+        f"{sols_total_rate*100:4.1f}",
         _format_secs(overall_avg),
     )
-
     console.print(totals_tbl)
 
 
@@ -143,14 +147,14 @@ def print_leaderboard_table(records: List[LeaderboardTaskRecord], task_prompt: s
         show_lines=False,
         padding=(0, 1),
     )
-    # ⬇️ Coldkey/Hotkey: 1 línea, 20 chars (… si hace falta)
+    # Coldkey/Hotkey: 1 línea, 20 chars (… si hace falta)
     results.add_column("Coldkey", style="cyan", width=20, no_wrap=True, overflow="ellipsis")
     results.add_column("Hotkey", style="cyan", width=20, no_wrap=True, overflow="ellipsis")
     results.add_column("Miner UID", style="green", justify="center", no_wrap=True, min_width=7)
-    results.add_column("Success", justify="center", no_wrap=True, min_width=6)
-    results.add_column("Actions", justify="right", no_wrap=True, min_width=6)
-    results.add_column("Reward", justify="right", no_wrap=True, min_width=6)
-    results.add_column("Duration (s)", justify="right", no_wrap=True, min_width=10)
+    results.add_column("Succes", justify="center", no_wrap=True, min_width=6)
+    results.add_column("Actio", justify="right", no_wrap=True, min_width=5)
+    results.add_column("Reward", justify="right", no_wrap=True, min_width=7)
+    results.add_column("Dur s", justify="right", no_wrap=True, min_width=7)
 
     for rec in records:
         acts = _actions_len(rec.actions)
@@ -198,9 +202,9 @@ def print_leaderboard_table(records: List[LeaderboardTaskRecord], task_prompt: s
     coldkey_table.add_column("Total tasks", justify="right", no_wrap=True, min_width=7)
     coldkey_table.add_column("Successes", justify="right", no_wrap=True, min_width=7)
     coldkey_table.add_column("Success %", justify="right", no_wrap=True, min_width=7)
-    coldkey_table.add_column("Avg duration s", justify="right", no_wrap=True, min_width=10)
-    coldkey_table.add_column("Avg reward", justify="right", no_wrap=True, min_width=8)
-    coldkey_table.add_column("Avg actions", justify="right", no_wrap=True, min_width=8)
+    coldkey_table.add_column("Avg duration s", justify="right", no_wrap=True, min_width=11)
+    coldkey_table.add_column("Avg reward", justify="right", no_wrap=True, min_width=9)
+    coldkey_table.add_column("Avg actions", justify="right", no_wrap=True, min_width=9)
 
     for coldkey, ck_records in coldkey_groups.items():
         total_ck_tasks = len(ck_records)
@@ -248,8 +252,8 @@ def print_coldkey_resume() -> None:
     tbl.add_column("Tasks", justify="right", no_wrap=True, min_width=5)
     tbl.add_column("Succ", justify="right", no_wrap=True, min_width=4)
     tbl.add_column("Rate %", justify="right", no_wrap=True, min_width=6)
-    tbl.add_column("Avg reward", justify="right", no_wrap=True, min_width=8)
-    tbl.add_column("Avg actions", justify="right", no_wrap=True, min_width=8)
+    tbl.add_column("Avg reward", justify="right", no_wrap=True, min_width=9)
+    tbl.add_column("Avg actions", justify="right", no_wrap=True, min_width=9)
     tbl.add_column("Avg s", justify="right", no_wrap=True, min_width=6)
 
     for (ck, web, uc), blk in sorted(stats.items()):
@@ -260,7 +264,7 @@ def print_coldkey_resume() -> None:
             str(len(blk.hotkeys)),
             str(blk.tasks),
             str(blk.successes),
-            f"{blk.success_rate*100:5.1f}",
+            f"{blk.success_rate*100:4.1f}",
             f"{blk.avg_reward:6.2f}",
             f"{blk.avg_actions:6.2f}",
             f"{blk.avg_duration:6.2f}",
@@ -291,8 +295,8 @@ def print_coldkey_resume() -> None:
     ck_tbl.add_column("Tasks", justify="right", no_wrap=True, min_width=5)
     ck_tbl.add_column("Succ", justify="right", no_wrap=True, min_width=4)
     ck_tbl.add_column("Rate %", justify="right", no_wrap=True, min_width=6)
-    ck_tbl.add_column("Avg reward", justify="right", no_wrap=True, min_width=8)
-    ck_tbl.add_column("Avg actions", justify="right", no_wrap=True, min_width=8)
+    ck_tbl.add_column("Avg reward", justify="right", no_wrap=True, min_width=9)
+    ck_tbl.add_column("Avg actions", justify="right", no_wrap=True, min_width=9)
     ck_tbl.add_column("Avg s", justify="right", no_wrap=True, min_width=6)
 
     for ck, acc in sorted(agg_by_ck.items()):
@@ -301,7 +305,7 @@ def print_coldkey_resume() -> None:
             str(len(acc.hotkeys)),
             str(acc.tasks),
             str(acc.successes),
-            f"{acc.success_rate*100:5.1f}",
+            f"{acc.success_rate*100:4.1f}",
             f"{acc.avg_reward:6.2f}",
             f"{acc.avg_actions:6.2f}",
             f"{acc.avg_duration:6.2f}",
