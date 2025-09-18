@@ -318,7 +318,7 @@ async def evaluate_task_all_miners(
         if vresp and hasattr(vresp, "actions") and vresp.actions:
             invalid_version_responders.add(miner_uids[i])
 
-    bt.logging.info("Sending Task Synapse to ALL miners")
+    ColoredLogger.info(f"Sending Task Synapse to ALL miners :{task_synapse.prompt} (URL: {task_synapse.url})", ColoredLogger.YELLOW)
     responses = await send_task_synapse_to_miners(validator, miner_axons, task_synapse, timeout=TIMEOUT)
 
     task_solutions, execution_times = collect_task_solutions(task, responses, miner_uids)
@@ -365,93 +365,6 @@ async def evaluate_task_all_miners(
 
     avg_miner_time = float(sum(execution_times) / len(execution_times)) if execution_times else 0.0
     return rewards_vec, avg_miner_time
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Per-task processing loop (sampling-based; kept for compatibility)
-# ─────────────────────────────────────────────────────────────────────────────
-async def process_tasks(validator, web_project: WebProject, tasks_generated: List[Task]):
-    """
-    Sampling-based pipeline kept for compatibility with previous flows.
-    Returns (sum_per_uid, count_per_uid) with shape (metagraph.n,).
-    NOTE: This function no longer updates forward-level stats; use forward_stats.py from forward.py.
-    """
-    import numpy as np
-
-    metagraph_n = validator.metagraph.n
-    sum_per_uid = np.zeros(metagraph_n, dtype=np.float32)
-    count_per_uid = np.zeros(metagraph_n, dtype=np.int32)
-
-    tasks_total_time = 0.0
-    tasks_count = 0
-
-    for index, task in enumerate(tasks_generated):
-        t0_task = time.time()
-        ColoredLogger.info(f"Task #{index} (URL: {task.url}, ID: {task.id}): {task.prompt}. TESTS: {task.tests}", ColoredLogger.CYAN)
-
-        miner_uids = get_random_uids(validator, k=SAMPLE_SIZE)
-        miner_axons = [validator.metagraph.axons[uid] for uid in miner_uids]
-
-        task_synapse = TaskSynapse(prompt=task.prompt, url=task.url, html="", screenshot="", actions=[])
-
-        version_responses = await check_miner_not_responding_to_invalid_version(
-            validator,
-            task_synapse=TaskSynapse(**task_synapse.model_dump()),
-            miner_axons=miner_axons,
-            probability=CHECK_VERSION_PROBABILITY,
-            timeout=CHECK_VERSION_SYNAPSE,
-        )
-        invalid_version_responders: Set[int] = set()
-        for i, vresp in enumerate(version_responses or []):
-            if vresp and hasattr(vresp, "actions") and vresp.actions:
-                invalid_version_responders.add(miner_uids[i])
-
-        bt.logging.info("Sending Task Synapses To Miners")
-        responses = await send_task_synapse_to_miners(validator, miner_axons, task_synapse, timeout=TIMEOUT)
-
-        task_solutions, execution_times = collect_task_solutions(task, responses, miner_uids)
-
-        rewards, test_results_matrices, evaluation_results = await get_rewards_with_details(
-            validator,
-            web_project=web_project,
-            task=task,
-            task_solutions=task_solutions,
-            execution_times=execution_times,
-            time_weight=TIME_WEIGHT,
-            efficiency_weight=EFFICIENCY_WEIGHT,
-            min_correct_format_score=MIN_SCORE_FOR_CORRECT_FORMAT,
-            min_response_reward=MIN_RESPONSE_REWARD,
-            invalid_version_responders=invalid_version_responders,
-        )
-        bt.logging.info(f"Miners final rewards: {rewards}")
-
-        r = np.asarray(rewards, dtype=np.float32)
-        sum_per_uid[miner_uids] += r
-        count_per_uid[miner_uids] += 1
-
-        await send_feedback_synapse_to_miners(
-            validator=validator,
-            miner_axons=miner_axons,
-            miner_uids=miner_uids,
-            task=task,
-            task_solutions=task_solutions,
-            test_results_matrices=test_results_matrices,
-            evaluation_results=evaluation_results,
-            rewards=rewards,
-            execution_times=execution_times,
-        )
-
-        _schedule_leaderboard_logging(validator, miner_uids, execution_times, task, evaluation_results, task_solutions)
-
-        tasks_count += 1
-        tasks_total_time += time.time() - t0_task
-        ColoredLogger.info(f"Task iteration time: {time.time() - t0_task:.2f}s.", ColoredLogger.YELLOW)
-
-        bt.logging.info(f"Sleeping for {TASK_SLEEP}s....")
-        await asyncio.sleep(TASK_SLEEP)
-
-    bt.logging.info(f"Processed {tasks_count} sampled tasks; avg per task: {(tasks_total_time / tasks_count) if tasks_count else 0.0:.2f}s")
-    return sum_per_uid, count_per_uid
 
 
 # ─────────────────────────────────────────────────────────────────────────────

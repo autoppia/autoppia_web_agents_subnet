@@ -97,9 +97,9 @@ async def forward(self) -> None:
         if tasks_sent > 0:
             success_ratio = successes.astype(np.float32) / float(tasks_sent)
 
-            # Optional: per-UID compact logs
-            for uid in range(n):
-                bt.logging.info(f"[update] UID {uid}: successes={int(successes[uid])}/{tasks_sent} => ratio={float(success_ratio[uid]):.3f}")
+            # # Optional: per-UID compact logs
+            # for uid in range(n):
+            #     bt.logging.info(f"[update] UID {uid}: successes={int(successes[uid])}/{tasks_sent} => ratio={float(success_ratio[uid]):.3f}")
             uids_update = list(range(n))
             async with self.lock:
                 self.update_scores(success_ratio, uids_update)
