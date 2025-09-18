@@ -52,6 +52,8 @@ async def forward(self) -> None:
         bt.logging.info(f"Generating {NUMBER_OF_PROMPTS_PER_FORWARD} tasks across {num_projects} projects: {task_distribution} tasks/project, {use_cases_per_project} use-cases/project.")
         all_tasks: list[list[Task]] = []
         for project, num_tasks in zip(demo_web_projects, task_distribution):
+            if num_tasks <= 0:
+                continue
             project_tasks = await generate_tasks_limited_use_cases(
                 project,
                 total_tasks=num_tasks,
@@ -72,7 +74,6 @@ async def forward(self) -> None:
 
         miner_successes_total = 0
         miner_attempts_total = 0
-        bt.logging.info(f"all tasks:  {all_tasks} ")
         for task in interleave_tasks(*all_tasks):
             if tasks_sent >= NUMBER_OF_PROMPTS_PER_FORWARD:
                 break
