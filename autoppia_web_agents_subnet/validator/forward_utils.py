@@ -48,7 +48,7 @@ from autoppia_web_agents_subnet.validator.leaderboard import (
     send_many_tasks_to_leaderboard_async,
 )
 from autoppia_web_agents_subnet.validator.reward import get_rewards_with_details
-from autoppia_web_agents_subnet.validator.forward_stats import (
+from autoppia_web_agents_subnet.validator.stats import (
     update_coldkey_stats_json,
 )
 from autoppia_web_agents_subnet.validator.visualization import (

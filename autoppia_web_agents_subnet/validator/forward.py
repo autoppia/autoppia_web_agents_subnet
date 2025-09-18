@@ -14,7 +14,7 @@ from autoppia_iwa.src.demo_webs.config import demo_web_projects
 from autoppia_iwa.src.data_generation.domain.classes import Task
 
 from autoppia_web_agents_subnet.validator.config import FORWARD_SLEEP_SECONDS, NUMBER_OF_PROMPTS_PER_FORWARD, PROMPTS_PER_USECASE, SET_OPERATOR_ENDPOINT_FORWARDS_INTERVAL, SUCCESS_THRESHOLD
-from autoppia_web_agents_subnet.validator.forward_stats import (  # <--- usa tu nuevo módulo
+from autoppia_web_agents_subnet.validator.stats import (  # <--- usa tu nuevo módulo
     init_validator_performance_stats,
     finalize_forward_stats,
 )

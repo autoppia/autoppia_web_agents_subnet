@@ -10,7 +10,7 @@ from rich import box
 
 # Local deps
 from .leaderboard import LeaderboardTaskRecord
-from .forward_stats import load_stats
+from .stats import load_stats
 
 console = Console(
     force_terminal=True,  # render as if TTY
@@ -221,7 +221,7 @@ def print_coldkey_resume() -> None:
         return
 
     # Per-coldkey totals
-    from .forward_stats import StatBlock  # reuse class for simple aggregation
+    from .stats import StatBlock  # reuse class for simple aggregation
 
     agg_by_ck: Dict[str, StatBlock] = {}
     for (ck, web, uc), blk in stats.items():
