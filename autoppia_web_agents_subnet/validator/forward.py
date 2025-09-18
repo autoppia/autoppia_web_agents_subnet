@@ -14,11 +14,11 @@ from autoppia_iwa.src.demo_webs.config import demo_web_projects
 from autoppia_iwa.src.data_generation.domain.classes import Task
 
 from autoppia_web_agents_subnet.validator.config import FORWARD_SLEEP_SECONDS, NUMBER_OF_PROMPTS_PER_FORWARD, PROMPTS_PER_USECASE, SET_OPERATOR_ENDPOINT_FORWARDS_INTERVAL, SUCCESS_THRESHOLD
-from autoppia_web_agents_subnet.validator.stats import (  # <--- usa tu nuevo módulo
+from autoppia_web_agents_subnet.validator.stats import (
     init_validator_performance_stats,
     finalize_forward_stats,
 )
-from autoppia_web_agents_subnet.validator.visualization import (  # <--- usa tu nuevo módulo
+from autoppia_web_agents_subnet.validator.visualization import (
     print_forward_tables,
 )
 from autoppia_web_agents_subnet.validator.forward_utils import (
@@ -78,14 +78,13 @@ async def forward(self) -> None:
             for project, project_tasks in zip(demo_web_projects, all_tasks):
                 if task in project_tasks:
                     rewards_vec, avg_time = await evaluate_task_all_miners(self, project, task)
-                    # success if reward > 0
                     successes += (rewards_vec > SUCCESS_THRESHOLD).astype(np.int32)
 
                     tasks_sent += 1
                     sum_avg_response_times += float(avg_time)
                     if np.any(rewards_vec > SUCCESS_THRESHOLD):
                         tasks_success += 1
-                    break  # next task
+                    break
 
         # 3) Single score update at the end: success ratio (e.g., 6/9, 8/9, ...)
         if tasks_sent > 0:
