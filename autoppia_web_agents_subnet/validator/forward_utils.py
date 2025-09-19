@@ -152,8 +152,11 @@ def collect_task_solutions(
 
         if response and hasattr(response.dendrite, "process_time") and response.dendrite.process_time is not None:
             execution_times.append(response.dendrite.process_time)
+            bt.logging.info(f"[TIME] uid={miner_uid} process_time={response.dendrite.process_time:.3f}s (taken)")
+
         else:
             execution_times.append(TIMEOUT)
+            bt.logging.info(f"[TIME] uid={miner_uid} process_time=None -> using TIMEOUT={TIMEOUT:.3f}s")
 
     return task_solutions, execution_times
 
@@ -337,6 +340,20 @@ async def evaluate_task_all_miners(
         invalid_version_responders=invalid_version_responders,
     )
     bt.logging.info(f"Miners final rewards: {rewards}")
+    # === DEBUG: mapear reward -> uid/hotkey/coldkey y ordenar ===
+    rows = []
+    for i, uid in enumerate(miner_uids):
+        hk = validator.metagraph.hotkeys[uid]
+        ck = validator.metagraph.coldkeys[uid]
+        r = float(rewards[i]) if i < len(rewards) else 0.0
+        t = float(execution_times[i]) if i < len(execution_times) else 0.0
+        rows.append((uid, hk, ck, r, t))
+
+    rows.sort(key=lambda x: x[3], reverse=True)
+
+    bt.logging.info("=== [TASK REWARDS] uid/hk/ck/reward/time (ordenado) ===")
+    for uid, hk, ck, r, t in rows[:25]:  # top 25 para no saturar
+        bt.logging.info(f"[REWARD] uid={uid:<3} hk={hk[:10]}… ck={ck[:10]}…  reward={r:.6f}  time={t:.2f}s")
 
     await send_feedback_synapse_to_miners(
         validator=validator,

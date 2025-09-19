@@ -142,6 +142,21 @@ async def forward(self) -> None:
             bt.logging.info(f"Average rewards - Min: {average_rewards.min():.4f}, " f"Max: {average_rewards.max():.4f}, Mean: {average_rewards.mean():.4f}")
 
             uids_update = list(range(n))
+            # === DEBUG: medias por uid/hotkey/coldkey antes de update_scores ===
+            rows = []
+            for uid in uids_update:
+                hk = self.metagraph.hotkeys[uid]
+                ck = self.metagraph.coldkeys[uid]
+                s = float(average_rewards[uid])
+                rows.append((uid, hk, ck, s))
+            rows.sort(key=lambda x: x[3], reverse=True)
+
+            bt.logging.info("=== [FORWARD AVG] uid/hk/ck/avg_reward (ordenado) ===")
+            for uid, hk, ck, s in rows[:25]:
+                bt.logging.info(f"[AVG] uid={uid:<3} hk={hk[:10]}… ck={ck[:10]}…  avg_reward={s:.6f}")
+
+            # stats globales ya los imprimes arriba, mantenemos la línea:
+            bt.logging.info(f"Average rewards - Min: {average_rewards.min():.4f}, " f"Max: {average_rewards.max():.4f}, Mean: {average_rewards.mean():.4f}")
             async with self.lock:
                 self.update_scores(average_rewards, uids_update)
 
