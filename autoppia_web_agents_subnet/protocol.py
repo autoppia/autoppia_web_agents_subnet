@@ -18,13 +18,7 @@ from autoppia_iwa.src.data_generation.domain.classes import Task, TestUnion
 from autoppia_iwa.src.execution.actions.actions import AllActionsUnion
 from autoppia_iwa.src.shared.visualizator import SubnetVisualizer
 from .miner.stats import MinerStats
-
-# === new import ===
-
-SAVE_SUCCESSFUL_TASK_IN_JSON = bool(
-    strtobool(os.getenv("SAVE_SUCCESSFUL_TASK_IN_JSON", "false"))
-)
-SUCCESSFUL_TASKS_JSON_FILENAME = "successful_tasks.json"
+from autoppia_web_agents_subnet.config.config import SAVE_SUCCESSFUL_TASK_IN_JSON
 
 
 class TaskSynapse(Synapse):
@@ -37,9 +31,7 @@ class TaskSynapse(Synapse):
     url: str
     html: Optional[str] = None
     screenshot: Optional[str] = None
-    actions: List[AllActionsUnion] = Field(
-        default_factory=list, description="The actions that solve the task"
-    )
+    actions: List[AllActionsUnion] = Field(default_factory=list, description="The actions that solve the task")
 
     class Config:
         extra = "allow"
@@ -95,8 +87,7 @@ class TaskFeedbackSynapse(Synapse):
             f"[bold]Prompt:[/bold] {self.prompt}\n"
         )
         console.print(
-            f"[bold]Score:[/bold] {self.score} | "
-            f"[bold]Execution Time:[/bold] {self.execution_time} seconds\n",
+            f"[bold]Score:[/bold] {self.score} | " f"[bold]Execution Time:[/bold] {self.execution_time} seconds\n",
             style="cyan",
         )
 
@@ -117,9 +108,7 @@ class TaskFeedbackSynapse(Synapse):
             )
         else:
             visualizer.show_task_with_tests(task)
-            console.print(
-                "[bold yellow]Insufficient actions or test results to render full evaluation.[/bold yellow]"
-            )
+            console.print("[bold yellow]Insufficient actions or test results to render full evaluation.[/bold yellow]")
 
         # show overall miner stats if available
         if miner_stats:
@@ -132,9 +121,7 @@ class TaskFeedbackSynapse(Synapse):
             )
             console.print(f"  • Total Tasks: [bold]{miner_stats.num_tasks}[/bold]")
             console.print(f"  • Avg. Score: [bold]{miner_stats.avg_score:.2f}[/bold]")
-            console.print(
-                f"  • Avg. Execution Time: [bold]{miner_stats.avg_execution_time:.2f}[/bold] seconds"
-            )
+            console.print(f"  • Avg. Execution Time: [bold]{miner_stats.avg_execution_time:.2f}[/bold] seconds")
 
         # optionally persist locally
         if SAVE_SUCCESSFUL_TASK_IN_JSON:
