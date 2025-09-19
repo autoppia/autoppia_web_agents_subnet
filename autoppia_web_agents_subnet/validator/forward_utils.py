@@ -44,7 +44,7 @@ from autoppia_web_agents_subnet.validator.config import (
     SUCCESS_THRESHOLD,
     TIME_WEIGHT,
 )
-from autoppia_web_agents_subnet.validator.leaderboard import (
+from autoppia_web_agents_subnet.validator.leaderboard_api.leaderboard import (
     LeaderboardTaskRecord,
     send_many_tasks_to_leaderboard_async,
 )

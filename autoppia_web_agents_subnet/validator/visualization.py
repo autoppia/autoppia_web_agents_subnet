@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.table import Table
 from rich import box
 
-from .leaderboard import LeaderboardTaskRecord
+from .leaderboard_api.leaderboard import LeaderboardTaskRecord
 from .stats import load_stats, StatBlock  # StatBlock con avg_* calculados
 
 console = Console(force_terminal=True, color_system="truecolor", no_color=False)
