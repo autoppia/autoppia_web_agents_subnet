@@ -60,13 +60,22 @@ class Miner(BaseMinerNeuron):
 
     def __init__(self, config=None):
         super(Miner, self).__init__(config=config)
-        self.agent = (
-            ApifiedWebAgent(name=AGENT_NAME, host=AGENT_HOST, port=AGENT_PORT)
-            if USE_APIFIED_AGENT
-            else RandomClickerWebAgent(is_random=False)
-        )
+        self.agent = ApifiedWebAgent(name=AGENT_NAME, host=AGENT_HOST, port=AGENT_PORT) if USE_APIFIED_AGENT else RandomClickerWebAgent(is_random=False)
         self.miner_stats = MinerStats()
         self.load_state()
+        try:
+            bt.logging.info(
+                f"[CFG] force_validator_permit={self.config.blacklist.force_validator_permit} | "
+                f"allow_non_registered={self.config.blacklist.allow_non_registered} | "
+                f"min_stake={self.config.blacklist.minimum_stake_requirement}"
+            )
+        except Exception as e:
+            bt.logging.warning(f"[CFG] error leyendo config de blacklist: {e}")
+
+    try:
+        bt.logging.info(f"[ME] uid={self.uid} hotkey={self.wallet.hotkey.ss58_address} netuid={self.config.netuid}")
+    except Exception as e:
+        bt.logging.warning(f"[ME] error imprimiendo identidad: {e}")
 
     def show_actions(self, actions: List[BaseAction]) -> None:
         """
@@ -107,9 +116,7 @@ class Miner(BaseMinerNeuron):
             )
             task_for_agent = task.prepare_for_agent(str(self.uid))
 
-            ColoredLogger.info(
-                f"Task Prompt: {task_for_agent.prompt}", ColoredLogger.BLUE
-            )
+            ColoredLogger.info(f"Task Prompt: {task_for_agent.prompt}", ColoredLogger.BLUE)
             bt.logging.info("Generating actions....")
 
             # Process the task
@@ -131,9 +138,7 @@ class Miner(BaseMinerNeuron):
 
         return synapse
 
-    async def forward_feedback(
-        self, synapse: TaskFeedbackSynapse
-    ) -> TaskFeedbackSynapse:
+    async def forward_feedback(self, synapse: TaskFeedbackSynapse) -> TaskFeedbackSynapse:
         """
         Endpoint for feedback requests from the validator.
         Logs the feedback, updates MinerStats, and prints a summary.
@@ -145,17 +150,13 @@ class Miner(BaseMinerNeuron):
             # Print feedback in terminal, including a global stats snapshot
             synapse.print_in_terminal(miner_stats=self.miner_stats)
         except Exception as e:
-            ColoredLogger.error(
-                "Error occurred while printing in terminal TaskFeedback"
-            )
+            ColoredLogger.error("Error occurred while printing in terminal TaskFeedback")
             raise e
 
         return synapse
 
     # Renamed method
-    async def forward_set_organic_endpoint(
-        self, synapse: SetOperatorEndpointSynapse
-    ) -> SetOperatorEndpointSynapse:
+    async def forward_set_organic_endpoint(self, synapse: SetOperatorEndpointSynapse) -> SetOperatorEndpointSynapse:
         """
         Sets the operator endpoint for the given synapse.
         """
@@ -168,58 +169,78 @@ class Miner(BaseMinerNeuron):
     async def blacklist(self, synapse: TaskSynapse) -> typing.Tuple[bool, str]:
         return await self._common_blacklist(synapse)
 
-    async def blacklist_feedback(
-        self, synapse: TaskFeedbackSynapse
-    ) -> typing.Tuple[bool, str]:
+    async def blacklist_feedback(self, synapse: TaskFeedbackSynapse) -> typing.Tuple[bool, str]:
         return await self._common_blacklist(synapse)
 
-    async def blacklist_set_organic_endpoint(
-        self, synapse: SetOperatorEndpointSynapse
-    ) -> typing.Tuple[bool, str]:
+    async def blacklist_set_organic_endpoint(self, synapse: SetOperatorEndpointSynapse) -> typing.Tuple[bool, str]:
         return await self._common_blacklist(synapse)
 
     async def _common_blacklist(
         self,
-        synapse: typing.Union[
-            TaskSynapse, TaskFeedbackSynapse, SetOperatorEndpointSynapse
-        ],
+        synapse: typing.Union[TaskSynapse, TaskFeedbackSynapse, SetOperatorEndpointSynapse],
     ) -> typing.Tuple[bool, str]:
         """
         Shared blacklist logic used by forward, feedback, and set_organic_endpoint.
-        Returns a tuple: (bool, str).
+        Returns a tuple: (bool, str) and LOGUEA la causa exacta.
         """
+        # 0) Sin hotkey / dendrite
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
-            bt.logging.warning("Received a request without a dendrite or hotkey.")
+            bt.logging.warning("BLK: Missing dendrite/hotkey")
             return True, "Missing dendrite or hotkey"
 
         validator_hotkey = synapse.dendrite.hotkey
 
-        # Ensure hotkey is recognized
-        if (
-            not self.config.blacklist.allow_non_registered
-            and validator_hotkey not in self.metagraph.hotkeys
-        ):
-            bt.logging.warning(f"Unrecognized hotkey: {validator_hotkey}")
+        # 1) Snapshot de configuración activa
+        try:
+            bt.logging.info(
+                f"[BLK] recv from hk={validator_hotkey} | "
+                f"allow_non_registered={self.config.blacklist.allow_non_registered} "
+                f"force_validator_permit={self.config.blacklist.force_validator_permit} "
+                f"min_stake={self.config.blacklist.minimum_stake_requirement}"
+            )
+        except Exception as e:
+            bt.logging.warning(f"[BLK] error leyendo config: {e}")
+
+        # 2) Comprobar si está en el metagraph (a menos que se permita no-registrados)
+        if not self.config.blacklist.allow_non_registered and validator_hotkey not in self.metagraph.hotkeys:
+            bt.logging.warning(f"[BLK] Unrecognized hotkey (not in metagraph): {validator_hotkey}")
             return True, f"Unrecognized hotkey: {validator_hotkey}"
 
-        uid = self.metagraph.hotkeys.index(validator_hotkey)
+        # 3) UID, permit y stake del llamante
+        try:
+            uid = self.metagraph.hotkeys.index(validator_hotkey)
+        except ValueError:
+            uid = -1
 
-        # Optionally force only validators
-        if self.config.blacklist.force_validator_permit:
-            if not self.metagraph.validator_permit[uid]:
-                bt.logging.warning(f"Blacklisted Non-Validator {validator_hotkey}")
-                return True, f"Non-validator hotkey: {validator_hotkey}"
+        try:
+            permit = self.metagraph.validator_permit[uid] if uid >= 0 else False
+        except Exception:
+            permit = False
 
-        # Check minimum stake
-        stake = self.metagraph.S[uid]
-        min_stake = self.config.blacklist.minimum_stake_requirement
+        try:
+            stake = float(self.metagraph.S[uid]) if uid >= 0 else 0.0
+        except Exception:
+            stake = 0.0
+
+        bt.logging.info(f"[BLK] caller uid={uid} permit={permit} stake={stake}")
+
+        # 4) Exigir permit si está activado
+        if self.config.blacklist.force_validator_permit and not permit:
+            bt.logging.warning(f"[BLK] Rejected: Non-validator (permit=False) hk={validator_hotkey} uid={uid}")
+            return True, f"Non-validator hotkey: {validator_hotkey}"
+
+        # 5) Corte por stake mínimo
+        try:
+            min_stake = float(self.config.blacklist.minimum_stake_requirement)
+        except Exception:
+            min_stake = 0.0
+
         if stake < min_stake:
-            bt.logging.warning(f"Blacklisted insufficient stake: {validator_hotkey}")
-            return (
-                True,
-                f"Insufficient stake ({stake} < {min_stake}) for {validator_hotkey}",
-            )
+            bt.logging.warning(f"[BLK] Rejected: Insufficient stake {stake} < {min_stake} hk={validator_hotkey} uid={uid}")
+            return True, f"Insufficient stake ({stake} < {min_stake}) for {validator_hotkey}"
 
+        # 6) Aceptado
+        bt.logging.info(f"[BLK] Accepted hk={validator_hotkey} uid={uid}")
         return False, f"Hotkey recognized: {validator_hotkey}"
 
     # ---------------------------------------------------------------------
@@ -231,16 +252,12 @@ class Miner(BaseMinerNeuron):
     async def priority_feedback(self, synapse: TaskFeedbackSynapse) -> float:
         return await self._common_priority(synapse)
 
-    async def priority_set_organic_endpoint(
-        self, synapse: SetOperatorEndpointSynapse
-    ) -> float:
+    async def priority_set_organic_endpoint(self, synapse: SetOperatorEndpointSynapse) -> float:
         return await self._common_priority(synapse)
 
     async def _common_priority(
         self,
-        synapse: typing.Union[
-            TaskSynapse, TaskFeedbackSynapse, SetOperatorEndpointSynapse
-        ],
+        synapse: typing.Union[TaskSynapse, TaskFeedbackSynapse, SetOperatorEndpointSynapse],
     ) -> float:
         """
         Shared priority logic used by forward, feedback, and set_organic_endpoint.
