@@ -224,6 +224,46 @@ chmod +x scripts/validator/update/update_deploy.sh
 
 ---
 
+## 📊 6. Reports Module
+
+We have added a reports module for both terminal and email reporting. To configure email report sending, modify the `.env` file:
+
+### **Email Configuration**
+
+```bash
+# Validator EMAIL Report
+SMTP_HOST=smtp.your-provider.com
+SMTP_PORT=587
+SMTP_USER=user@domain.com
+SMTP_PASS=PASSWORD
+SMTP_FROM=report@domain.com
+SMTP_TO=test@domain.com
+SMTP_STARTTLS=true
+
+# reports folder (where the forward writes the jsonl)
+REPORTS_DIR=forward_reports
+```
+
+### Setting up Automated Reports
+
+Once configured, it's as simple as creating a PM2 process that executes the reports at regular intervals, for example every hour. Here's an example command so you can verify everything is working correctly:
+
+```bash
+python3 autoppia_web_agents_subnet/validator/send_reports.py
+```
+
+### PM2 Automated Reports Setup
+
+```bash
+pm2 start --name "validator-reports" \
+  --interpreter python3 \
+  --cron "0 * * * *" \
+  --no-autorestart \
+  autoppia_web_agents_subnet/validator/send_reports.py
+```
+
+## This will send reports every hour and help you monitor that everything is functioning correctly.
+
 ## 🆘 Support & Contact
 
 Need help? Contact our team on Discord:
@@ -240,3 +280,7 @@ Need help? Contact our team on Discord:
 - 🌍 **Scalability**: All components support distributed deployment across multiple machines
 - 🔒 **Security**: Ensure proper firewall configuration for remote deployments
 - 🔄 **Auto-Updates**: Option 1 (editing script) is recommended as it persists configuration across restarts
+
+```
+
+```
