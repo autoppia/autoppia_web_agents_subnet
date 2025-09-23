@@ -28,14 +28,29 @@ def render_html_report(fwd_table_data, table_global_data, table_cwu_data, task_t
         if not rows:
             return f"<p><b>{title}:</b> (no data)</p>"
 
-        # Sort Coldkey Global by Hotk (column 1) descending
+        # Orden especial por tabla
         if title == "Coldkey Global":
             try:
-                rows = sorted(rows, key=lambda r: int(r[1]), reverse=True)
+                rate_idx = headers.index("Rate %")
+
+                def parse_rate(val):
+                    try:
+                        return float(str(val).replace("%", "").strip())
+                    except:
+                        return 0.0
+
+                rows = sorted(rows, key=lambda r: parse_rate(r[rate_idx]), reverse=True)
             except Exception:
                 pass
 
-        # Sort by Web if present (groups same web together, same colors)
+        elif title == "Coldkey / Web / Use-case":
+            try:
+                ck_idx = headers.index("Coldkey")
+                web_idx = headers.index("Web")
+                rows = sorted(rows, key=lambda r: (str(r[ck_idx]), str(r[web_idx])))
+            except Exception:
+                pass
+
         elif "Web" in headers:
             try:
                 web_idx = headers.index("Web")
