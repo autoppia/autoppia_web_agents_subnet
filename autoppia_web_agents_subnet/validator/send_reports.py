@@ -95,13 +95,25 @@ def load_forward_totals():
 # ---------- Coldkey tables ----------
 def load_coldkey_tables():
     if not COLDKEY_SNAPSHOT.exists():
-        return (["Coldkey", "Hotk", "Tasks", "Succ", "Rate %", "Avg s"], []), (["Coldkey", "Web", "Use-case", "Hotk", "Tasks", "Succ", "Rate %", "Avg s"], [])
+        return (
+            ["Coldkey", "Hotk", "Tasks", "Succ", "Rate %", "Avg s", "Avg Reward", "Avg Actions"],
+            [],
+        ), (
+            ["Coldkey", "Web", "Use-case", "Hotk", "Tasks", "Succ", "Rate %", "Avg s", "Avg Actions"],
+            [],
+        )
     try:
         data = json.loads(COLDKEY_SNAPSHOT.read_text(encoding="utf-8"))
     except:
-        return (["Coldkey", "Hotk", "Tasks", "Succ", "Rate %", "Avg s"], []), (["Coldkey", "Web", "Use-case", "Hotk", "Tasks", "Succ", "Rate %", "Avg s"], [])
+        return (
+            ["Coldkey", "Hotk", "Tasks", "Succ", "Rate %", "Avg s", "Avg Reward", "Avg Actions"],
+            [],
+        ), (
+            ["Coldkey", "Web", "Use-case", "Hotk", "Tasks", "Succ", "Rate %", "Avg s", "Avg Actions"],
+            [],
+        )
     stats = data.get("stats", {})
-    agg = defaultdict(lambda: {"tasks": 0, "succ": 0, "dur": 0.0, "hotkeys": set()})
+    agg = defaultdict(lambda: {"tasks": 0, "succ": 0, "dur": 0.0, "reward": 0.0, "actions": 0, "hotkeys": set()})
     rows_cwu = []
     rows_global = []
     for ck, webs in stats.items():
@@ -110,15 +122,36 @@ def load_coldkey_tables():
                 t = safe_int(blk.get("tasks", 0))
                 s = safe_int(blk.get("successes", 0))
                 d = safe_float(blk.get("duration_sum", 0.0))
+                r = safe_float(blk.get("reward_sum", 0.0))
+                a_sum = safe_int(blk.get("actions_sum", 0))
                 hk = set(blk.get("hotkeys", []))
-                rows_cwu.append([ck, web, uc, len(hk), t, s, f"{pct(s,t):.1f}%", f"{(d/t if t else 0):.2f}"])
+                rows_cwu.append([ck, web, uc, len(hk), t, s, f"{pct(s,t):.1f}%", f"{(d/t if t else 0):.2f}", f"{(a_sum/t if t else 0):.1f}"])
                 agg[ck]["tasks"] += t
                 agg[ck]["succ"] += s
                 agg[ck]["dur"] += d
+                agg[ck]["reward"] += r
+                agg[ck]["actions"] += a_sum
                 agg[ck]["hotkeys"] |= hk
     for ck, a in sorted(agg.items()):
-        rows_global.append([ck, len(a["hotkeys"]), a["tasks"], a["succ"], f"{pct(a['succ'],a['tasks']):.1f}%", f"{(a['dur']/a['tasks'] if a['tasks'] else 0):.2f}"])
-    return (["Coldkey", "Hotk", "Tasks", "Succ", "Rate %", "Avg s"], rows_global), (["Coldkey", "Web", "Use-case", "Hotk", "Tasks", "Succ", "Rate %", "Avg s"], rows_cwu)
+        rows_global.append(
+            [
+                ck,
+                len(a["hotkeys"]),
+                a["tasks"],
+                a["succ"],
+                f"{pct(a['succ'],a['tasks']):.1f}%",
+                f"{(a['dur']/a['tasks'] if a['tasks'] else 0):.2f}",
+                f"{(a['reward']/a['tasks'] if a['tasks'] else 0):.2f}",
+                f"{(a['actions']/a['tasks'] if a['tasks'] else 0):.1f}",
+            ]
+        )
+    return (
+        ["Coldkey", "Hotk", "Tasks", "Succ", "Rate %", "Avg s", "Avg Reward", "Avg Actions"],
+        rows_global,
+    ), (
+        ["Coldkey", "Web", "Use-case", "Hotk", "Tasks", "Succ", "Rate %", "Avg s", "Avg Actions"],
+        rows_cwu,
+    )
 
 
 # ---------- Tareas del último forward ----------

@@ -35,6 +35,14 @@ def render_html_report(fwd_table_data, table_global_data, table_cwu_data, task_t
             except Exception:
                 pass
 
+        # Sort by Web if present (groups same web together, same colors)
+        elif "Web" in headers:
+            try:
+                web_idx = headers.index("Web")
+                rows = sorted(rows, key=lambda r: str(r[web_idx]).lower())
+            except Exception:
+                pass
+
         table_html = f"<h2>{title}</h2><table>"
         table_html += "<thead><tr>" + "".join(f"<th>{h}</th>" for h in headers) + "</tr></thead>"
         table_html += "<tbody>"
