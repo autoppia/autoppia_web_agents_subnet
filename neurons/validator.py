@@ -22,7 +22,7 @@ from autoppia_web_agents_subnet.config import (
     TIME_WEIGHT,
 )
 
-from autoppia_web_agents_subnet.validator.tasks import get_tasks  # returns TaskPlan
+from autoppia_web_agents_subnet.validator.tasks import get_task_plan  # returns TaskPlan
 from autoppia_web_agents_subnet.validator.synapse import (
     send_synapse_to_miners_generic,
     collect_task_solutions_and_execution_times,
@@ -62,6 +62,7 @@ from autoppia_web_agents_subnet.validator.leaderboard import (
 # IWA
 from autoppia_iwa_module.autoppia_iwa.src.web_agents.classes import TaskSolution
 from autoppia_iwa_module.autoppia_iwa.src.bootstrap import AppBootstrap
+
 
 SUCCESS_THRESHOLD = 0.0  # UI semantics for "success"
 
@@ -322,6 +323,132 @@ class Validator(BaseValidatorNeuron):
         return 16
 
     # ─────────────────────────────────────────────────────────────────────
+    # Helper: Build + POST RoundResults (hierarchical)
+    # ─────────────────────────────────────────────────────────────────────
+    def _build_and_post_round_results(
+        self,
+        *,
+        round_id: str,
+        started_at: float,
+        full_uids: List[int],
+        active_uids: List[int],
+        active_hotkeys: List[str],
+        active_coldkeys: List[str],
+        scored_tasks: List[ScoredTask],
+        rewards_full_avg: np.ndarray,
+        rewards_full_wta: np.ndarray,
+    ) -> None:
+        """Builds a RoundResults object from current state and POSTs it once."""
+
+        # 1) Winner (by WTA)
+        winner_uid: Optional[int] = None
+        try:
+            winner_full_index = int(np.argmax(rewards_full_wta))
+            winner_uid = int(full_uids[winner_full_index])
+            winner_hotkey = self.metagraph.hotkeys[winner_uid]
+            bt.logging.info(f"[forward #{self.forward_count}] WTA winner UID={winner_uid} hotkey={winner_hotkey}")
+        except Exception:
+            pass
+
+        # 2) Minimal task list
+        tasks_info: List[TaskInfo] = []
+        for st in scored_tasks:
+            t = st.task
+            tasks_info.append(
+                TaskInfo(
+                    task_id=str(getattr(t, "id", "")),
+                    prompt=str(getattr(t, "prompt", "")),
+                    website=str(getattr(t, "url", "")),
+                    web_project=str(getattr(t, "web_project_id", "")),
+                    use_case=str(getattr(getattr(t, "use_case", None), "name", "")),
+                )
+            )
+
+        # 3) Per-miner agent runs (aggregate + per-task)
+        agent_runs: List[AgentEvaluationRun] = []
+        for i_miner, uid in enumerate(active_uids):
+            miner_task_results: List[TaskResult] = []
+
+            per_miner_rewards: List[float] = []
+            per_miner_eval_scores: List[float] = []
+            per_miner_times: List[float] = []
+            per_miner_time_scores: List[float] = []
+
+            for st in scored_tasks:
+                reward_i = float(st.final_rewards[i_miner]) if i_miner < len(st.final_rewards) else 0.0
+                eval_i = float(st.eval_scores[i_miner]) if i_miner < len(st.eval_scores) else 0.0
+                time_i = float(st.execution_times[i_miner]) if i_miner < len(st.execution_times) else 0.0
+                time_score_i = time_i  # UI can normalize/invert
+
+                sol_dict: Dict[str, Any] = {}
+                try:
+                    sol = st.solutions[i_miner]
+                    if sol is not None:
+                        sol_dict = sol.model_dump() if hasattr(sol, "model_dump") else getattr(sol, "__dict__", {})
+                except Exception:
+                    pass
+
+                tr_i = st.test_results_matrices[i_miner] if i_miner < len(st.test_results_matrices) else []
+                er_i = st.evaluation_results[i_miner] if i_miner < len(st.evaluation_results) else {}
+
+                miner_task_results.append(
+                    TaskResult(
+                        task_id=str(getattr(st.task, "id", "")),
+                        eval_score=eval_i,
+                        execution_time=time_i,
+                        time_score=time_score_i,
+                        reward=reward_i,
+                        solution=sol_dict,
+                        test_results={"results": tr_i},
+                        evaluation_result=er_i,
+                    )
+                )
+
+                per_miner_rewards.append(reward_i)
+                per_miner_eval_scores.append(eval_i)
+                per_miner_times.append(time_i)
+                per_miner_time_scores.append(time_score_i)
+
+            denom = max(len(per_miner_rewards), 1)
+            agent_runs.append(
+                AgentEvaluationRun(
+                    miner_uid=int(uid),
+                    miner_hotkey=str(active_hotkeys[i_miner]),
+                    miner_coldkey=str(active_coldkeys[i_miner]),
+                    reward=float(np.mean(per_miner_rewards)) if denom > 0 else 0.0,
+                    eval_score=float(np.mean(per_miner_eval_scores)) if denom > 0 else 0.0,
+                    time_score=float(np.mean(per_miner_time_scores)) if denom > 0 else 0.0,
+                    execution_time=float(np.mean(per_miner_times)) if denom > 0 else 0.0,
+                    task_results=miner_task_results,
+                )
+            )
+
+        # 4) RoundResults + POST
+        ended_at = time.time()
+        rr = RoundResults(
+            validator_uid=int(self.uid),
+            round_id=round_id,
+            version=self.version,
+            started_at=float(started_at),
+            ended_at=float(ended_at),
+            elapsed_sec=float(ended_at - started_at),
+            n_active_miners=len(active_uids),
+            n_total_miners=len(full_uids),
+            tasks=tasks_info,
+            agent_runs=agent_runs,
+            weights=WeightsSnapshot(
+                full_uids=[int(u) for u in full_uids],
+                rewards_full_avg=[float(x) for x in rewards_full_avg],
+                rewards_full_wta=[float(x) for x in rewards_full_wta],
+                winner_uid=int(winner_uid) if winner_uid is not None else None,
+            ),
+            meta={"tasks_sent": len(scored_tasks)},
+        )
+
+        # Single POST (non-blocking)
+        self.lb.post_round_results(rr, background=True)
+
+    # ─────────────────────────────────────────────────────────────────────
     # Forward loop (drops StartRound non-responders; zeros elsewhere)
     # ─────────────────────────────────────────────────────────────────────
     async def forward(self) -> None:
@@ -353,12 +480,6 @@ class Validator(BaseValidatorNeuron):
 
             if not full_uids:
                 bt.logging.warning("No miners in metagraph; skipping forward.")
-                self.lb.log_event_simple(
-                    validator_uid=int(self.uid),
-                    round_id=round_id,
-                    phase=Phase.ERROR,
-                    message="No miners in metagraph.",
-                )
                 return
 
             # Phase 0: notify start, then filter to ACTIVE miners only
@@ -410,28 +531,11 @@ class Validator(BaseValidatorNeuron):
                 validator_uid=int(self.uid),
                 round_id=round_id,
                 phase=Phase.GENERATING_TASKS,
-                message="Generating TaskPlan (one per use-case across projects).",
+                message="Generating Task Plan",
             )
-            task_plan: TaskPlan = await get_tasks(
-                total_prompts=10**9,
+            task_plan: TaskPlan = await get_task_plan(
                 prompts_per_use_case=1,
             )
-
-            if task_plan.empty():
-                bt.logging.warning("No tasks generated – burn_all and return.")
-                self.burn_all(uids=full_uids)
-                elapsed = time.time() - t0
-                self.lb.log_event_simple(
-                    validator_uid=int(self.uid),
-                    round_id=round_id,
-                    phase=Phase.ERROR,
-                    message="No tasks generated; burn_all.",
-                    extra={"elapsed_sec": elapsed},
-                )
-                if FORWARD_SLEEP_SECONDS > 0:
-                    bt.logging.info(f"Sleeping {FORWARD_SLEEP_SECONDS}s…")
-                    await asyncio.sleep(FORWARD_SLEEP_SECONDS)
-                return
 
             max_tasks = self._cap_one_per_use_case(task_plan)
 
@@ -462,13 +566,6 @@ class Validator(BaseValidatorNeuron):
                 n_miners=len(active_uids),
             )
 
-            # Blend → rewards
-            self.lb.log_event_simple(
-                validator_uid=int(self.uid),
-                round_id=round_id,
-                phase=Phase.CALCULATING_METRICS,
-                message="Blending eval scores + times; computing averages.",
-            )
             rewards_active, scored_tasks = await self.calculate_rewards(
                 per_task_results=per_task_results,
                 eval_outputs=eval_outputs,
@@ -477,7 +574,7 @@ class Validator(BaseValidatorNeuron):
                 time_weight=TIME_WEIGHT,
             )
 
-            # Stats feed + (we don't log intermediate to leaderboard; only RoundResults)
+            # Stats feed (console only)
             for st in scored_tasks:
                 stats.record_batch(
                     final_rewards=st.final_rewards,
@@ -498,7 +595,7 @@ class Validator(BaseValidatorNeuron):
                 miner_axons=active_axons,
             )
 
-            # Weights: WTA
+            # Weights: WTA on active → map to full; zeros for non-responders
             raw_active_avg = rewards_active.copy()
             rewards_active_wta = wta_rewards(rewards_active)
 
@@ -522,116 +619,25 @@ class Validator(BaseValidatorNeuron):
             self.set_weights()
             self.last_rewards = rewards_full_avg
 
-            winner_uid: Optional[int] = None
-            try:
-                winner_full_index = int(np.argmax(rewards_full_wta))
-                winner_uid = full_uids[winner_full_index]
-                winner_hotkey = self.metagraph.hotkeys[winner_uid]
-                bt.logging.info(f"[forward #{self.forward_count}] WTA winner UID={winner_uid} hotkey={winner_hotkey}")
-            except Exception:
-                pass
-
-            # ─────────────────────────────────────────────────────────────
-            # Build RoundResults (hierarchical) and POST once
-            # ─────────────────────────────────────────────────────────────
-            # Task list (minimal info)
-            tasks_info: List[TaskInfo] = []
-            for st in scored_tasks:
-                t = st.task
-                tasks_info.append(TaskInfo(
-                    task_id=str(getattr(t, "id", "")),
-                    prompt=str(getattr(t, "prompt", "")),
-                    website=str(getattr(t, "url", "")),
-                    web_project=str(getattr(t, "web_project_id", "")),
-                    use_case=str(getattr(getattr(t, "use_case", None), "name", "")),
-                ))
-
-            # Per-miner AgentEvaluationRun with per-task TaskResult
-            agent_runs: List[AgentEvaluationRun] = []
-            n_tasks = len(scored_tasks)
-
-            for i_miner, uid in enumerate(active_uids):
-                miner_task_results: List[TaskResult] = []
-
-                per_miner_rewards: List[float] = []
-                per_miner_eval_scores: List[float] = []
-                per_miner_times: List[float] = []
-                per_miner_time_scores: List[float] = []
-
-                for st in scored_tasks:
-                    # Safe accesses with defaults
-                    reward_i = float(st.final_rewards[i_miner]) if i_miner < len(st.final_rewards) else 0.0
-                    eval_i = float(st.eval_scores[i_miner]) if i_miner < len(st.eval_scores) else 0.0
-                    time_i = float(st.execution_times[i_miner]) if i_miner < len(st.execution_times) else 0.0
-                    time_score_i = time_i  # raw; UI may normalize/invert
-
-                    sol_dict: Dict[str, Any] = {}
-                    try:
-                        sol = st.solutions[i_miner]
-                        if sol is not None:
-                            sol_dict = sol.model_dump() if hasattr(sol, "model_dump") else getattr(sol, "__dict__", {})
-                    except Exception:
-                        pass
-
-                    tr_i = st.test_results_matrices[i_miner] if i_miner < len(st.test_results_matrices) else []
-                    er_i = st.evaluation_results[i_miner] if i_miner < len(st.evaluation_results) else {}
-
-                    miner_task_results.append(TaskResult(
-                        task_id=str(getattr(st.task, "id", "")),
-                        eval_score=eval_i,
-                        execution_time=time_i,
-                        time_score=time_score_i,
-                        reward=reward_i,
-                        solution=sol_dict,
-                        test_results={"results": tr_i},
-                        evaluation_result=er_i,
-                    ))
-
-                    per_miner_rewards.append(reward_i)
-                    per_miner_eval_scores.append(eval_i)
-                    per_miner_times.append(time_i)
-                    per_miner_time_scores.append(time_score_i)
-
-                # aggregates (average over tasks present)
-                denom = max(len(per_miner_rewards), 1)
-                agent_runs.append(AgentEvaluationRun(
-                    miner_uid=int(uid),
-                    miner_hotkey=str(active_hotkeys[i_miner]),
-                    miner_coldkey=str(active_coldkeys[i_miner]),
-                    reward=float(np.mean(per_miner_rewards)) if denom > 0 else 0.0,
-                    eval_score=float(np.mean(per_miner_eval_scores)) if denom > 0 else 0.0,
-                    time_score=float(np.mean(per_miner_time_scores)) if denom > 0 else 0.0,
-                    execution_time=float(np.mean(per_miner_times)) if denom > 0 else 0.0,
-                    task_results=miner_task_results,
-                ))
-
-            elapsed = time.time() - t0
-            rr = RoundResults(
-                validator_uid=int(self.uid),
+            # Build + POST RoundResults once
+            self._build_and_post_round_results(
                 round_id=round_id,
-                version=self.version,
-                started_at=float(t0),
-                ended_at=float(time.time()),
-                elapsed_sec=float(elapsed),
-                n_active_miners=len(active_uids),
-                n_total_miners=len(full_uids),
-                tasks=tasks_info,
-                agent_runs=agent_runs,
-                weights=WeightsSnapshot(
-                    full_uids=[int(u) for u in full_uids],
-                    rewards_full_avg=[float(x) for x in rewards_full_avg],
-                    rewards_full_wta=[float(x) for x in rewards_full_wta],
-                    winner_uid=int(winner_uid) if winner_uid is not None else None,
-                ),
-                meta={"tasks_sent": len(per_task_results)},
+                started_at=t0,
+                full_uids=full_uids,
+                active_uids=active_uids,
+                active_hotkeys=active_hotkeys,
+                active_coldkeys=active_coldkeys,
+                scored_tasks=scored_tasks,
+                rewards_full_avg=rewards_full_avg,
+                rewards_full_wta=rewards_full_wta,
             )
-            self.lb.post_round_results(rr, background=True)
 
             # Finish + console table
             summary = stats.finish()
             stats.render_table(summary, to_console=True)
 
             # Events: round_end + done
+            elapsed = time.time() - t0
             self.lb.log_event_simple(
                 validator_uid=int(self.uid),
                 round_id=round_id,

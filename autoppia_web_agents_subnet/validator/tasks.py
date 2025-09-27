@@ -43,9 +43,8 @@ async def _generate_tasks_limited_use_cases(
 # ─────────────────────────────────────────────────────────────────────────────
 # Public API
 # ─────────────────────────────────────────────────────────────────────────────
-async def get_tasks(
+async def get_task_plan(
     *,
-    total_prompts: int,
     prompts_per_use_case: int,
 ) -> TaskPlan:
     """
@@ -55,6 +54,9 @@ async def get_tasks(
     Returns:
         TaskPlan: batches = [ProjectTaskBatch(project, [Task, ...]), ...]
     """
+    num_projects = len(demo_web_projects)
+    total_prompts = num_projects
+
     if total_prompts <= 0:
         bt.logging.warning("get_tasks(): total_prompts <= 0 -> returning empty TaskPlan")
         return TaskPlan(batches=[])
