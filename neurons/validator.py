@@ -15,9 +15,9 @@ from autoppia_web_agents_subnet.base.validator import BaseValidatorNeuron
 from autoppia_web_agents_subnet.utils.random import get_random_uids
 from autoppia_web_agents_subnet.config import (
     FORWARD_SLEEP_SECONDS,
-    NUMBER_OF_PROMPTS_PER_FORWARD,
-    PROMPTS_PER_USECASE,
     TIMEOUT,
+    EVAL_SCORE_WEIGHT,
+    TIME_WEIGHT,
 )
 from autoppia_web_agents_subnet.validator.tasks import get_tasks  # returns TaskPlan
 from autoppia_web_agents_subnet.validator.synapse import (
@@ -29,13 +29,15 @@ from autoppia_web_agents_subnet.protocol import StartRoundSynapse, TaskSynapse
 from autoppia_web_agents_subnet.validator.rewards import (
     blend_eval_and_time,
     reduce_rewards_to_averages,
-    EVAL_SCORE_WEIGHT,
-    TIME_WEIGHT,
     pad_or_trim,
 )
 from autoppia_web_agents_subnet.validator.eval import evaluate_task_solutions
-from autoppia_web_agents_subnet.validator.models import TaskPlan, PerTaskResult, ScoredTask, EvalOutput
-
+from autoppia_web_agents_subnet.validator.models import (
+    TaskPlan,
+    PerTaskResult,
+    ScoredTask,
+    EvalOutput,
+)
 from autoppia_web_agents_subnet.bittensor_config import config
 from autoppia_iwa_module.autoppia_iwa.src.web_agents.classes import TaskSolution
 from autoppia_iwa_module.autoppia_iwa.src.bootstrap import AppBootstrap
@@ -71,8 +73,9 @@ class Validator(BaseValidatorNeuron):
             version=self.version,
             round_id=round_id,
             validator_id=str(self.wallet.hotkey.ss58_address) if hasattr(self, "wallet") else None,
-            total_prompts=NUMBER_OF_PROMPTS_PER_FORWARD,
-            prompts_per_use_case=PROMPTS_PER_USECASE,
+            # We run “one task per use-case across projects”; this is informational for miners
+            total_prompts=None,
+            prompts_per_use_case=1,
             note=note,
         )
 
@@ -291,9 +294,44 @@ class Validator(BaseValidatorNeuron):
                 bt.logging.warning(f"[Phase 3 - Feedback] send_feedback failed on task {i}: {e}")
 
     # ─────────────────────────────────────────────────────────────────────
+    # Helper: derive “one per use-case across all projects” cap from TaskPlan
+    # ─────────────────────────────────────────────────────────────────────
+    @staticmethod
+    def _cap_one_per_use_case(task_plan: TaskPlan) -> int:
+        """
+        Try to compute the number of tasks equal to (#use_cases across all projects),
+        with robust fallbacks so we don't need to modify tasks.py.
+        """
+        # Preferred explicit fields if TaskPlan provides them:
+        for attr in ("num_use_cases_total", "total_use_cases", "n_use_cases"):
+            if hasattr(task_plan, attr):
+                try:
+                    v = int(getattr(task_plan, attr))
+                    if v > 0:
+                        return v
+                except Exception:
+                    pass
+
+        # Fallback: if TaskPlan has a 'size' / '__len__'
+        try:
+            v = int(getattr(task_plan, "size", 0))
+            if v > 0:
+                return v
+        except Exception:
+            pass
+        try:
+            v = int(len(task_plan))  # type: ignore[arg-type]
+            if v > 0:
+                return v
+        except Exception:
+            pass
+
+        # Last resort: a safe, small cap to avoid sending too many
+        return 16
+
+    # ─────────────────────────────────────────────────────────────────────
     # Forward loop (drops StartRound non-responders; zeros elsewhere)
     # ─────────────────────────────────────────────────────────────────────
-
     async def forward(self) -> None:
         try:
             self.forward_count += 1
@@ -339,10 +377,11 @@ class Validator(BaseValidatorNeuron):
             )
             stats.start(forward_id=self.forward_count)
 
-            # Phase 1: tasks (always get tasks; if none, burn_all and exit)
+            # Phase 1: tasks (“one per use-case across all projects”)
+            # We ask for prompts_per_use_case=1 and let TaskPlan provide all use-cases.
             task_plan: TaskPlan = await get_tasks(
-                total_prompts=NUMBER_OF_PROMPTS_PER_FORWARD,
-                prompts_per_use_case=PROMPTS_PER_USECASE,
+                total_prompts=10**9,            # effectively “no cap”; we’ll cap below
+                prompts_per_use_case=1,
             )
 
             if task_plan.empty():
@@ -365,12 +404,14 @@ class Validator(BaseValidatorNeuron):
                     await asyncio.sleep(FORWARD_SLEEP_SECONDS)
                 return
 
+            max_tasks = self._cap_one_per_use_case(task_plan)
+
             # Phase 1: send tasks only to ACTIVE miners
             per_task_results = await self.send_tasks(
                 task_plan=task_plan,
                 miner_uids=active_uids,
                 miner_axons=active_axons,
-                max_tasks=NUMBER_OF_PROMPTS_PER_FORWARD,
+                max_tasks=max_tasks,
                 timeout=TIMEOUT,
             )
 
@@ -389,15 +430,11 @@ class Validator(BaseValidatorNeuron):
                 time_weight=TIME_WEIGHT,
             )
 
-            # === NEW: feed the stats collector (one record per task) ===
-            # We use scored_tasks to get per-task final_rewards + eval_scores + execution_times
+            # Feed stats collector (one record per task)
             for st in scored_tasks:
-                # st.final_rewards: np.ndarray aligned to active_uids
-                # st.eval_scores:   np.ndarray aligned to active_uids
-                # st.execution_times: Sequence[float] aligned to active_uids
                 stats.record_batch(
-                    final_rewards=st.final_rewards,
-                    eval_scores=st.eval_scores,
+                    final_rewards=st.final_rewards,   # aligned to active_uids
+                    eval_scores=st.eval_scores,       # aligned to active_uids
                     execution_times=st.execution_times,
                 )
 
@@ -408,17 +445,36 @@ class Validator(BaseValidatorNeuron):
                 miner_axons=active_axons,
             )
 
-            # Expand active rewards to full vector (zeros to non-active)
-            rewards_full = np.zeros(len(full_uids), dtype=np.float32)
+            # --- Winner-Takes-All transform on averaged ACTIVE rewards ---
+            from autoppia_web_agents_subnet.validator.rewards import wta_rewards
+            raw_active_avg = rewards_active.copy()
+            rewards_active_wta = wta_rewards(rewards_active)
+
+            # Expand active rewards to full vector (both raw avg and WTA)
+            rewards_full_avg = np.zeros(len(full_uids), dtype=np.float32)
+            rewards_full_wta = np.zeros(len(full_uids), dtype=np.float32)
+
             uid_to_idx_active = {uid: i for i, uid in enumerate(active_uids)}
             for i_full, uid in enumerate(full_uids):
                 idx_active = uid_to_idx_active.get(uid, None)
-                rewards_full[i_full] = rewards_active[idx_active] if idx_active is not None else 0.0
+                if idx_active is not None:
+                    rewards_full_avg[i_full] = raw_active_avg[idx_active]
+                    rewards_full_wta[i_full] = rewards_active_wta[idx_active]
+                # else: stays 0.0 for non-active miners
 
-            # Update on-chain / local state
-            self.update_scores(rewards_full, full_uids)
+            # Use WTA for on-chain updates, keep dense avg locally for inspection/metrics
+            self.update_scores(rewards_full_wta, full_uids)
             self.set_weights()
-            self.last_rewards = rewards_full
+            self.last_rewards = rewards_full_avg  # keep the dense vector for analysis
+
+            # Log the round winner (deterministic on ties: first max)
+            try:
+                winner_full_index = int(np.argmax(rewards_full_wta))
+                winner_uid = full_uids[winner_full_index]
+                winner_hotkey = self.metagraph.hotkeys[winner_uid]
+                bt.logging.info(f"[forward #{self.forward_count}] WTA winner UID={winner_uid} hotkey={winner_hotkey}")
+            except Exception:
+                pass
 
             # Finish + render the per-forward ordered table (by avg_reward)
             summary = stats.finish()

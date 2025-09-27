@@ -1,4 +1,3 @@
-# autoppia_web_agents_subnet/validator/rewards.py
 from __future__ import annotations
 
 import math
@@ -69,10 +68,7 @@ def blend_eval_and_time(
     """
     final = eval_weight * eval_scores + time_weight * time_scores
     """
-    if not math.isclose(eval_score_weight + time_weight, 1.0, rel_tol=1e-6):
-        # Allowed intentionally; caller might choose non-unit sum.
-        pass
-
+    # Caller may choose non-unit sum; we don't enforce exact 1.0.
     eval_scores = pad_or_trim(eval_scores, n_miners)
     time_scores = times_to_scores(execution_times, n_miners)
     final = (eval_score_weight * eval_scores) + (time_weight * time_scores)
@@ -87,3 +83,29 @@ def reduce_rewards_to_averages(rewards_sum: np.ndarray, counts: np.ndarray) -> n
     counts_safe = np.maximum(counts, 1).astype(np.float32)
     avg = (rewards_sum.astype(np.float32) / counts_safe).astype(np.float32)
     return avg
+
+
+def wta_rewards(avg_rewards: NDArray[np.float32]) -> NDArray[np.float32]:
+    """
+    Winner-takes-all transform:
+      - Returns a 0/1 vector with a single 1 at the index of the maximum value.
+      - Deterministic on ties: selects the *first* index with the max value.
+      - If input is empty, returns it unchanged.
+    NaNs are treated as -inf for the purpose of argmax.
+    """
+    if avg_rewards.size == 0:
+        return avg_rewards
+
+    arr = np.asarray(avg_rewards, dtype=np.float32)
+    # Treat NaN as -inf so they never win.
+    where_nan = ~np.isfinite(arr)
+    if np.any(where_nan):
+        tmp = arr.copy()
+        tmp[where_nan] = -np.inf
+        winner = int(np.argmax(tmp))
+    else:
+        winner = int(np.argmax(arr))
+
+    out = np.zeros_like(arr, dtype=np.float32)
+    out[winner] = 1.0
+    return out

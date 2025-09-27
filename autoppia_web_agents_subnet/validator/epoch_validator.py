@@ -1,6 +1,6 @@
 # ╭──────────────────────────────────────────────────────────────────────╮
-# metahash/validator/epoch_validator.py                                  #
-# (v2.4: EPOCH_LENGTH_OVERRIDE + ROUND_EPOCHS_DURATION + TESTING bootstrap)
+# autoppia_web_agents_subnet/validator/epoch_validator.py                #
+# (v2.5: 20-epoch rounds + CLOSEOUT window + TESTING bootstrap)          #
 # ╰──────────────────────────────────────────────────────────────────────╯
 from __future__ import annotations
 
@@ -12,20 +12,31 @@ import bittensor as bt
 from bittensor import BLOCKTIME  # 12 s on Finney
 
 from autoppia_web_agents_subnet.base.validator import BaseValidatorNeuron
-from autoppia_web_agents_subnet.config import EPOCH_LENGTH_OVERRIDE, TESTING, ROUND_EPOCHS_DURATION
+from autoppia_web_agents_subnet.config import (
+    EPOCH_LENGTH_OVERRIDE,
+    TESTING,
+    ROUND_SIZE_EPOCHS,   # NEW: default 20 in config
+    CLOSEOUT_EPOCHS,     # NEW: stop launching forwards when <= N epochs remain in round
+)
 
 
 class EpochValidatorNeuron(BaseValidatorNeuron):
     """
-    Validator base-class with robust epoch rollover handling.
+    Validator base-class with robust epoch/round handling.
 
-    New:
-      • Honors ROUND_EPOCHS_DURATION: number of epoch heads to wait between forwards.
-      • Clean bootstrap in TESTING mode (immediate forward once, then apply cadence).
-      • Handles EPOCH_LENGTH_OVERRIDE for fast local testing.
+    • Rounds are windows of ROUND_SIZE_EPOCHS (default 20) chain epochs.
+      Round index r = epoch_index // ROUND_SIZE_EPOCHS.
 
-    ⚠️ If you use overrides you are *not* aligned to real chain epoch heads.
-       Avoid on-chain set_weights in that mode.
+    • We launch a forward once at (most) every epoch **outside** the closeout
+      window. The closeout window is when there are <= CLOSEOUT_EPOCHS epochs
+      left until the end of the current 20-epoch round. Inside that window,
+      the validator pauses new evaluations and simply waits for the next
+      round boundary to start evaluating again.
+
+    • TESTING mode bootstraps a forward immediately, then continues cadence.
+
+    • Honors EPOCH_LENGTH_OVERRIDE for fast local testing. When override is
+      active, avoid relying on real chain heads for set_weights alignment.
     """
 
     def __init__(self, *args, log_interval_blocks: int = 2, **kwargs):
@@ -36,10 +47,16 @@ class EpochValidatorNeuron(BaseValidatorNeuron):
         self._override_active: bool = False
         self._bootstrapped: bool = False  # run forward immediately if TESTING
 
+        # Configured round size and closeout window
         try:
-            self._round_epochs = max(1, int(ROUND_EPOCHS_DURATION or 1))
+            self._round_size = max(1, int(ROUND_SIZE_EPOCHS or 20))
         except Exception:
-            self._round_epochs = 1
+            self._round_size = 20
+
+        try:
+            self._closeout = max(0, int(CLOSEOUT_EPOCHS or 0))
+        except Exception:
+            self._closeout = 0
 
     # ----------------------- helpers ---------------------------------- #
     def _discover_epoch_length(self) -> int:
@@ -100,12 +117,23 @@ class EpochValidatorNeuron(BaseValidatorNeuron):
             f"[epoch {idx} @ {label}] head at block {blk:,} ({head_time} UTC) – len={ep_len}"
         )
 
+    def _round_meta(self, epoch_idx: int) -> Tuple[int, int, int]:
+        """Return (round_index, round_start_epoch, round_end_epoch)."""
+        r_idx = epoch_idx // self._round_size
+        r_start = r_idx * self._round_size
+        r_end = r_start + self._round_size - 1
+        return r_idx, r_start, r_end
+
+    def _epochs_until_round_end(self, epoch_idx: int) -> int:
+        """How many epochs remain including the current one up to the round end."""
+        _, _, r_end = self._round_meta(epoch_idx)
+        return max(0, r_end - epoch_idx)
+
     async def _wait_for_next_head(self):
         """
         Sleep until the next epoch head. Re-evaluates remaining blocks periodically,
         resilient to override/tempo changes and validator shutdowns.
         """
-        # Capture a fresh target based on the *current* view.
         while not self.should_exit:
             ep_l = self._epoch_len or self._discover_epoch_length()
             blk = self.subtensor.get_current_block()
@@ -113,8 +141,6 @@ class EpochValidatorNeuron(BaseValidatorNeuron):
             label = "override" if self._override_active else "chain"
 
             if blk >= target_head:
-                # Already at or past a head boundary—advance once more to avoid
-                # double-firing within the same height.
                 target_head += ep_l
 
             while not self.should_exit:
@@ -127,14 +153,12 @@ class EpochValidatorNeuron(BaseValidatorNeuron):
                     f"[status:{label}] Block {cur:,} | {remain} blocks → next head "
                     f"(~{int(eta_s // 60)}m{int(eta_s % 60):02d}s) | len={ep_l}"
                 )
-                # Sleep proportionally but wake up often enough to react quickly.
                 sleep_blocks = max(1, min(30, remain // 2 or 1))
                 await asyncio.sleep(sleep_blocks * BLOCKTIME * 0.95)
-            # Loop outer to rebuild target if we were interrupted.
 
     async def _wait_epochs(self, n: int):
         """Wait for n epoch heads, one by one (tempo/override may change in-between)."""
-        for i in range(n):
+        for _ in range(n):
             if self.should_exit:
                 return
             await self._wait_for_next_head()
@@ -148,10 +172,13 @@ class EpochValidatorNeuron(BaseValidatorNeuron):
         left = max(1, next_head - blk)
         eta_s = left * BLOCKTIME
         label = "override" if self._override_active else "chain"
+        r_idx, r_start, r_end = self._round_meta(idx)
+        till_end = self._epochs_until_round_end(idx)
         bt.logging.info(
             f"[status:{label}] Block {blk:,} | Epoch {idx} "
-            f"[{into}/{ep_len} blocks] – next {label} head in {left} blocks "
-            f"(~{int(eta_s // 60)}m{int(eta_s % 60):02d}s)"
+            f"[{into}/{ep_len} blocks] – next head in {left} blocks "
+            f"(~{int(eta_s // 60)}m{int(eta_s % 60):02d}s) "
+            f"| Round r={r_idx} [{r_start}..{r_end}], epochs_until_end={till_end}, closeout={self._closeout}"
         )
 
     def _at_head_apply(self):
@@ -160,11 +187,11 @@ class EpochValidatorNeuron(BaseValidatorNeuron):
         blk2, start2, end2, idx2, ep_len2 = self._epoch_snapshot()
         self._apply_epoch_state(blk2, start2, end2, idx2, ep_len2)
 
-    def _do_forward_sync_wrapped(self):
-        """DRY: sync → forward → sync with error handling & step bump."""
+    async def _do_forward_async_wrapped(self):
+        """Run a forward with pre/post sync and error handling."""
         try:
             self.sync()
-            return self.concurrent_forward()
+            await self.concurrent_forward()
         except Exception as err:
             bt.logging.error(f"forward() raised: {err}")
         finally:
@@ -178,35 +205,60 @@ class EpochValidatorNeuron(BaseValidatorNeuron):
     def run(self):  # noqa: D401
         bt.logging.info(
             f"EpochValidator starting at block {self.block:,} (netuid {self.config.netuid}) "
-            f"| ROUND_EPOCHS_DURATION={self._round_epochs}"
+            f"| ROUND_SIZE_EPOCHS={self._round_size} | CLOSEOUT_EPOCHS={self._closeout}"
         )
 
         async def _loop():
             while not self.should_exit:
-                # Initial status line for the current position.
+                # Log current position
                 self._log_position()
+
+                # Compute round info
+                _blk, _start, _end, idx, _ep_len = self._epoch_snapshot()
+                r_idx, r_start, r_end = self._round_meta(idx)
+                epochs_left = self._epochs_until_round_end(idx)
 
                 # --- TESTING bootstrap: run a forward immediately on first loop ---
                 if TESTING and not self._bootstrapped:
-                    blk, start, end, idx, ep_len = self._epoch_snapshot()
-                    self._apply_epoch_state(blk, start, end, idx, ep_len)
+                    self._apply_epoch_state(*self._epoch_snapshot())
                     self._bootstrapped = True
 
-                    # Run the forward once right now.
-                    await self._do_forward_sync_wrapped()
+                    await self._do_forward_async_wrapped()
 
-                    # Then wait N epoch heads before the next forward.
-                    await self._wait_epochs(self._round_epochs)
-                    # Apply state *at* head and forward again.
+                    # Move to next head and continue cadence logic
+                    await self._wait_for_next_head()
                     self._at_head_apply()
-                    await self._do_forward_sync_wrapped()
-                    # Continue the loop cadence (wait N heads between each forward).
                     continue
 
-                # Normal cadence: wait N epoch heads, then forward.
-                await self._wait_epochs(self._round_epochs)
-                self._at_head_apply()
-                await self._do_forward_sync_wrapped()
+                # Outside closeout window: run a forward once per epoch.
+                if epochs_left > self._closeout:
+                    # Wait until *next* head, then forward
+                    await self._wait_for_next_head()
+                    self._at_head_apply()
+                    await self._do_forward_async_wrapped()
+                    # Next loop iteration will re-evaluate whether we’re still outside closeout
+                    continue
+
+                # Inside closeout window (epochs_left <= closeout):
+                # Pause new evaluations; wait until the ROUND boundary.
+                bt.logging.info(
+                    f"[round r={r_idx}] In closeout window (epochs_left={epochs_left} "
+                    f"<= closeout={self._closeout}). Pausing forwards until next round boundary."
+                )
+                # Wait until we cross the round end; each head may change tempo/override.
+                while not self.should_exit:
+                    await self._wait_for_next_head()
+                    self._at_head_apply()
+                    # Recompute epoch index and round
+                    _blk2, _st2, _en2, idx2, _l2 = self._epoch_snapshot()
+                    r_idx2, r_start2, r_end2 = self._round_meta(idx2)
+                    if r_idx2 != r_idx:
+                        bt.logging.success(
+                            f"[round r={r_idx}] Completed. New round r={r_idx2} "
+                            f"([{r_start2}..{r_end2}]). Resuming evaluations."
+                        )
+                        break
+                # Loop continues into next round, where we’ll launch forwards again.
 
         try:
             self.loop.run_until_complete(_loop())

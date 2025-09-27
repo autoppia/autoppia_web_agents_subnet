@@ -4,35 +4,29 @@ from pathlib import Path
 
 
 # ╭─────────────────────────── Environment ─────────────────────────────╮
+
 EPOCH_LENGTH_OVERRIDE = 0 
 TESTING = False
 ROUND_EPOCHS_DURATION = 20  # 1 day
 
+# ╭─────────────────────────── Rounds ─────────────────────────────╮
+
+ROUND_SIZE_EPOCHS = 20   # How much epcohs a round takes
+CLOSEOUT_EPOCHS = 2  # How close we shopuld be to end epoch to stop sending tasks
+PROMPTS_PER_USECASE = 1
+NUMBER_OF_PROMPTS_PER_FORWARD = 24
+MAX_ACTIONS_LENGTH = 30
+
+# ╭─────────────────────────── Rewards ─────────────────────────────╮
+EVAL_SCORE_WEIGHT = 0.85
+TIME_WEIGHT = 0.15
+
 # ╭─────────────────────────── Task Settings ─────────────────────────────╮
 
 TIMEOUT = 60 * 2
-CHECK_VERSION_SYNAPSE = 30
-CHECK_VERSION_PROBABILITY = 0.25
 FEEDBACK_TIMEOUT = 60
 FORWARD_SLEEP_SECONDS = 60 * 1
-TASK_SLEEP = 60 * 1
 
-# ╭─────────────────────────── Scoring Weights ─────────────────────────────╮
-
-TIME_WEIGHT = 0.15
-EFFICIENCY_WEIGHT = 0.10
-MIN_SCORE_FOR_CORRECT_FORMAT = 0.0
-MIN_RESPONSE_REWARD = 0
-APPLY_WEIGHTS_VERSION_CHECK_PENALTY = False
-
-# ╭─────────────────────────── Sampling & Limits ─────────────────────────────╮
-
-SAMPLE_SIZE = 256
-MAX_ACTIONS_LENGTH = 15
-NUM_URLS = 1
-PROMPTS_PER_USECASE = 1
-NUMBER_OF_PROMPTS_PER_FORWARD = 24
-SET_OPERATOR_ENDPOINT_FORWARDS_INTERVAL = 10
 
 # ╭─────────────────────────── Leaderboard ─────────────────────────────╮
 
