@@ -73,13 +73,20 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--no_epoch", action="store_true", default=False, help="Enable mock mode (no real chain calls).")
     parser.add_argument("--neuron.moving_average_alpha", type=float, default=1.0, help="Moving average alpha parameter for validator rewards blending.")
 
+    parser.add_argument(
+        "--neuron.disable_set_weights",
+        action="store_true",
+        help="Disables setting weights.",
+        default=True,
+    )
+
 
 def add_miner_args(parser: argparse.ArgumentParser) -> None:
     """Default miner arguments."""
     parser.add_argument("--neuron.name", type=str, default="miner", help="Trials go in neuron.root/(wallet_cold-wallet_hot)/neuron.name.")
 
     # IMPORTANT: default False so AuctionStart/WinSynapse work without vpermit
-    parser.add_argument("--blacklist.force_validator_permit", action="store_true", default=False, help="Force incoming requests to have a validator permit.")
+    parser.add_argument("--blacklist.force_validator_permit", action="store_true", default=True, help="Force incoming requests to have a validator permit.")
     parser.add_argument("--no-blacklist.force_validator_permit", action="store_false", dest="blacklist.force_validator_permit", help="Do NOT force incoming requests to have a validator permit.")
 
     parser.add_argument("--blacklist.minimum_stake_requirement", type=int, default=1_000, help="Minimum stake required to send requests to miners.")

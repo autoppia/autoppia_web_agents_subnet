@@ -1,11 +1,6 @@
-# The MIT License (MIT)
-# Copyright © 2024 Autoppia
-
 import time
 from typing import List
-
 import bittensor as bt
-
 from autoppia_web_agents_subnet.base.miner import BaseMinerNeuron
 from autoppia_web_agents_subnet.protocol import (
     TaskSynapse,
@@ -13,8 +8,8 @@ from autoppia_web_agents_subnet.protocol import (
     SetOperatorEndpointSynapse,
 )
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
-from autoppia_web_agents_subnet.miner.stats import MinerStats
-
+from autoppia_web_agents_subnet.miner.models import MinerStats
+from autoppia_web_agents_subnet.base.utils.config import config
 from autoppia_iwa.src.bootstrap import AppBootstrap
 from autoppia_iwa.src.data_generation.domain.classes import Task
 from autoppia_iwa.src.execution.actions.base import BaseAction
@@ -27,49 +22,48 @@ from autoppia_iwa.config.config import (
     USE_APIFIED_AGENT,
     OPERATOR_ENDPOINT,
 )
+from autoppia_web_agents_subnet.miner.logging import print_task_feedback
 
 
 class Miner(BaseMinerNeuron):
-    """
-    Miner neuron implementation.
-
-    Inherits default blacklist/priority logic from BaseMinerNeuron.
-    This class only implements:
-      - forward: handles task requests
-      - forward_feedback: handles feedback from validators
-      - forward_set_organic_endpoint: sets operator endpoint
-    """
 
     def __init__(self, config=None):
-        super().__init__(config=config)
-        self.agent = ApifiedWebAgent(name=AGENT_NAME, host=AGENT_HOST, port=AGENT_PORT) if USE_APIFIED_AGENT else RandomClickerWebAgent(is_random=False)
+        super(Miner, self).__init__(config=config)
+        self.agent = (
+            ApifiedWebAgent(name=AGENT_NAME, host=AGENT_HOST, port=AGENT_PORT)
+            if USE_APIFIED_AGENT
+            else RandomClickerWebAgent(is_random=False)
+        )
         self.miner_stats = MinerStats()
         self.load_state()
 
-    # ------------------------- Utilities -------------------------
     def show_actions(self, actions: List[BaseAction]) -> None:
-        """Pretty-print executed actions in logs."""
+        """
+        Pretty-prints the list of actions in a more readable format.
+        """
         if not actions:
             bt.logging.warning("No actions to log.")
             return
-        bt.logging.info("Actions sent:")
-        for i, action in enumerate(actions, 1):
-            attrs = vars(action)
-            ColoredLogger.info(f"    {i}. {action.type}: {attrs}", ColoredLogger.GREEN)
-            bt.logging.info(f"  {i}. {action.type}: {attrs}")
 
-    # ------------------------- Axon routes ------------------------
+        bt.logging.info("Actions sent: ")
+        for i, action in enumerate(actions, 1):
+            action_attrs = vars(action)
+            ColoredLogger.info(
+                f"    {i}. {action.type}: {action_attrs}",
+                ColoredLogger.GREEN,
+            )
+            bt.logging.info(f"  {i}. {action.type}: {action_attrs}")
+
     async def forward(self, synapse: TaskSynapse) -> TaskSynapse:
-        """Handles TaskSynapse requests from validators."""
         validator_hotkey = getattr(synapse.dendrite, "hotkey", None)
         ColoredLogger.info(
-            f"Request received from validator: {validator_hotkey}",
+            f"Request Received from validator: {validator_hotkey}",
             ColoredLogger.YELLOW,
         )
-        try:
-            t0 = time.time()
 
-            # Build task for the agent
+        try:
+            start_time = time.time()
+
             task = Task(
                 prompt=synapse.prompt,
                 url=synapse.url,
@@ -78,47 +72,62 @@ class Miner(BaseMinerNeuron):
             )
             task_for_agent = task.prepare_for_agent(str(self.uid))
 
-            ColoredLogger.info(f"Task Prompt: {task_for_agent.prompt}", ColoredLogger.BLUE)
-            bt.logging.info("Generating actions...")
+            ColoredLogger.info(
+                f"Task Prompt: {task_for_agent.prompt}", ColoredLogger.BLUE
+            )
+            bt.logging.info("Generating actions....")
 
-            # Let the agent solve the task
-            solution = await self.agent.solve_task(task=task_for_agent)
-            solution.web_agent_id = str(self.uid)
-            actions: List[BaseAction] = solution.replace_web_agent_id()
+            # Process the task
+            task_solution = await self.agent.solve_task(task=task_for_agent)
+            task_solution.web_agent_id = str(self.uid)
+            actions: List[BaseAction] = task_solution.replace_web_agent_id()
 
-            # Log and attach actions to synapse
             self.show_actions(actions)
+
+            # Assign actions back to the synapse
             synapse.actions = actions
 
             ColoredLogger.success(
-                f"Request completed in {time.time() - t0:.2f}s",
+                f"Request completed successfully in {time.time() - start_time:.2f}s",
                 ColoredLogger.GREEN,
             )
         except Exception as e:
-            bt.logging.error(f"Error in miner forward: {e}")
+            bt.logging.error(f"An error occurred on miner forward: {e}")
 
         return synapse
 
-    async def forward_feedback(self, synapse: TaskFeedbackSynapse) -> TaskFeedbackSynapse:
-        """Handles feedback from validators, updates miner stats, and logs results."""
+    async def forward_feedback(
+        self, synapse: TaskFeedbackSynapse
+    ) -> TaskFeedbackSynapse:
+        """
+        Endpoint for feedback requests from the validator.
+        Logs the feedback, updates MinerStats, and prints a summary.
+        """
         ColoredLogger.info("Received feedback", ColoredLogger.GRAY)
         try:
             self.miner_stats.log_feedback(synapse.score, synapse.execution_time)
-            synapse.print_in_terminal(miner_stats=self.miner_stats)
+            print_task_feedback(synapse, self.miner_stats)
         except Exception as e:
-            ColoredLogger.error("Error while printing TaskFeedback", ColoredLogger.RED)
+            ColoredLogger.error(
+                "Error occurred while printing in terminal TaskFeedback"
+            )
             raise e
+
         return synapse
 
-    async def forward_set_organic_endpoint(self, synapse: SetOperatorEndpointSynapse) -> SetOperatorEndpointSynapse:
-        """Sets the operator endpoint in the synapse."""
+    async def forward_set_organic_endpoint(
+        self, synapse: SetOperatorEndpointSynapse
+    ) -> SetOperatorEndpointSynapse:
+        """
+        Sets the operator endpoint for the given synapse.
+        """
         synapse.endpoint = OPERATOR_ENDPOINT
         return synapse
 
 
 if __name__ == "__main__":
-    # Miner entrypoint
-    app = AppBootstrap()  # Wiring IWA dependency injection
-    with Miner() as miner:
+    # Initializing Dependency Injection In IWA
+    app = AppBootstrap()  
+    with Miner(config=config(role="miner")) as miner:
         while True:
             time.sleep(5)

@@ -3,6 +3,11 @@ from distutils.util import strtobool
 from pathlib import Path
 
 
+# ╭─────────────────────────── Environment ─────────────────────────────╮
+EPOCH_LENGTH_OVERRIDE = 0 
+TESTING = False
+ROUND_EPOCHS_DURATION = 20  # 1 day
+
 # ╭─────────────────────────── Task Settings ─────────────────────────────╮
 
 TIMEOUT = 60 * 2
@@ -19,6 +24,7 @@ EFFICIENCY_WEIGHT = 0.10
 MIN_SCORE_FOR_CORRECT_FORMAT = 0.0
 MIN_RESPONSE_REWARD = 0
 APPLY_WEIGHTS_VERSION_CHECK_PENALTY = False
+
 # ╭─────────────────────────── Sampling & Limits ─────────────────────────────╮
 
 SAMPLE_SIZE = 256
