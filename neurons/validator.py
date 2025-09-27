@@ -12,36 +12,58 @@ from loguru import logger
 
 from autoppia_web_agents_subnet import __version__
 from autoppia_web_agents_subnet.base.validator import BaseValidatorNeuron
+from autoppia_web_agents_subnet.bittensor_config import config
 from autoppia_web_agents_subnet.utils.random import get_random_uids
+
 from autoppia_web_agents_subnet.config import (
     FORWARD_SLEEP_SECONDS,
     TIMEOUT,
     EVAL_SCORE_WEIGHT,
     TIME_WEIGHT,
 )
+
 from autoppia_web_agents_subnet.validator.tasks import get_tasks  # returns TaskPlan
 from autoppia_web_agents_subnet.validator.synapse import (
     send_synapse_to_miners_generic,
     collect_task_solutions_and_execution_times,
     send_feedback_synapse_to_miners,  # per-miner helper
 )
+
 from autoppia_web_agents_subnet.protocol import StartRoundSynapse, TaskSynapse
+
 from autoppia_web_agents_subnet.validator.rewards import (
     blend_eval_and_time,
     reduce_rewards_to_averages,
     pad_or_trim,
+    wta_rewards,
 )
+
 from autoppia_web_agents_subnet.validator.eval import evaluate_task_solutions
+
 from autoppia_web_agents_subnet.validator.models import (
     TaskPlan,
     PerTaskResult,
     ScoredTask,
     EvalOutput,
 )
-from autoppia_web_agents_subnet.bittensor_config import config
+
+from autoppia_web_agents_subnet.validator.stats import ForwardStats
+
+from autoppia_web_agents_subnet.validator.leaderboard import (
+    LeaderboardAPI,
+    Phase,
+    TaskInfo,
+    TaskResult,
+    AgentEvaluationRun,
+    WeightsSnapshot,
+    RoundResults,
+)
+
+# IWA
 from autoppia_iwa_module.autoppia_iwa.src.web_agents.classes import TaskSolution
 from autoppia_iwa_module.autoppia_iwa.src.bootstrap import AppBootstrap
-from autoppia_web_agents_subnet.validator.stats.main import ForwardStats
+
+SUCCESS_THRESHOLD = 0.0  # UI semantics for "success"
 
 
 class Validator(BaseValidatorNeuron):
@@ -51,6 +73,7 @@ class Validator(BaseValidatorNeuron):
         self.last_rewards: np.ndarray | None = None
         self.last_round_responses: Dict[int, StartRoundSynapse] = {}
         self.version: str = __version__
+        self.lb = LeaderboardAPI()  # Leaderboard client
 
         bt.logging.info("load_state()")
         self.load_state()
@@ -73,7 +96,6 @@ class Validator(BaseValidatorNeuron):
             version=self.version,
             round_id=round_id,
             validator_id=str(self.wallet.hotkey.ss58_address) if hasattr(self, "wallet") else None,
-            # We run “one task per use-case across projects”; this is informational for miners
             total_prompts=None,
             prompts_per_use_case=1,
             note=note,
@@ -108,12 +130,6 @@ class Validator(BaseValidatorNeuron):
         max_tasks: int,
         timeout: int = TIMEOUT,
     ) -> List[PerTaskResult]:
-        """
-        Broadcast tasks to miners.
-
-        Returns:
-          List[PerTaskResult] — one item per sent task, each already aligned to `miner_uids`.
-        """
         per_task_results: List[PerTaskResult] = []
         sent = 0
 
@@ -143,7 +159,6 @@ class Validator(BaseValidatorNeuron):
                 retries=1,
             )
 
-            # Already aligned to miner_uids by the helper:
             solutions_aligned, exec_times_aligned = collect_task_solutions_and_execution_times(
                 task, responses, miner_uids
             )
@@ -161,7 +176,7 @@ class Validator(BaseValidatorNeuron):
         return per_task_results
 
     # ─────────────────────────────────────────────────────────────────────
-    # NEW Phase 2A: Evaluate (only scoring & artifacts) — NO rewards here
+    # Phase 2A: Evaluate (only scoring & artifacts) — NO rewards here
     # ─────────────────────────────────────────────────────────────────────
     async def evaluate_tasks(
         self,
@@ -169,13 +184,6 @@ class Validator(BaseValidatorNeuron):
         per_task_results: List[PerTaskResult],
         n_miners: int,
     ) -> List[EvalOutput]:
-        """
-        Evalúa cada PerTaskResult y devuelve una lista de EvalOutput con:
-          - eval_scores (vector alineado a los uids activos, tamaño n_miners)
-          - test_results_matrices (por-miner)
-          - evaluation_results (por-miner)
-        NO realiza blending ni calcula recompensas aquí.
-        """
         outputs: List[EvalOutput] = []
 
         for i, ptr in enumerate(per_task_results, start=1):
@@ -186,7 +194,6 @@ class Validator(BaseValidatorNeuron):
                     task_solutions=ptr.solutions,
                     execution_times=ptr.execution_times,
                 )
-                # Garantiza tamaño n_miners por seguridad
                 eval_scores = pad_or_trim(eval_scores, n_miners)
                 outputs.append(
                     EvalOutput(
@@ -209,7 +216,6 @@ class Validator(BaseValidatorNeuron):
 
     # ─────────────────────────────────────────────────────────────────────
     # Phase 2B: Blend eval + time → final rewards & averages
-    # (separated from evaluation; it consumes EvalOutput)
     # ─────────────────────────────────────────────────────────────────────
     async def calculate_rewards(
         self,
@@ -220,11 +226,6 @@ class Validator(BaseValidatorNeuron):
         eval_score_weight: float = EVAL_SCORE_WEIGHT,
         time_weight: float = TIME_WEIGHT,
     ) -> Tuple[NDArray[np.float32], List[ScoredTask]]:
-        """
-        Mezcla eval_scores + execution_times por tarea para producir:
-          - avg_rewards: vector promedio por-miner (alineado a miner_uids)
-          - scored: List[ScoredTask] (con artifacts para feedback)
-        """
         n_miners = len(miner_uids)
         rewards_sum = np.zeros(n_miners, dtype=np.float32)
         counts = np.zeros(n_miners, dtype=np.int32)
@@ -294,15 +295,10 @@ class Validator(BaseValidatorNeuron):
                 bt.logging.warning(f"[Phase 3 - Feedback] send_feedback failed on task {i}: {e}")
 
     # ─────────────────────────────────────────────────────────────────────
-    # Helper: derive “one per use-case across all projects” cap from TaskPlan
+    # Helper: derive tasks-to-send cap
     # ─────────────────────────────────────────────────────────────────────
     @staticmethod
     def _cap_one_per_use_case(task_plan: TaskPlan) -> int:
-        """
-        Try to compute the number of tasks equal to (#use_cases across all projects),
-        with robust fallbacks so we don't need to modify tasks.py.
-        """
-        # Preferred explicit fields if TaskPlan provides them:
         for attr in ("num_use_cases_total", "total_use_cases", "n_use_cases"):
             if hasattr(task_plan, attr):
                 try:
@@ -311,8 +307,6 @@ class Validator(BaseValidatorNeuron):
                         return v
                 except Exception:
                     pass
-
-        # Fallback: if TaskPlan has a 'size' / '__len__'
         try:
             v = int(getattr(task_plan, "size", 0))
             if v > 0:
@@ -325,8 +319,6 @@ class Validator(BaseValidatorNeuron):
                 return v
         except Exception:
             pass
-
-        # Last resort: a safe, small cap to avoid sending too many
         return 16
 
     # ─────────────────────────────────────────────────────────────────────
@@ -335,20 +327,41 @@ class Validator(BaseValidatorNeuron):
     async def forward(self) -> None:
         try:
             self.forward_count += 1
+            round_id = f"Round-{self.forward_count}"
             bt.logging.info(f"[forward #{self.forward_count}] start (version {self.version})")
             t0 = time.time()
 
-            # Full miner roster in a deterministic random order
+            # Events: initializing + round_start
+            self.lb.log_event_simple(
+                validator_uid=int(self.uid),
+                round_id=round_id,
+                phase=Phase.ROUND_START,
+                message="Round starting.",
+                extra={"version": self.version},
+            )
+            self.lb.log_event_simple(
+                validator_uid=int(self.uid),
+                round_id=round_id,
+                phase=Phase.INITIALIZING,
+                message="Forward loop starting.",
+            )
+
+            # Full miner roster
             full_uid_array = get_random_uids(self, k=self.metagraph.n.item())
             full_uids: List[int] = full_uid_array.tolist()
             full_axons = [self.metagraph.axons[uid] for uid in full_uids]
 
             if not full_uids:
                 bt.logging.warning("No miners in metagraph; skipping forward.")
+                self.lb.log_event_simple(
+                    validator_uid=int(self.uid),
+                    round_id=round_id,
+                    phase=Phase.ERROR,
+                    message="No miners in metagraph.",
+                )
                 return
 
             # Phase 0: notify start, then filter to ACTIVE miners only
-            round_id = f"Round-{self.forward_count}"
             responders: Dict[int, StartRoundSynapse] = {}
             try:
                 responders = await self.notify_start_round(
@@ -365,11 +378,26 @@ class Validator(BaseValidatorNeuron):
             active_uids = [uid for uid, ok in zip(full_uids, active_mask) if ok]
             active_axons = [ax for ax, ok in zip(full_axons, active_mask) if ok]
 
-            # Build miner metadata for stats (only ACTIVE miners)
+            if not active_uids:
+                self.burn_all(uids=full_uids)
+                elapsed = time.time() - t0
+                self.lb.log_event_simple(
+                    validator_uid=int(self.uid),
+                    round_id=round_id,
+                    phase=Phase.ERROR,
+                    message="No active miners responded to StartRound; burn_all.",
+                    extra={"elapsed_sec": elapsed, "total_miners": len(full_uids)},
+                )
+                if FORWARD_SLEEP_SECONDS > 0:
+                    bt.logging.info(f"Sleeping {FORWARD_SLEEP_SECONDS}s…")
+                    await asyncio.sleep(FORWARD_SLEEP_SECONDS)
+                return
+
+            # Miner metadata
             active_hotkeys = [self.metagraph.hotkeys[uid] for uid in active_uids]
             active_coldkeys = [self.metagraph.coldkeys[uid] for uid in active_uids]
 
-            # Init per-forward stats collector (decoupled module)
+            # Stats collector (for console table only)
             stats = ForwardStats(
                 miner_uids=active_uids,
                 miner_hotkeys=active_hotkeys,
@@ -377,10 +405,15 @@ class Validator(BaseValidatorNeuron):
             )
             stats.start(forward_id=self.forward_count)
 
-            # Phase 1: tasks (“one per use-case across all projects”)
-            # We ask for prompts_per_use_case=1 and let TaskPlan provide all use-cases.
+            # Phase 1: tasks plan
+            self.lb.log_event_simple(
+                validator_uid=int(self.uid),
+                round_id=round_id,
+                phase=Phase.GENERATING_TASKS,
+                message="Generating TaskPlan (one per use-case across projects).",
+            )
             task_plan: TaskPlan = await get_tasks(
-                total_prompts=10**9,            # effectively “no cap”; we’ll cap below
+                total_prompts=10**9,
                 prompts_per_use_case=1,
             )
 
@@ -388,17 +421,13 @@ class Validator(BaseValidatorNeuron):
                 bt.logging.warning("No tasks generated – burn_all and return.")
                 self.burn_all(uids=full_uids)
                 elapsed = time.time() - t0
-                bt.logging.info(f"[forward #{self.forward_count}] no tasks; took {elapsed:.2f}s.")
-                if FORWARD_SLEEP_SECONDS > 0:
-                    bt.logging.info(f"Sleeping {FORWARD_SLEEP_SECONDS}s…")
-                    await asyncio.sleep(FORWARD_SLEEP_SECONDS)
-                return
-
-            if not active_uids:
-                bt.logging.warning("No active miners responded to StartRound; burn_all and return.")
-                self.burn_all(uids=full_uids)
-                elapsed = time.time() - t0
-                bt.logging.info(f"[forward #{self.forward_count}] no active miners; took {elapsed:.2f}s.")
+                self.lb.log_event_simple(
+                    validator_uid=int(self.uid),
+                    round_id=round_id,
+                    phase=Phase.ERROR,
+                    message="No tasks generated; burn_all.",
+                    extra={"elapsed_sec": elapsed},
+                )
                 if FORWARD_SLEEP_SECONDS > 0:
                     bt.logging.info(f"Sleeping {FORWARD_SLEEP_SECONDS}s…")
                     await asyncio.sleep(FORWARD_SLEEP_SECONDS)
@@ -406,7 +435,13 @@ class Validator(BaseValidatorNeuron):
 
             max_tasks = self._cap_one_per_use_case(task_plan)
 
-            # Phase 1: send tasks only to ACTIVE miners
+            # Send tasks
+            self.lb.log_event_simple(
+                validator_uid=int(self.uid),
+                round_id=round_id,
+                phase=Phase.SENDING_TASKS,
+                message=f"Sending {max_tasks} tasks to {len(active_uids)} miners.",
+            )
             per_task_results = await self.send_tasks(
                 task_plan=task_plan,
                 miner_uids=active_uids,
@@ -415,13 +450,25 @@ class Validator(BaseValidatorNeuron):
                 timeout=TIMEOUT,
             )
 
-            # Phase 2A: EVALUATE (get eval_scores + artifacts; NO rewards)
+            # Evaluate
+            self.lb.log_event_simple(
+                validator_uid=int(self.uid),
+                round_id=round_id,
+                phase=Phase.EVALUATING_TASKS,
+                message=f"Evaluating {len(per_task_results)} tasks.",
+            )
             eval_outputs = await self.evaluate_tasks(
                 per_task_results=per_task_results,
                 n_miners=len(active_uids),
             )
 
-            # Phase 2B: BLEND → per-task final rewards, then average
+            # Blend → rewards
+            self.lb.log_event_simple(
+                validator_uid=int(self.uid),
+                round_id=round_id,
+                phase=Phase.CALCULATING_METRICS,
+                message="Blending eval scores + times; computing averages.",
+            )
             rewards_active, scored_tasks = await self.calculate_rewards(
                 per_task_results=per_task_results,
                 eval_outputs=eval_outputs,
@@ -430,27 +477,31 @@ class Validator(BaseValidatorNeuron):
                 time_weight=TIME_WEIGHT,
             )
 
-            # Feed stats collector (one record per task)
+            # Stats feed + (we don't log intermediate to leaderboard; only RoundResults)
             for st in scored_tasks:
                 stats.record_batch(
-                    final_rewards=st.final_rewards,   # aligned to active_uids
-                    eval_scores=st.eval_scores,       # aligned to active_uids
+                    final_rewards=st.final_rewards,
+                    eval_scores=st.eval_scores,
                     execution_times=st.execution_times,
                 )
 
-            # Phase 3: per-miner feedback for ACTIVE miners
+            # Feedback
+            self.lb.log_event_simple(
+                validator_uid=int(self.uid),
+                round_id=round_id,
+                phase=Phase.SENDING_FEEDBACK,
+                message="Sending per-miner feedback for scored tasks.",
+            )
             await self.send_feedback(
                 scored_tasks=scored_tasks,
                 miner_uids=active_uids,
                 miner_axons=active_axons,
             )
 
-            # --- Winner-Takes-All transform on averaged ACTIVE rewards ---
-            from autoppia_web_agents_subnet.validator.rewards import wta_rewards
+            # Weights: WTA
             raw_active_avg = rewards_active.copy()
             rewards_active_wta = wta_rewards(rewards_active)
 
-            # Expand active rewards to full vector (both raw avg and WTA)
             rewards_full_avg = np.zeros(len(full_uids), dtype=np.float32)
             rewards_full_wta = np.zeros(len(full_uids), dtype=np.float32)
 
@@ -460,14 +511,18 @@ class Validator(BaseValidatorNeuron):
                 if idx_active is not None:
                     rewards_full_avg[i_full] = raw_active_avg[idx_active]
                     rewards_full_wta[i_full] = rewards_active_wta[idx_active]
-                # else: stays 0.0 for non-active miners
 
-            # Use WTA for on-chain updates, keep dense avg locally for inspection/metrics
+            self.lb.log_event_simple(
+                validator_uid=int(self.uid),
+                round_id=round_id,
+                phase=Phase.UPDATING_WEIGHTS,
+                message="Updating weights on-chain (WTA).",
+            )
             self.update_scores(rewards_full_wta, full_uids)
             self.set_weights()
-            self.last_rewards = rewards_full_avg  # keep the dense vector for analysis
+            self.last_rewards = rewards_full_avg
 
-            # Log the round winner (deterministic on ties: first max)
+            winner_uid: Optional[int] = None
             try:
                 winner_full_index = int(np.argmax(rewards_full_wta))
                 winner_uid = full_uids[winner_full_index]
@@ -476,14 +531,119 @@ class Validator(BaseValidatorNeuron):
             except Exception:
                 pass
 
-            # Finish + render the per-forward ordered table (by avg_reward)
+            # ─────────────────────────────────────────────────────────────
+            # Build RoundResults (hierarchical) and POST once
+            # ─────────────────────────────────────────────────────────────
+            # Task list (minimal info)
+            tasks_info: List[TaskInfo] = []
+            for st in scored_tasks:
+                t = st.task
+                tasks_info.append(TaskInfo(
+                    task_id=str(getattr(t, "id", "")),
+                    prompt=str(getattr(t, "prompt", "")),
+                    website=str(getattr(t, "url", "")),
+                    web_project=str(getattr(t, "web_project_id", "")),
+                    use_case=str(getattr(getattr(t, "use_case", None), "name", "")),
+                ))
+
+            # Per-miner AgentEvaluationRun with per-task TaskResult
+            agent_runs: List[AgentEvaluationRun] = []
+            n_tasks = len(scored_tasks)
+
+            for i_miner, uid in enumerate(active_uids):
+                miner_task_results: List[TaskResult] = []
+
+                per_miner_rewards: List[float] = []
+                per_miner_eval_scores: List[float] = []
+                per_miner_times: List[float] = []
+                per_miner_time_scores: List[float] = []
+
+                for st in scored_tasks:
+                    # Safe accesses with defaults
+                    reward_i = float(st.final_rewards[i_miner]) if i_miner < len(st.final_rewards) else 0.0
+                    eval_i = float(st.eval_scores[i_miner]) if i_miner < len(st.eval_scores) else 0.0
+                    time_i = float(st.execution_times[i_miner]) if i_miner < len(st.execution_times) else 0.0
+                    time_score_i = time_i  # raw; UI may normalize/invert
+
+                    sol_dict: Dict[str, Any] = {}
+                    try:
+                        sol = st.solutions[i_miner]
+                        if sol is not None:
+                            sol_dict = sol.model_dump() if hasattr(sol, "model_dump") else getattr(sol, "__dict__", {})
+                    except Exception:
+                        pass
+
+                    tr_i = st.test_results_matrices[i_miner] if i_miner < len(st.test_results_matrices) else []
+                    er_i = st.evaluation_results[i_miner] if i_miner < len(st.evaluation_results) else {}
+
+                    miner_task_results.append(TaskResult(
+                        task_id=str(getattr(st.task, "id", "")),
+                        eval_score=eval_i,
+                        execution_time=time_i,
+                        time_score=time_score_i,
+                        reward=reward_i,
+                        solution=sol_dict,
+                        test_results={"results": tr_i},
+                        evaluation_result=er_i,
+                    ))
+
+                    per_miner_rewards.append(reward_i)
+                    per_miner_eval_scores.append(eval_i)
+                    per_miner_times.append(time_i)
+                    per_miner_time_scores.append(time_score_i)
+
+                # aggregates (average over tasks present)
+                denom = max(len(per_miner_rewards), 1)
+                agent_runs.append(AgentEvaluationRun(
+                    miner_uid=int(uid),
+                    miner_hotkey=str(active_hotkeys[i_miner]),
+                    miner_coldkey=str(active_coldkeys[i_miner]),
+                    reward=float(np.mean(per_miner_rewards)) if denom > 0 else 0.0,
+                    eval_score=float(np.mean(per_miner_eval_scores)) if denom > 0 else 0.0,
+                    time_score=float(np.mean(per_miner_time_scores)) if denom > 0 else 0.0,
+                    execution_time=float(np.mean(per_miner_times)) if denom > 0 else 0.0,
+                    task_results=miner_task_results,
+                ))
+
+            elapsed = time.time() - t0
+            rr = RoundResults(
+                validator_uid=int(self.uid),
+                round_id=round_id,
+                version=self.version,
+                started_at=float(t0),
+                ended_at=float(time.time()),
+                elapsed_sec=float(elapsed),
+                n_active_miners=len(active_uids),
+                n_total_miners=len(full_uids),
+                tasks=tasks_info,
+                agent_runs=agent_runs,
+                weights=WeightsSnapshot(
+                    full_uids=[int(u) for u in full_uids],
+                    rewards_full_avg=[float(x) for x in rewards_full_avg],
+                    rewards_full_wta=[float(x) for x in rewards_full_wta],
+                    winner_uid=int(winner_uid) if winner_uid is not None else None,
+                ),
+                meta={"tasks_sent": len(per_task_results)},
+            )
+            self.lb.post_round_results(rr, background=True)
+
+            # Finish + console table
             summary = stats.finish()
             stats.render_table(summary, to_console=True)
 
-            elapsed = time.time() - t0
-            bt.logging.info(
-                f"[forward #{self.forward_count}] updated {len(full_uids)} UIDs "
-                f"({len(active_uids)} active); took {elapsed:.2f}s."
+            # Events: round_end + done
+            self.lb.log_event_simple(
+                validator_uid=int(self.uid),
+                round_id=round_id,
+                phase=Phase.ROUND_END,
+                message=f"Round finished; elapsed {elapsed:.2f}s.",
+                extra={"active_miners": len(active_uids), "total_miners": len(full_uids)},
+            )
+            self.lb.log_event_simple(
+                validator_uid=int(self.uid),
+                round_id=round_id,
+                phase=Phase.DONE,
+                message="Forward complete.",
             )
 
             if FORWARD_SLEEP_SECONDS > 0:
@@ -492,6 +652,16 @@ class Validator(BaseValidatorNeuron):
 
         except Exception as err:
             bt.logging.error(f"Error in forward: {err}")
+            try:
+                round_id = f"Round-{self.forward_count}"
+                self.lb.log_event_simple(
+                    validator_uid=int(self.uid),
+                    round_id=round_id,
+                    phase=Phase.ERROR,
+                    message=f"Forward crashed: {err}",
+                )
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":

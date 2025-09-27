@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import List, Sequence, Tuple, Dict, Any, Optional
+from typing import List, Sequence, Dict, Any, Optional
 
 import numpy as np
 
