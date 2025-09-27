@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import time
-from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import bittensor as bt
@@ -40,6 +39,7 @@ from autoppia_web_agents_subnet.validator.models import TaskPlan, PerTaskResult,
 from autoppia_web_agents_subnet.bittensor_config import config
 from autoppia_iwa_module.autoppia_iwa.src.web_agents.classes import TaskSolution
 from autoppia_iwa_module.autoppia_iwa.src.bootstrap import AppBootstrap
+from autoppia_web_agents_subnet.validator.stats.main import ForwardStats
 
 
 class Validator(BaseValidatorNeuron):
@@ -293,6 +293,7 @@ class Validator(BaseValidatorNeuron):
     # ─────────────────────────────────────────────────────────────────────
     # Forward loop (drops StartRound non-responders; zeros elsewhere)
     # ─────────────────────────────────────────────────────────────────────
+
     async def forward(self) -> None:
         try:
             self.forward_count += 1
@@ -325,6 +326,18 @@ class Validator(BaseValidatorNeuron):
             active_mask = [uid in responders for uid in full_uids]
             active_uids = [uid for uid, ok in zip(full_uids, active_mask) if ok]
             active_axons = [ax for ax, ok in zip(full_axons, active_mask) if ok]
+
+            # Build miner metadata for stats (only ACTIVE miners)
+            active_hotkeys = [self.metagraph.hotkeys[uid] for uid in active_uids]
+            active_coldkeys = [self.metagraph.coldkeys[uid] for uid in active_uids]
+
+            # Init per-forward stats collector (decoupled module)
+            stats = ForwardStats(
+                miner_uids=active_uids,
+                miner_hotkeys=active_hotkeys,
+                miner_coldkeys=active_coldkeys,
+            )
+            stats.start(forward_id=self.forward_count)
 
             # Phase 1: tasks (always get tasks; if none, burn_all and exit)
             task_plan: TaskPlan = await get_tasks(
@@ -361,13 +374,13 @@ class Validator(BaseValidatorNeuron):
                 timeout=TIMEOUT,
             )
 
-            # Phase 2A: EVALUATE (obtener eval_scores y artifacts, SIN recompensas)
+            # Phase 2A: EVALUATE (get eval_scores + artifacts; NO rewards)
             eval_outputs = await self.evaluate_tasks(
                 per_task_results=per_task_results,
                 n_miners=len(active_uids),
             )
 
-            # Phase 2B: BLEND (eval + tiempo) → recompensas promedio
+            # Phase 2B: BLEND → per-task final rewards, then average
             rewards_active, scored_tasks = await self.calculate_rewards(
                 per_task_results=per_task_results,
                 eval_outputs=eval_outputs,
@@ -376,24 +389,40 @@ class Validator(BaseValidatorNeuron):
                 time_weight=TIME_WEIGHT,
             )
 
-            # Phase 3: per-miner feedback para los ACTIVOS
+            # === NEW: feed the stats collector (one record per task) ===
+            # We use scored_tasks to get per-task final_rewards + eval_scores + execution_times
+            for st in scored_tasks:
+                # st.final_rewards: np.ndarray aligned to active_uids
+                # st.eval_scores:   np.ndarray aligned to active_uids
+                # st.execution_times: Sequence[float] aligned to active_uids
+                stats.record_batch(
+                    final_rewards=st.final_rewards,
+                    eval_scores=st.eval_scores,
+                    execution_times=st.execution_times,
+                )
+
+            # Phase 3: per-miner feedback for ACTIVE miners
             await self.send_feedback(
                 scored_tasks=scored_tasks,
                 miner_uids=active_uids,
                 miner_axons=active_axons,
             )
 
-            # Expandir recompensas activas a vector completo (ceros a no-activos)
+            # Expand active rewards to full vector (zeros to non-active)
             rewards_full = np.zeros(len(full_uids), dtype=np.float32)
             uid_to_idx_active = {uid: i for i, uid in enumerate(active_uids)}
             for i_full, uid in enumerate(full_uids):
                 idx_active = uid_to_idx_active.get(uid, None)
                 rewards_full[i_full] = rewards_active[idx_active] if idx_active is not None else 0.0
 
-            # Actualizar on-chain / estado local
+            # Update on-chain / local state
             self.update_scores(rewards_full, full_uids)
             self.set_weights()
             self.last_rewards = rewards_full
+
+            # Finish + render the per-forward ordered table (by avg_reward)
+            summary = stats.finish()
+            stats.render_table(summary, to_console=True)
 
             elapsed = time.time() - t0
             bt.logging.info(

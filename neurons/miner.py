@@ -1,15 +1,20 @@
+import os
 import time
 from typing import List
+
 import bittensor as bt
+
 from autoppia_web_agents_subnet.base.miner import BaseMinerNeuron
 from autoppia_web_agents_subnet.protocol import (
     TaskSynapse,
     TaskFeedbackSynapse,
-    SetOperatorEndpointSynapse,
+    StartRoundSynapse,
 )
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.miner.models import MinerStats
 from autoppia_web_agents_subnet.base.utils.config import config
+
+# IWA dependencies (agent + task types)
 from autoppia_iwa.src.bootstrap import AppBootstrap
 from autoppia_iwa.src.data_generation.domain.classes import Task
 from autoppia_iwa.src.execution.actions.base import BaseAction
@@ -17,35 +22,72 @@ from autoppia_iwa.src.web_agents.random.agent import RandomClickerWebAgent
 from autoppia_iwa.src.web_agents.apified_agent import ApifiedWebAgent
 from autoppia_iwa.config.config import (
     AGENT_HOST,
-    AGENT_NAME,
+    AGENT_NAME as CFG_AGENT_NAME,
     AGENT_PORT,
     USE_APIFIED_AGENT,
-    OPERATOR_ENDPOINT,
 )
+
 from autoppia_web_agents_subnet.miner.logging import print_task_feedback
 
 
-class Miner(BaseMinerNeuron):
+# ─────────────────────────────────────────────────────────────
+# Miner identity / metadata advertised in StartRound response
+# Override via env if you want without touching code.
+# ─────────────────────────────────────────────────────────────
+AGENT_NAME = os.getenv("MINER_AGENT_NAME", CFG_AGENT_NAME or "Autoppia Miner")
+AGENT_IMAGE = os.getenv("MINER_AGENT_IMAGE", "")          # URL or data URI
+GITHUB_URL = os.getenv("MINER_GITHUB_URL", "https://github.com/your-org/your-repo")
+AGENT_VERSION = os.getenv("MINER_AGENT_VERSION", "0.1.0")
+HAS_RL = bool(int(os.getenv("MINER_HAS_RL", "0")))        # "1" to set True
 
+
+class Miner(BaseMinerNeuron):
     def __init__(self, config=None):
         super(Miner, self).__init__(config=config)
+
+        # Choose agent implementation
         self.agent = (
             ApifiedWebAgent(name=AGENT_NAME, host=AGENT_HOST, port=AGENT_PORT)
             if USE_APIFIED_AGENT
             else RandomClickerWebAgent(is_random=False)
         )
+
         self.miner_stats = MinerStats()
         self.load_state()
 
+    # ────────────────────────── Round Handshake ──────────────────────────
+    async def forward_start_round(self, synapse: StartRoundSynapse) -> StartRoundSynapse:
+        """
+        Respond to a StartRound handshake with miner/agent metadata.
+        No side-effects beyond logging and returning metadata.
+        """
+        validator_hotkey = getattr(synapse.dendrite, "hotkey", None)
+        ColoredLogger.info(
+            f"[StartRound] from validator: {validator_hotkey} round_id={getattr(synapse, 'round_id', '')}",
+            ColoredLogger.YELLOW,
+        )
+
+        # Respond with our metadata
+        synapse.agent_name = AGENT_NAME
+        synapse.agent_image = AGENT_IMAGE or None
+        synapse.github_url = GITHUB_URL or None
+        synapse.agent_version = AGENT_VERSION
+        synapse.has_rl = HAS_RL
+
+        ColoredLogger.success(
+            f"[StartRound] Responded with agent={AGENT_NAME} v{AGENT_VERSION} RL={HAS_RL}",
+            ColoredLogger.GREEN,
+        )
+        return synapse
+
+    # ───────────────────────────── Tasks ─────────────────────────────
     def show_actions(self, actions: List[BaseAction]) -> None:
-        """
-        Pretty-prints the list of actions in a more readable format.
-        """
+        """Pretty-prints the list of actions in a more readable format."""
         if not actions:
             bt.logging.warning("No actions to log.")
             return
 
-        bt.logging.info("Actions sent: ")
+        bt.logging.info("Actions sent:")
         for i, action in enumerate(actions, 1):
             action_attrs = vars(action)
             ColoredLogger.info(
@@ -75,7 +117,7 @@ class Miner(BaseMinerNeuron):
             ColoredLogger.info(
                 f"Task Prompt: {task_for_agent.prompt}", ColoredLogger.BLUE
             )
-            bt.logging.info("Generating actions....")
+            bt.logging.info("Generating actions...")
 
             # Process the task
             task_solution = await self.agent.solve_task(task=task_for_agent)
@@ -96,6 +138,7 @@ class Miner(BaseMinerNeuron):
 
         return synapse
 
+    # ─────────────────────────── Feedback ───────────────────────────
     async def forward_feedback(
         self, synapse: TaskFeedbackSynapse
     ) -> TaskFeedbackSynapse:
@@ -105,29 +148,22 @@ class Miner(BaseMinerNeuron):
         """
         ColoredLogger.info("Received feedback", ColoredLogger.GRAY)
         try:
-            self.miner_stats.log_feedback(synapse.score, synapse.execution_time)
+            # Defensive defaults
+            score = float(synapse.score or 0.0)
+            exec_time = float(synapse.execution_time or 0.0)
+
+            self.miner_stats.log_feedback(score, exec_time)
             print_task_feedback(synapse, self.miner_stats)
         except Exception as e:
-            ColoredLogger.error(
-                "Error occurred while printing in terminal TaskFeedback"
-            )
+            ColoredLogger.error("Error occurred while printing TaskFeedback in terminal")
             raise e
 
-        return synapse
-
-    async def forward_set_organic_endpoint(
-        self, synapse: SetOperatorEndpointSynapse
-    ) -> SetOperatorEndpointSynapse:
-        """
-        Sets the operator endpoint for the given synapse.
-        """
-        synapse.endpoint = OPERATOR_ENDPOINT
         return synapse
 
 
 if __name__ == "__main__":
     # Initializing Dependency Injection In IWA
-    app = AppBootstrap()  
+    app = AppBootstrap()
     with Miner(config=config(role="miner")) as miner:
         while True:
             time.sleep(5)
