@@ -22,7 +22,7 @@ from autoppia_web_agents_subnet.config import (
     TIME_WEIGHT,
 )
 
-from autoppia_web_agents_subnet.validator.tasks import get_task_plan  # returns TaskPlan
+from autoppia_web_agents_subnet.validator.tasks import get_task_plan, cap_one_per_use_case  
 from autoppia_web_agents_subnet.validator.synapse import (
     send_synapse_to_miners_generic,
     collect_task_solutions_and_execution_times,
@@ -296,35 +296,9 @@ class Validator(BaseValidatorNeuron):
                 bt.logging.warning(f"[Phase 3 - Feedback] send_feedback failed on task {i}: {e}")
 
     # ─────────────────────────────────────────────────────────────────────
-    # Helper: derive tasks-to-send cap
-    # ─────────────────────────────────────────────────────────────────────
-    @staticmethod
-    def _cap_one_per_use_case(task_plan: TaskPlan) -> int:
-        for attr in ("num_use_cases_total", "total_use_cases", "n_use_cases"):
-            if hasattr(task_plan, attr):
-                try:
-                    v = int(getattr(task_plan, attr))
-                    if v > 0:
-                        return v
-                except Exception:
-                    pass
-        try:
-            v = int(getattr(task_plan, "size", 0))
-            if v > 0:
-                return v
-        except Exception:
-            pass
-        try:
-            v = int(len(task_plan))  # type: ignore[arg-type]
-            if v > 0:
-                return v
-        except Exception:
-            pass
-        return 16
-
-    # ─────────────────────────────────────────────────────────────────────
     # Helper: Build + POST RoundResults (hierarchical)
     # ─────────────────────────────────────────────────────────────────────
+
     def _build_and_post_round_results(
         self,
         *,
@@ -537,7 +511,7 @@ class Validator(BaseValidatorNeuron):
                 prompts_per_use_case=1,
             )
 
-            max_tasks = self._cap_one_per_use_case(task_plan)
+            max_tasks = cap_one_per_use_case(task_plan)
 
             # Send tasks
             self.lb.log_event_simple(

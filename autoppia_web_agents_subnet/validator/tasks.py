@@ -40,9 +40,34 @@ async def _generate_tasks_limited_use_cases(
     return await pipeline.generate()
 
 
+def cap_one_per_use_case(task_plan: TaskPlan) -> int:
+    for attr in ("num_use_cases_total", "total_use_cases", "n_use_cases"):
+        if hasattr(task_plan, attr):
+            try:
+                v = int(getattr(task_plan, attr))
+                if v > 0:
+                    return v
+            except Exception:
+                pass
+    try:
+        v = int(getattr(task_plan, "size", 0))
+        if v > 0:
+            return v
+    except Exception:
+        pass
+    try:
+        v = int(len(task_plan))  # type: ignore[arg-type]
+        if v > 0:
+            return v
+    except Exception:
+        pass
+    return 16
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Public API
 # ─────────────────────────────────────────────────────────────────────────────
+
+
 async def get_task_plan(
     *,
     prompts_per_use_case: int,
