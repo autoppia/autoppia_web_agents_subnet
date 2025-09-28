@@ -40,10 +40,6 @@ def add_shared_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--neuron.events_retention_size", type=int, default=2 * 1024 * 1024 * 1024, help="Max size for persisted event logs (bytes).")  # 2 GiB
     parser.add_argument("--neuron.dont_save_events", action="store_true", default=False, help="If set, events are not saved to a log file.")
 
-    parser.add_argument("--wandb.off", action="store_true", default=False, help="Turn off Weights & Biases.")
-    parser.add_argument("--wandb.offline", action="store_true", default=False, help="Run W&B in offline mode.")
-    parser.add_argument("--wandb.notes", type=str, default="", help="Notes to attach to the W&B run.")
-
     # Fresh boot helper (shared)
     parser.add_argument(
         "--fresh",
@@ -65,9 +61,6 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--neuron.axon_off", "--axon_off", action="store_true", default=False, help="Set this flag to not attempt to serve an Axon (validators only).")
 
     parser.add_argument("--neuron.vpermit_tao_limit", type=int, default=4096, help="Max TAO allowed to query a validator with a vpermit.")
-
-    parser.add_argument("--wandb.project_name", type=str, default="template-validators", help="W&B project name.")
-    parser.add_argument("--wandb.entity", type=str, default="opentensor-dev", help="W&B entity/org.")
 
     # Validator-specific testing args
     parser.add_argument("--no_epoch", action="store_true", default=False, help="Enable mock mode (no real chain calls).")
@@ -91,14 +84,6 @@ def add_miner_args(parser: argparse.ArgumentParser) -> None:
 
     parser.add_argument("--blacklist.minimum_stake_requirement", type=int, default=1_000, help="Minimum stake required to send requests to miners.")
     parser.add_argument("--blacklist.allow_non_registered", action="store_true", default=False, help="Accept queries from non-registered entities (dangerous).")
-
-    parser.add_argument("--wandb.project_name", type=str, default="template-miners", help="W&B project name.")
-    parser.add_argument("--wandb.entity", type=str, default="opentensor-dev", help="W&B entity/org.")
-
-    # Auction/bidding CLI (miner)
-    parser.add_argument("--miner.bids.netuids", nargs="+", type=int, default=[], help="Target subnets to bid on (repeat allowed), e.g. 30 30 12.")
-    parser.add_argument("--miner.bids.amounts", nargs="+", type=float, default=[], help="α amounts for each bid, e.g. 1000 500 200.")
-    parser.add_argument("--miner.bids.discounts", nargs="+", type=str, default=[], help="Discounts per bid: percent or bps tokens (e.g., 10 5 1000bps).")
 
 
 # ──────────────────────── main entrypoint ───────────────────────── #
