@@ -32,18 +32,18 @@ class ForwardHandler:
     """
     Handles the forward loop logic for the validator.
 
-    Este forward dura TODO el round (~24h):
-    1. Calcula cuántas tasks hacer basado en el tiempo disponible
-    2. Loop: genera, envía, evalúa tasks en batches
-    3. Acumula scores de todos los miners
-    4. Al terminar, WAIT hasta target epoch
-    5. Calcula promedios, aplica WTA, setea weights
+    This forward spans the ENTIRE round (~24h):
+    1. Pre-generates all tasks at the beginning
+    2. Dynamic loop: sends tasks one by one based on time remaining
+    3. Accumulates scores from all miners
+    4. When finished, WAIT until target epoch
+    5. Calculates averages, applies WTA, sets weights
     """
 
     def __init__(self, validator):
         self.validator = validator
 
-        # ⭐ Round calculator: sistema dinámico de tasks
+        # ⭐ Round calculator: dynamic task system
         self.round_calculator = RoundCalculator(
             round_size_epochs=ROUND_SIZE_EPOCHS,
             avg_task_duration_seconds=AVG_TASK_DURATION_SECONDS,
@@ -88,7 +88,7 @@ class ForwardHandler:
                 }
             )
 
-            # ⭐ Log configuración del sistema dinámico
+            # ⭐ Log dynamic system configuration
             self.round_calculator.log_calculation_summary()
 
             # ═══════════════════════════════════════════════════════
@@ -186,7 +186,7 @@ class ForwardHandler:
             bt.logging.warning("=" * 80)
 
             # ═══════════════════════════════════════════════════════
-            # MAIN LOOP: Sistema dinámico con tasks pre-generadas
+            # MAIN LOOP: Dynamic system with pre-generated tasks
             # ═══════════════════════════════════════════════════════
             tasks_completed = 0
             all_scored_tasks: List[ScoredTask] = []
@@ -194,7 +194,7 @@ class ForwardHandler:
 
             bt.logging.warning(f"🎯 Starting dynamic task execution with {len(all_tasks)} pre-generated tasks")
 
-            # Loop dinámico: consume tasks pre-generadas y checkea DESPUÉS de evaluar
+            # Dynamic loop: consume pre-generated tasks and check AFTER evaluation
             while task_index < len(all_tasks):
                 iteration_start = time.time()
 
@@ -309,7 +309,7 @@ class ForwardHandler:
                     top_3 = np.argsort(avg_so_far)[-3:][::-1]
                     bt.logging.info(f"   Current top 3: {[(full_uids[i], f'{avg_so_far[i]:.3f}') for i in top_3]}")
 
-                # ⚡ CHECKEO DINÁMICO: ¿Hay tiempo para otra task DESPUÉS de evaluar?
+                # ⚡ DYNAMIC CHECK: Is there time for another task AFTER evaluation?
                 current_block = self.validator.block
                 if not self.round_calculator.should_send_next_task(current_block, start_block):
                     current_epoch = self.round_calculator.block_to_epoch(current_block)

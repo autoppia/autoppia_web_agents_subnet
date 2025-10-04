@@ -6,19 +6,19 @@ from typing import Dict, Any
 
 class RoundCalculator:
     """
-    Calcula automáticamente cuántas tasks se pueden ejecutar en un round completo.
+    Automatically calculates how many tasks can be executed in a complete round.
 
-    Un round = ROUND_SIZE_EPOCHS epochs de Bittensor
-    Todos los validators sincronizan en epochs múltiplos de ROUND_SIZE_EPOCHS.
+    A round = ROUND_SIZE_EPOCHS epochs of Bittensor
+    All validators synchronize at epoch multiples of ROUND_SIZE_EPOCHS.
 
-    Ejemplo:
-        Si ROUND_SIZE_EPOCHS = 20:
-        - Round 1: epochs 0-19 (target: 19)
-        - Round 2: epochs 20-39 (target: 39)
-        - Round 3: epochs 40-59 (target: 59)
+    Example:
+        If ROUND_SIZE_EPOCHS = 20:
+        - Round 1: epochs 0-19 (target: 20)
+        - Round 2: epochs 20-39 (target: 40)
+        - Round 3: epochs 40-59 (target: 60)
     """
 
-    # Constantes de Bittensor
+    # Bittensor constants
     BLOCKS_PER_EPOCH = 360
     SECONDS_PER_BLOCK = 12
 
@@ -30,9 +30,9 @@ class RoundCalculator:
     ):
         """
         Args:
-            round_size_epochs: Duración del round en epochs (ej: 20 = ~24h)
-            avg_task_duration_seconds: Tiempo promedio para completar 1 task
-            safety_buffer_epochs: Buffer de seguridad en epochs (ej: 0.5 = 36 min)
+            round_size_epochs: Round duration in epochs (e.g., 20 = ~24h)
+            avg_task_duration_seconds: Average time to complete 1 task
+            safety_buffer_epochs: Safety buffer in epochs (e.g., 0.5 = 36 min)
         """
         self.round_size_epochs = round_size_epochs
         self.avg_task_duration_seconds = avg_task_duration_seconds
@@ -40,39 +40,39 @@ class RoundCalculator:
 
     @classmethod
     def block_to_epoch(cls, block: int) -> int:
-        """Convierte block number a epoch number."""
+        """Convert block number to epoch number."""
         return block // cls.BLOCKS_PER_EPOCH
 
     @classmethod
     def epoch_to_block(cls, epoch: int) -> int:
-        """Convierte epoch number al primer bloque de ese epoch."""
+        """Convert epoch number to the first block of that epoch."""
         return epoch * cls.BLOCKS_PER_EPOCH
 
     def get_round_boundaries(self, current_block: int) -> Dict[str, int]:
         """
-        Calcula las boundaries del round actual basado en el bloque actual.
+        Calculate the boundaries of the current round based on the current block.
 
-        Los rounds empiezan en epochs múltiplos de round_size_epochs.
-        Ejemplo con round_size_epochs=20:
-            - Epoch 0-19 → round_start=0, round_end=20
-            - Epoch 20-39 → round_start=20, round_end=40
-            - Epoch 233 → round_start=220, round_end=240
+        Rounds start at epoch multiples of round_size_epochs.
+        Example with round_size_epochs=20:
+            - Epoch 0-19 → round_start=0, target=20
+            - Epoch 20-39 → round_start=20, target=40
+            - Epoch 233 → round_start=220, target=240
 
         Args:
-            current_block: Bloque actual de la blockchain
+            current_block: Current blockchain block
 
         Returns:
-            Dict con boundaries del round
+            Dict with round boundaries
         """
         current_epoch = self.block_to_epoch(current_block)
 
-        # Calcular inicio del round (epoch múltiplo de round_size_epochs)
+        # Calculate round start (epoch multiple of round_size_epochs)
         round_start_epoch = (current_epoch // self.round_size_epochs) * self.round_size_epochs
 
-        # Target epoch es el último del round
-        target_epoch = round_start_epoch + self.round_size_epochs - 1
+        # Target epoch is the end of the round
+        target_epoch = round_start_epoch + self.round_size_epochs
 
-        # Convertir a bloques
+        # Convert to blocks
         round_start_block = self.epoch_to_block(round_start_epoch)
         target_block = self.epoch_to_block(target_epoch)
 
@@ -87,32 +87,32 @@ class RoundCalculator:
 
     def should_send_next_task(self, current_block: int, start_block: int) -> bool:
         """
-        Determina si hay tiempo suficiente para enviar otra task.
+        Determine if there's enough time to send another task.
 
-        Checkea dinámicamente:
-        1. Calcula límite absoluto (start + round_size - safety_buffer)
-        2. Compara current_block con ese límite
-        3. Verifica si hay tiempo para avg_task_duration
+        Dynamically checks:
+        1. Calculate absolute limit (start + round_size - safety_buffer)
+        2. Compare current_block with that limit
+        3. Verify if there's time for avg_task_duration
 
         Args:
-            current_block: Bloque actual de la blockchain
-            start_block: Bloque donde inició el round
+            current_block: Current blockchain block
+            start_block: Block where the round started
 
         Returns:
-            True si hay tiempo para otra task, False si ya no
+            True if there's time for another task, False otherwise
         """
         boundaries = self.get_round_boundaries(start_block)
 
-        # Calcular límite absoluto: start + round_size - safety_buffer
+        # Calculate absolute limit: start + round_size - safety_buffer
         total_round_blocks = self.round_size_epochs * self.BLOCKS_PER_EPOCH
         safety_buffer_blocks = self.safety_buffer_epochs * self.BLOCKS_PER_EPOCH
         absolute_limit_block = start_block + total_round_blocks - safety_buffer_blocks
 
-        # ¿Hemos alcanzado el límite absoluto?
+        # Have we reached the absolute limit?
         if current_block >= absolute_limit_block:
             return False
 
-        # ¿Hay tiempo para otra task desde ahora hasta el límite?
+        # Is there time for another task from now until the limit?
         blocks_until_limit = absolute_limit_block - current_block
         seconds_until_limit = blocks_until_limit * self.SECONDS_PER_BLOCK
 
@@ -122,15 +122,15 @@ class RoundCalculator:
 
     def get_calculation_summary(self) -> Dict[str, Any]:
         """
-        Devuelve un resumen de la configuración del round.
+        Return a summary of the round configuration.
 
         Returns:
-            Dict con info de configuración
+            Dict with configuration info
         """
         total_blocks = self.round_size_epochs * self.BLOCKS_PER_EPOCH
         total_seconds = total_blocks * self.SECONDS_PER_BLOCK
 
-        # Estimación inicial (meramente informativa)
+        # Initial estimation (informational only)
         safety_buffer_seconds = self.safety_buffer_epochs * self.BLOCKS_PER_EPOCH * self.SECONDS_PER_BLOCK
         available_time = total_seconds - safety_buffer_seconds
         estimated_tasks = int(available_time / self.avg_task_duration_seconds)
@@ -149,20 +149,20 @@ class RoundCalculator:
             "available_seconds": int(available_time),
             "available_hours": round(available_time / 3600, 2),
 
-            # Estimación inicial (no es el máximo real, solo referencia)
+            # Initial estimation (not the real maximum, just reference)
             "estimated_tasks": estimated_tasks,
         }
 
     def should_wait_for_target(self, current_block: int, start_block: int) -> bool:
         """
-        Determina si debe esperar al target epoch.
+        Determine if should wait for the target epoch.
 
         Args:
-            current_block: Bloque actual
-            start_block: Bloque donde inició el round
+            current_block: Current block
+            start_block: Block where the round started
 
         Returns:
-            True si ya alcanzamos o pasamos el target epoch
+            True if we've already reached or passed the target epoch
         """
         boundaries = self.get_round_boundaries(start_block)
         current_epoch = self.block_to_epoch(current_block)
@@ -171,14 +171,14 @@ class RoundCalculator:
 
     def get_wait_info(self, current_block: int, start_block: int) -> Dict[str, Any]:
         """
-        Info de cuánto falta para el target epoch.
+        Info about how much time is left until the target epoch.
 
         Args:
-            current_block: Bloque actual
-            start_block: Bloque donde inició el round
+            current_block: Current block
+            start_block: Block where the round started
 
         Returns:
-            Dict con info de espera
+            Dict with wait info
         """
         boundaries = self.get_round_boundaries(start_block)
         current_epoch = self.block_to_epoch(current_block)
@@ -198,7 +198,7 @@ class RoundCalculator:
         }
 
     def log_calculation_summary(self) -> None:
-        """Log un resumen de la configuración del round."""
+        """Log a summary of the round configuration."""
         summary = self.get_calculation_summary()
 
         bt.logging.info("=" * 80)
