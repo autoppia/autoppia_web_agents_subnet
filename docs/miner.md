@@ -9,6 +9,31 @@ This guide covers two distinct phases:
 1. **🔬 LOCAL TESTING** - Develop and test your web agent using our benchmark framework
 2. **⛏️ MINER DEPLOYMENT** - Deploy your tested agent as a miner on mainnet
 
+## 🏆 Why Test Locally First?
+
+### **Benefits of Local Testing Before Mining**
+
+- 💰 **Save Money**: No network fees during development and testing
+- 🚀 **Faster Iteration**: Instant feedback vs waiting for network cycles
+- 🛡️ **Risk-Free**: Test your agent without risking rewards or reputation
+- 🎯 **Better Performance**: Optimize your agent before competing with others
+- 📊 **Detailed Analytics**: Get comprehensive performance metrics
+- 🔧 **Easy Debugging**: Full logs and error tracking
+- ⚡ **Quick Setup**: Start testing in minutes, not hours
+
+### **Steps to Be the Best Miner!**
+
+**Local Testing (Do this first!):**
+
+1. **Configure your .env** to generate tasks as a validator does
+2. **Deploy demo web projects** which you want to test and evaluate
+3. **Install autoppia_iwa requirements**
+4. **Create an agent** with an entrypoint `/solve_task`
+5. **Check you receive the tasks** in the endpoint
+6. **Do your magic** and return list of actions
+7. **See your results** after being evaluated
+8. **Once you achieve good scores** you are prepared to deploy a miner!
+
 ---
 
 # 🔬 PHASE 1: LOCAL TESTING & DEVELOPMENT
@@ -31,6 +56,8 @@ The **Benchmark Framework** simulates the entire validator workflow locally. It:
 4. **Reporting**: Provides detailed performance analytics
 
 **The benchmark system exactly replicates what happens in production!**
+
+📚 **For detailed benchmark documentation, see**: `autoppia_iwa_module/autoppia_iwa/entrypoints/benchmark/README.md`
 
 ---
 
@@ -88,14 +115,6 @@ cd autoppia_iwa_module
 pip install -e .
 ```
 
-**Or if you have specific validator setup scripts:**
-
-```bash
-# Check if there are validator setup scripts
-ls scripts/validator/
-# Run validator setup if available
-```
-
 ### **Step 4: Deploy Demo Web Projects**
 
 > **Required for Benchmark Testing**: You need demo web projects to generate and test tasks.
@@ -143,7 +162,31 @@ python -m autoppia_iwa.entrypoints.benchmark.run
 
 ### **Step 2: Create Your Web Agent**
 
-Create your web agent that will receive tasks and return actions:
+You need to create an agent that will receive a **Task** which consists of:
+
+- **url**: The target URL to interact with
+- **prompt**: The task you need to perform
+- **id**: Unique task identifier
+- **specifications**: Additional task details (screen dimensions, etc.)
+
+The actions that a miner can return are:
+
+| Action        | Description                | Example Use Case      |
+| ------------- | -------------------------- | --------------------- |
+| `click`       | Mouse click at coordinates | Button interactions   |
+| `type`        | Text input                 | Form filling          |
+| `navigate`    | URL navigation             | Page changes          |
+| `screenshot`  | Screen capture             | State verification    |
+| `wait`        | Pause execution            | Loading waits         |
+| `assert`      | Condition verification     | Task validation       |
+| `hover`       | Mouse hover                | Tooltip triggers      |
+| `dragAndDrop` | Drag and drop              | File uploads, sorting |
+| `submit`      | Form submission            | Data sending          |
+| `doubleClick` | Double click               | File opening          |
+| `scroll`      | Page scrolling             | Content viewing       |
+| `select`      | Dropdown selection         | Option choosing       |
+
+**Create your agent:**
 
 ```bash
 mkdir -p my_agent
@@ -261,59 +304,6 @@ Task prompt: Click on the login button
 
 ---
 
-## 🕷️ Web Agent Development
-
-### **Understanding Tasks**
-
-Tasks contain:
-
-- `id`: Unique task identifier
-- `prompt`: Human-readable instruction
-- `specifications`: Screen dimensions, target URL, etc.
-- `use_case`: Category of task (login, form_filling, etc.)
-
-### **Available Actions**
-
-Your web agents can use these actions:
-
-| Action        | Description                | Example Use Case      |
-| ------------- | -------------------------- | --------------------- |
-| `click`       | Mouse click at coordinates | Button interactions   |
-| `type`        | Text input                 | Form filling          |
-| `navigate`    | URL navigation             | Page changes          |
-| `screenshot`  | Screen capture             | State verification    |
-| `wait`        | Pause execution            | Loading waits         |
-| `assert`      | Condition verification     | Task validation       |
-| `hover`       | Mouse hover                | Tooltip triggers      |
-| `dragAndDrop` | Drag and drop              | File uploads, sorting |
-| `submit`      | Form submission            | Data sending          |
-| `doubleClick` | Double click               | File opening          |
-| `scroll`      | Page scrolling             | Content viewing       |
-| `select`      | Dropdown selection         | Option choosing       |
-
-### **Agent Development Tips**
-
-- 🧠 **Start Simple**: Begin with basic click/type actions
-- 🎯 **Parse Prompts**: Extract intent from task descriptions
-- 🌐 **Handle Errors**: Implement robust error handling
-- ✅ **Test Thoroughly**: Use benchmark for continuous testing
-- 📊 **Monitor Performance**: Track success rates and speed
-
-### **Performance Targets**
-
-Aim for:
-
-- **Success Rate**: >80% task completion
-- **Speed**: <5 seconds per task
-- **Quality**: Complete and correct solutions
-
-### **Iterative Development**
-
-1. **Run benchmark** → See performance metrics
-2. **Analyze failures** → Check task logs and solutions
-3. **Improve agent logic** → Fix identified issues
-4. **Repeat** → Continuous improvement cycle
-
 ---
 
 # ⛏️ PHASE 2: MINER DEPLOYMENT
@@ -326,14 +316,15 @@ Aim for:
 
 Ensure your agent:
 
-- ✅ **Passes benchmark tests** with >80% success rate
-- ✅ **Handles all task types** you plan to support
-- ✅ **Responds within time limits** (<30 seconds per task)
-- ✅ **Has been tested** with multiple project types
+- ✅ **Has been thoroughly tested** with the benchmark framework
+- ✅ **Achieves good performance results** in local testing
+- ✅ **Is ready for production** deployment
 
-### **Miner Setup & Deployment**
+### **Miner Deployment**
 
-**First, setup the miner environment:**
+A miner is like the benchmark - you just need to configure the `.env` file with the port where your agent is deployed and run it.
+
+**Setup the miner environment:**
 
 ```bash
 # Install miner dependencies
@@ -345,7 +336,16 @@ chmod +x scripts/miner/setup.sh
 ./scripts/miner/setup.sh
 ```
 
-**Then deploy your miner:**
+**Configure your agent in the `.env` file:**
+
+```bash
+# Configure your deployed agent
+AGENT_HOST="localhost"  # or your agent's host
+AGENT_PORT="5000"       # port where your agent is running
+AGENT_NAME="your_agent_name"
+```
+
+**Deploy your miner:**
 
 ```bash
 source miner_env/bin/activate
@@ -390,19 +390,9 @@ A **Miner** is your deployed web agent that:
 
 Miners are rewarded based on:
 
-- **📊 Task Completion Rate**: Primary factor
-- **🎯 Completion Quality**: Complete solutions required
-- **⚡ Execution Speed**: Faster solutions get higher rewards
-- **🏁 Competitive Performance**: Relative to other miners
-
-### **Success Metrics**
-
-| Metric            | Target | Description                   |
-| ----------------- | ------ | ----------------------------- |
-| **Success Rate**  | >80%   | Percentage of completed tasks |
-| **Response Time** | <5s    | Average time per task         |
-| **Quality Score** | >0.8   | Completeness and correctness  |
-| **Uptime**        | >99%   | Agent availability            |
+- **🎯 Task Completion Precision**: **85%** of the reward value - How accurately your agent completes tasks successfully
+- **⚡ Execution Speed**: **15%** of the reward value - How quickly your agent responds and executes tasks
+- **🏁 Competitive Performance**: Rewards are relative to other miners' performance
 
 ---
 
@@ -412,19 +402,19 @@ Miners are rewarded based on:
 
 1. **Setup** (10 min):
 
-   ```bash
+```bash
    git clone https://github.com/autoppia/autoppia_web_agents_subnet
    cd autoppia_web_agents_subnet
    cp .env.example .env  # Add OpenAI or Chutes API key
    cd autoppia_iwa_module && pip install -e .  # Install validator dependencies
-   ```
+```
 
 2. **Deploy Demo Projects** (5 min):
 
-   ```bash
-   chmod +x autoppia_iwa_module/modules/webs_demo/scripts/setup.sh
-   ./autoppia_iwa_module/modules/webs_demo/scripts/setup.sh
-   ```
+```bash
+chmod +x autoppia_iwa_module/modules/webs_demo/scripts/setup.sh
+./autoppia_iwa_module/modules/webs_demo/scripts/setup.sh
+```
 
 3. **Test Task Generation** (5 min):
 
