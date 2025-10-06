@@ -67,7 +67,7 @@ Once your agent performs well locally, deploy it to the network to start earning
 
 **Complete guide for local testing and agent development:**
 
-📖 **👉 Go to**: [autoppia_iwa_module/autoppia_iwa/entrypoints/benchmark/README.md](../autoppia_iwa_module/autoppia_iwa/entrypoints/benchmark/README.md)
+📖 **👉 Go to**: [Benchmark Guide](./benchmark-README.md)
 
 **What the benchmark does:**
 The benchmark **generates tasks the same way a validator would** and sends them to your deployed agent, then **evaluates the results exactly like a validator would**. This gives you production-identical testing without any blockchain interaction.
@@ -175,10 +175,10 @@ pm2 start neurons/miner.py \
 
 ### **Complete Workflow**
 
-| Phase                | Time  | Action               | Guide                                                                                      |
-| -------------------- | ----- | -------------------- | ------------------------------------------------------------------------------------------ |
-| **Local Testing**    | 30min | Develop & test agent | [Local Testing Guide](../autoppia_iwa_module/autoppia_iwa/entrypoints/benchmark/README.md) |
-| **Miner Deployment** | 10min | Deploy to mainnet    | This guide (Phase 2)                                                                       |
+| Phase                | Time  | Action               | Guide                                    |
+| -------------------- | ----- | -------------------- | ---------------------------------------- |
+| **Local Testing**    | 30min | Develop & test agent | [Benchmark Guide](./benchmark-README.md) |
+| **Miner Deployment** | 10min | Deploy to mainnet    | This guide (Phase 2)                     |
 
 ### **Key Benefits**
 
