@@ -16,8 +16,8 @@ from autoppia_web_agents_subnet.bittensor_config import config
 from autoppia_web_agents_subnet.utils.random import get_random_uids
 from autoppia_web_agents_subnet.config import FORWARD_SLEEP_SECONDS, TIMEOUT, EVAL_SCORE_WEIGHT, TIME_WEIGHT
 from autoppia_web_agents_subnet.validator.tasks import get_task_plan  # returns TaskPlan
-from autoppia_web_agents_subnet.validator.synapse import send_synapse_to_miners_generic, collect_task_solutions_and_execution_times, send_feedback_synapse_to_miners
-from autoppia_web_agents_subnet.protocol import StartRoundSynapse, TaskSynapse
+from autoppia_web_agents_subnet.validator.communication import send_synapse_to_miners_generic, collect_task_solutions_and_execution_times, send_feedback_synapse_to_miners
+from autoppia_web_agents_subnet.synapses import StartRoundSynapse, TaskSynapse
 from autoppia_web_agents_subnet.validator.rewards import blend_eval_and_time, reduce_rewards_to_averages, pad_or_trim, wta_rewards
 from autoppia_web_agents_subnet.validator.eval import evaluate_task_solutions
 from autoppia_web_agents_subnet.validator.models import TaskPlan, PerTaskResult, ScoredTask, EvalOutput

@@ -1,8 +1,7 @@
-# file: autoppia_iwa/src/execution/protocol.py
+# file: autoppia_web_agents_subnet/synapses.py
 """
-Pure protocol layer:
- - Defines Synapse payloads exchanged between validator and miners.
- - No side-effects (no printing, visualization, or persistence).
+Shared synapse definitions between validator and miners.
+These are the communication protocols used in Bittensor.
 """
 
 from __future__ import annotations

@@ -19,8 +19,8 @@ from autoppia_web_agents_subnet.config import (
     PRE_GENERATED_TASKS,
 )
 from autoppia_web_agents_subnet.validator.tasks import get_task_plan
-from autoppia_web_agents_subnet.validator.synapse import send_feedback_synapse_to_miners
-from autoppia_web_agents_subnet.protocol import StartRoundSynapse
+from autoppia_web_agents_subnet.validator.communication import send_feedback_synapse_to_miners
+from autoppia_web_agents_subnet.synapses import StartRoundSynapse
 from autoppia_web_agents_subnet.validator.rewards import reduce_rewards_to_averages, wta_rewards
 from autoppia_web_agents_subnet.validator.models import TaskPlan, ScoredTask
 from autoppia_web_agents_subnet.validator.leaderboard import Phase

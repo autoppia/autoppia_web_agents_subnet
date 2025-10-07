@@ -5,7 +5,7 @@ from typing import List
 import bittensor as bt
 
 from autoppia_web_agents_subnet.base.miner import BaseMinerNeuron
-from autoppia_web_agents_subnet.protocol import (
+from autoppia_web_agents_subnet.synapses import (
     TaskSynapse,
     TaskFeedbackSynapse,
     StartRoundSynapse,

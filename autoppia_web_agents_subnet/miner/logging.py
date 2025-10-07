@@ -19,7 +19,7 @@ from rich.console import Console
 from autoppia_iwa.src.data_generation.domain.classes import Task
 from autoppia_iwa.src.shared.visualizator import SubnetVisualizer
 from .models import MinerStats
-from ..protocol import TaskFeedbackSynapse
+from ..synapses import TaskFeedbackSynapse
 
 # Feature flag (same import path you used before)
 try:

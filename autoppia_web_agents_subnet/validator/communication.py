@@ -1,4 +1,8 @@
-# file: autoppia_web_agents_subnet/validator/forward_utils.py
+# file: autoppia_web_agents_subnet/validator/communication.py
+"""
+Communication utilities for validator.
+Handles sending/receiving synapses to/from miners.
+"""
 from __future__ import annotations
 
 import asyncio
@@ -9,7 +13,7 @@ from bittensor import AxonInfo
 
 from autoppia_web_agents_subnet import __version__
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
-from autoppia_web_agents_subnet.protocol import (
+from autoppia_web_agents_subnet.synapses import (
     TaskSynapse,
     TaskFeedbackSynapse,
     StartRoundSynapse,

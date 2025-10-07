@@ -1,6 +1,6 @@
 import bittensor as bt
 from typing import List
-from autoppia_web_agents_subnet.protocol import TaskSynapse, SetOperatorEndpointSynapse
+from autoppia_web_agents_subnet.synapses import TaskSynapse, SetOperatorEndpointSynapse
 
 
 async def dendrite_with_retries(
