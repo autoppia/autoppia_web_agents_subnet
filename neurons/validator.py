@@ -3,11 +3,10 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List
 
 import bittensor as bt
 import numpy as np
-from numpy.typing import NDArray
 from loguru import logger
 
 from autoppia_web_agents_subnet import __version__
@@ -19,16 +18,12 @@ from autoppia_web_agents_subnet.validator.synapse_handlers import send_feedback_
 from autoppia_web_agents_subnet.synapses import StartRoundSynapse
 from autoppia_web_agents_subnet.validator.rewards import blend_eval_and_time, wta_rewards
 from autoppia_web_agents_subnet.validator.eval import evaluate_task_solutions
-from autoppia_web_agents_subnet.validator.models import ProjectTaskBatch, TaskPlan
+from autoppia_web_agents_subnet.validator.models import TaskPlan
 from autoppia_web_agents_subnet.validator.round_manager import RoundManager
 from autoppia_web_agents_subnet.validator.leaderboard.leaderboard_sender import LeaderboardSender
 from autoppia_web_agents_subnet.utils.random import get_random_uids
 # IWA
-from autoppia_iwa_module.autoppia_iwa.src.web_agents.classes import TaskSolution
 from autoppia_iwa_module.autoppia_iwa.src.bootstrap import AppBootstrap
-
-
-SUCCESS_THRESHOLD = 0.0  # UI semantics for "success"
 
 
 class Validator(BaseValidatorNeuron):
