@@ -135,7 +135,7 @@ class MockEvaluator:
         }
 
 
-class MockRoundCalculator:
+class MockRoundManager:
     """
     Calculates how many tasks can be executed in a complete round.
     Simplified version without bittensor dependencies.
@@ -149,6 +149,10 @@ class MockRoundCalculator:
         self.round_size_epochs = round_size_epochs
         self.avg_task_duration_seconds = avg_task_duration_seconds
         self.safety_buffer_epochs = safety_buffer_epochs
+
+        # Round state management
+        self.round_scores = {}  # {miner_uid: [score1, score2, ...]}
+        self.round_times = {}   # {miner_uid: [time1, time2, ...]}
 
     def block_to_epoch(self, block: int) -> float:
         """Convert block to epoch (simplified)"""
@@ -215,12 +219,41 @@ class MockRoundCalculator:
 
     def log_calculation_summary(self):
         """Log calculation summary"""
-        print(f"📊 Round Calculator Configuration:")
+        print(f"📊 Round Manager Configuration:")
         print(f"   Round size: {self.round_size_epochs} epochs")
         print(f"   Safety buffer: {self.safety_buffer_epochs} epochs")
         print(f"   Avg task duration: {self.avg_task_duration_seconds}s")
         print(f"   Blocks per epoch: {self.BLOCKS_PER_EPOCH}")
         print(f"   Seconds per block: {self.SECONDS_PER_BLOCK}s")
+
+    def accumulate_scores(self, miner_uids, rewards, execution_times):
+        """Accumulate scores for the round"""
+        for i, uid in enumerate(miner_uids):
+            if uid not in self.round_scores:
+                self.round_scores[uid] = []
+                self.round_times[uid] = []
+            self.round_scores[uid].append(rewards[i])
+            self.round_times[uid].append(execution_times[i])
+
+    def get_average_scores(self):
+        """Calculate average scores for each miner"""
+        avg_scores = {}
+        for uid, scores in self.round_scores.items():
+            if scores:
+                avg_scores[uid] = sum(scores) / len(scores)
+            else:
+                avg_scores[uid] = 0.0
+        return avg_scores
+
+    def log_round_summary(self):
+        """Log round summary with statistics"""
+        avg_scores = self.get_average_scores()
+        total_miners = len(self.round_scores)
+        total_tasks = sum(len(scores) for scores in self.round_scores.values())
+
+        print(f"Round stats: {total_miners} miners, {total_tasks} tasks")
+        for uid, score in avg_scores.items():
+            print(f"  Miner {uid}: {score:.3f} (from {len(self.round_scores[uid])} tasks)")
 
 
 class MockValidator:
@@ -228,15 +261,11 @@ class MockValidator:
 
     def __init__(self, config: SimulationConfig):
         self.config = config
-        self.round_calculator = MockRoundCalculator(
+        self.round_manager = MockRoundManager(
             round_size_epochs=config.round_size_epochs,
             avg_task_duration_seconds=config.avg_task_duration,
             safety_buffer_epochs=config.safety_buffer_epochs
         )
-
-        # Round system components
-        self.round_scores = {}  # {miner_uid: [score1, score2, ...]}
-        self.round_times = {}   # {miner_uid: [time1, time2, ...]}
 
         # Simulate miners with different skill levels
         self.miners = [
@@ -254,12 +283,12 @@ class MockValidator:
 
         # Simulate current block
         current_block = 1000
-        boundaries = self.round_calculator.get_round_boundaries(current_block)
+        boundaries = self.round_manager.get_round_boundaries(current_block)
 
         print(f"Round boundaries: start={boundaries['round_start_epoch']}, target={boundaries['target_epoch']}")
 
         # Log configuration summary
-        self.round_calculator.log_calculation_summary()
+        self.round_manager.log_calculation_summary()
 
         # ═══════════════════════════════════════════════════════
         # PRE-GENERATION: Generate all tasks at the beginning
@@ -296,9 +325,9 @@ class MockValidator:
         # Dynamic loop: consume pre-generated tasks and check AFTER evaluating
         while task_index < len(all_tasks):
             current_block = self.simulate_block_advance(current_block)
-            current_epoch = self.round_calculator.block_to_epoch(current_block)
-            boundaries = self.round_calculator.get_round_boundaries(start_block)
-            wait_info = self.round_calculator.get_wait_info(current_block, start_block)
+            current_epoch = self.round_manager.block_to_epoch(current_block)
+            boundaries = self.round_manager.get_round_boundaries(start_block)
+            wait_info = self.round_manager.get_wait_info(current_block, start_block)
 
             print(f"📍 TASK {task_index + 1}/{len(all_tasks)} | "
                   f"Epoch {current_epoch:.2f}/{boundaries['target_epoch']} | "
@@ -311,7 +340,7 @@ class MockValidator:
             task_index += 1
 
             # Dynamic check: should we send another task?
-            if not self.round_calculator.should_send_next_task(current_block, start_block):
+            if not self.round_manager.should_send_next_task(current_block, start_block):
                 print("")
                 print("🛑 STOPPING TASK EXECUTION - SAFETY BUFFER REACHED")
                 print(f"   Reason: Insufficient time remaining for another task")
@@ -350,6 +379,10 @@ class MockValidator:
             active_miners = np.random.choice(self.miners, size=min(3, len(self.miners)), replace=False)
 
             # Simulate miner responses
+            miner_uids = []
+            rewards = []
+            execution_times = []
+
             for miner in active_miners:
                 # Miner solves task
                 actions = miner.solve_task(task)
@@ -359,17 +392,17 @@ class MockValidator:
                     miner.uid, task, actions, miner.skill_level
                 )
 
-                # Accumulate scores for the round
-                if miner.uid not in self.round_scores:
-                    self.round_scores[miner.uid] = []
-                    self.round_times[miner.uid] = []
-
-                self.round_scores[miner.uid].append(eval_result['score'])
-                self.round_times[miner.uid].append(eval_result['execution_time'])
+                # Collect data for round_manager
+                miner_uids.append(miner.uid)
+                rewards.append(eval_result['score'])
+                execution_times.append(eval_result['execution_time'])
 
                 # Update miner stats
                 miner.total_tasks += 1
                 miner.total_score += eval_result['score']
+
+            # Accumulate scores for the round using round_manager
+            self.round_manager.accumulate_scores(miner_uids, rewards, execution_times)
 
             print(f"✅ Task {task_index + 1} completed")
             return True
@@ -384,7 +417,7 @@ class MockValidator:
         print("⏳ WAITING FOR TARGET EPOCH")
         print("=" * 80)
 
-        boundaries = self.round_calculator.get_round_boundaries(start_block)
+        boundaries = self.round_manager.get_round_boundaries(start_block)
         target_epoch = boundaries['target_epoch']
 
         # Simulate waiting (just log, don't actually wait)
@@ -397,17 +430,11 @@ class MockValidator:
         print("🏁 CALCULATING FINAL WEIGHTS")
         print("=" * 80)
 
-        # Calculate average scores for each miner
-        avg_scores = {}
-        for uid, scores in self.round_scores.items():
-            if scores:
-                avg_scores[uid] = sum(scores) / len(scores)
-            else:
-                avg_scores[uid] = 0.0
+        # Calculate average scores using round_manager
+        avg_scores = self.round_manager.get_average_scores()
 
-        print(f"Round scores: {len(avg_scores)} miners with scores")
-        for uid, score in avg_scores.items():
-            print(f"  Miner {uid}: {score:.3f} (from {len(self.round_scores[uid])} tasks)")
+        # Log round summary
+        self.round_manager.log_round_summary()
 
         # Apply WTA to get final weights
         final_weights = self.simulate_wta_rewards(avg_scores)
