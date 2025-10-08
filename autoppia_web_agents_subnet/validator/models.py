@@ -7,53 +7,32 @@ import numpy as np
 from numpy.typing import NDArray
 
 # IWA domain types
-from autoppia_iwa_module.autoppia_iwa.src.demo_webs.classes import WebProject
-from autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.classes import Task
-from autoppia_iwa_module.autoppia_iwa.src.web_agents.classes import TaskSolution
+from autoppia_iwa.src.demo_webs.classes import WebProject
+from autoppia_iwa.src.data_generation.domain.classes import Task
+from autoppia_iwa.src.web_agents.classes import TaskSolution
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Task plan modeling
+# Task collection modeling
 # ─────────────────────────────────────────────────────────────────────────────
 
 @dataclass
-class ProjectTaskBatch:
+class ProjectTasks:
     """
-    A batch of tasks belonging to a single project.
+    Tasks belonging to a single project.
     """
     project: WebProject
     tasks: List[Task]
 
 
 @dataclass
-class TaskPlan:
+class TaskWithProject:
     """
-    Full multi-project plan for a forward. Wraps convenience iterators and lookups.
+    A single task paired with its project.
+    Simple, clear alternative to tuples for better code readability.
     """
-    batches: List[ProjectTaskBatch]
-
-    def __len__(self) -> int:
-        return sum(len(b.tasks) for b in self.batches)
-
-    def empty(self) -> bool:
-        return all(len(b.tasks) == 0 for b in self.batches)
-
-    def iter_interleaved(self) -> Iterator[Tuple[WebProject, Task]]:
-        """
-        Round-robin interleave across project batches yielding (project, task).
-        """
-        queues: List[Tuple[WebProject, List[Task]]] = [
-            (b.project, list(b.tasks)) for b in self.batches if b.tasks
-        ]
-        i = 0
-        while queues:
-            proj, q = queues[i % len(queues)]
-            if q:
-                yield proj, q.pop(0)
-            if not q:
-                queues.pop(i % len(queues))
-            else:
-                i += 1
+    project: WebProject
+    task: Task
 
 
 # ─────────────────────────────────────────────────────────────────────────────

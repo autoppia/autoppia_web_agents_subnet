@@ -29,16 +29,14 @@ from autoppia_iwa.config.config import (
 
 from autoppia_web_agents_subnet.miner.logging import print_task_feedback
 
-
-# ─────────────────────────────────────────────────────────────
-# Miner identity / metadata advertised in StartRound response
-# Override via env if you want without touching code.
-# ─────────────────────────────────────────────────────────────
-AGENT_NAME = os.getenv("MINER_AGENT_NAME", CFG_AGENT_NAME or "Autoppia Miner")
-AGENT_IMAGE = os.getenv("MINER_AGENT_IMAGE", "")          # URL or data URI
-GITHUB_URL = os.getenv("MINER_GITHUB_URL", "https://github.com/your-org/your-repo")
-AGENT_VERSION = os.getenv("MINER_AGENT_VERSION", "0.1.0")
-HAS_RL = bool(int(os.getenv("MINER_HAS_RL", "0")))        # "1" to set True
+# Miner configuration
+from autoppia_web_agents_subnet.miner.config import (
+    AGENT_NAME,
+    AGENT_IMAGE,
+    GITHUB_URL,
+    AGENT_VERSION,
+    HAS_RL,
+)
 
 
 class Miner(BaseMinerNeuron):
@@ -81,7 +79,7 @@ class Miner(BaseMinerNeuron):
         return synapse
 
     # ───────────────────────────── Tasks ─────────────────────────────
-    def show_actions(self, actions: List[BaseAction]) -> None:
+    def _show_actions(self, actions: List[BaseAction]) -> None:
         """Pretty-prints the list of actions in a more readable format."""
         if not actions:
             bt.logging.warning("No actions to log.")
@@ -123,7 +121,7 @@ class Miner(BaseMinerNeuron):
             task_solution.web_agent_id = str(self.uid)
             actions: List[BaseAction] = task_solution.replace_web_agent_id()
 
-            self.show_actions(actions)
+            self._show_actions(actions)
 
             # Assign actions back to the synapse
             synapse.actions = actions

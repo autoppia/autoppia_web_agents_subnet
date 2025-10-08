@@ -57,7 +57,7 @@ def times_to_scores(execution_times: List[float], n_miners: int) -> NDArray[np.f
     return scores
 
 
-def blend_eval_and_time(
+def calculate_final_scores(
     *,
     eval_scores: NDArray[np.float32],
     execution_times: List[float],
@@ -66,7 +66,11 @@ def blend_eval_and_time(
     time_weight: float = TIME_WEIGHT,
 ) -> NDArray[np.float32]:
     """
-    final = eval_weight * eval_scores + time_weight * time_scores
+    Calculate final scores by combining eval scores and execution time scores.
+
+    Formula: final_score = eval_weight × eval_scores + time_weight × time_scores
+
+    The time scores are calculated inversely: faster miners get higher scores.
     """
     # Caller may choose non-unit sum; we don't enforce exact 1.0.
     eval_scores = pad_or_trim(eval_scores, n_miners)

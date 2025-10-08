@@ -21,11 +21,12 @@ from autoppia_iwa.src.shared.visualizator import SubnetVisualizer
 from .models import MinerStats
 from ..synapses import TaskFeedbackSynapse
 
-# Feature flag (same import path you used before)
+# Feature flag from miner config
 try:
-    from autoppia_web_agents_subnet.config.config import SAVE_SUCCESSFUL_TASK_IN_JSON  # type: ignore
+    from autoppia_web_agents_subnet.miner.config import SAVE_FEEDBACK_TO_JSON, FEEDBACK_JSON_FILE
 except Exception:
-    SAVE_SUCCESSFUL_TASK_IN_JSON = False
+    SAVE_FEEDBACK_TO_JSON = False
+    FEEDBACK_JSON_FILE = "feedback_tasks.json"
 
 
 def _render_task_feedback_header(console: Console, fb: TaskFeedbackSynapse) -> None:
@@ -112,5 +113,5 @@ def print_task_feedback(fb: TaskFeedbackSynapse, miner_stats: Optional[MinerStat
     _render_miner_stats(console, miner_stats)
 
     # Optionally persist locally
-    if SAVE_SUCCESSFUL_TASK_IN_JSON:
-        save_feedback_to_json(fb)
+    if SAVE_FEEDBACK_TO_JSON:
+        save_feedback_to_json(fb, filename=FEEDBACK_JSON_FILE)

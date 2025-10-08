@@ -6,10 +6,10 @@ import numpy as np
 from numpy.typing import NDArray
 import bittensor as bt
 
-from autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.classes import Task
-from autoppia_iwa_module.autoppia_iwa.src.demo_webs.classes import WebProject
-from autoppia_iwa_module.autoppia_iwa.src.web_agents.classes import TaskSolution
-from autoppia_iwa_module.autoppia_iwa.src.evaluation.evaluator.evaluator import (
+from autoppia_iwa.src.data_generation.domain.classes import Task
+from autoppia_iwa.src.demo_webs.classes import WebProject
+from autoppia_iwa.src.web_agents.classes import TaskSolution
+from autoppia_iwa.src.evaluation.evaluator.evaluator import (
     ConcurrentEvaluator,
     EvaluatorConfig,
 )

@@ -11,16 +11,16 @@ from typing import List, Tuple
 
 import bittensor as bt
 
-from autoppia_web_agents_subnet.validator.models import TaskPlan, ProjectTaskBatch
+from autoppia_web_agents_subnet.validator.models import TaskWithProject, ProjectTasks
 from autoppia_web_agents_subnet.utils.random import split_tasks_evenly
 from autoppia_web_agents_subnet.synapses import TaskSynapse
-from autoppia_web_agents_subnet.config import MAX_ACTIONS_LENGTH, TIMEOUT
+from autoppia_web_agents_subnet.validator.config import MAX_ACTIONS_LENGTH, TIMEOUT
 
 # IWA (module-wrapped) imports
-from autoppia_iwa_module.autoppia_iwa.src.demo_webs.config import demo_web_projects
-from autoppia_iwa_module.autoppia_iwa.src.demo_webs.classes import WebProject
-from autoppia_iwa_module.autoppia_iwa.src.data_generation.domain.classes import Task, TaskGenerationConfig
-from autoppia_iwa_module.autoppia_iwa.src.data_generation.application.tasks_generation_pipeline import (
+from autoppia_iwa.src.demo_webs.config import demo_web_projects
+from autoppia_iwa.src.demo_webs.classes import WebProject
+from autoppia_iwa.src.data_generation.domain.classes import Task, TaskGenerationConfig
+from autoppia_iwa.src.data_generation.application.tasks_generation_pipeline import (
     TaskGenerationPipeline,
 )
 from autoppia_iwa.src.data_generation.domain.classes import Task as IWATask
@@ -50,61 +50,37 @@ async def _generate_tasks_limited_use_cases(
     return await pipeline.generate()
 
 
-def cap_one_per_use_case(task_plan: TaskPlan) -> int:
-    """
-    Cap the number of use cases per project to avoid ballooning generation.
-    """
-    for attr in ("num_use_cases_total", "total_use_cases", "n_use_cases"):
-        if hasattr(task_plan, attr):
-            try:
-                v = int(getattr(task_plan, attr))
-                if v > 0:
-                    return v
-            except Exception:
-                pass
-    try:
-        v = int(getattr(task_plan, "size", 0))
-        if v > 0:
-            return v
-    except Exception:
-        pass
-    try:
-        v = int(len(task_plan))  # type: ignore[arg-type]
-        if v > 0:
-            return v
-    except Exception:
-        pass
-    return 16
-
-
-async def get_task_plan(
+async def get_task_collection_interleaved(
     *,
     prompts_per_use_case: int,
-) -> TaskPlan:
+) -> List[TaskWithProject]:
     """
-    Build a TaskPlan distributing `total_prompts` across demo web projects,
-    limiting use-cases per project for coverage and variety.
+    Generate tasks across demo web projects and return them as an interleaved list.
+
+    Tasks are distributed evenly across projects and then interleaved using round-robin
+    to ensure variety (alternating between different projects).
+
+    Args:
+        prompts_per_use_case: Number of prompts to generate per use case
 
     Returns:
-        TaskPlan: batches = [ProjectTaskBatch(project, [Task, ...]), ...]
+        List[TaskWithProject]: Flat list of tasks already interleaved across projects
     """
     num_projects = len(demo_web_projects)
     total_prompts = num_projects
 
     if total_prompts <= 0:
-        bt.logging.warning("get_tasks(): total_prompts <= 0 -> returning empty TaskPlan")
-        return TaskPlan(batches=[])
+        bt.logging.warning("[tasks] total_prompts <= 0 -> returning empty list")
+        return []
 
-    num_projects = len(demo_web_projects)
     if num_projects == 0:
-        bt.logging.warning("get_tasks(): no demo_web_projects found -> returning empty TaskPlan")
-        return TaskPlan(batches=[])
+        bt.logging.warning("[tasks] no demo_web_projects found -> returning empty list")
+        return []
 
-    # Even split total prompts; remainder distributed one-by-one from the end.
+    # Even split total prompts; remainder distributed one-by-one from the end
     task_distribution = split_tasks_evenly(total_prompts, num_projects)
 
-    # Heuristic: cap how many distinct use-cases we touch per project this forward.
-    # (Keeps variety but avoids ballooning generation.)
+    # Heuristic: cap how many distinct use-cases we touch per project
     use_cases_per_project = max(1, math.ceil(total_prompts / max(1, num_projects)))
 
     bt.logging.info(
@@ -113,8 +89,9 @@ async def get_task_plan(
         f"prompts_per_use_case={prompts_per_use_case}"
     )
 
-    batches: List[ProjectTaskBatch] = []
+    projects_tasks: List[ProjectTasks] = []
 
+    # Generate tasks for each project
     for project, num_tasks in zip(demo_web_projects, task_distribution):
         if num_tasks <= 0:
             continue
@@ -136,15 +113,30 @@ async def get_task_plan(
 
         # Add intra-project variety
         random.shuffle(project_tasks)
+        projects_tasks.append(ProjectTasks(project=project, tasks=project_tasks))
 
-        batches.append(ProjectTaskBatch(project=project, tasks=project_tasks))
-
-    if not batches:
+    if not projects_tasks:
         bt.logging.warning("[tasks] No tasks generated in any project.")
-        return TaskPlan(batches=[])
+        return []
 
-    bt.logging.info(f"[tasks] Built TaskPlan with {sum(len(b.tasks) for b in batches)} tasks across {len(batches)} projects.")
-    return TaskPlan(batches=batches)
+    # Interleave tasks using round-robin across projects
+    interleaved_tasks: List[TaskWithProject] = []
+    queues = [(pt.project, list(pt.tasks)) for pt in projects_tasks if pt.tasks]
+
+    while queues:
+        for project, task_queue in list(queues):
+            if task_queue:
+                task = task_queue.pop(0)
+                interleaved_tasks.append(TaskWithProject(project=project, task=task))
+            if not task_queue:
+                queues.remove((project, task_queue))
+
+    bt.logging.info(
+        f"[tasks] Generated {len(interleaved_tasks)} interleaved tasks "
+        f"across {len(projects_tasks)} projects"
+    )
+
+    return interleaved_tasks
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

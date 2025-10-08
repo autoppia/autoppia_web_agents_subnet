@@ -12,18 +12,18 @@ from loguru import logger
 from autoppia_web_agents_subnet import __version__
 from autoppia_web_agents_subnet.base.validator import BaseValidatorNeuron
 from autoppia_web_agents_subnet.bittensor_config import config
-from autoppia_web_agents_subnet.config import EVAL_SCORE_WEIGHT, TIME_WEIGHT, ROUND_SIZE_EPOCHS, AVG_TASK_DURATION_SECONDS, SAFETY_BUFFER_EPOCHS, PROMPTS_PER_USECASE, PRE_GENERATED_TASKS
-from autoppia_web_agents_subnet.validator.tasks import get_task_plan, collect_task_solutions_and_execution_times
+from autoppia_web_agents_subnet.validator.config import EVAL_SCORE_WEIGHT, TIME_WEIGHT, ROUND_SIZE_EPOCHS, AVG_TASK_DURATION_SECONDS, SAFETY_BUFFER_EPOCHS, PROMPTS_PER_USECASE, PRE_GENERATED_TASKS
+from autoppia_web_agents_subnet.validator.tasks import get_task_collection_interleaved, collect_task_solutions_and_execution_times
 from autoppia_web_agents_subnet.validator.synapse_handlers import send_feedback_synapse_to_miners
-from autoppia_web_agents_subnet.synapses import StartRoundSynapse
-from autoppia_web_agents_subnet.validator.rewards import blend_eval_and_time, wta_rewards
+from autoppia_web_agents_subnet.synapses import StartRoundSynapse, TaskSynapse
+from autoppia_web_agents_subnet.validator.rewards import calculate_final_scores, wta_rewards
 from autoppia_web_agents_subnet.validator.eval import evaluate_task_solutions
-from autoppia_web_agents_subnet.validator.models import TaskPlan
+from autoppia_web_agents_subnet.validator.models import TaskWithProject
 from autoppia_web_agents_subnet.validator.round_manager import RoundManager
 from autoppia_web_agents_subnet.validator.leaderboard.leaderboard_sender import LeaderboardSender
 from autoppia_web_agents_subnet.utils.random import get_random_uids
 # IWA
-from autoppia_iwa_module.autoppia_iwa.src.bootstrap import AppBootstrap
+from autoppia_iwa.src.bootstrap import AppBootstrap
 
 
 class Validator(BaseValidatorNeuron):
@@ -81,30 +81,65 @@ class Validator(BaseValidatorNeuron):
         bt.logging.warning("=" * 80)
 
         pre_generation_start = time.time()
-        all_tasks = []
+        all_tasks: list[TaskWithProject] = []
 
-        # Generate all tasks in batches
+        # Generate all tasks in batches (already interleaved)
         tasks_generated = 0
         while tasks_generated < PRE_GENERATED_TASKS:
             batch_start = time.time()
 
-            # Generate a batch of tasks
-            task_plan: TaskPlan = await get_task_plan(prompts_per_use_case=PROMPTS_PER_USECASE)
+            # Generate a batch of tasks (returns flat list, already interleaved)
+            batch_tasks = await get_task_collection_interleaved(prompts_per_use_case=PROMPTS_PER_USECASE)
 
-            # Extract individual tasks from the plan
-            for project_task_batch in task_plan.batches:
-                for task in project_task_batch.tasks:
-                    if tasks_generated >= PRE_GENERATED_TASKS:
-                        break
-                    all_tasks.append((project_task_batch.project, task))
-                    tasks_generated += 1
+            # Take only what we need from this batch
+            remaining = PRE_GENERATED_TASKS - tasks_generated
+            tasks_to_add = batch_tasks[:remaining]
+            all_tasks.extend(tasks_to_add)
+            tasks_generated += len(tasks_to_add)
 
             batch_elapsed = time.time() - batch_start
-            bt.logging.info(f"   Generated batch: {len(task_plan.batches)} projects in {batch_elapsed:.1f}s (total: {tasks_generated}/{PRE_GENERATED_TASKS})")
+            bt.logging.info(f"   Generated batch: {len(tasks_to_add)} tasks in {batch_elapsed:.1f}s (total: {tasks_generated}/{PRE_GENERATED_TASKS})")
 
         pre_generation_elapsed = time.time() - pre_generation_start
         bt.logging.warning(f"✅ Pre-generation complete: {len(all_tasks)} tasks in {pre_generation_elapsed:.1f}s")
         bt.logging.warning("=" * 80)
+
+        # ═══════════════════════════════════════════════════════
+        # START ROUND HANDSHAKE: Send StartRoundSynapse ONCE
+        # ═══════════════════════════════════════════════════════
+        bt.logging.warning("")
+        bt.logging.warning("🤝 SENDING START ROUND HANDSHAKE")
+        bt.logging.warning("=" * 80)
+
+        start_block = current_block
+        boundaries = self.round_manager.get_round_boundaries(start_block)
+
+        # Send StartRoundSynapse to all miners ONCE at the beginning
+        try:
+            all_axons = [self.metagraph.axons[uid] for uid in range(len(self.metagraph.uids))]
+            start_synapse = StartRoundSynapse(
+                version=self.version,
+                round_id=f"round_{boundaries['round_start_epoch']}",
+                validator_id=str(self.uid),
+                total_prompts=len(all_tasks),
+                prompts_per_use_case=PROMPTS_PER_USECASE,
+                note=f"Starting round at epoch {boundaries['round_start_epoch']}"
+            )
+
+            bt.logging.info(f"Sending StartRoundSynapse to {len(all_axons)} miners...")
+            handshake_responses = await self.dendrite(
+                axons=all_axons,
+                synapse=start_synapse,
+                deserialize=True,
+                timeout=30,
+            )
+
+            # Log miner responses (agent names, versions, etc.)
+            responding_miners = sum(1 for r in handshake_responses if r and hasattr(r, 'agent_name') and r.agent_name)
+            bt.logging.info(f"✅ Handshake complete: {responding_miners}/{len(all_axons)} miners responded")
+
+        except Exception as e:
+            bt.logging.error(f"StartRoundSynapse handshake failed: {e}")
 
         # ═══════════════════════════════════════════════════════
         # DYNAMIC LOOP: Execute tasks one by one based on time
@@ -113,7 +148,6 @@ class Validator(BaseValidatorNeuron):
         bt.logging.warning("🔄 STARTING DYNAMIC TASK EXECUTION")
         bt.logging.warning("=" * 80)
 
-        start_block = current_block
         task_index = 0
         tasks_completed = 0
 
@@ -131,8 +165,8 @@ class Validator(BaseValidatorNeuron):
             )
 
             # Execute single task
-            success = await self._execute_single_task(all_tasks[task_index], task_index, start_block)
-            if success:
+            task_sent = await self._send_task_and_evaluate(all_tasks[task_index], task_index)
+            if task_sent:
                 tasks_completed += 1
             task_index += 1
 
@@ -162,9 +196,10 @@ class Validator(BaseValidatorNeuron):
     # ═══════════════════════════════════════════════════════════════════════════════
     # TASK EXECUTION HELPERS
     # ═══════════════════════════════════════════════════════════════════════════════
-    async def _execute_single_task(self, task_data, task_index: int, start_block: int) -> bool:
+    async def _send_task_and_evaluate(self, task_item: TaskWithProject, task_index: int) -> bool:
         """Execute a single task and accumulate results"""
-        project, task = task_data
+        project = task_item.project
+        task = task_item.task
 
         try:
             # Get active miners
@@ -174,16 +209,15 @@ class Validator(BaseValidatorNeuron):
             )
             active_axons = [self.metagraph.axons[uid] for uid in active_uids]
 
-            # Send task
-            boundaries = self.round_manager.get_round_boundaries(start_block)
-            task_synapse = StartRoundSynapse(
+            # Create TaskSynapse with the actual task
+            task_synapse = TaskSynapse(
                 version=self.version,
-                round_id=f"round_{boundaries['round_start_epoch']}",
-                validator_id=str(self.uid),
-                total_prompts=1,
-                prompts_per_use_case=PROMPTS_PER_USECASE,
+                prompt=task.prompt,
+                url=project.frontend_url,
+                screenshot=None,  # Optional: could add screenshot support
             )
 
+            # Send task to miners
             responses = await self.dendrite(
                 axons=active_axons,
                 synapse=task_synapse,
@@ -206,8 +240,8 @@ class Validator(BaseValidatorNeuron):
                 execution_times=execution_times,
             )
 
-            # Calculate rewards using rewards.py
-            rewards = blend_eval_and_time(
+            # Calculate final scores (combining eval quality + execution speed)
+            rewards = calculate_final_scores(
                 eval_scores=eval_scores,
                 execution_times=execution_times,
                 n_miners=len(active_uids),
