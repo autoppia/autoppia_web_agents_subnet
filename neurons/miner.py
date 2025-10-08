@@ -109,7 +109,6 @@ class Miner(BaseMinerNeuron):
             task = Task(
                 prompt=synapse.prompt,
                 url=synapse.url,
-                html=synapse.html,
                 screenshot=synapse.screenshot,
             )
             task_for_agent = task.prepare_for_agent(str(self.uid))

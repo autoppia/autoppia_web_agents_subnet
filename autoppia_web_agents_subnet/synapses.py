@@ -23,7 +23,6 @@ class TaskSynapse(Synapse):
     version: str = ""
     prompt: str
     url: str
-    html: Optional[str] = None
     screenshot: Optional[str] = None
     actions: List[AllActionsUnion] = Field(
         default_factory=list,
