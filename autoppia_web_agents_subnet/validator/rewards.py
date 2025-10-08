@@ -57,7 +57,7 @@ def times_to_scores(execution_times: List[float], n_miners: int) -> NDArray[np.f
     return scores
 
 
-def calculate_final_scores(
+def calculate_rewards_for_task(
     *,
     eval_scores: NDArray[np.float32],
     execution_times: List[float],

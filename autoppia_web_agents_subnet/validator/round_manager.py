@@ -44,8 +44,9 @@ class RoundManager:
         self.safety_buffer_epochs = safety_buffer_epochs
 
         # Round state management
-        self.round_scores = {}  # {miner_uid: [score1, score2, ...]}
-        self.round_times = {}   # {miner_uid: [time1, time2, ...]}
+        self.round_rewards = {} 
+        self.round_eval_scores = {}   
+        self.round_times = {}  
 
     @classmethod
     def block_to_epoch(cls, block: int) -> float:
@@ -144,7 +145,7 @@ class RoundManager:
     # SCORE MANAGEMENT METHODS
     # ═══════════════════════════════════════════════════════════════════════════════
 
-    def accumulate_scores(self, miner_uids: List[int], rewards: List[float], execution_times: List[float]):
+    def accumulate_rewards(self, miner_uids: List[int], rewards: List[float], eval_scores: List[float], execution_times: List[float]):
         """
         Accumulate scores for the round.
 
@@ -154,27 +155,29 @@ class RoundManager:
             execution_times: List of execution times for each miner
         """
         for i, uid in enumerate(miner_uids):
-            if uid not in self.round_scores:
-                self.round_scores[uid] = []
+            if uid not in self.round_rewards:
+                self.round_rewards[uid] = []
+                self.round_eval_scores[uid] = []
                 self.round_times[uid] = []
 
-            self.round_scores[uid].append(rewards[i])
+            self.round_rewards[uid].append(rewards[i])
+            self.round_eval_scores[uid].append(eval_scores[i])
             self.round_times[uid].append(execution_times[i])
 
-    def get_average_scores(self) -> Dict[int, float]:
+    def get_average_rewards(self) -> Dict[int, float]:
         """
         Calculate average scores for each miner.
 
         Returns:
             Dict mapping miner_uid to average score
         """
-        avg_scores = {}
-        for uid, scores in self.round_scores.items():
-            if scores:
-                avg_scores[uid] = sum(scores) / len(scores)
+        avg_rewards = {}
+        for uid, rewards in self.round_rewards.items():
+            if rewards:
+                avg_rewards[uid] = sum(rewards) / len(rewards)
             else:
-                avg_scores[uid] = 0.0
-        return avg_scores
+                avg_rewards[uid] = 0.0
+        return avg_rewards
 
     def get_round_stats(self) -> Dict[str, Any]:
         """
@@ -183,27 +186,29 @@ class RoundManager:
         Returns:
             Dict with round statistics
         """
-        total_miners = len(self.round_scores)
-        total_tasks = sum(len(scores) for scores in self.round_scores.values())
+        total_miners = len(self.round_rewards)
+        total_tasks = sum(len(reward) for reward in self.round_rewards.values())
 
         return {
             'total_miners': total_miners,
             'total_tasks': total_tasks,
-            'miners_with_scores': len([uid for uid, scores in self.round_scores.items() if scores]),
-            'round_scores': self.round_scores,
-            'round_times': self.round_times
+            'miners_with_rewards': len([uid for uid, rewards in self.round_rewards.items() if rewards]),
+            'round_rewards': self.round_rewards,
+            'round_times': self.round_times,
+            'round_eval_scores': self.round_eval_scores
         }
 
     def reset_round(self):
         """Reset round state for new round."""
-        self.round_scores = {}
+        self.round_rewards = {}
         self.round_times = {}
+        self.eval_scores = {}
 
     def log_round_summary(self):
         """Log round summary with statistics."""
         stats = self.get_round_stats()
-        avg_scores = self.get_average_scores()
+        avg_rewards = self.get_average_rewards()
 
         bt.logging.info(f"Round stats: {stats['total_miners']} miners, {stats['total_tasks']} tasks")
-        for uid, score in avg_scores.items():
-            bt.logging.info(f"  Miner {uid}: {score:.3f} (from {len(self.round_scores[uid])} tasks)")
+        for uid, score in avg_rewards.items():
+            bt.logging.info(f"  Miner {uid}: {score:.3f} (from {len(self.round_rewards[uid])} tasks)")

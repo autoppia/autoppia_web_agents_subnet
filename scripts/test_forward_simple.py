@@ -226,7 +226,7 @@ class MockRoundManager:
         print(f"   Blocks per epoch: {self.BLOCKS_PER_EPOCH}")
         print(f"   Seconds per block: {self.SECONDS_PER_BLOCK}s")
 
-    def accumulate_scores(self, miner_uids, rewards, execution_times):
+    def accumulate_rewards(self, miner_uids, rewards, execution_times):
         """Accumulate scores for the round"""
         for i, uid in enumerate(miner_uids):
             if uid not in self.round_scores:
@@ -235,7 +235,7 @@ class MockRoundManager:
             self.round_scores[uid].append(rewards[i])
             self.round_times[uid].append(execution_times[i])
 
-    def get_average_scores(self):
+    def get_average_rewards(self):
         """Calculate average scores for each miner"""
         avg_scores = {}
         for uid, scores in self.round_scores.items():
@@ -247,7 +247,7 @@ class MockRoundManager:
 
     def log_round_summary(self):
         """Log round summary with statistics"""
-        avg_scores = self.get_average_scores()
+        avg_scores = self.get_average_rewards()
         total_miners = len(self.round_scores)
         total_tasks = sum(len(scores) for scores in self.round_scores.values())
 
@@ -402,7 +402,7 @@ class MockValidator:
                 miner.total_score += eval_result['score']
 
             # Accumulate scores for the round using round_manager
-            self.round_manager.accumulate_scores(miner_uids, rewards, execution_times)
+            self.round_manager.accumulate_rewards(miner_uids, rewards, execution_times)
 
             print(f"✅ Task {task_index + 1} completed")
             return True
@@ -431,7 +431,7 @@ class MockValidator:
         print("=" * 80)
 
         # Calculate average scores using round_manager
-        avg_scores = self.round_manager.get_average_scores()
+        avg_scores = self.round_manager.get_average_rewards()
 
         # Log round summary
         self.round_manager.log_round_summary()

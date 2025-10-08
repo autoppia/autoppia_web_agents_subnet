@@ -16,7 +16,7 @@ from autoppia_web_agents_subnet.validator.config import EVAL_SCORE_WEIGHT, TIME_
 from autoppia_web_agents_subnet.validator.tasks import get_task_collection_interleaved, collect_task_solutions_and_execution_times
 from autoppia_web_agents_subnet.validator.synapse_handlers import send_feedback_synapse_to_miners
 from autoppia_web_agents_subnet.synapses import StartRoundSynapse, TaskSynapse
-from autoppia_web_agents_subnet.validator.rewards import calculate_final_scores, wta_rewards
+from autoppia_web_agents_subnet.validator.rewards import calculate_rewards_for_task, wta_rewards
 from autoppia_web_agents_subnet.validator.eval import evaluate_task_solutions
 from autoppia_web_agents_subnet.validator.models import TaskWithProject
 from autoppia_web_agents_subnet.validator.round_manager import RoundManager
@@ -241,7 +241,7 @@ class Validator(BaseValidatorNeuron):
             )
 
             # Calculate final scores (combining eval quality + execution speed)
-            rewards = calculate_final_scores(
+            rewards = calculate_rewards_for_task(
                 eval_scores=eval_scores,
                 execution_times=execution_times,
                 n_miners=len(active_uids),
@@ -250,7 +250,12 @@ class Validator(BaseValidatorNeuron):
             )
 
             # Accumulate scores for the round using round_manager
-            self.round_manager.accumulate_scores(list(active_uids), rewards.tolist(), execution_times)
+            self.round_manager.accumulate_rewards(
+                miner_uids=list(active_uids),
+                rewards=rewards.tolist(),
+                eval_scores=eval_scores.tolist(),
+                execution_times=execution_times
+            )
 
             # Send feedback to miners
             try:
@@ -308,7 +313,7 @@ class Validator(BaseValidatorNeuron):
         bt.logging.warning("=" * 80)
 
         # Calculate average scores using round_manager
-        avg_scores = self.round_manager.get_average_scores()
+        avg_scores = self.round_manager.get_average_rewards()
 
         # Log round summary
         self.round_manager.log_round_summary()
@@ -317,10 +322,10 @@ class Validator(BaseValidatorNeuron):
         # Convert dict to numpy array for wta_rewards
         uids = list(avg_scores.keys())
         scores_array = np.array([avg_scores[uid] for uid in uids], dtype=np.float32)
-        final_weights_array = wta_rewards(scores_array)
+        final_rewards_array = wta_rewards(scores_array)
 
         # Convert back to dict
-        final_weights = {uid: float(weight) for uid, weight in zip(uids, final_weights_array)}
+        final_weights = {uid: float(weight) for uid, weight in zip(uids, final_rewards_array)}
 
         bt.logging.warning("")
         bt.logging.warning("🎯 FINAL WEIGHTS (WTA)")
