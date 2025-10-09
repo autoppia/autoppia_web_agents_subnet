@@ -313,34 +313,36 @@ class Validator(BaseValidatorNeuron):
         bt.logging.warning("=" * 80)
 
         # Calculate average scores using round_manager
-        avg_scores = self.round_manager.get_average_rewards()
+        avg_rewards = self.round_manager.get_average_rewards()
 
         # Log round summary
         self.round_manager.log_round_summary()
 
         # Apply WTA to get final weights
         # Convert dict to numpy array for wta_rewards
-        uids = list(avg_scores.keys())
-        scores_array = np.array([avg_scores[uid] for uid in uids], dtype=np.float32)
+        uids = list(avg_rewards.keys())
+        scores_array = np.array([avg_rewards[uid] for uid in uids], dtype=np.float32)
         final_rewards_array = wta_rewards(scores_array)
 
         # Convert back to dict
-        final_weights = {uid: float(weight) for uid, weight in zip(uids, final_rewards_array)}
+        final_rewards_dict = {uid: float(reward) for uid, reward in zip(uids, final_rewards_array)}
 
         bt.logging.warning("")
-        bt.logging.warning("🎯 FINAL WEIGHTS (WTA)")
+        bt.logging.warning("🎯 FINAL rewardS (WTA)")
         bt.logging.warning("=" * 80)
-        for uid, weight in final_weights.items():
-            if weight > 0:
-                bt.logging.warning(f"  🏆 Miner {uid}: {weight:.3f}")
+        for uid, reward in final_rewards_dict.items():
+            if reward > 0:
+                bt.logging.warning(f"  🏆 Miner {uid}: {reward:.3f}")
             else:
-                bt.logging.info(f"  ❌ Miner {uid}: {weight:.3f}")
+                bt.logging.info(f"  ❌ Miner {uid}: {reward:.3f}")
 
-        # Set weights (store in validator for set_weights to use)
-        self.last_rewards = np.zeros(len(self.metagraph.uids), dtype=np.float32)
-        for uid, weight in final_weights.items():
-            if uid < len(self.last_rewards):
-                self.last_rewards[uid] = weight
+        # Set rewards (store in validator for set_rewards to use)
+        self.final_rewards_np = np.zeros(len(self.metagraph.uids), dtype=np.float32)
+        for uid, reward in final_rewards_dict.items():
+            if uid < len(self.final_rewards_np):
+                self.final_rewards_np[uid] = reward
+        self.last_rewards = self.final_rewards_np
+        self.update_scores(self.final_rewards_np, uids)
         self.set_weights()
 
         # ═══════════════════════════════════════════════════════
@@ -350,8 +352,8 @@ class Validator(BaseValidatorNeuron):
             validator=self,
             start_block=start_block,
             tasks_completed=tasks_completed,
-            avg_scores=avg_scores,
-            final_weights=final_weights,
+            avg_scores=avg_rewards,
+            final_weights=final_rewards_dict,
             round_manager=self.round_manager,
         )
 
