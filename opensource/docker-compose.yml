@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    restart: unless-stopped
+    ports:
+      - "8080:8080"   # Traefik API
+      - "80:80"       # HTTP
+      - "443:443"     # HTTPS
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik:/etc/traefik
+    command:
+      - --api.dashboard=true
+      - --api.insecure=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=deployer_network
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --log.level=INFO
+      - --accesslog=true
+    networks:
+      - deployer_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`localhost`)"
+      - "traefik.http.routers.traefik.service=api@internal"
+
+  deployer-controller:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: deployer-controller
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./state:/srv/deployer/state
+      - ./work:/srv/deployer/work
+      - ./logs:/srv/deployer/logs
+    environment:
+      - AUTH_TOKEN=${AUTH_TOKEN:-your-secret-token-here}
+      - DOCKER_NETWORK=deployer_network
+      - TRAEFIK_API_URL=http://traefik:8080
+      - STATE_DIR=/srv/deployer/state
+      - WORK_DIR=/srv/deployer/work
+      - LOGS_DIR=/srv/deployer/logs
+      - LOG_LEVEL=INFO
+    depends_on:
+      - traefik
+    networks:
+      - deployer_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.deployer.rule=Host(`localhost`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.deployer.service=deployer"
+      - "traefik.http.services.deployer.loadbalancer.server.port=8000"
+
+networks:
+  deployer_network:
+    driver: bridge
+    name: deployer_network

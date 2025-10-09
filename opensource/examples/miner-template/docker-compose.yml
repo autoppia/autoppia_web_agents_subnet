@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  agent:
+    build:
+      context: ./agent
+      dockerfile: Dockerfile
+    container_name: autoppia-miner-agent
+    ports:
+      - "8000:8000"  # Must expose port 8000
+    environment:
+      - NODE_ENV=production
+      - AGENT_NAME=${AGENT_NAME:-Autoppia Miner}
+      - AGENT_VERSION=${AGENT_VERSION:-1.0.0}
+      - GITHUB_URL=${GITHUB_URL:-https://github.com/example/miner-agent}
+      - HAS_RL=${HAS_RL:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    labels:
+      - "autoppia.miner=true"
+      - "autoppia.version=1.0"
+    networks:
+      - autoppia-network
+
+networks:
+  autoppia-network:
+    external: true
+    name: deployer_network
