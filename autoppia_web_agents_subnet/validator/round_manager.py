@@ -46,7 +46,10 @@ class RoundManager:
         # Round state management
         self.round_rewards = {} 
         self.round_eval_scores = {}   
-        self.round_times = {}  
+        self.round_times = {}
+
+        # Track round start block
+        self.start_block: int | None = None  
 
     @classmethod
     def block_to_epoch(cls, block: int) -> float:
@@ -57,6 +60,22 @@ class RoundManager:
     def epoch_to_block(cls, epoch: float) -> int:
         """Convert epoch number to the first block of that epoch."""
         return int(epoch * cls.BLOCKS_PER_EPOCH)
+
+    def start_new_round(self, current_block: int):
+        """
+        Initialize a new round.
+
+        Args:
+            current_block: The block when the round starts
+        """
+        self.start_block = current_block
+        self.reset_round()
+
+        boundaries = self.get_round_boundaries(current_block)
+        bt.logging.info("🔄 Starting new round")
+        bt.logging.info(f"   Start block: {current_block}")
+        bt.logging.info(f"   Round epoch: {boundaries['round_start_epoch']}")
+        bt.logging.info(f"   Target epoch: {boundaries['target_epoch']}")
 
     def get_round_boundaries(self, current_block: int) -> Dict[str, Any]:
         """
@@ -83,21 +102,40 @@ class RoundManager:
             'target_block': target_block
         }
 
-    def should_send_next_task(self, current_block: int, start_block: int) -> bool:
+    def get_current_boundaries(self) -> Dict[str, Any]:
+        """
+        Get boundaries for the current round.
+
+        Returns:
+            Dict with round boundaries
+
+        Raises:
+            ValueError: If round not started
+        """
+        if self.start_block is None:
+            raise ValueError("Round not started. Call start_new_round() first.")
+        return self.get_round_boundaries(self.start_block)
+
+    def should_send_next_task(self, current_block: int) -> bool:
         """
         Check if there's enough time to send another task.
 
         Args:
             current_block: Current block number
-            start_block: Block when the round started
 
         Returns:
             True if there's enough time for another task
+
+        Raises:
+            ValueError: If round not started
         """
-        boundaries = self.get_round_boundaries(start_block)
+        if self.start_block is None:
+            raise ValueError("Round not started. Call start_new_round() first.")
+
+        boundaries = self.get_round_boundaries(self.start_block)
         total_round_blocks = self.round_size_epochs * self.BLOCKS_PER_EPOCH
         safety_buffer_blocks = self.safety_buffer_epochs * self.BLOCKS_PER_EPOCH
-        absolute_limit_block = start_block + total_round_blocks - safety_buffer_blocks
+        absolute_limit_block = self.start_block + total_round_blocks - safety_buffer_blocks
 
         if current_block >= absolute_limit_block:
             return False
@@ -108,14 +146,23 @@ class RoundManager:
 
         return has_time
 
-    def get_wait_info(self, current_block: int, start_block: int) -> Dict[str, Any]:
+    def get_wait_info(self, current_block: int) -> Dict[str, Any]:
         """
         Get wait information for the current round.
 
+        Args:
+            current_block: Current block number
+
         Returns:
             Dict with current_epoch, target_epoch, blocks_remaining, etc.
+
+        Raises:
+            ValueError: If round not started
         """
-        boundaries = self.get_round_boundaries(start_block)
+        if self.start_block is None:
+            raise ValueError("Round not started. Call start_new_round() first.")
+
+        boundaries = self.get_round_boundaries(self.start_block)
         target_epoch = boundaries['target_epoch']
         current_epoch = self.block_to_epoch(current_block)
 

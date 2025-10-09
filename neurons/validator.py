@@ -111,8 +111,9 @@ class Validator(BaseValidatorNeuron):
         bt.logging.warning("🤝 SENDING START ROUND HANDSHAKE")
         bt.logging.warning("=" * 80)
 
-        start_block = current_block
-        boundaries = self.round_manager.get_round_boundaries(start_block)
+        # Initialize new round in RoundManager
+        self.round_manager.start_new_round(current_block)
+        boundaries = self.round_manager.get_current_boundaries()
 
         # Send StartRoundSynapse to all miners ONCE at the beginning
         try:
@@ -155,8 +156,8 @@ class Validator(BaseValidatorNeuron):
         while task_index < len(all_tasks):
             current_block = self.metagraph.block.item()
             current_epoch = self.round_manager.block_to_epoch(current_block)
-            boundaries = self.round_manager.get_round_boundaries(start_block)
-            wait_info = self.round_manager.get_wait_info(current_block, start_block)
+            boundaries = self.round_manager.get_current_boundaries()
+            wait_info = self.round_manager.get_wait_info(current_block)
 
             bt.logging.info(
                 f"📍 TASK {task_index + 1}/{len(all_tasks)} | "
@@ -171,7 +172,7 @@ class Validator(BaseValidatorNeuron):
             task_index += 1
 
             # Dynamic check: should we send another task?
-            if not self.round_manager.should_send_next_task(current_block, start_block):
+            if not self.round_manager.should_send_next_task(current_block):
                 bt.logging.warning("")
                 bt.logging.warning("🛑 STOPPING TASK EXECUTION - SAFETY BUFFER REACHED")
                 bt.logging.warning(f"   Reason: Insufficient time remaining for another task")
@@ -186,12 +187,12 @@ class Validator(BaseValidatorNeuron):
         # WAIT FOR TARGET EPOCH: Wait until the round ends
         # ═══════════════════════════════════════════════════════
         if tasks_completed < len(all_tasks):
-            await self._wait_for_target_epoch(start_block)
+            await self._wait_for_target_epoch()
 
         # ═══════════════════════════════════════════════════════
         # FINAL WEIGHTS: Calculate averages, apply WTA, set weights
         # ═══════════════════════════════════════════════════════
-        await self._calculate_final_weights(tasks_completed, start_block)
+        await self._calculate_final_weights(tasks_completed)
 
     # ═══════════════════════════════════════════════════════════════════════════════
     # TASK EXECUTION HELPERS
@@ -280,19 +281,19 @@ class Validator(BaseValidatorNeuron):
             bt.logging.error(f"Task execution failed: {e}")
             return False
 
-    async def _wait_for_target_epoch(self, start_block: int):
+    async def _wait_for_target_epoch(self):
         """Wait for the target epoch to set weights"""
         bt.logging.warning("")
         bt.logging.warning("⏳ WAITING FOR TARGET EPOCH")
         bt.logging.warning("=" * 80)
 
-        boundaries = self.round_manager.get_round_boundaries(start_block)
+        boundaries = self.round_manager.get_current_boundaries()
         target_epoch = boundaries['target_epoch']
 
         while True:
             current_block = self.metagraph.block.item()
             current_epoch = self.round_manager.block_to_epoch(current_block)
-            wait_info = self.round_manager.get_wait_info(current_block, start_block)
+            wait_info = self.round_manager.get_wait_info(current_block)
 
             if wait_info["reached_target"]:
                 bt.logging.warning(f"🎯 Target epoch {target_epoch} REACHED!")
@@ -306,7 +307,7 @@ class Validator(BaseValidatorNeuron):
 
         bt.logging.warning("=" * 80)
 
-    async def _calculate_final_weights(self, tasks_completed: int, start_block: int):
+    async def _calculate_final_weights(self, tasks_completed: int):
         """Calculate averages, apply WTA, set weights"""
         bt.logging.warning("")
         bt.logging.warning("🏁 CALCULATING FINAL WEIGHTS")
@@ -348,9 +349,10 @@ class Validator(BaseValidatorNeuron):
         # ═══════════════════════════════════════════════════════
         # LEADERBOARD: Post round results to API
         # ═══════════════════════════════════════════════════════
+        boundaries = self.round_manager.get_current_boundaries()
         self.leaderboard_sender.post_round_results(
             validator=self,
-            start_block=start_block,
+            start_block=boundaries['round_start_block'],
             tasks_completed=tasks_completed,
             avg_scores=avg_rewards,
             final_weights=final_rewards_dict,
@@ -361,8 +363,8 @@ class Validator(BaseValidatorNeuron):
         bt.logging.warning("✅ ROUND COMPLETE")
         bt.logging.warning("=" * 80)
         bt.logging.warning(f"Tasks completed: {tasks_completed}")
-        bt.logging.warning(f"Miners evaluated: {len(avg_scores)}")
-        winner_uid = max(avg_scores.keys(), key=lambda k: avg_scores[k]) if avg_scores else None
+        bt.logging.warning(f"Miners evaluated: {len(avg_rewards)}")
+        winner_uid = max(avg_rewards.keys(), key=lambda k: avg_rewards[k]) if avg_rewards else None
         bt.logging.warning(f"Winner: {winner_uid}")
 
 
