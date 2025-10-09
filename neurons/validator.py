@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import random
 import time
 from typing import Dict
 
@@ -21,7 +22,7 @@ from autoppia_web_agents_subnet.validator.eval import evaluate_task_solutions
 from autoppia_web_agents_subnet.validator.models import TaskWithProject
 from autoppia_web_agents_subnet.validator.round_manager import RoundManager
 from autoppia_web_agents_subnet.validator.leaderboard.leaderboard_sender import LeaderboardSender
-from autoppia_web_agents_subnet.utils.random import get_random_uids
+
 # IWA
 from autoppia_iwa.src.bootstrap import AppBootstrap
 
@@ -33,6 +34,9 @@ class Validator(BaseValidatorNeuron):
         self.last_rewards: np.ndarray | None = None
         self.last_round_responses: Dict[int, StartRoundSynapse] = {}
         self.version: str = __version__
+
+        # Active miners (those who responded to StartRoundSynapse handshake)
+        self.active_miner_uids: list[int] = []
 
         # ⭐ Round system components
         self.round_manager = RoundManager(
@@ -135,12 +139,19 @@ class Validator(BaseValidatorNeuron):
                 timeout=30,
             )
 
-            # Log miner responses (agent names, versions, etc.)
-            responding_miners = sum(1 for r in handshake_responses if r and hasattr(r, 'agent_name') and r.agent_name)
-            bt.logging.info(f"✅ Handshake complete: {responding_miners}/{len(all_axons)} miners responded")
+            # Filter and save UIDs of miners who responded successfully
+            self.active_miner_uids = []
+            for uid, response in enumerate(handshake_responses):
+                if response and hasattr(response, 'agent_name') and response.agent_name:
+                    self.active_miner_uids.append(uid)
+
+            bt.logging.info(f"✅ Handshake complete: {len(self.active_miner_uids)}/{len(all_axons)} miners responded")
 
         except Exception as e:
             bt.logging.error(f"StartRoundSynapse handshake failed: {e}")
+            # Fallback: use all miners if handshake fails
+            self.active_miner_uids = list(range(len(self.metagraph.uids)))
+            bt.logging.warning(f"   Using all {len(self.active_miner_uids)} miners as fallback")
 
         # ═══════════════════════════════════════════════════════
         # DYNAMIC LOOP: Execute tasks one by one based on time
@@ -203,12 +214,8 @@ class Validator(BaseValidatorNeuron):
         task = task_item.task
 
         try:
-            # Get active miners
-            active_uids = get_random_uids(
-                self.metagraph,
-                k=min(5, len(self.metagraph.uids)),
-            )
-            active_axons = [self.metagraph.axons[uid] for uid in active_uids]
+
+            active_axons = [self.metagraph.axons[uid] for uid in self.active_miner_uids]
 
             # Create TaskSynapse with the actual task
             task_synapse = TaskSynapse(
@@ -230,7 +237,7 @@ class Validator(BaseValidatorNeuron):
             task_solutions, execution_times = collect_task_solutions_and_execution_times(
                 task=task,
                 responses=responses,
-                miner_uids=list(active_uids),
+                miner_uids=list(self.active_miner_uids),
             )
 
             # Evaluate task solutions
@@ -245,14 +252,14 @@ class Validator(BaseValidatorNeuron):
             rewards = calculate_rewards_for_task(
                 eval_scores=eval_scores,
                 execution_times=execution_times,
-                n_miners=len(active_uids),
+                n_miners=len(self.active_miner_uids),
                 eval_score_weight=EVAL_SCORE_WEIGHT,
                 time_weight=TIME_WEIGHT,
             )
 
             # Accumulate scores for the round using round_manager
             self.round_manager.accumulate_rewards(
-                miner_uids=list(active_uids),
+                miner_uids=list(self.active_miner_uids),
                 rewards=rewards.tolist(),
                 eval_scores=eval_scores.tolist(),
                 execution_times=execution_times
@@ -263,7 +270,7 @@ class Validator(BaseValidatorNeuron):
                 await send_feedback_synapse_to_miners(
                     validator=self,
                     miner_axons=list(active_axons),
-                    miner_uids=list(active_uids),
+                    miner_uids=list(self.active_miner_uids),
                     task=task,
                     rewards=rewards.tolist(),
                     execution_times=execution_times,
@@ -329,7 +336,7 @@ class Validator(BaseValidatorNeuron):
         final_rewards_dict = {uid: float(reward) for uid, reward in zip(uids, final_rewards_array)}
 
         bt.logging.warning("")
-        bt.logging.warning("🎯 FINAL rewardS (WTA)")
+        bt.logging.warning("🎯 FINAL WEIGHTS (WTA)")
         bt.logging.warning("=" * 80)
         for uid, reward in final_rewards_dict.items():
             if reward > 0:
@@ -337,13 +344,20 @@ class Validator(BaseValidatorNeuron):
             else:
                 bt.logging.info(f"  ❌ Miner {uid}: {reward:.3f}")
 
-        # Set rewards (store in validator for set_rewards to use)
-        self.final_rewards_np = np.zeros(len(self.metagraph.uids), dtype=np.float32)
-        for uid, reward in final_rewards_dict.items():
-            if uid < len(self.final_rewards_np):
-                self.final_rewards_np[uid] = reward
-        self.last_rewards = self.final_rewards_np
-        self.update_scores(self.final_rewards_np, uids)
+        # Update EMA scores (only for active miners who responded to handshake)
+        # Prepare aligned arrays: rewards and uids must have the same length
+        active_rewards = np.array(
+            [final_rewards_dict.get(uid, 0.0) for uid in self.active_miner_uids], 
+            dtype=np.float32
+        )
+
+        bt.logging.info(f"Updating scores for {len(self.active_miner_uids)} active miners")
+        self.update_scores(
+            rewards=active_rewards,           # Array of rewards for active miners
+            uids=self.active_miner_uids       # List of active miner UIDs (same length)
+        )
+
+        # Set weights on blockchain
         self.set_weights()
 
         # ═══════════════════════════════════════════════════════
