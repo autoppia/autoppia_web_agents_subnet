@@ -2,11 +2,16 @@
 """
 Synapse handling utilities for validator.
 Handles sending/receiving synapses to/from miners.
+
+Each synapse type has its own dedicated handler:
+- StartRoundSynapse  → send_start_round_synapse_to_miners
+- TaskSynapse        → send_task_synapse_to_miners
+- TaskFeedbackSynapse → send_feedback_synapse_to_miners
 """
 from __future__ import annotations
 
 import asyncio
-from typing import List, Union
+from typing import List, Optional
 
 import bittensor as bt
 from bittensor import AxonInfo
@@ -23,50 +28,71 @@ from autoppia_web_agents_subnet.utils.dendrite import dendrite_with_retries
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SYNAPSE SENDING - Send synapses to miners
+# 1. START ROUND SYNAPSE HANDLER
 # ═══════════════════════════════════════════════════════════════════════════════
 
-async def send_synapse_to_miners_generic(
+async def send_start_round_synapse_to_miners(
     validator,
     miner_axons: List[AxonInfo],
-    synapse: Union[TaskSynapse, StartRoundSynapse],
-    timeout: int,
-    retries: int = 1,
-) -> List[Optional[T]]:
+    start_synapse: StartRoundSynapse,
+    timeout: int = 30,
+) -> List[Optional[StartRoundSynapse]]:
     """
-    Generic synapse sender for validator.
-    Sets synapse.version = validator.version (if present)
-    Uses a single retry wrapper for all queries
-    Returns a list aligned with miner_axons order (Optional for failures)
-    """
-    if hasattr(synapse, "version"):
-        setattr(synapse, "version", getattr(validator, "version", ""))
+    Send StartRoundSynapse to miners for round handshake.
 
-    responses: List[Optional[T]] = await dendrite_with_retries(
+    Args:
+        validator: Validator instance
+        miner_axons: List of miner axons to send to
+        start_synapse: StartRoundSynapse to send
+        timeout: Timeout in seconds
+
+    Returns:
+        List of responses (None for failed responses)
+    """
+    start_synapse.version = validator.version
+
+    bt.logging.info(f"Sending StartRoundSynapse to {len(miner_axons)} miners...")
+    responses: List[Optional[StartRoundSynapse]] = await dendrite_with_retries(
         dendrite=validator.dendrite,
         axons=miner_axons,
-        synapse=synapse,
+        synapse=start_synapse,
         deserialize=True,
         timeout=timeout,
-        retries=retries,
+        retries=1,
     )
-    bt.logging.info(
-        f"Received {sum(1 for r in responses if r is not None)}/{len(miner_axons)} responses."
-    )
+
+    successful = sum(1 for r in responses if r is not None and hasattr(r, 'agent_name') and r.agent_name)
+    bt.logging.info(f"✅ Handshake complete: {successful}/{len(miner_axons)} miners responded")
+
     return responses
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 2. TASK SYNAPSE HANDLER
+# ═══════════════════════════════════════════════════════════════════════════════
 
 async def send_task_synapse_to_miners(
     validator,
     miner_axons: List[AxonInfo],
     task_synapse: TaskSynapse,
-    timeout: int,
-) -> List[TaskSynapse]:
+    timeout: int = 60,
+) -> List[Optional[TaskSynapse]]:
     """
-    Send a TaskSynapse (with correct version) and return the responses.
+    Send a TaskSynapse to miners and return the responses.
+
+    Args:
+        validator: Validator instance
+        miner_axons: List of miner axons to send to
+        task_synapse: TaskSynapse to send
+        timeout: Timeout in seconds
+
+    Returns:
+        List of responses (None for failed responses)
     """
     task_synapse.version = validator.version
-    responses: List[TaskSynapse] = await dendrite_with_retries(
+
+    bt.logging.info(f"Sending TaskSynapse to {len(miner_axons)} miners...")
+    responses: List[Optional[TaskSynapse]] = await dendrite_with_retries(
         dendrite=validator.dendrite,
         axons=miner_axons,
         synapse=task_synapse,
@@ -74,9 +100,16 @@ async def send_task_synapse_to_miners(
         timeout=timeout,
         retries=1,
     )
-    bt.logging.info(f"Received responses from {len(responses)} miners.")
+
+    successful = sum(1 for r in responses if r is not None)
+    bt.logging.info(f"Received {successful}/{len(miner_axons)} task responses.")
+
     return responses
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 3. TASK FEEDBACK SYNAPSE HANDLER
+# ═══════════════════════════════════════════════════════════════════════════════
 
 async def send_feedback_synapse_to_miners(
     validator,
@@ -91,6 +124,17 @@ async def send_feedback_synapse_to_miners(
 ) -> None:
     """
     Build and send a TaskFeedbackSynapse to each miner with their evaluation details.
+
+    Args:
+        validator: Validator instance
+        miner_axons: List of miner axons
+        miner_uids: List of miner UIDs
+        task: Task object
+        rewards: List of reward scores
+        execution_times: List of execution times
+        task_solutions: List of solutions from miners
+        test_results_matrices: Test results for each miner
+        evaluation_results: Evaluation results for each miner
     """
     feedback_list: List[TaskFeedbackSynapse] = []
     for i, miner_uid in enumerate(miner_uids):

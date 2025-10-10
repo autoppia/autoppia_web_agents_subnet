@@ -1,23 +1,26 @@
 import bittensor as bt
-from typing import List
-from autoppia_web_agents_subnet.synapses import TaskSynapse
+from typing import List, TypeVar
+from bittensor import Synapse
+
+# Generic synapse type
+T = TypeVar('T', bound=Synapse)
 
 
 async def dendrite_with_retries(
     dendrite: bt.dendrite,
     axons: list,
-    synapse: TaskSynapse ,
+    synapse: T,
     deserialize: bool,
     timeout: float,
     retries=1,
-) -> List[TaskSynapse | None] | None:
-    res: List[TaskSynapse | None] = [None] * len(axons)
+) -> List[T | None]:
+    res: List[T | None] = [None] * len(axons)
     idx = list(range(len(axons)))
     axons = axons.copy()
 
     try:
         for attempt in range(retries):
-            responses: List[TaskSynapse] = await dendrite(
+            responses: List[T] = await dendrite(
                 axons=axons, synapse=synapse, deserialize=deserialize, timeout=timeout
             )
 

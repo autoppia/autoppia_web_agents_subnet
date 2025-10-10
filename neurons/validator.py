@@ -15,7 +15,11 @@ from autoppia_web_agents_subnet.base.validator import BaseValidatorNeuron
 from autoppia_web_agents_subnet.bittensor_config import config
 from autoppia_web_agents_subnet.validator.config import EVAL_SCORE_WEIGHT, TIME_WEIGHT, ROUND_SIZE_EPOCHS, AVG_TASK_DURATION_SECONDS, SAFETY_BUFFER_EPOCHS, PROMPTS_PER_USECASE, PRE_GENERATED_TASKS
 from autoppia_web_agents_subnet.validator.tasks import get_task_collection_interleaved, collect_task_solutions_and_execution_times
-from autoppia_web_agents_subnet.validator.synapse_handlers import send_feedback_synapse_to_miners
+from autoppia_web_agents_subnet.validator.synapse_handlers import (
+    send_start_round_synapse_to_miners,
+    send_task_synapse_to_miners,
+    send_feedback_synapse_to_miners,
+)
 from autoppia_web_agents_subnet.synapses import StartRoundSynapse, TaskSynapse
 from autoppia_web_agents_subnet.validator.rewards import calculate_rewards_for_task, wta_rewards
 from autoppia_web_agents_subnet.validator.eval import evaluate_task_solutions
@@ -131,11 +135,10 @@ class Validator(BaseValidatorNeuron):
                 note=f"Starting round at epoch {boundaries['round_start_epoch']}"
             )
 
-            bt.logging.info(f"Sending StartRoundSynapse to {len(all_axons)} miners...")
-            handshake_responses = await self.dendrite(
-                axons=all_axons,
-                synapse=start_synapse,
-                deserialize=True,
+            handshake_responses = await send_start_round_synapse_to_miners(
+                validator=self,
+                miner_axons=all_axons,
+                start_synapse=start_synapse,
                 timeout=30,
             )
 
@@ -226,10 +229,10 @@ class Validator(BaseValidatorNeuron):
             )
 
             # Send task to miners
-            responses = await self.dendrite(
-                axons=active_axons,
-                synapse=task_synapse,
-                deserialize=True,
+            responses = await send_task_synapse_to_miners(
+                validator=self,
+                miner_axons=active_axons,
+                task_synapse=task_synapse,
                 timeout=60,
             )
 

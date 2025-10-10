@@ -161,16 +161,30 @@ def get_task_solution_from_synapse(
 
 def collect_task_solutions_and_execution_times(
     task: IWATask,
-    responses: List[TaskSynapse],
+    responses: List[TaskSynapse | None],
     miner_uids: List[int],
 ) -> Tuple[List[TaskSolution], List[float]]:
     """
     Convert miner responses into TaskSolution and gather process times.
+    Handles None responses (failed requests) gracefully.
     """
     task_solutions: List[TaskSolution] = []
     execution_times: List[float] = []
 
     for miner_uid, response in zip(miner_uids, responses):
+        # Handle None or failed responses
+        if response is None:
+            bt.logging.warning(f"Miner {miner_uid} returned None response")
+            task_solutions.append(
+                TaskSolution(task_id=task.id, actions=[], web_agent_id=str(miner_uid))
+            )
+            execution_times.append(TIMEOUT)
+            bt.logging.info(
+                f"[TIME] uid={miner_uid} response=None -> using TIMEOUT={TIMEOUT:.3f}s"
+            )
+            continue
+
+        # Try to parse valid response
         try:
             task_solutions.append(
                 get_task_solution_from_synapse(
