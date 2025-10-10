@@ -20,7 +20,7 @@ from autoppia_web_agents_subnet.validator.synapse_handlers import (
     send_task_synapse_to_miners,
     send_feedback_synapse_to_miners,
 )
-from autoppia_web_agents_subnet.synapses import StartRoundSynapse, TaskSynapse
+from autoppia_web_agents_subnet.protocol import StartRoundSynapse, TaskSynapse
 from autoppia_web_agents_subnet.validator.rewards import calculate_rewards_for_task, wta_rewards
 from autoppia_web_agents_subnet.validator.eval import evaluate_task_solutions
 from autoppia_web_agents_subnet.validator.models import TaskWithProject

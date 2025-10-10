@@ -10,7 +10,7 @@ import typing
 import bittensor as bt
 
 from autoppia_web_agents_subnet.base.neuron import BaseNeuron
-from autoppia_web_agents_subnet.synapses import (
+from autoppia_web_agents_subnet.protocol import (
     TaskSynapse,
     TaskFeedbackSynapse,
     StartRoundSynapse,

@@ -18,7 +18,7 @@ from bittensor import AxonInfo
 
 from autoppia_web_agents_subnet import __version__
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
-from autoppia_web_agents_subnet.synapses import (
+from autoppia_web_agents_subnet.protocol import (
     TaskSynapse,
     TaskFeedbackSynapse,
     StartRoundSynapse,

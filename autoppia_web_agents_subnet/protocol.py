@@ -1,6 +1,6 @@
-# file: autoppia_web_agents_subnet/synapses.py
+# file: autoppia_web_agents_subnet/protocol.py
 """
-Shared synapse definitions between validator and miners.
+Shared protocol definitions between validator and miners.
 These are the communication protocols used in Bittensor.
 """
 

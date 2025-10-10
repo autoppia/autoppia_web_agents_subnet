@@ -19,7 +19,7 @@ from rich.console import Console
 from autoppia_iwa.src.data_generation.domain.classes import Task
 from autoppia_iwa.src.shared.visualizator import SubnetVisualizer
 from .models import MinerStats
-from ..synapses import TaskFeedbackSynapse
+from ..protocol import TaskFeedbackSynapse
 
 # Feature flag from miner config
 try:

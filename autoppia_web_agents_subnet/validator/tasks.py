@@ -13,7 +13,7 @@ import bittensor as bt
 
 from autoppia_web_agents_subnet.validator.models import TaskWithProject, ProjectTasks
 from autoppia_web_agents_subnet.utils.random import split_tasks_evenly
-from autoppia_web_agents_subnet.synapses import TaskSynapse
+from autoppia_web_agents_subnet.protocol import TaskSynapse
 from autoppia_web_agents_subnet.validator.config import MAX_ACTIONS_LENGTH, TIMEOUT
 
 # IWA (module-wrapped) imports
