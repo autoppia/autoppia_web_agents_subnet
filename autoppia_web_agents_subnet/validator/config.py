@@ -9,13 +9,13 @@ from pathlib import Path
 # All validators synchronize: start at epoch multiples of ROUND_SIZE_EPOCHS
 # and set weights when reaching the target epoch
 
-ROUND_SIZE_EPOCHS = 0.15              # Round duration in epochs (~10.8 min para testing)
+ROUND_SIZE_EPOCHS = 0.05              # Round duration in epochs (~3.6 min para testing súper rápido)
 # 1 epoch = 360 blocks ≈ 72 minutes
-# 0.15 epochs = 54 blocks ≈ 10.8 minutes
+# 0.05 epochs = 18 blocks ≈ 3.6 minutes
 
-SAFETY_BUFFER_EPOCHS = 0.02          # Safety buffer in epochs before target epoch
-# If less than 0.02 epochs remaining, stop sending tasks
-# 0.02 epochs ≈ 1.4 minutes (sufficient for last task)
+SAFETY_BUFFER_EPOCHS = 0.01          # Safety buffer in epochs before target epoch
+# If less than 0.01 epochs remaining, stop sending tasks
+# 0.01 epochs ≈ 0.7 minutes (sufficient for last task)
 
 AVG_TASK_DURATION_SECONDS = 300     # ⚠️ CALIBRATE THIS VALUE based on real measurements
 # Average time for: send + evaluate 1 task (excluding generation)

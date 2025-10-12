@@ -327,6 +327,7 @@ class Validator(BaseValidatorNeuron):
 
         boundaries = self.round_manager.get_current_boundaries()
         target_epoch = boundaries['target_epoch']
+        last_log_time = time.time()
 
         while True:
             # Fetch latest block from network to keep time in sync
@@ -350,17 +351,20 @@ class Validator(BaseValidatorNeuron):
             blocks_done = max(current_block - round_start_block, 0)
             progress = min(max((blocks_done / blocks_total) * 100.0, 0.0), 100.0)
 
-            # Verbose, human-friendly status
-            bt.logging.info("⏳ Waiting for target epoch")
-            bt.logging.info(
-                f"   - Epoch: current={current_epoch:.3f} | target={target_epoch:.3f}"
-            )
-            bt.logging.info(
-                f"   - Blocks: current={current_block} | target={target_block} | progress={progress:.2f}%"
-            )
-            bt.logging.info(
-                f"   - Remaining: {wait_info['minutes_remaining']:.1f} min (~{wait_info['minutes_remaining']*60:.0f}s)"
-            )
+            # Log progress every 30 seconds
+            if time.time() - last_log_time >= 30:
+                # Verbose, human-friendly status
+                bt.logging.info("⏳ Waiting for target epoch")
+                bt.logging.info(
+                    f"   - Epoch: current={current_epoch:.3f} | target={target_epoch:.3f}"
+                )
+                bt.logging.info(
+                    f"   - Blocks: current={current_block} | target={target_block} | progress={progress:.2f}%"
+                )
+                bt.logging.info(
+                    f"   - Remaining: {wait_info['minutes_remaining']:.1f} min (~{wait_info['minutes_remaining']*60:.0f}s)"
+                )
+                last_log_time = time.time()
 
             # Wait for next block
             await asyncio.sleep(12)  # Wait for next block
