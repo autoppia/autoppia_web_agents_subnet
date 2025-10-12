@@ -12,7 +12,7 @@ from autoppia_web_agents_subnet.protocol import (
 )
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.miner.models import MinerStats
-from autoppia_web_agents_subnet.base.utils.config import config
+from autoppia_web_agents_subnet.bittensor_config import config
 
 # IWA dependencies (agent + task types)
 from autoppia_iwa.src.bootstrap import AppBootstrap
