@@ -144,6 +144,17 @@ class Miner(BaseMinerNeuron):
         Logs the feedback, updates MinerStats, and prints a summary.
         """
         ColoredLogger.info("Received feedback", ColoredLogger.GRAY)
+
+        # DEBUG: Log detailed TaskFeedbackSynapse content
+        ColoredLogger.info(f"🔍 DEBUG TaskFeedbackSynapse content:", ColoredLogger.YELLOW)
+        ColoredLogger.info(f"  - task_id: {synapse.task_id}", ColoredLogger.GRAY)
+        ColoredLogger.info(f"  - score: {synapse.score}", ColoredLogger.GRAY)
+        ColoredLogger.info(f"  - execution_time: {synapse.execution_time}", ColoredLogger.GRAY)
+        ColoredLogger.info(f"  - tests: {synapse.tests}", ColoredLogger.GRAY)
+        ColoredLogger.info(f"  - test_results_matrix: {synapse.test_results_matrix}", ColoredLogger.GRAY)
+        ColoredLogger.info(f"  - actions: {len(synapse.actions) if synapse.actions else 0} actions", ColoredLogger.GRAY)
+        ColoredLogger.info(f"  - evaluation_result: {synapse.evaluation_result}", ColoredLogger.GRAY)
+
         try:
             # Defensive defaults
             score = float(synapse.score or 0.0)
