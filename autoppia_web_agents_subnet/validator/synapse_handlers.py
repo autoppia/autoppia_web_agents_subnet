@@ -173,17 +173,15 @@ async def send_feedback_synapse_to_miners(
         )
 
     # DEBUG: Log detailed TaskFeedbackSynapse content being sent
-    ColoredLogger.info(f"🔍 DEBUG Sending TaskFeedbackSynapse content:", ColoredLogger.YELLOW)
+    ColoredLogger.info(f"🔍 DEBUG Sending TaskFeedbackSynapse content of the first miner:", ColoredLogger.YELLOW)
     if feedback_list:
         fb = feedback_list[0]  # Log first feedback as example
         ColoredLogger.info(f"  - task_id: {fb.task_id}", ColoredLogger.CYAN)
+        ColoredLogger.info(f"  - tests: {fb.tests}", ColoredLogger.CYAN)
         ColoredLogger.info(f"  - score: {fb.score}", ColoredLogger.CYAN)
         ColoredLogger.info(f"  - execution_time: {fb.execution_time}", ColoredLogger.CYAN)
-        ColoredLogger.info(f"  - tests: {fb.tests}", ColoredLogger.CYAN)
-        ColoredLogger.info(f"  - test_results_matrix: {fb.test_results_matrix}", ColoredLogger.CYAN)
-        ColoredLogger.info(f"  - actions: {len(fb.actions) if fb.actions else 0} actions", ColoredLogger.CYAN)
         ColoredLogger.info(f"  - evaluation_result: {fb.evaluation_result}", ColoredLogger.CYAN)
-
+        ColoredLogger.info(f"  - actions: {len(fb.actions) if fb.actions else 0} actions", ColoredLogger.CYAN)
     ColoredLogger.info(
         f"Sending TaskFeedbackSynapse to {len(miner_axons)} miners in parallel",
         ColoredLogger.BLUE,
