@@ -353,15 +353,15 @@ class Validator(BaseValidatorNeuron):
             # Log progress every 30 seconds
             if time.time() - last_log_time >= 30:
                 # Verbose, human-friendly status
-                bt.logging.info("⏳ Waiting for target epoch")
-                bt.logging.info(
-                    f"   - Epoch: current={current_epoch:.3f} | target={target_epoch:.3f}"
+                ColoredLogger.info("⏳ Waiting for target epoch", ColoredLogger.BLUE)
+                ColoredLogger.info(
+                    f"   - Epoch: current={current_epoch:.3f} | target={target_epoch:.3f}", ColoredLogger.BLUE
                 )
-                bt.logging.info(
-                    f"   - Blocks: current={current_block} | target={target_block} | progress={progress:.2f}%"
+                ColoredLogger.info(
+                    f"   - Blocks: current={current_block} | target={target_block} | progress={progress:.2f}%", ColoredLogger.BLUE
                 )
-                bt.logging.info(
-                    f"   - Remaining: {wait_info['minutes_remaining']:.1f} min (~{wait_info['minutes_remaining']*60:.0f}s)"
+                ColoredLogger.info(
+                    f"   - Remaining: {wait_info['minutes_remaining']:.1f} min (~{wait_info['minutes_remaining']*60:.0f}s)", ColoredLogger.BLUE
                 )
                 last_log_time = time.time()
 

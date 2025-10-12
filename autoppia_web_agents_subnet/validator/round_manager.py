@@ -3,6 +3,7 @@ from __future__ import annotations
 import bittensor as bt
 from typing import Dict, Any, List
 import numpy as np
+from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
 
 class RoundManager:
@@ -72,16 +73,16 @@ class RoundManager:
         self.reset_round()
 
         boundaries = self.get_round_boundaries(current_block)
-        bt.logging.info("🔄 Starting new round")
-        bt.logging.info(f"   Start block: {current_block}")
-        bt.logging.info(f"   Target block: {boundaries['target_block']}")
-        bt.logging.info(f"   Round epoch: {boundaries['round_start_epoch']}")
-        bt.logging.info(f"   Target epoch: {boundaries['target_epoch']}")
+        ColoredLogger.info("🔄 Starting new round", ColoredLogger.CYAN)
+        ColoredLogger.info(f"   Start block: {current_block}", ColoredLogger.CYAN)
+        ColoredLogger.info(f"   Target block: {boundaries['target_block']}", ColoredLogger.CYAN)
+        ColoredLogger.info(f"   Round epoch: {boundaries['round_start_epoch']}", ColoredLogger.CYAN)
+        ColoredLogger.info(f"   Target epoch: {boundaries['target_epoch']}", ColoredLogger.CYAN)
 
         # Calculate estimated duration
         blocks_remaining = boundaries['target_block'] - current_block
         estimated_minutes = (blocks_remaining * 12) / 60  # 12 seconds per block
-        bt.logging.info(f"   Estimated duration: {estimated_minutes:.1f} min (~{blocks_remaining} blocks)")
+        ColoredLogger.info(f"   Estimated duration: {estimated_minutes:.1f} min (~{blocks_remaining} blocks)", ColoredLogger.CYAN)
 
     def get_round_boundaries(self, current_block: int) -> Dict[str, Any]:
         """

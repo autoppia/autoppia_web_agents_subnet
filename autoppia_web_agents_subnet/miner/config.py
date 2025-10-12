@@ -13,7 +13,7 @@ from distutils.util import strtobool
 # Metadata advertised to validators during StartRoundSynapse handshake.
 # Override via environment variables.
 
-AGENT_NAME = os.getenv("MINER_AGENT_NAME","")
+AGENT_NAME = os.getenv("MINER_AGENT_NAME","miner_name")
 """Agent display name shown in leaderboard and logs. Empty string if unset."""
 
 AGENT_IMAGE = os.getenv("MINER_AGENT_IMAGE", "")
