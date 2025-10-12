@@ -27,6 +27,7 @@ from autoppia_web_agents_subnet.validator.models import TaskWithProject
 from autoppia_web_agents_subnet.validator.round_manager import RoundManager
 from autoppia_web_agents_subnet.validator.leaderboard.leaderboard_sender import LeaderboardSender
 from autoppia_web_agents_subnet.validator.visualization.round_table import render_round_summary_table
+from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
 
 class Validator(BaseValidatorNeuron):
@@ -113,9 +114,9 @@ class Validator(BaseValidatorNeuron):
         # ═══════════════════════════════════════════════════════
         # START ROUND HANDSHAKE: Send StartRoundSynapse ONCE
         # ═══════════════════════════════════════════════════════
-        bt.logging.warning("")
-        bt.logging.warning("🤝 SENDING START ROUND HANDSHAKE")
-        bt.logging.warning("=" * 80)
+        ColoredLogger.warning("", ColoredLogger.CYAN)
+        ColoredLogger.warning("🤝 SENDING START ROUND HANDSHAKE", ColoredLogger.CYAN)
+        ColoredLogger.warning("=" * 80, ColoredLogger.CYAN)
 
         # Initialize new round in RoundManager
         self.round_manager.start_new_round(current_block)
@@ -162,13 +163,13 @@ class Validator(BaseValidatorNeuron):
                     f"uid={uid}, hotkey={self.metagraph.hotkeys[uid]}"
                     for uid in self.active_miner_uids
                 ]
-                bt.logging.info(
+                ColoredLogger.success(
                     f"✅ Handshake complete: {len(self.active_miner_uids)}/{len(all_axons)} miners responded: "
-                    + "; ".join(responders)
+                    + "; ".join(responders), ColoredLogger.GREEN
                 )
             else:
-                bt.logging.info(
-                    f"✅ Handshake complete: 0/{len(all_axons)} miners responded"
+                ColoredLogger.warning(
+                    f"⚠️ Handshake complete: 0/{len(all_axons)} miners responded", ColoredLogger.YELLOW
                 )
 
         except Exception as e:
@@ -180,9 +181,9 @@ class Validator(BaseValidatorNeuron):
         # ═══════════════════════════════════════════════════════
         # DYNAMIC LOOP: Execute tasks one by one based on time
         # ═══════════════════════════════════════════════════════
-        bt.logging.warning("")
-        bt.logging.warning("🔄 STARTING DYNAMIC TASK EXECUTION")
-        bt.logging.warning("=" * 80)
+        ColoredLogger.warning("", ColoredLogger.MAGENTA)
+        ColoredLogger.warning("🔄 STARTING DYNAMIC TASK EXECUTION", ColoredLogger.MAGENTA)
+        ColoredLogger.warning("=" * 80, ColoredLogger.MAGENTA)
 
         task_index = 0
         tasks_completed = 0
@@ -194,10 +195,10 @@ class Validator(BaseValidatorNeuron):
             boundaries = self.round_manager.get_current_boundaries()
             wait_info = self.round_manager.get_wait_info(current_block)
 
-            bt.logging.info(
+            ColoredLogger.info(
                 f"📍 TASK {task_index + 1}/{len(all_tasks)} | "
                 f"Epoch {current_epoch:.2f}/{boundaries['target_epoch']} | "
-                f"Time remaining: {wait_info['minutes_remaining']:.1f} min"
+                f"Time remaining: {wait_info['minutes_remaining']:.1f} min", ColoredLogger.CYAN
             )
 
             # Execute single task
@@ -208,14 +209,14 @@ class Validator(BaseValidatorNeuron):
 
             # Dynamic check: should we send another task?
             if not self.round_manager.should_send_next_task(current_block):
-                bt.logging.warning("")
-                bt.logging.warning("🛑 STOPPING TASK EXECUTION - SAFETY BUFFER REACHED")
-                bt.logging.warning(f"   Reason: Insufficient time remaining for another task")
-                bt.logging.warning(f"   Current epoch: {current_epoch:.2f}")
-                bt.logging.warning(f"   Time remaining: {wait_info['seconds_remaining']:.0f}s")
-                bt.logging.warning(f"   Safety buffer: {SAFETY_BUFFER_EPOCHS} epochs")
-                bt.logging.warning(f"   Tasks completed: {tasks_completed}/{len(all_tasks)}")
-                bt.logging.warning(f"   ⏳ Now waiting for target epoch to set weights...")
+                ColoredLogger.warning("", ColoredLogger.YELLOW)
+                ColoredLogger.warning("🛑 STOPPING TASK EXECUTION - SAFETY BUFFER REACHED", ColoredLogger.YELLOW)
+                ColoredLogger.warning(f"   Reason: Insufficient time remaining for another task", ColoredLogger.YELLOW)
+                ColoredLogger.info(f"   Current epoch: {current_epoch:.2f}", ColoredLogger.YELLOW)
+                ColoredLogger.info(f"   Time remaining: {wait_info['seconds_remaining']:.0f}s", ColoredLogger.YELLOW)
+                ColoredLogger.info(f"   Safety buffer: {SAFETY_BUFFER_EPOCHS} epochs", ColoredLogger.YELLOW)
+                ColoredLogger.info(f"   Tasks completed: {tasks_completed}/{len(all_tasks)}", ColoredLogger.YELLOW)
+                ColoredLogger.info(f"   ⏳ Now waiting for target epoch to set weights...", ColoredLogger.YELLOW)
                 break
 
         # ═══════════════════════════════════════════════════════
@@ -241,7 +242,7 @@ class Validator(BaseValidatorNeuron):
 
             # Guard: if no active miners responded to handshake, skip task
             if not self.active_miner_uids:
-                bt.logging.warning("No active miners responded to handshake; skipping task send.")
+                ColoredLogger.warning("⚠️ No active miners responded to handshake; skipping task send.", ColoredLogger.YELLOW)
                 return False
 
             active_axons = [self.metagraph.axons[uid] for uid in self.active_miner_uids]
@@ -319,9 +320,9 @@ class Validator(BaseValidatorNeuron):
 
     async def _wait_for_target_epoch(self):
         """Wait for the target epoch to set weights"""
-        bt.logging.warning("")
-        bt.logging.warning("⏳ WAITING FOR TARGET EPOCH")
-        bt.logging.warning("=" * 80)
+        ColoredLogger.warning("", ColoredLogger.BLUE)
+        ColoredLogger.warning("⏳ WAITING FOR TARGET EPOCH", ColoredLogger.BLUE)
+        ColoredLogger.warning("=" * 80, ColoredLogger.BLUE)
 
         boundaries = self.round_manager.get_current_boundaries()
         target_epoch = boundaries['target_epoch']
@@ -334,8 +335,8 @@ class Validator(BaseValidatorNeuron):
             wait_info = self.round_manager.get_wait_info(current_block)
 
             if wait_info["reached_target"]:
-                bt.logging.warning(f"🎯 Target epoch {target_epoch} REACHED!")
-                bt.logging.warning(f"   Current epoch: {current_epoch:.2f}")
+                ColoredLogger.success(f"🎯 Target epoch {target_epoch} REACHED!", ColoredLogger.GREEN)
+                ColoredLogger.info(f"   Current epoch: {current_epoch:.2f}", ColoredLogger.GREEN)
                 break
 
             # Recompute round boundaries and progress on each tick
@@ -371,15 +372,15 @@ class Validator(BaseValidatorNeuron):
 
     async def _calculate_final_weights(self, tasks_completed: int):
         """Calculate averages, apply WTA, set weights"""
-        bt.logging.warning("")
-        bt.logging.warning("🏁 CALCULATING FINAL WEIGHTS")
-        bt.logging.warning("=" * 80)
+        ColoredLogger.warning("", ColoredLogger.PURPLE)
+        ColoredLogger.warning("🏁 CALCULATING FINAL WEIGHTS", ColoredLogger.PURPLE)
+        ColoredLogger.warning("=" * 80, ColoredLogger.PURPLE)
 
         # Check if no miners responded to handshake - BURN ALL WEIGHTS
         if not self.active_miner_uids:
-            bt.logging.warning("🔥 NO ACTIVE MINERS - BURNING ALL WEIGHTS")
-            bt.logging.warning("   - Setting weight=1.0 to UID 0 (burn address)")
-            bt.logging.warning("   - All other UIDs get weight=0.0")
+            ColoredLogger.error("🔥 NO ACTIVE MINERS - BURNING ALL WEIGHTS", ColoredLogger.RED)
+            ColoredLogger.warning("   - Setting weight=1.0 to UID 0 (burn address)", ColoredLogger.RED)
+            ColoredLogger.warning("   - All other UIDs get weight=0.0", ColoredLogger.RED)
 
             # Create burn weights: UID 0 = 1.0, all others = 0.0
             burn_weights = np.zeros(self.metagraph.n, dtype=np.float32)
@@ -389,12 +390,12 @@ class Validator(BaseValidatorNeuron):
             self.scores = burn_weights
             self.set_weights()
 
-            bt.logging.warning("")
-            bt.logging.warning("✅ BURN COMPLETE")
-            bt.logging.warning("=" * 80)
-            bt.logging.warning(f"Tasks attempted: {tasks_completed}")
-            bt.logging.warning(f"Miners evaluated: 0")
-            bt.logging.warning(f"Result: BURNED (weight=1.0 to UID 0)")
+            ColoredLogger.warning("", ColoredLogger.RED)
+            ColoredLogger.success("✅ BURN COMPLETE", ColoredLogger.RED)
+            ColoredLogger.warning("=" * 80, ColoredLogger.RED)
+            ColoredLogger.info(f"Tasks attempted: {tasks_completed}", ColoredLogger.RED)
+            ColoredLogger.info(f"Miners evaluated: 0", ColoredLogger.RED)
+            ColoredLogger.info(f"Result: BURNED (weight=1.0 to UID 0)", ColoredLogger.RED)
             return
 
         # Calculate average scores using round_manager
@@ -458,13 +459,13 @@ class Validator(BaseValidatorNeuron):
             round_manager=self.round_manager,
         )
 
-        bt.logging.warning("")
-        bt.logging.warning("✅ ROUND COMPLETE")
-        bt.logging.warning("=" * 80)
-        bt.logging.warning(f"Tasks completed: {tasks_completed}")
-        bt.logging.warning(f"Miners evaluated: {len(avg_rewards)}")
+        ColoredLogger.warning("", ColoredLogger.GREEN)
+        ColoredLogger.success("✅ ROUND COMPLETE", ColoredLogger.GREEN)
+        ColoredLogger.warning("=" * 80, ColoredLogger.GREEN)
+        ColoredLogger.info(f"Tasks completed: {tasks_completed}", ColoredLogger.GREEN)
+        ColoredLogger.info(f"Miners evaluated: {len(avg_rewards)}", ColoredLogger.GREEN)
         winner_uid = max(avg_rewards.keys(), key=lambda k: avg_rewards[k]) if avg_rewards else None
-        bt.logging.warning(f"Winner: {winner_uid}")
+        ColoredLogger.info(f"Winner: {winner_uid}", ColoredLogger.GREEN)
 
 
 if __name__ == "__main__":
