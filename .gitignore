@@ -182,3 +182,12 @@ cython_debug/
 
 testing/
 data/mongodb_data/
+
+# Archivos generados automáticamente
+forward_reports/
+forward_reports_old/
+autoppia_web_agents_subnet/forward_reports/
+*.json
+*.lock
+*.log
+*.png
