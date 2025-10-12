@@ -35,7 +35,7 @@ PRE_GENERATED_TASKS = 120           # Number of tasks to pre-generate at round s
 # ╭─────────────────────────── Task Settings ─────────────────────────────╮
 
 PROMPTS_PER_USECASE = 1             # Number of prompts to generate per use case
-MAX_ACTIONS_LENGTH = 30             # Maximum number of actions per solution
+MAX_ACTIONS_LENGTH = 60             # Maximum number of actions per solution
 
 TIMEOUT = 60 * 2                    # 2 min: timeout for receiving miner responses
 FEEDBACK_TIMEOUT = 60               # 1 min: timeout for sending feedback to miners

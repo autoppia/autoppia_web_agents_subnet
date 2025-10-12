@@ -1,93 +1,136 @@
 # ⛏️ Miner Guide for Subnet 36 Web Agents
 
-## 💻 System Requirements
+> **🎯 Key Innovation**: We've worked extensively to simplify miner deployment. **You don't need to run on testnet first!** Use our **Benchmark Framework** to develop and test your web agents locally before mining.
 
-### **Hardware Overview**
+## 📋 Overview
 
-Miners **only need CPU** for basic operation! The miner code runs on virtually any system with Python support. **GPU is only required if you want to run your own local LLM** (see LLM section below).
+## 🎯 How It Works: Two Simple Steps
 
-**What you need:**
+### Step 1: Build & Test Your Agent Locally
 
-- 🖥️ **CPU-only machine** - Full mining capability
-- 🐍 **Python support** - Any modern system
-- 🌐 **Internet connection** - For external LLM APIs (recommended)
+First, you'll create a web agent that can solve tasks. Test it thoroughly using our Benchmark Framework - no blockchain required!
 
-💡 **Pro Tip**: Start with CPU-only setup using external LLM APIs for the easiest deployment.
+### **Benefits of Local Testing**
+
+| Benefit                   | Description                             |
+| ------------------------- | --------------------------------------- |
+| 💰 **Save Money**         | No network fees during development      |
+| 🚀 **Faster Iteration**   | Instant feedback vs network cycles      |
+| 🛡️ **Risk-Free**          | Test without risking rewards/reputation |
+| 🎯 **Better Performance** | Optimize before competing               |
+| 📊 **Detailed Analytics** | Comprehensive performance metrics       |
+| 🔧 **Easy Debugging**     | Full logs and error tracking            |
+| ⚡ **Quick Setup**        | Start testing in minutes                |
+
+### Step 2: Deploy as a Miner
+
+Once your agent performs well locally, deploy it to the network to start earning rewards.
+
+**Your deployed miner will:**
+
+- 📥 **Receive tasks** from validators
+- 🧠 **Process requirements** using your logic
+- ✅ **Return a list of actions** (see actions allowed)
+- 💰 **Earn rewards** based on performance
 
 ---
 
-## 🚀 Installation Steps
+## 🏆 **Steps to Be the Best Miner**
 
-### **1. Repository Setup**
+**Local Testing (Do this first!):**
+
+1. **Configure .env** → Generate tasks as validator does
+2. **Deploy demo projects** → Test target websites
+3. **Install requirements** → Setup validator dependencies
+4. **Create agent** → Build `/solve_task` endpoint
+5. **Check endpoint** → Verify task reception
+6. **Implement logic** → Return action sequences
+7. **See results** → Get performance scores
+8. **Deploy miner** → Go live when ready!
+
+---
+
+# 🔬 PHASE 1: LOCAL TESTING
+
+## ⚠️ IMPORTANT: Test Locally First!
+
+> **Before deploying your miner, you MUST test your agent locally using our Benchmark Framework.**
+
+**Why local testing is crucial:**
+
+- ✅ **Free development** - no network fees for testing
+- ✅ **Instant feedback** - immediate performance metrics
+- ✅ **Risk-free iteration** - test before deploying
+- ✅ **Production-ready** - benchmark = production behavior
+
+## 📚 Local Testing Guide
+
+**Complete guide for local testing and agent development:**
+
+📖 **👉 Go to**: [Benchmark Guide](./benchmark-README.md)
+
+**What the benchmark does:**
+The benchmark **generates tasks the same way a validator would** and sends them to your deployed agent, then **evaluates the results exactly like a validator would**. This gives you production-identical testing without any blockchain interaction.
+
+**This guide covers:**
+
+- 🕷️ **What is a Web Agent** and how it works
+- 🎯 **Available Actions** your agent can use
+- 🚀 **Setup & Configuration** for local testing
+- 🧪 **Creating Your Agent** with code examples
+- ⚙️ **Benchmark Configuration** and customization
+- 📊 **Performance Testing** and optimization
+
+**Quick start for local testing:**
 
 ```bash
-# Clone repository
-git clone https://github.com/autoppia/autoppia_web_agents_subnet
-cd autoppia_web_agents_subnet
-
-# Initialize submodules
-git submodule update --init --recursive --remote
+# From the main repository root
+cd autoppia_iwa_module
+python -m autoppia_iwa.entrypoints.benchmark.run
 ```
 
-### **2. Environment Configuration**
+---
+
+# ⛏️ PHASE 2: MINER DEPLOYMENT
+
+## 🚀 Deploy Your Miner to Mainnet
+
+> **Prerequisites**: Only deploy to mainnet after thorough local testing with the benchmark!
+
+### **Before Deploying**
+
+Ensure your agent:
+
+- ✅ **Thoroughly tested** with benchmark framework
+- ✅ **Good performance results** in local testing
+- ✅ **Ready for production** deployment
+
+### **Miner Deployment**
+
+**A miner is like the benchmark** - configure `.env` with your agent's port and run it.
+
+**Step 1: Setup Miner Environment**
 
 ```bash
-# Create environment file
-cp .env.example .env
-```
-
-**Configure your `.env` file:**
-
-```bash
-AGENT_NAME="browser_use"
-AGENT_HOST="localhost"
-AGENT_PORT="8080"
-USE_APIFIED_AGENT="false"  # Set to "true" for custom Agent API deployment
-```
-
-💡 **Note**: API connection feature allows deploying your own Agent and connecting via API.
-
-### **3. System Setup**
-
-#### **Install Python & System Dependencies**
-
-Run the following to install all required dependencies:
-
-```bash
+# Install miner dependencies
 chmod +x scripts/miner/install_dependencies.sh
 ./scripts/miner/install_dependencies.sh
-```
 
-#### **Standard Environment Setup (Ubuntu 22.04+ e.g., Jammy/Noble)**
-
-To configure the system environment and install core components:
-
-```bash
+# Setup miner environment
 chmod +x scripts/miner/setup.sh
 ./scripts/miner/setup.sh
 ```
 
-#### **RunPod / Docker-Based Setup**
-
-If you're running inside a RunPod or Docker container:
+**Step 2: Configure Agent in .env**
 
 ```bash
-chmod +x scripts/miner/runpod_setup.sh
-./scripts/miner/runpod_setup.sh
+# Configure your deployed agent
+AGENT_HOST="localhost"  # or your agent's host
+AGENT_PORT="5000"       # port where your agent is running
+AGENT_NAME="your_agent_name"
 ```
 
-⚠️ **Warning**: RunPod setup script has limited testing.
-
-**The setup script handles:**
-
-- ✅ System dependencies installation
-- ✅ Python 3.11 environment setup
-- ✅ PM2 installation and configuration
-- ✅ Virtual environment creation
-- ✅ Python packages including autoppia_iwa
-- ✅ Bittensor and dependencies
-
-### **4. Miner Deployment**
+**Step 3: Deploy Miner**
 
 ```bash
 source miner_env/bin/activate
@@ -104,7 +147,7 @@ pm2 start neurons/miner.py \
   --axon.port 8091
 ```
 
-#### **Configuration Options**
+### **Configuration Options**
 
 | Parameter             | Description              | Default | Example           |
 | --------------------- | ------------------------ | ------- | ----------------- |
@@ -117,204 +160,41 @@ pm2 start neurons/miner.py \
 
 ---
 
-## 🔧 Optional Components
+## 💪 Mining & Rewards
 
-> **For Competitive Web Agents**: Deploy these components for advanced functionality
+### **Reward Structure**
 
-### **1. LLM Configuration** 🤖
-
-You have **multiple options** for LLM integration:
-
-#### **Option A: External LLM APIs** 🌐 (Recommended - CPU Only)
-
-Use any external LLM service:
-
-- **OpenAI** (GPT-4, GPT-3.5)
-- **DeepSeek**
-- **Anthropic Claude**
-- **Any other API provider**
-
-**Benefits:**
-
-- ✅ No GPU required
-- ✅ No local setup needed
-- ✅ Always up-to-date models
-- ✅ Lower maintenance
-
-#### **Option B: Local LLM Endpoint** 🖥️ (GPU Required)
-
-**Prerequisites Check**
-
-```bash
-nvcc --version
-```
-
-⚠️ **CRITICAL**: Must show CUDA version 12.1. Install CUDA 12.1 if different or missing.
-
-**LLM Setup**
-
-```bash
-chmod +x autoppia_iwa_module/modules/llm_local/setup.sh
-./autoppia_iwa_module/modules/llm_local/setup.sh
-
-source llm_env/bin/activate
-pm2 start autoppia_iwa_module/modules/llm_local/run_local_llm.py \
-  --name llm_local -- --port 6000
-```
-
-**Verification**
-
-```bash
-python3 autoppia_iwa_module/modules/llm_local/tests/test.py
-```
-
-**Current Local Model**: `qwen2.5-coder-14b-instruct-q4_k_m`
-🔄 **Future Updates**: Better performing models coming soon
-
-📚 **Advanced Setup**: See `modules/llm_local/setup.md` for detailed configuration
-
-### **2. Demo Web Projects** 🌐
-
-```bash
-chmod +x autoppia_iwa_module/modules/webs_demo/scripts/setup.sh
-./autoppia_iwa_module/modules/webs_demo/scripts/setup.sh
-```
-
-**This script:**
-
-- 🐳 Installs Docker and Docker Compose (if needed)
-- 🚀 Deploys multiple demo web project containers
-- 🔗 Sets up networking and configurations
-
-💡 **Note**: LLM integration is optional. You can use external APIs (OpenAI, DeepSeek, etc.) or run local LLM, but neither is required for basic mining.
+| Factor                           | Weight  | Description                               |
+| -------------------------------- | ------- | ----------------------------------------- |
+| **🎯 Task Completion Precision** | **85%** | How accurately your agent completes tasks |
+| **⚡ Execution Speed**           | **15%** | How quickly your agent responds           |
 
 ---
 
-## 🕷️ Understanding Web Agents
+## 🎯 Quick Start Summary
 
-### **What is a Web Agent?**
+### **Complete Workflow**
 
-A Web Agent is an application that:
+| Phase                | Time  | Action               | Guide                                    |
+| -------------------- | ----- | -------------------- | ---------------------------------------- |
+| **Local Testing**    | 30min | Develop & test agent | [Benchmark Guide](./benchmark-README.md) |
+| **Miner Deployment** | 10min | Deploy to mainnet    | This guide (Phase 2)                     |
 
-- 📥 **Receives** web tasks
-- 🧠 **Processes** task requirements
-- 📤 **Returns** action sequences to accomplish tasks
-- 🎯 **Interacts** with web interfaces programmatically
+### **Key Benefits**
 
-### **Available Actions**
-
-Web Agents can perform actions from the `ACTION_CLASS_MAP`:
-
-| Action        | Description                | Use Case              |
-| ------------- | -------------------------- | --------------------- |
-| `click`       | Mouse click at coordinates | Button interactions   |
-| `type`        | Text input                 | Form filling          |
-| `hover`       | Mouse hover                | Tooltip triggers      |
-| `navigate`    | URL navigation             | Page changes          |
-| `dragAndDrop` | Drag and drop              | File uploads, sorting |
-| `submit`      | Form submission            | Data sending          |
-| `doubleClick` | Double click               | File opening          |
-| `scroll`      | Page scrolling             | Content viewing       |
-| `screenshot`  | Screen capture             | State verification    |
-| `wait`        | Pause execution            | Loading waits         |
-| `assert`      | Condition verification     | Task validation       |
-| `select`      | Dropdown selection         | Option choosing       |
-
-📚 **Detailed Reference**: `/autoppia_iwa/src/execution/actions/actions.py`
-
-### **Example: RandomClicker Web Agent (Provided)**
-
-The repository includes a basic **RandomClicker** agent for demonstration:
-
-```python
-class RandomClickerWebAgent(IWebAgent):
-    """
-    Web Agent that executes random actions within screen dimensions.
-    """
-    def __init__(self):
-        pass
-
-    def generate_actions(self, task: Task) -> TaskSolution:
-        """
-        Generates random click actions within screen dimensions.
-        """
-        actions = []
-        for _ in range(1):  # Generate random click action
-            x = random.randint(0, task.specifications.screen_width - 1)
-            y = random.randint(0, task.specifications.screen_height - 1)
-            actions.append(ClickAction(x=x, y=y))
-        return TaskSolution(task=task, actions=actions)
-```
-
-**What RandomClicker Demonstrates:**
-
-- ✅ Basic Web Agent interface structure
-- ✅ Task reception and processing flow
-- ✅ Action generation and return format
-- ✅ Expected implementation patterns
-
-### **Recommended Starting Point: browser-use**
-
-🚀 **Suggestion**: Use **browser-use** as your base agent for development. It provides a solid foundation with:
-
-- 🧠 Better task understanding
-- 🎯 More intelligent action generation
-- 🌐 Improved web interaction capabilities
-- 📈 Higher success rates than RandomClicker
-
-### **Building Competitive Agents**
-
-To succeed in Subnet 36, develop agents that can:
-
-- 🧠 **Understand** complex web tasks
-- 🎯 **Generate** appropriate action sequences
-- 🌐 **Navigate** web interfaces effectively
-- ✅ **Verify** task completion successfully
-
----
-
-## 🏆 Reward Mechanism
-
-### **Reward Factors**
-
-Miners are rewarded based on multiple performance metrics:
-
-| Factor                   | Weight   | Description                             |
-| ------------------------ | -------- | --------------------------------------- |
-| **Task Completion Rate** | Primary  | Number of successfully completed tasks  |
-| **Completion Quality**   | High     | Complete and correct solutions required |
-| **Execution Time**       | Moderate | Faster solutions receive higher rewards |
-
-### **Reward Principles**
-
-1. **📊 Performance-Based**: Rewards scale with task completion success
-2. **🎯 Quality-Focused**: Partial solutions receive proportionally lower rewards
-3. **⚡ Speed-Incentivized**: Faster execution increases reward multipliers
-4. **🏁 Competitive**: Rewards are relative to other miners' performance
-
-### **Key Insights**
-
-- 🔄 **Continuous Improvement**: Essential for maintaining competitive rewards
-- 📈 **Relative Performance**: Your rewards depend on how you compare to others
-- 🎯 **Complete Solutions**: Partial task completion significantly reduces rewards
-
-📚 **Technical Details**: Review `src/validator/reward.py` for implementation specifics
+- ✅ **No testnet required** - develop locally first
+- ✅ **Free development** - no network fees for testing
+- ✅ **Instant feedback** - immediate performance metrics
+- ✅ **Production-ready** - benchmark = production behavior
+- ✅ **Risk-free iteration** - test before deploying
 
 ---
 
 ## 🆘 Support & Contact
 
-Need assistance? Contact our team on Discord:
+**Need help?** Contact our team on Discord:
 
 - **@Daryxx**
 - **@Riiveer**
 
 ---
-
-## 📝 Important Notes
-
-- 🖥️ **Start Simple**: Begin with basic hardware, scale as needed
-- 🏆 **Competitive Edge**: Sophisticated agents perform better
-- 🔧 **Optional Components**: LLM and demo webs enhance development
-- 📊 **Performance Monitoring**: Track your agent's completion rates
-- 🔄 **Continuous Development**: Regular improvements maintain competitiveness
