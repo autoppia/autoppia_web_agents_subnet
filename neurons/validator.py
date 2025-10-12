@@ -375,6 +375,28 @@ class Validator(BaseValidatorNeuron):
         bt.logging.warning("🏁 CALCULATING FINAL WEIGHTS")
         bt.logging.warning("=" * 80)
 
+        # Check if no miners responded to handshake - BURN ALL WEIGHTS
+        if not self.active_miner_uids:
+            bt.logging.warning("🔥 NO ACTIVE MINERS - BURNING ALL WEIGHTS")
+            bt.logging.warning("   - Setting weight=1.0 to UID 0 (burn address)")
+            bt.logging.warning("   - All other UIDs get weight=0.0")
+
+            # Create burn weights: UID 0 = 1.0, all others = 0.0
+            burn_weights = np.zeros(self.metagraph.n, dtype=np.float32)
+            burn_weights[0] = 1.0  # UID 0 gets all weight (burn)
+
+            # Set these burn weights directly
+            self.scores = burn_weights
+            self.set_weights()
+
+            bt.logging.warning("")
+            bt.logging.warning("✅ BURN COMPLETE")
+            bt.logging.warning("=" * 80)
+            bt.logging.warning(f"Tasks attempted: {tasks_completed}")
+            bt.logging.warning(f"Miners evaluated: 0")
+            bt.logging.warning(f"Result: BURNED (weight=1.0 to UID 0)")
+            return
+
         # Calculate average scores using round_manager
         avg_rewards = self.round_manager.get_average_rewards()
 
