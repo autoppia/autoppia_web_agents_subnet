@@ -463,4 +463,4 @@ if __name__ == "__main__":
     with Validator(config=config(role="validator")) as validator:
         while True:
             bt.logging.info(f"Validator running... {time.time()}")
-            time.sleep(5)
+            time.sleep(30)

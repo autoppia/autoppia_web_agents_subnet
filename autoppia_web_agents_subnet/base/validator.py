@@ -280,32 +280,15 @@ class BaseValidatorNeuron(BaseNeuron):
         bt.logging.debug("uint_weights count", len(uint_weights))
         bt.logging.debug("uint_uids count", len(uint_uids))
 
-        # Human-friendly summary: UID, hotkey, and weight (top 20 by weight)
+        # Render clear weights table with Rich
         try:
-            if isinstance(processed_weights, np.ndarray) and processed_weights.size > 0:
-                # Build list of (uid, hotkey, weight)
-                uid_to_weight = list(zip(processed_weight_uids.tolist(), processed_weights.tolist()))
-                # Filter non-zero
-                uid_to_weight = [(u, w) for (u, w) in uid_to_weight if w > 0]
-                # Sort by weight desc
-                uid_to_weight.sort(key=lambda x: x[1], reverse=True)
-
-                non_zero_count = len(uid_to_weight)
-                bt.logging.warning("Weights summary (processed, non-zero):")
-                bt.logging.warning(f"  Miners with weight > 0: {non_zero_count}")
-
-                # Print top 20
-                top_n = 20
-                for u, w in uid_to_weight[:top_n]:
-                    hotkey = self.metagraph.hotkeys[u] if u < len(self.metagraph.hotkeys) else "<unknown>"
-                    bt.logging.warning(f"  uid={u:3d} | hotkey={hotkey} | weight={w:.6f}")
-
-                if non_zero_count > top_n:
-                    bt.logging.warning(f"  ... and {non_zero_count - top_n} more with non-zero weight")
-            else:
-                bt.logging.warning("Weights summary: no non-zero processed weights")
+            from autoppia_web_agents_subnet.validator.visualization.weights_table import render_weights_table
+            render_weights_table(processed_weight_uids, processed_weights, self.metagraph, to_console=True)
         except Exception as e:
-            bt.logging.debug(f"Weights summary logging failed: {e}")
+            bt.logging.debug(f"Weights table failed: {e}")
+            # Fallback to simple summary
+            non_zero_count = np.sum(processed_weights > 0)
+            bt.logging.warning(f"Weights: {non_zero_count} miners with non-zero weights")
 
         # Set the weights on chain via our subtensor connection.
         result, msg = self.subtensor.set_weights(
