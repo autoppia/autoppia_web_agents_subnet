@@ -188,12 +188,12 @@ class RoundManager:
 
     def log_calculation_summary(self):
         """Log calculation summary for debugging."""
-        bt.logging.info("📊 Round Manager Configuration:")
-        bt.logging.info(f"   Round size: {self.round_size_epochs} epochs")
-        bt.logging.info(f"   Safety buffer: {self.safety_buffer_epochs} epochs")
-        bt.logging.info(f"   Avg task duration: {self.avg_task_duration_seconds}s")
-        bt.logging.info(f"   Blocks per epoch: {self.BLOCKS_PER_EPOCH}")
-        bt.logging.info(f"   Seconds per block: {self.SECONDS_PER_BLOCK}s")
+        ColoredLogger.info("📊 Round Manager Configuration:", ColoredLogger.CYAN)
+        ColoredLogger.info(f"   Round size: {self.round_size_epochs} epochs", ColoredLogger.CYAN)
+        ColoredLogger.info(f"   Safety buffer: {self.safety_buffer_epochs} epochs", ColoredLogger.CYAN)
+        ColoredLogger.info(f"   Avg task duration: {self.avg_task_duration_seconds}s", ColoredLogger.CYAN)
+        ColoredLogger.info(f"   Blocks per epoch: {self.BLOCKS_PER_EPOCH}", ColoredLogger.CYAN)
+        ColoredLogger.info(f"   Seconds per block: {self.SECONDS_PER_BLOCK}s", ColoredLogger.CYAN)
 
     # ═══════════════════════════════════════════════════════════════════════════════
     # SCORE MANAGEMENT METHODS
@@ -263,6 +263,6 @@ class RoundManager:
         stats = self.get_round_stats()
         avg_rewards = self.get_average_rewards()
 
-        bt.logging.info(f"Round stats: {stats['total_miners']} miners, {stats['total_tasks']} tasks")
+        ColoredLogger.info(f"Round stats: {stats['total_miners']} miners, {stats['total_tasks']} tasks", ColoredLogger.PURPLE)
         for uid, score in avg_rewards.items():
-            bt.logging.info(f"  Miner {uid}: {score:.3f} (from {len(self.round_rewards[uid])} tasks)")
+            ColoredLogger.info(f"  Miner {uid}: {score:.3f} (from {len(self.round_rewards[uid])} tasks)", ColoredLogger.PURPLE)
