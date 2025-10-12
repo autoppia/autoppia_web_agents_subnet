@@ -26,9 +26,7 @@ from autoppia_web_agents_subnet.validator.eval import evaluate_task_solutions
 from autoppia_web_agents_subnet.validator.models import TaskWithProject
 from autoppia_web_agents_subnet.validator.round_manager import RoundManager
 from autoppia_web_agents_subnet.validator.leaderboard.leaderboard_sender import LeaderboardSender
-
-# IWA
-from autoppia_iwa.src.bootstrap import AppBootstrap
+from autoppia_web_agents_subnet.validator.visualization.round_table import render_round_summary_table
 
 
 class Validator(BaseValidatorNeuron):
@@ -44,7 +42,7 @@ class Validator(BaseValidatorNeuron):
 
         # ⭐ Round system components
         self.round_manager = RoundManager(
-            round_size_epochs=ROUND_SIZE_EPOCHS,
+            round_size_epochs=int(ROUND_SIZE_EPOCHS),
             avg_task_duration_seconds=AVG_TASK_DURATION_SECONDS,
             safety_buffer_epochs=SAFETY_BUFFER_EPOCHS,
         )
@@ -392,14 +390,22 @@ class Validator(BaseValidatorNeuron):
         # Convert back to dict
         final_rewards_dict = {uid: float(reward) for uid, reward in zip(uids, final_rewards_array)}
 
+        # Render concise round summary table (UID, hotkey prefix, avg score, avg time, reward)
+        try:
+            render_round_summary_table(self.round_manager, final_rewards_dict, self.metagraph, to_console=True)
+        except Exception as e:
+            bt.logging.debug(f"Round summary table failed: {e}")
+
+        # Minimal final weights log: only winner
         bt.logging.warning("")
         bt.logging.warning("🎯 FINAL WEIGHTS (WTA)")
         bt.logging.warning("=" * 80)
-        for uid, reward in final_rewards_dict.items():
-            if reward > 0:
-                bt.logging.warning(f"  🏆 Miner {uid}: {reward:.3f}")
-            else:
-                bt.logging.info(f"  ❌ Miner {uid}: {reward:.3f}")
+        winner_uid = max(final_rewards_dict.keys(), key=lambda k: final_rewards_dict[k]) if final_rewards_dict else None
+        if winner_uid is not None:
+            hotkey = self.metagraph.hotkeys[winner_uid] if winner_uid < len(self.metagraph.hotkeys) else "<unknown>"
+            bt.logging.warning(f"  🏆 Winner uid={winner_uid}, hotkey={hotkey[:10]}..., weight={final_rewards_dict[winner_uid]:.4f}")
+        else:
+            bt.logging.warning("  ❌ No miners evaluated.")
 
         # Update EMA scores (only for active miners who responded to handshake)
         # Prepare aligned arrays: rewards and uids must have the same length
@@ -440,13 +446,19 @@ class Validator(BaseValidatorNeuron):
 
 
 if __name__ == "__main__":
-    # Initializing Dependency Injection In IWA
-    app = AppBootstrap()
-
-    # IWA logging works with loguru
-    logger.remove()
-    logger.add("logfile.log", level="INFO")
-    logger.add(lambda msg: print(msg, end=""), level="WARNING")
+    # Optional IWA bootstrap (if available)
+    try:
+        # Optional dependency: autoppia_iwa (may not be installed)
+        import importlib
+        _mod = importlib.import_module("autoppia_iwa.src.bootstrap")
+        _AppBootstrap = getattr(_mod, "AppBootstrap")
+        _app = _AppBootstrap()
+        # IWA logging works with loguru
+        logger.remove()
+        logger.add("logfile.log", level="INFO")
+        logger.add(lambda msg: print(msg, end=""), level="WARNING")
+    except Exception:
+        pass
 
     with Validator(config=config(role="validator")) as validator:
         while True:

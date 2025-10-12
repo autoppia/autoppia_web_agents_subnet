@@ -253,8 +253,9 @@ class BaseValidatorNeuron(BaseNeuron):
         # Compute raw_weights safely
         raw_weights = self.scores / norm
 
-        bt.logging.debug("raw_weights", raw_weights)
-        bt.logging.debug("raw_weight_uids", str(self.metagraph.uids.tolist()))
+        # Compact debug
+        bt.logging.debug("raw_weights count", raw_weights.size)
+        bt.logging.debug("raw_weight_uids count", len(self.metagraph.uids.tolist()))
         # Process the raw weights to final_weights via subtensor limitations.
         (
             processed_weight_uids,
@@ -266,8 +267,8 @@ class BaseValidatorNeuron(BaseNeuron):
             subtensor=self.subtensor,
             metagraph=self.metagraph,
         )
-        bt.logging.debug("processed_weights", processed_weights)
-        bt.logging.debug("processed_weight_uids", processed_weight_uids)
+        bt.logging.debug("processed_weights shape", getattr(processed_weights, "shape", None))
+        bt.logging.debug("processed_weight_uids count", len(processed_weight_uids))
 
         # Convert to uint16 weights and uids.
         (
@@ -276,8 +277,35 @@ class BaseValidatorNeuron(BaseNeuron):
         ) = convert_weights_and_uids_for_emit(
             uids=processed_weight_uids, weights=processed_weights
         )
-        bt.logging.debug("uint_weights", uint_weights)
-        bt.logging.debug("uint_uids", uint_uids)
+        bt.logging.debug("uint_weights count", len(uint_weights))
+        bt.logging.debug("uint_uids count", len(uint_uids))
+
+        # Human-friendly summary: UID, hotkey, and weight (top 20 by weight)
+        try:
+            if isinstance(processed_weights, np.ndarray) and processed_weights.size > 0:
+                # Build list of (uid, hotkey, weight)
+                uid_to_weight = list(zip(processed_weight_uids.tolist(), processed_weights.tolist()))
+                # Filter non-zero
+                uid_to_weight = [(u, w) for (u, w) in uid_to_weight if w > 0]
+                # Sort by weight desc
+                uid_to_weight.sort(key=lambda x: x[1], reverse=True)
+
+                non_zero_count = len(uid_to_weight)
+                bt.logging.warning("Weights summary (processed, non-zero):")
+                bt.logging.warning(f"  Miners with weight > 0: {non_zero_count}")
+
+                # Print top 20
+                top_n = 20
+                for u, w in uid_to_weight[:top_n]:
+                    hotkey = self.metagraph.hotkeys[u] if u < len(self.metagraph.hotkeys) else "<unknown>"
+                    bt.logging.warning(f"  uid={u:3d} | hotkey={hotkey} | weight={w:.6f}")
+
+                if non_zero_count > top_n:
+                    bt.logging.warning(f"  ... and {non_zero_count - top_n} more with non-zero weight")
+            else:
+                bt.logging.warning("Weights summary: no non-zero processed weights")
+        except Exception as e:
+            bt.logging.debug(f"Weights summary logging failed: {e}")
 
         # Set the weights on chain via our subtensor connection.
         result, msg = self.subtensor.set_weights(
