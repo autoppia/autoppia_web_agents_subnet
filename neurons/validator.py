@@ -329,7 +329,8 @@ class Validator(BaseValidatorNeuron):
         target_epoch = boundaries['target_epoch']
 
         while True:
-            current_block = self.metagraph.block.item()
+            # Fetch latest block from network to keep time in sync
+            current_block = self.subtensor.get_current_block()
             current_epoch = self.round_manager.block_to_epoch(current_block)
             wait_info = self.round_manager.get_wait_info(current_block)
 
@@ -338,7 +339,28 @@ class Validator(BaseValidatorNeuron):
                 bt.logging.warning(f"   Current epoch: {current_epoch:.2f}")
                 break
 
-            bt.logging.info(f"⏳ Waiting... Current: {current_epoch:.2f}, Target: {target_epoch}, Remaining: {wait_info['minutes_remaining']:.1f} min")
+            # Recompute round boundaries and progress on each tick
+            boundaries = self.round_manager.get_round_boundaries(current_block)
+            target_epoch = boundaries['target_epoch']
+            round_start_block = boundaries['round_start_block']
+            target_block = boundaries['target_block']
+
+            # Progress based on blocks within the round window
+            blocks_total = max(target_block - round_start_block, 1)
+            blocks_done = max(current_block - round_start_block, 0)
+            progress = min(max((blocks_done / blocks_total) * 100.0, 0.0), 100.0)
+
+            # Verbose, human-friendly status
+            bt.logging.info("⏳ Waiting for target epoch")
+            bt.logging.info(
+                f"   - Epoch: current={current_epoch:.3f} | target={target_epoch:.3f}"
+            )
+            bt.logging.info(
+                f"   - Blocks: current={current_block} | target={target_block} | progress={progress:.2f}%"
+            )
+            bt.logging.info(
+                f"   - Remaining: {wait_info['minutes_remaining']:.1f} min (~{wait_info['minutes_remaining']*60:.0f}s)"
+            )
 
             # Wait for next block
             await asyncio.sleep(12)  # Wait for next block
