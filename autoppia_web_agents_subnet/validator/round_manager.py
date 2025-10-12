@@ -29,13 +29,13 @@ class RoundManager:
 
     def __init__(
         self,
-        round_size_epochs: int,
+        round_size_epochs: float,
         avg_task_duration_seconds: float,
         safety_buffer_epochs: float,
     ):
         """
         Args:
-            round_size_epochs: Round duration in epochs (e.g., 20 = ~24h)
+            round_size_epochs: Round duration in epochs (e.g., 20 = ~24h, or 0.05 for testing)
             avg_task_duration_seconds: Average time to complete 1 task
             safety_buffer_epochs: Safety buffer in epochs (e.g., 0.5 = 36 min)
         """

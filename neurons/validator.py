@@ -42,7 +42,7 @@ class Validator(BaseValidatorNeuron):
 
         # ⭐ Round system components
         self.round_manager = RoundManager(
-            round_size_epochs=int(ROUND_SIZE_EPOCHS),
+            round_size_epochs=ROUND_SIZE_EPOCHS,
             avg_task_duration_seconds=AVG_TASK_DURATION_SECONDS,
             safety_buffer_epochs=SAFETY_BUFFER_EPOCHS,
         )
