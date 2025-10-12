@@ -13,8 +13,8 @@ from distutils.util import strtobool
 # Metadata advertised to validators during StartRoundSynapse handshake.
 # Override via environment variables.
 
-AGENT_NAME = os.getenv("MINER_AGENT_NAME", "Autoppia Miner")
-"""Agent display name shown in leaderboard and logs."""
+AGENT_NAME = os.getenv("MINER_AGENT_NAME","")
+"""Agent display name shown in leaderboard and logs. Empty string if unset."""
 
 AGENT_IMAGE = os.getenv("MINER_AGENT_IMAGE", "")
 """Agent logo/avatar URL (or data URI). Empty string means no image."""

@@ -61,13 +61,18 @@ async def send_start_round_synapse_to_miners(
         retries=1,
     )
 
-    # DEBUG: Log detailed handshake responses
-    bt.logging.info(f"🔍 DEBUG: Handshake responses analysis:")
+    # DEBUG: Log only successful responses
+    successful_responses = []
     for i, response in enumerate(responses):
-        if response is not None:
-            bt.logging.info(f"  Response {i}: agent_name='{getattr(response, 'agent_name', 'MISSING')}', type={type(response)}")
-        else:
-            bt.logging.info(f"  Response {i}: None (failed/timeout)")
+        if response is not None and getattr(response, 'agent_name', None):
+            successful_responses.append(f"  Response {i}: agent_name='{response.agent_name}'")
+
+    if successful_responses:
+        bt.logging.info(f"🔍 DEBUG: Successful handshake responses:")
+        for response_log in successful_responses:
+            bt.logging.info(response_log)
+    else:
+        bt.logging.info(f"🔍 DEBUG: No successful handshake responses")
 
     successful = sum(1 for r in responses if r is not None and hasattr(r, 'agent_name') and r.agent_name)
     bt.logging.info(f"✅ Handshake complete: {successful}/{len(miner_axons)} miners responded")

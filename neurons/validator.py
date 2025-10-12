@@ -147,27 +147,31 @@ class Validator(BaseValidatorNeuron):
             # Filter and save UIDs of miners who responded successfully (must include agent_name)
             self.active_miner_uids = []
 
-            # DEBUG: Log handshake response analysis
-            bt.logging.info(f"🔍 DEBUG: Analyzing handshake responses:")
-            bt.logging.info(f"  - Total responses: {len(handshake_responses)}")
-            bt.logging.info(f"  - Total axons: {len(all_axons)}")
-
+            # Filter successful responses only
             for i, response in enumerate(handshake_responses):
                 if i < len(all_axons):
                     mapped_uid = all_uids[i]
-                    mapped_hotkey = self.metagraph.hotkeys[mapped_uid]
                     agent_name = getattr(response, 'agent_name', None) if response else None
-                    bt.logging.info(
-                        f"  Response {i}: uid={mapped_uid}, hotkey={mapped_hotkey}, agent_name='{agent_name}'"
-                    )
 
                     if response and agent_name:
                         self.active_miner_uids.append(mapped_uid)
-                        bt.logging.info(f"    ✅ Added uid {mapped_uid} (hotkey={mapped_hotkey}) to active miners")
                 else:
                     bt.logging.warning(f"  Response {i}: No corresponding axon (out of bounds)")
 
-            bt.logging.info(f"✅ Handshake complete: {len(self.active_miner_uids)}/{len(all_axons)} miners responded")
+            # Log only successful responders for clarity
+            if self.active_miner_uids:
+                responders = [
+                    f"uid={uid}, hotkey={self.metagraph.hotkeys[uid]}"
+                    for uid in self.active_miner_uids
+                ]
+                bt.logging.info(
+                    f"✅ Handshake complete: {len(self.active_miner_uids)}/{len(all_axons)} miners responded: "
+                    + "; ".join(responders)
+                )
+            else:
+                bt.logging.info(
+                    f"✅ Handshake complete: 0/{len(all_axons)} miners responded"
+                )
 
         except Exception as e:
             bt.logging.error(f"StartRoundSynapse handshake failed: {e}")
