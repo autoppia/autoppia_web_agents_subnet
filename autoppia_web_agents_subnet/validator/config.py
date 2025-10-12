@@ -3,34 +3,54 @@ from distutils.util import strtobool
 from pathlib import Path
 
 
-# ╭─────────────────────────── Environment ─────────────────────────────╮
-
-EPOCH_LENGTH_OVERRIDE = 0 
-TESTING = False
-
-# ╭─────────────────────────── Round System Configuration ─────────────────────────────╮
+# ╭─────────────────────────── Round System Configuration QUICK TEST─────────────────────────────╮
 
 # Round-based system: Long-duration rounds with pre-generated tasks and dynamic execution
 # All validators synchronize: start at epoch multiples of ROUND_SIZE_EPOCHS
 # and set weights when reaching the target epoch
 
-ROUND_SIZE_EPOCHS = 20              # Round duration in epochs (~24h = 20 epochs)
+ROUND_SIZE_EPOCHS = 0.15              # Round duration in epochs (~10.8 min para testing)
 # 1 epoch = 360 blocks ≈ 72 minutes
-# 20 epochs = 7200 blocks ≈ 24 hours
+# 0.15 epochs = 54 blocks ≈ 10.8 minutes
 
-SAFETY_BUFFER_EPOCHS = 0.5          # Safety buffer in epochs before target epoch
-# If less than 0.5 epochs remaining, stop sending tasks
-# 0.5 epochs ≈ 36 minutes (sufficient for last task)
+SAFETY_BUFFER_EPOCHS = 0.02          # Safety buffer in epochs before target epoch
+# If less than 0.02 epochs remaining, stop sending tasks
+# 0.02 epochs ≈ 1.4 minutes (sufficient for last task)
 
-AVG_TASK_DURATION_SECONDS = 600     # ⚠️ CALIBRATE THIS VALUE based on real measurements
+AVG_TASK_DURATION_SECONDS = 300     # ⚠️ CALIBRATE THIS VALUE based on real measurements
 # Average time for: send + evaluate 1 task (excluding generation)
-# Default value: 600s (10 minutes)
+# Testing value: 300s (5 minutes)
 # Measure in production and update
 # This value is used to estimate if there's time for another task
 
-PRE_GENERATED_TASKS = 120           # Number of tasks to pre-generate at round start
+PRE_GENERATED_TASKS = 1           # Number of tasks to pre-generate at round start
 # Generate all at the beginning to avoid on-the-fly errors
-# Adjust based on estimation: (available_time / avg_duration) + margin
+# Testing: only 1 task
+
+
+# ╭─────────────────────────── Round System Configuration ─────────────────────────────╮
+
+# # Round-based system: Long-duration rounds with pre-generated tasks and dynamic execution
+# # All validators synchronize: start at epoch multiples of ROUND_SIZE_EPOCHS
+# # and set weights when reaching the target epoch
+
+# ROUND_SIZE_EPOCHS = 20              # Round duration in epochs (~24h = 20 epochs)
+# # 1 epoch = 360 blocks ≈ 72 minutes
+# # 20 epochs = 7200 blocks ≈ 24 hours
+
+# SAFETY_BUFFER_EPOCHS = 0.5          # Safety buffer in epochs before target epoch
+# # If less than 0.5 epochs remaining, stop sending tasks
+# # 0.5 epochs ≈ 36 minutes (sufficient for last task)
+
+# AVG_TASK_DURATION_SECONDS = 600     # ⚠️ CALIBRATE THIS VALUE based on real measurements
+# # Average time for: send + evaluate 1 task (excluding generation)
+# # Default value: 600s (10 minutes)
+# # Measure in production and update
+# # This value is used to estimate if there's time for another task
+
+# PRE_GENERATED_TASKS = 120           # Number of tasks to pre-generate at round start
+# # Generate all at the beginning to avoid on-the-fly errors
+# # Adjust based on estimation: (available_time / avg_duration) + margin
 
 # ╭─────────────────────────── Task Settings ─────────────────────────────╮
 
