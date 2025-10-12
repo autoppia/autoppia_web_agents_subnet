@@ -125,7 +125,9 @@ class Validator(BaseValidatorNeuron):
 
         # Send StartRoundSynapse to all miners ONCE at the beginning
         try:
-            all_axons = [self.metagraph.axons[uid] for uid in range(len(self.metagraph.uids))]
+            # Build parallel lists of UIDs and axons to preserve mapping
+            all_uids = list(range(len(self.metagraph.uids)))
+            all_axons = [self.metagraph.axons[uid] for uid in all_uids]
             start_synapse = StartRoundSynapse(
                 version=self.version,
                 round_id=f"round_{boundaries['round_start_epoch']}",
@@ -142,19 +144,36 @@ class Validator(BaseValidatorNeuron):
                 timeout=30,
             )
 
-            # Filter and save UIDs of miners who responded successfully
+            # Filter and save UIDs of miners who responded successfully (must include agent_name)
             self.active_miner_uids = []
-            for uid, response in enumerate(handshake_responses):
-                if response and hasattr(response, 'agent_name') and response.agent_name:
-                    self.active_miner_uids.append(uid)
+
+            # DEBUG: Log handshake response analysis
+            bt.logging.info(f"🔍 DEBUG: Analyzing handshake responses:")
+            bt.logging.info(f"  - Total responses: {len(handshake_responses)}")
+            bt.logging.info(f"  - Total axons: {len(all_axons)}")
+
+            for i, response in enumerate(handshake_responses):
+                if i < len(all_axons):
+                    mapped_uid = all_uids[i]
+                    mapped_hotkey = self.metagraph.hotkeys[mapped_uid]
+                    agent_name = getattr(response, 'agent_name', None) if response else None
+                    bt.logging.info(
+                        f"  Response {i}: uid={mapped_uid}, hotkey={mapped_hotkey}, agent_name='{agent_name}'"
+                    )
+
+                    if response and agent_name:
+                        self.active_miner_uids.append(mapped_uid)
+                        bt.logging.info(f"    ✅ Added uid {mapped_uid} (hotkey={mapped_hotkey}) to active miners")
+                else:
+                    bt.logging.warning(f"  Response {i}: No corresponding axon (out of bounds)")
 
             bt.logging.info(f"✅ Handshake complete: {len(self.active_miner_uids)}/{len(all_axons)} miners responded")
 
         except Exception as e:
             bt.logging.error(f"StartRoundSynapse handshake failed: {e}")
-            # Fallback: use all miners if handshake fails
-            self.active_miner_uids = list(range(len(self.metagraph.uids)))
-            bt.logging.warning(f"   Using all {len(self.active_miner_uids)} miners as fallback")
+            # Do NOT silently use all miners; skip task execution if no handshake
+            self.active_miner_uids = []
+            bt.logging.warning("   No miners will be used this round due to handshake failure.")
 
         # ═══════════════════════════════════════════════════════
         # DYNAMIC LOOP: Execute tasks one by one based on time
@@ -217,6 +236,11 @@ class Validator(BaseValidatorNeuron):
         task = task_item.task
 
         try:
+
+            # Guard: if no active miners responded to handshake, skip task
+            if not self.active_miner_uids:
+                bt.logging.warning("No active miners responded to handshake; skipping task send.")
+                return False
 
             active_axons = [self.metagraph.axons[uid] for uid in self.active_miner_uids]
 
