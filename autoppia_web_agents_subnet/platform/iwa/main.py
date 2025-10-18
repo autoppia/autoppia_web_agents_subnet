@@ -55,10 +55,11 @@ class IWAPClient:
         client: Optional[httpx.AsyncClient] = None,
         backup_dir: Optional[Path] = None,
     ) -> None:
-        resolved_base_url = base_url or os.getenv("IWAP_API_BASE_URL", "http://217.154.10.168:8080")
-        self._client = client or httpx.AsyncClient(base_url=resolved_base_url.rstrip("/"), timeout=timeout)
+        resolved_base_url = (base_url or os.getenv("IWAP_API_BASE_URL", "http://217.154.10.168:8080")).rstrip("/")
+        self._client = client or httpx.AsyncClient(base_url=resolved_base_url, timeout=timeout)
         self._owns_client = client is None
         self._backup_dir = Path(backup_dir or os.getenv("IWAP_BACKUP_DIR", "iwap_payloads"))
+        logger.info("IWAP client initialized with base_url=%s", self._client.base_url)
         try:
             self._backup_dir.mkdir(parents=True, exist_ok=True)
         except Exception:
@@ -193,22 +194,24 @@ class IWAPClient:
 
     async def _post(self, path: str, payload: Dict[str, object], *, context: str) -> None:
         self._backup_payload(context, payload)
+        request = self._client.build_request("POST", path, json=payload)
+        target_url = str(request.url)
         try:
-            logger.info("IWAP %s POST %s started", context, path)
-            response = await self._client.post(path, json=payload)
+            logger.info("IWAP %s POST %s started", context, target_url)
+            response = await self._client.send(request)
             response.raise_for_status()
             logger.info(
                 "IWAP %s POST %s succeeded with status %s",
                 context,
-                path,
+                target_url,
                 response.status_code,
             )
         except httpx.HTTPStatusError as exc:
             body = exc.response.text
-            logger.error("IWAP %s failed (%s): %s", context, exc.response.status_code, body)
+            logger.error("IWAP %s POST %s failed (%s): %s", context, target_url, exc.response.status_code, body)
             raise
         except Exception:
-            logger.exception("IWAP %s failed unexpectedly", context)
+            logger.exception("IWAP %s POST %s failed unexpectedly", context, target_url)
             raise
 
     def _backup_payload(self, context: str, payload: Dict[str, object]) -> None:
