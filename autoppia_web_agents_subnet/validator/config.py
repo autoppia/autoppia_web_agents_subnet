@@ -7,7 +7,7 @@ from pathlib import Path
 
 # Round-based system: Long-duration rounds with pre-generated tasks and dynamic execution
 # All validators synchronize: start at epoch multiples of ROUND_SIZE_EPOCHS
-# and set weights when reaching the target epoch.
+# and set weights when reaching the target epoch..
 
 ROUND_SIZE_EPOCHS = 0.1               # Round duration in epochs (~14.4 min para testing adecuado)
 # 1 epoch = 360 blocks ≈ 72 minutes
