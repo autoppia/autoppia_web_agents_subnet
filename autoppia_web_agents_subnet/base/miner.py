@@ -174,7 +174,7 @@ class BaseMinerNeuron(BaseNeuron):
 
         validator_hotkey = synapse.dendrite.hotkey
 
-        # Ensure hotkey is recognized
+        # Ensure hotkey is recognized.
         if (
             not self.config.blacklist.allow_non_registered
             and validator_hotkey not in self.metagraph.hotkeys
