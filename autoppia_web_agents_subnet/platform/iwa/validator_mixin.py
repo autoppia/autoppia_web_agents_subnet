@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 import bittensor as bt
 
 from autoppia_web_agents_subnet.validator.models import TaskWithProject
-from autoppia_web_agents_subnet.validator.config import ROUND_SIZE_EPOCHS
+from autoppia_web_agents_subnet.validator.config import ROUND_SIZE_EPOCHS, IWAP_API_BASE_URL
 from autoppia_web_agents_subnet.platform.iwa import models as iwa_models
 from autoppia_web_agents_subnet.platform.iwa import main as iwa_main
 
@@ -18,7 +18,7 @@ class ValidatorPlatformMixin:
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.iwap_client = iwa_main.IWAPClient()
+        self.iwap_client = iwa_main.IWAPClient(base_url=IWAP_API_BASE_URL)
         self.current_round_id: Optional[str] = None
         self.current_round_tasks: Dict[str, iwa_models.TaskIWAP] = {}
         self.current_agent_runs: Dict[int, iwa_models.AgentRunIWAP] = {}

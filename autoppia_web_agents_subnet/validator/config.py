@@ -69,6 +69,7 @@ TIME_WEIGHT = 0.15                  # Weight of execution time (0-1)
 # ╭─────────────────────────── Leaderboard ─────────────────────────────╮
 
 LEADERBOARD_ENDPOINT = os.getenv("LEADERBOARD_ENDPOINT", "https://leaderboard-api.autoppia.com")
+IWAP_API_BASE_URL = os.getenv("IWAP_API_BASE_URL", "http://217.154.10.168:8000")
 LEADERBOARD_TASKS_ENDPOINT = "https://api-leaderboard.autoppia.com/tasks"
 LEADERBOARD_VALIDATOR_RUNS_ENDPOINT = "https://api-leaderboard.autoppia.com/validator-runs"
 
