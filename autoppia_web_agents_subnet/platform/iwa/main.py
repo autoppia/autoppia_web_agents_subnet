@@ -55,7 +55,7 @@ class IWAPClient:
         client: Optional[httpx.AsyncClient] = None,
         backup_dir: Optional[Path] = None,
     ) -> None:
-        resolved_base_url = base_url or os.getenv("IWAP_API_BASE_URL", "http://217.154.10.168:8000")
+        resolved_base_url = base_url or os.getenv("IWAP_API_BASE_URL", "http://217.154.10.168:8080")
         self._client = client or httpx.AsyncClient(base_url=resolved_base_url.rstrip("/"), timeout=timeout)
         self._owns_client = client is None
         self._backup_dir = Path(backup_dir or os.getenv("IWAP_BACKUP_DIR", "iwap_payloads"))
