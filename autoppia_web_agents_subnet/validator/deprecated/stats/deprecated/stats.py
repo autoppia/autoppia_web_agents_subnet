@@ -173,7 +173,7 @@ def save_stats(stats: Dict[AggKey, StatBlock]) -> None:
 
 
 # Import tardío para evitar ciclos
-from ..leaderboard.leaderboard import LeaderboardTaskRecord
+from ..leaderboard_deprecated.deprecated.leaderboard import LeaderboardTaskRecord
 
 
 def update_coldkey_stats_json(records: List[LeaderboardTaskRecord]) -> None:

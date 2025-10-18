@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import asyncio
-import random
 import time
 from typing import Dict
 
@@ -25,12 +24,12 @@ from autoppia_web_agents_subnet.validator.rewards import calculate_rewards_for_t
 from autoppia_web_agents_subnet.validator.eval import evaluate_task_solutions
 from autoppia_web_agents_subnet.validator.models import TaskWithProject
 from autoppia_web_agents_subnet.validator.round_manager import RoundManager
-from autoppia_web_agents_subnet.validator.leaderboard.leaderboard_sender import LeaderboardSender
 from autoppia_web_agents_subnet.validator.visualization.round_table import render_round_summary_table
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+from autoppia_web_agents_subnet.platform.iwa.validator_mixin import ValidatorPlatformMixin
 
 
-class Validator(BaseValidatorNeuron):
+class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
     def __init__(self, config=None):
         super().__init__(config=config)
         self.forward_count = 0
@@ -47,9 +46,6 @@ class Validator(BaseValidatorNeuron):
             avg_task_duration_seconds=AVG_TASK_DURATION_SECONDS,
             safety_buffer_epochs=SAFETY_BUFFER_EPOCHS,
         )
-
-        # ⭐ Leaderboard integration
-        self.leaderboard_sender = LeaderboardSender()
 
         bt.logging.info("load_state()")
         self.load_state()
@@ -107,6 +103,13 @@ class Validator(BaseValidatorNeuron):
             batch_elapsed = time.time() - batch_start
             bt.logging.info(f"   Generated batch: {len(tasks_to_add)} tasks in {batch_elapsed:.1f}s (total: {tasks_generated}/{PRE_GENERATED_TASKS})")
 
+        self.current_round_id = self._generate_validator_round_id()
+        self.round_start_timestamp = pre_generation_start
+        self.current_round_tasks = self._build_iwap_tasks(
+            validator_round_id=self.current_round_id,
+            tasks=all_tasks,
+        )
+
         pre_generation_elapsed = time.time() - pre_generation_start
         bt.logging.warning(f"✅ Pre-generation complete: {len(all_tasks)} tasks in {pre_generation_elapsed:.1f}s")
         bt.logging.warning("=" * 80)
@@ -121,6 +124,10 @@ class Validator(BaseValidatorNeuron):
         # Initialize new round in RoundManager
         self.round_manager.start_new_round(current_block)
         boundaries = self.round_manager.get_current_boundaries()
+        self.round_handshake_payloads = {}
+        self.current_agent_runs = {}
+        self.current_miner_snapshots = {}
+        self.agent_run_accumulators = {}
 
         # Send StartRoundSynapse to all miners ONCE at the beginning
         try:
@@ -129,7 +136,7 @@ class Validator(BaseValidatorNeuron):
             all_axons = [self.metagraph.axons[uid] for uid in all_uids]
             start_synapse = StartRoundSynapse(
                 version=self.version,
-                round_id=f"round_{boundaries['round_start_epoch']}",
+                round_id=self.current_round_id or f"round_{boundaries['round_start_epoch']}",
                 validator_id=str(self.uid),
                 total_prompts=len(all_tasks),
                 prompts_per_use_case=PROMPTS_PER_USECASE,
@@ -152,6 +159,8 @@ class Validator(BaseValidatorNeuron):
                     mapped_uid = all_uids[i]
                     agent_name = getattr(response, 'agent_name', None) if response else None
 
+                    if response:
+                        self.round_handshake_payloads[mapped_uid] = response
                     if response and agent_name:
                         self.active_miner_uids.append(mapped_uid)
                 else:
@@ -177,6 +186,8 @@ class Validator(BaseValidatorNeuron):
             # Do NOT silently use all miners; skip task execution if no handshake
             self.active_miner_uids = []
             bt.logging.warning("   No miners will be used this round due to handshake failure.")
+
+        await self._iwap_start_round(current_block=current_block, n_tasks=len(all_tasks))
 
         # ═══════════════════════════════════════════════════════
         # DYNAMIC LOOP: Execute tasks one by one based on time
@@ -310,6 +321,19 @@ class Validator(BaseValidatorNeuron):
                 )
             except Exception as e:
                 bt.logging.warning(f"Feedback failed: {e}")
+
+            try:
+                await self._iwap_submit_task_results(
+                    task_item=task_item,
+                    task_solutions=task_solutions,
+                    eval_scores=eval_scores,
+                    test_results_matrices=test_results_matrices,
+                    evaluation_results=evaluation_results,
+                    execution_times=execution_times,
+                    rewards=rewards.tolist(),
+                )
+            except Exception as e:
+                bt.logging.warning(f"IWAP submission failed: {e}")
 
             bt.logging.info(f"✅ Task {task_index + 1} completed")
             return True
@@ -446,26 +470,19 @@ class Validator(BaseValidatorNeuron):
         # Set weights on blockchain
         self.set_weights()
 
-        # ═══════════════════════════════════════════════════════
-        # LEADERBOARD: Post round results to API
-        # ═══════════════════════════════════════════════════════
-        boundaries = self.round_manager.get_current_boundaries()
-        self.leaderboard_sender.post_round_results(
-            validator=self,
-            start_block=boundaries['round_start_block'],
-            tasks_completed=tasks_completed,
-            avg_scores=avg_rewards,
-            final_weights=final_rewards_dict,
-            round_manager=self.round_manager,
-        )
+        try:
+            await self._finish_iwap_round(
+                avg_rewards=avg_rewards,
+                final_weights=final_rewards_dict,
+                tasks_completed=tasks_completed,
+            )
+        except Exception as e:
+            bt.logging.warning(f"IWAP finish_round failed: {e}")
 
         ColoredLogger.warning("", ColoredLogger.GREEN)
         ColoredLogger.success("✅ ROUND COMPLETE", ColoredLogger.GREEN)
         ColoredLogger.warning("=" * 80, ColoredLogger.GREEN)
         ColoredLogger.info(f"Tasks completed: {tasks_completed}", ColoredLogger.GREEN)
-        ColoredLogger.info(f"Miners evaluated: {len(avg_rewards)}", ColoredLogger.GREEN)
-        winner_uid = max(avg_rewards.keys(), key=lambda k: avg_rewards[k]) if avg_rewards else None
-        ColoredLogger.info(f"Winner: {winner_uid}", ColoredLogger.GREEN)
 
 
 if __name__ == "__main__":
