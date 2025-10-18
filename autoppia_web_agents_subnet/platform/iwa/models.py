@@ -230,6 +230,16 @@ class RoundWinnerIWAP:
 
 
 @dataclass
+class FinishRoundAgentRunIWAP:
+    agent_run_id: str
+    rank: Optional[int] = None
+    weight: Optional[float] = None
+
+    def to_payload(self) -> Dict[str, Any]:
+        return _drop_nones(asdict(self))
+
+
+@dataclass
 class FinishRoundIWAP:
     status: str
     winners: List[RoundWinnerIWAP]
@@ -237,6 +247,7 @@ class FinishRoundIWAP:
     weights: Dict[str, float]
     ended_at: float
     summary: Optional[Dict[str, int]] = None
+    agent_runs: List[FinishRoundAgentRunIWAP] = field(default_factory=list)
 
     def to_payload(self) -> Dict[str, Any]:
         return {
@@ -246,4 +257,5 @@ class FinishRoundIWAP:
             "weights": self.weights,
             "ended_at": self.ended_at,
             "summary": self.summary or {},
+            "agent_runs": [run.to_payload() for run in self.agent_runs],
         }

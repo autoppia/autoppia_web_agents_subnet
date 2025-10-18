@@ -418,6 +418,19 @@ class ValidatorPlatformMixin:
             "active_miners": len(avg_rewards),
         }
 
+        rank_map = {uid: rank for rank, (uid, _score) in enumerate(sorted_miners, start=1)}
+        agent_run_summaries: List[iwa_models.FinishRoundAgentRunIWAP] = []
+        for miner_uid, agent_run in self.current_agent_runs.items():
+            rank_value = rank_map.get(miner_uid)
+            weight_value = final_weights.get(miner_uid)
+            agent_run_summaries.append(
+                iwa_models.FinishRoundAgentRunIWAP(
+                    agent_run_id=agent_run.agent_run_id,
+                    rank=rank_value,
+                    weight=float(weight_value) if weight_value is not None else None,
+                )
+            )
+
         finish_request = iwa_models.FinishRoundIWAP(
             status="completed",
             winners=winners,
@@ -425,6 +438,7 @@ class ValidatorPlatformMixin:
             weights=weights_payload,
             ended_at=ended_at,
             summary=summary,
+            agent_runs=agent_run_summaries,
         )
 
         try:
