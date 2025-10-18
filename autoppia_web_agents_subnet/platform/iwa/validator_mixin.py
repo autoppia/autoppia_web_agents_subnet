@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import time
 from typing import Any, Dict, List, Optional
 
@@ -144,6 +145,12 @@ class ValidatorPlatformMixin:
         validator_snapshot = self._build_validator_snapshot(self.current_round_id)
         boundaries = self.round_manager.get_current_boundaries()
         max_epochs = max(1, int(round(ROUND_SIZE_EPOCHS))) if ROUND_SIZE_EPOCHS else 1
+        start_epoch_raw = boundaries["round_start_epoch"]
+        start_epoch = math.floor(start_epoch_raw)
+        round_metadata: Dict[str, Any] = {
+            "round_start_epoch_raw": start_epoch_raw,
+            "target_epoch": boundaries.get("target_epoch"),
+        }
 
         validator_round = iwa_models.ValidatorRoundIWAP(
             validator_round_id=self.current_round_id,
@@ -152,7 +159,7 @@ class ValidatorPlatformMixin:
             validator_hotkey=validator_identity.hotkey,
             validator_coldkey=validator_identity.coldkey,
             start_block=current_block,
-            start_epoch=boundaries["round_start_epoch"],
+            start_epoch=start_epoch,
             max_epochs=max_epochs,
             max_blocks=self.round_manager.BLOCKS_PER_EPOCH,
             n_tasks=n_tasks,
@@ -160,6 +167,7 @@ class ValidatorPlatformMixin:
             n_winners=max(1, len(self.active_miner_uids)) if self.active_miner_uids else 1,
             started_at=self.round_start_timestamp or time.time(),
             summary={"tasks": n_tasks},
+            metadata=round_metadata,
         )
 
         try:
