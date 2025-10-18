@@ -81,6 +81,11 @@ class IWAPClient:
             "validator_round": validator_round.to_payload(),
             "validator_snapshot": validator_snapshot.to_payload(),
         }
+        logger.info(
+            "IWAP start_round prepared for validator_round_id=%s round_number=%s",
+            validator_round.validator_round_id,
+            validator_round.round_number,
+        )
         await self._post("/api/v1/validator-rounds/start", payload, context="start_round")
 
     async def set_tasks(
@@ -89,7 +94,13 @@ class IWAPClient:
         validator_round_id: str,
         tasks: Iterable[models.TaskIWAP],
     ) -> None:
-        payload = {"tasks": [task.to_payload() for task in tasks]}
+        task_payloads = [task.to_payload() for task in tasks]
+        payload = {"tasks": task_payloads}
+        logger.info(
+            "IWAP set_tasks prepared for validator_round_id=%s tasks=%s",
+            validator_round_id,
+            len(task_payloads),
+        )
         await self._post(f"/api/v1/validator-rounds/{validator_round_id}/tasks", payload, context="set_tasks")
 
     async def start_agent_run(
@@ -105,6 +116,12 @@ class IWAPClient:
             "miner_identity": miner_identity.to_payload(),
             "miner_snapshot": miner_snapshot.to_payload(),
         }
+        logger.info(
+            "IWAP start_agent_run prepared for validator_round_id=%s agent_run_id=%s miner_uid=%s",
+            validator_round_id,
+            agent_run.agent_run_id,
+            miner_identity.uid,
+        )
         await self._post(
             f"/api/v1/validator-rounds/{validator_round_id}/agent-runs/start",
             payload,
@@ -145,6 +162,12 @@ class IWAPClient:
             },
             "evaluation_result": evaluation_result.to_payload(),
         }
+        logger.info(
+            "IWAP add_evaluation prepared for validator_round_id=%s agent_run_id=%s task_solution_id=%s",
+            validator_round_id,
+            agent_run_id,
+            task_solution.solution_id,
+        )
         await self._post(
             f"/api/v1/validator-rounds/{validator_round_id}/agent-runs/{agent_run_id}/evaluations",
             payload,
@@ -157,6 +180,11 @@ class IWAPClient:
         validator_round_id: str,
         finish_request: models.FinishRoundIWAP,
     ) -> None:
+        logger.info(
+            "IWAP finish_round prepared for validator_round_id=%s summary=%s",
+            validator_round_id,
+            finish_request.summary,
+        )
         await self._post(
             f"/api/v1/validator-rounds/{validator_round_id}/finish",
             finish_request.to_payload(),
@@ -166,8 +194,15 @@ class IWAPClient:
     async def _post(self, path: str, payload: Dict[str, object], *, context: str) -> None:
         self._backup_payload(context, payload)
         try:
+            logger.info("IWAP %s POST %s started", context, path)
             response = await self._client.post(path, json=payload)
             response.raise_for_status()
+            logger.info(
+                "IWAP %s POST %s succeeded with status %s",
+                context,
+                path,
+                response.status_code,
+            )
         except httpx.HTTPStatusError as exc:
             body = exc.response.text
             logger.error("IWAP %s failed (%s): %s", context, exc.response.status_code, body)
