@@ -16,6 +16,8 @@ from autoppia_web_agents_subnet.validator.config import (
 from autoppia_web_agents_subnet.platform.iwa import models as iwa_models
 from autoppia_web_agents_subnet.platform.iwa import main as iwa_main
 
+IWAP_PHASE_ICON = "🛰️"
+
 
 class ValidatorPlatformMixin:
     """
@@ -32,6 +34,29 @@ class ValidatorPlatformMixin:
         self.round_handshake_payloads: Dict[int, Any] = {}
         self.round_start_timestamp: float = 0.0
         self.agent_run_accumulators: Dict[int, Dict[str, float]] = {}
+
+    def _log_iwap_phase(
+        self,
+        phase: str,
+        message: str,
+        *,
+        level: str = "info",
+        exc_info: bool = False,
+    ) -> None:
+        """
+        Centralized IWAP logging with a consistent icon and message format.
+        """
+        prefix = f"{IWAP_PHASE_ICON} IWAP {phase}: {message}"
+        if level == "success":
+            bt.logging.success(prefix)
+        elif level == "warning":
+            bt.logging.warning(prefix)
+        elif level == "error":
+            bt.logging.error(prefix, exc_info=exc_info)
+        elif level == "debug":
+            bt.logging.debug(prefix)
+        else:
+            bt.logging.info(prefix)
 
     def _generate_validator_round_id(self) -> str:
         return iwa_main.generate_validator_round_id()
@@ -158,6 +183,14 @@ class ValidatorPlatformMixin:
         }
 
         round_number = self.round_manager.calculate_round(current_block)
+        miner_count = len(getattr(self, "active_miner_uids", []))
+
+        start_round_message = (
+            f"Calling start_round with round_number={round_number}, "
+            f"tasks={n_tasks}, miners={miner_count}, "
+            f"round_id={self.current_round_id}"
+        )
+        self._log_iwap_phase("Phase 1", start_round_message)
 
         validator_round = iwa_models.ValidatorRoundIWAP(
             validator_round_id=self.current_round_id,
@@ -183,13 +216,47 @@ class ValidatorPlatformMixin:
                 validator_round=validator_round,
                 validator_snapshot=validator_snapshot,
             )
+        except Exception:
+            self._log_iwap_phase(
+                "Phase 1",
+                f"start_round failed for round_id={self.current_round_id}",
+                level="error",
+                exc_info=True,
+            )
+            return
+        else:
+            self._log_iwap_phase(
+                "Phase 1",
+                f"start_round completed for round_id={self.current_round_id}",
+                level="success",
+            )
+
+        task_count = len(self.current_round_tasks)
+        set_tasks_message = (
+            f"Calling set_tasks with tasks={task_count} "
+            f"for round_id={self.current_round_id}"
+        )
+        self._log_iwap_phase("Phase 2", set_tasks_message)
+
+        try:
             await self.iwap_client.set_tasks(
                 validator_round_id=self.current_round_id,
                 tasks=self.current_round_tasks.values(),
             )
         except Exception:
-            bt.logging.warning("Unable to start IWAP round ingestion", exc_info=True)
+            self._log_iwap_phase(
+                "Phase 2",
+                f"set_tasks failed for round_id={self.current_round_id}",
+                level="error",
+                exc_info=True,
+            )
             return
+        else:
+            self._log_iwap_phase(
+                "Phase 2",
+                f"set_tasks completed for round_id={self.current_round_id}",
+                level="success",
+            )
 
         coldkeys = getattr(self.metagraph, "coldkeys", [])
         now_ts = time.time()
@@ -241,11 +308,38 @@ class ValidatorPlatformMixin:
             )
 
             try:
+                start_agent_run_message = (
+                    f"Calling start_agent_run for miner_uid={miner_uid}, "
+                    f"agent_run_id={agent_run_id}"
+                )
+                self._log_iwap_phase("Phase 3", start_agent_run_message)
                 await self.iwap_client.start_agent_run(
                     validator_round_id=self.current_round_id,
                     agent_run=agent_run,
                     miner_identity=miner_identity,
                     miner_snapshot=miner_snapshot,
+                )
+            except Exception:
+                start_agent_run_error = (
+                    f"start_agent_run failed for miner_uid={miner_uid}, "
+                    f"agent_run_id={agent_run_id}"
+                )
+                self._log_iwap_phase(
+                    "Phase 3",
+                    start_agent_run_error,
+                    level="error",
+                    exc_info=True,
+                )
+                continue
+            else:
+                start_agent_run_success = (
+                    f"start_agent_run completed for miner_uid={miner_uid}, "
+                    f"agent_run_id={agent_run_id}"
+                )
+                self._log_iwap_phase(
+                    "Phase 3",
+                    start_agent_run_success,
+                    level="success",
                 )
                 self.current_agent_runs[miner_uid] = agent_run
                 self.current_miner_snapshots[miner_uid] = miner_snapshot
@@ -255,11 +349,6 @@ class ValidatorPlatformMixin:
                     "execution_time": 0.0,
                     "tasks": 0,
                 }
-            except Exception:
-                bt.logging.warning(
-                    f"Unable to start IWAP agent run for miner {miner_uid}",
-                    exc_info=True,
-                )
 
     async def _iwap_submit_task_results(
         self,
@@ -355,6 +444,11 @@ class ValidatorPlatformMixin:
                 metadata=evaluation_meta,
             )
 
+            add_evaluation_message = (
+                f"Calling add_evaluation for miner_uid={miner_uid}, "
+                f"task_id={task_id}, agent_run_id={agent_run.agent_run_id}"
+            )
+            self._log_iwap_phase("Phase 4", add_evaluation_message)
             try:
                 await self.iwap_client.add_evaluation(
                     validator_round_id=self.current_round_id,
@@ -364,9 +458,25 @@ class ValidatorPlatformMixin:
                     evaluation_result=evaluation_result_payload,
                 )
             except Exception:
-                bt.logging.warning(
-                    f"Failed to submit IWAP evaluation for miner {miner_uid} task {task_id}",
+                add_evaluation_error = (
+                    f"add_evaluation failed for miner_uid={miner_uid}, "
+                    f"task_id={task_id}"
+                )
+                self._log_iwap_phase(
+                    "Phase 4",
+                    add_evaluation_error,
+                    level="error",
                     exc_info=True,
+                )
+            else:
+                add_evaluation_success = (
+                    f"add_evaluation completed for miner_uid={miner_uid}, "
+                    f"task_id={task_id}"
+                )
+                self._log_iwap_phase(
+                    "Phase 4",
+                    add_evaluation_success,
+                    level="success",
                 )
 
             accumulators = self.agent_run_accumulators.setdefault(
@@ -448,10 +558,30 @@ class ValidatorPlatformMixin:
             agent_runs=agent_run_summaries,
         )
 
+        round_id = self.current_round_id
+        finish_round_message = (
+            f"Calling finish_round for round_id={round_id}, "
+            f"winners={len(winners)}, tasks_completed={tasks_completed}"
+        )
+        self._log_iwap_phase("Phase 5", finish_round_message)
         try:
             await self.iwap_client.finish_round(
-                validator_round_id=self.current_round_id,
+                validator_round_id=round_id,
                 finish_request=finish_request,
+            )
+        except Exception:
+            self._log_iwap_phase(
+                "Phase 5",
+                f"finish_round failed for round_id={round_id}",
+                level="error",
+                exc_info=True,
+            )
+            raise
+        else:
+            self._log_iwap_phase(
+                "Phase 5",
+                f"finish_round completed for round_id={round_id}",
+                level="success",
             )
         finally:
             self._reset_iwap_round_state()
