@@ -1,9 +1,12 @@
 # autoppia_web_agents_subnet/validator/round_manager.py
 from __future__ import annotations
-import bittensor as bt
-from typing import Dict, Any, List, Optional
-import numpy as np
+
+from typing import Any, Dict, List, Optional
+
+import httpx
+
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+from autoppia_web_agents_subnet.validator.config import IWAP_API_BASE_URL, TESTING
 
 
 class RoundManager:
@@ -231,6 +234,11 @@ class RoundManager:
 
     def calculate_round(self, current_block: int) -> int:
         """Return the human-visible round number based on days elapsed since launch block."""
+        if TESTING:
+            testing_round = self._calculate_round_from_backend()
+            if testing_round is not None:
+                return testing_round
+
         base_block = self.minimum_start_block or 0
         if current_block <= base_block:
             return 0
@@ -238,6 +246,97 @@ class RoundManager:
         blocks_since_start = current_block - base_block
         round_index = blocks_since_start // self.ROUND_BLOCK_LENGTH
         return int(round_index + 1)
+
+    def _calculate_round_from_backend(self) -> Optional[int]:
+        """Use the dashboard rounds endpoint to derive the next round number when testing."""
+        base_url = (IWAP_API_BASE_URL or "").rstrip("/")
+        if not base_url:
+            return None
+
+        url = f"{base_url}/api/v1/rounds"
+        params = {
+            "limit": 1,
+            "page": 1,
+            "sortBy": "round",
+            "sortOrder": "desc",
+        }
+
+        try:
+            response = httpx.get(url, params=params, timeout=10.0)
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            ColoredLogger.warning(
+                f"Unable to fetch rounds from backend ({url}): {exc}",
+                ColoredLogger.YELLOW,
+            )
+            return None
+        except Exception as exc:  # noqa: BLE001
+            ColoredLogger.warning(
+                f"Unexpected error when fetching rounds from backend ({url}): {exc}",
+                ColoredLogger.YELLOW,
+            )
+            return None
+
+        try:
+            payload = response.json()
+        except ValueError:
+            ColoredLogger.warning(
+                f"Received non-JSON response from backend rounds endpoint ({url})",
+                ColoredLogger.YELLOW,
+            )
+            return None
+
+        entries = self._extract_round_entries(payload)
+        if not entries:
+            # No prior rounds recorded; start from first round.
+            return 1
+
+        latest_entry = entries[0]
+        round_value = self._extract_round_value(latest_entry)
+        if round_value is None:
+            return None
+        return round_value + 1
+
+    @staticmethod
+    def _extract_round_entries(payload: Any) -> List[Dict[str, Any]]:
+        """Normalize rounds API responses into a list of round dictionaries."""
+        def _coerce(obj: Any) -> List[Dict[str, Any]]:
+            if isinstance(obj, list):
+                return [item for item in obj if isinstance(item, dict)]
+            if isinstance(obj, dict):
+                candidates = []
+                for key in ("rounds", "data", "entries"):
+                    if key in obj:
+                        nested = _coerce(obj[key])
+                        if nested:
+                            candidates.extend(nested)
+                if candidates:
+                    return candidates
+                # No known keys – treat the dict itself as a single entry if it looks like one.
+                if {"round", "roundNumber", "round_number", "id"}.intersection(obj.keys()):
+                    return [obj]
+            return []
+
+        extracted = _coerce(payload)
+        return extracted
+
+    @staticmethod
+    def _extract_round_value(entry: Dict[str, Any]) -> Optional[int]:
+        """Attempt to pull an integer round number from a round entry."""
+        for key in ("round", "roundNumber", "round_number", "id"):
+            value = entry.get(key)
+            if isinstance(value, bool):  # Avoid treating booleans as integers
+                continue
+            if isinstance(value, (int, float)):
+                return int(value)
+            if isinstance(value, str):
+                digits = "".join(ch for ch in value if ch.isdigit())
+                if digits:
+                    try:
+                        return int(digits)
+                    except ValueError:
+                        continue
+        return None
 
     # ═══════════════════════════════════════════════════════════════════════════════
     # SCORE MANAGEMENT METHODS
