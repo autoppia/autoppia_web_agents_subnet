@@ -14,6 +14,20 @@ def _normalized(value: Optional[str]) -> Optional[str]:
     return stripped or None
 
 
+def _env_int(name: str, default: int) -> int:
+    """
+    Retrieve an integer environment variable, falling back to default for invalid values.
+    """
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        parsed = int(raw.strip())
+        return parsed if parsed > 0 else default
+    except (TypeError, ValueError):
+        return default
+
+
 # ╭─────────────────────────── Round System Configuration QUICK TEST─────────────────────────────╮
 
 # Round-based system: Long-duration rounds with pre-generated tasks and dynamic execution
@@ -87,6 +101,7 @@ TIME_WEIGHT = 0.15                  # Weight of execution time (0-1)
 
 VALIDATOR_NAME = _normalized(os.getenv("VALIDATOR_NAME"))
 VALIDATOR_IMAGE = _normalized(os.getenv("VALIDATOR_IMAGE"))
+MAX_AGENT_NAME_LENGTH = _env_int("MAX_AGENT_NAME_LENGTH", 12)
 
 LEADERBOARD_ENDPOINT = os.getenv("LEADERBOARD_ENDPOINT", "https://leaderboard-api.autoppia.com")
 IWAP_API_BASE_URL = os.getenv("IWAP_API_BASE_URL", "https://api-leaderboard.autoppia.com")

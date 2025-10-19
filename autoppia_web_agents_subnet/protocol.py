@@ -24,6 +24,14 @@ class TaskSynapse(Synapse):
     prompt: str
     url: str
     screenshot: Optional[str] = None
+    seed: Optional[int] = Field(
+        default=None,
+        description="Seed assigned to the task URL (when applicable).",
+    )
+    web_project_name: Optional[str] = Field(
+        default=None,
+        description="Display name of the web project the task belongs to.",
+    )
     actions: List[AllActionsUnion] = Field(
         default_factory=list,
         description="The actions that solve the task",

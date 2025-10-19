@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import time
 from typing import Dict
+from urllib.parse import parse_qs, urlparse
 
 import bittensor as bt
 import numpy as np
@@ -23,6 +24,7 @@ from autoppia_web_agents_subnet.validator.config import (
     VALIDATOR_NAME,
     VALIDATOR_IMAGE,
     DZ_STARTING_BLOCK,
+    MAX_AGENT_NAME_LENGTH,
 )
 from autoppia_web_agents_subnet.validator.tasks import get_task_collection_interleaved, collect_task_solutions_and_execution_times
 from autoppia_web_agents_subnet.validator.synapse_handlers import (
@@ -201,6 +203,14 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                 text = str(value).strip()
                 return text or None
 
+            def _truncate_agent_name(name: str) -> str:
+                if MAX_AGENT_NAME_LENGTH and len(name) > MAX_AGENT_NAME_LENGTH:
+                    bt.logging.debug(
+                        f"Truncating agent name '{name}' to {MAX_AGENT_NAME_LENGTH} characters."
+                    )
+                    return name[:MAX_AGENT_NAME_LENGTH]
+                return name
+
             # Filter successful responses only
             for i, response in enumerate(handshake_responses):
                 if i >= len(all_axons):
@@ -232,6 +242,8 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                         f"  Skipping uid={mapped_uid}: handshake missing agent metadata"
                     )
                     continue
+
+                agent_name = _truncate_agent_name(agent_name)
 
                 response.agent_name = agent_name
                 response.agent_image = _normalized_optional(getattr(response, "agent_image", None))
@@ -335,12 +347,27 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
 
             active_axons = [self.metagraph.axons[uid] for uid in self.active_miner_uids]
 
+            # Capture task metadata to forward to miners
+            seed: int | None = getattr(task, "_seed_value", None)
+            if seed is None and isinstance(getattr(task, "url", None), str):
+                try:
+                    parsed = urlparse(task.url)
+                    query = parse_qs(parsed.query)
+                    raw_seed = query.get("seed", [None])[0]
+                    seed = int(str(raw_seed)) if raw_seed is not None else None
+                except (ValueError, TypeError):
+                    seed = None
+
+            web_project_name = getattr(project, "name", None)
+
             # Create TaskSynapse with the actual task
             task_synapse = TaskSynapse(
                 version=self.version,
                 prompt=task.prompt,
                 url=project.frontend_url,
                 screenshot=None,  # Optional: could add screenshot support
+                seed=seed,
+                web_project_name=web_project_name,
             )
 
             # Send task to miners

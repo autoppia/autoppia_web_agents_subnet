@@ -11,6 +11,8 @@ from typing import Dict, Iterable, List, Optional
 
 import httpx
 
+from autoppia_web_agents_subnet.validator.config import MAX_AGENT_NAME_LENGTH
+
 from . import models
 
 logger = logging.getLogger(__name__)
@@ -267,6 +269,9 @@ def build_miner_snapshot(
         agent_name = "Benchmark Agent" if miner_uid is None else "Unknown"
     else:
         agent_name = str(raw_name).strip()
+
+    if MAX_AGENT_NAME_LENGTH and len(agent_name) > MAX_AGENT_NAME_LENGTH:
+        agent_name = agent_name[:MAX_AGENT_NAME_LENGTH]
 
     image_url = _normalized_optional(getattr(handshake_payload, "agent_image", None))
     github_url = _normalized_optional(getattr(handshake_payload, "github_url", None))
