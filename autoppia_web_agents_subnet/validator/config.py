@@ -83,6 +83,9 @@ TIME_WEIGHT = 0.15                  # Weight of execution time (0-1)
 
 VALIDATOR_NAME = _normalized(os.getenv("ValidatorName"))
 VALIDATOR_IMAGE = _normalized(os.getenv("ValidatorImage"))
+print(os.getenv("ValidatorName"))
+print(os.getenv("ValidatorImage"))
+input()
 
 LEADERBOARD_ENDPOINT = os.getenv("LEADERBOARD_ENDPOINT", "https://leaderboard-api.autoppia.com")
 IWAP_API_BASE_URL = os.getenv("IWAP_API_BASE_URL", "https://api-leaderboard.autoppia.com")
