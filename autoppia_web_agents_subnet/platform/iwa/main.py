@@ -217,6 +217,10 @@ class IWAPClient:
             context="finish_round",
         )
 
+    async def auth_check(self) -> None:
+        logger.info("IWAP auth_check prepared")
+        await self._post("/api/v1/validator-rounds/auth-check", {}, context="auth_check")
+
     async def upload_evaluation_gif(self, evaluation_id: str, gif_bytes: bytes) -> Optional[str]:
         if not gif_bytes:
             raise ValueError("GIF payload is empty")

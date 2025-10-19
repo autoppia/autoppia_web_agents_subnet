@@ -86,7 +86,8 @@ class ValidatorPlatformMixin:
             return {}
 
         try:
-            signature_bytes = self.wallet.hotkey.sign(message=message.encode("utf-8"))
+            message_bytes = message.encode("utf-8")
+            signature_bytes = self.wallet.hotkey.sign(message_bytes)
         except Exception as exc:
             self._log_iwap_phase(
                 "Auth",
@@ -232,6 +233,17 @@ class ValidatorPlatformMixin:
             f"round_id={self.current_round_id}"
         )
         self._log_iwap_phase("Phase 1", start_round_message)
+
+        try:
+            await self.iwap_client.auth_check()
+        except Exception as exc:
+            self._log_iwap_phase(
+                "Auth",
+                f"Validator auth check failed – aborting round: {exc}",
+                level="error",
+                exc_info=True,
+            )
+            raise SystemExit("Validator authentication failed; shutting down") from exc
 
         validator_round = iwa_models.ValidatorRoundIWAP(
             validator_round_id=self.current_round_id,
