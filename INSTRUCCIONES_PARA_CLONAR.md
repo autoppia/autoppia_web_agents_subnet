@@ -1,6 +1,6 @@
 # 🔧 Instrucciones para Re-clonar el Repositorio
 
-## ⚠️ Si rompiste el repositorio con un push, sigue estos pasos:
+### ⚠️ Si rompiste el repositorio con un push, sigue estos pasos:
 
 ### 1. Respaldar tu trabajo (por si acaso)
 
