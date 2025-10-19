@@ -27,7 +27,7 @@ echo ""
 echo "📝 Estado actual:"
 git submodule status --recursive
 echo ""
-echo "⚠️   Si quieres guardar estos cambios en tu rama:"
+echo "⚠️  Si quieres guardar estos cambios en tu rama:"
 echo "   git add autoppia_iwa_module"
 echo "   git commit -m 'Update submodule references'"
 echo "   git push"
