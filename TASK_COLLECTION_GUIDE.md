@@ -12,7 +12,7 @@ Reemplaza el uso de tuplas `(project, task)` con el modelo `TaskWithProject` má
 ```python
 @dataclass
 class TaskWithProject:
-    """Single task paired with its project.."""
+    """Single task paired with its project..."""
     project: WebProject
     task: Task
 ```
