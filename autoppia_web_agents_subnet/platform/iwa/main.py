@@ -7,7 +7,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 import uuid
-from typing import Dict, Iterable, List, Optional
+from typing import Callable, Dict, Iterable, List, Optional
 
 import httpx
 
@@ -16,6 +16,9 @@ from autoppia_web_agents_subnet.validator.config import MAX_AGENT_NAME_LENGTH
 from . import models
 
 logger = logging.getLogger(__name__)
+
+VALIDATOR_HOTKEY_HEADER = "x-validator-hotkey"
+VALIDATOR_SIGNATURE_HEADER = "x-validator-signature"
 
 
 def _uuid_suffix(length: int = 12) -> str:
@@ -56,11 +59,13 @@ class IWAPClient:
         timeout: float = 30.0,
         client: Optional[httpx.AsyncClient] = None,
         backup_dir: Optional[Path] = None,
+        auth_provider: Optional[Callable[[], Dict[str, str]]] = None,
     ) -> None:
         resolved_base_url = (base_url or os.getenv("IWAP_API_BASE_URL", "http://217.154.10.168:8080")).rstrip("/")
         self._client = client or httpx.AsyncClient(base_url=resolved_base_url, timeout=timeout)
         self._owns_client = client is None
         self._backup_dir = Path(backup_dir or os.getenv("IWAP_BACKUP_DIR", "iwap_bakcup_dir"))
+        self._auth_provider = auth_provider
         logger.info("IWAP client initialized with base_url=%s", self._client.base_url)
         try:
             self._backup_dir.mkdir(parents=True, exist_ok=True)
@@ -71,6 +76,24 @@ class IWAPClient:
     async def close(self) -> None:
         if self._owns_client:
             await self._client.aclose()
+
+    def set_auth_provider(self, provider: Optional[Callable[[], Dict[str, str]]]) -> None:
+        self._auth_provider = provider
+
+    def _resolve_auth_headers(self) -> Dict[str, str]:
+        if not self._auth_provider:
+            return {}
+        try:
+            headers = dict(self._auth_provider())
+        except Exception:
+            logger.exception("IWAP auth provider failed to generate headers")
+            raise
+        sanitized: Dict[str, str] = {}
+        for key, value in headers.items():
+            if value is None:
+                continue
+            sanitized[str(key)] = str(value)
+        return sanitized
 
     async def start_round(
         self,
@@ -194,9 +217,54 @@ class IWAPClient:
             context="finish_round",
         )
 
+    async def upload_evaluation_gif(self, evaluation_id: str, gif_bytes: bytes) -> Optional[str]:
+        if not gif_bytes:
+            raise ValueError("GIF payload is empty")
+
+        path = f"/api/v1/evaluations/{evaluation_id}/gif"
+        filename = f"{evaluation_id}.gif"
+        logger.info("IWAP upload_evaluation_gif prepared for evaluation_id=%s", evaluation_id)
+
+        try:
+            response = await self._client.post(
+                path,
+                files={"gif": (filename, gif_bytes, "image/gif")},
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            body = exc.response.text
+            logger.error(
+                "IWAP upload_evaluation_gif POST %s failed (%s): %s",
+                path,
+                exc.response.status_code,
+                body,
+            )
+            raise
+        except Exception:
+            logger.exception("IWAP upload_evaluation_gif POST %s failed unexpectedly", path)
+            raise
+
+        try:
+            payload = response.json()
+        except Exception:
+            logger.warning("IWAP upload_evaluation_gif received non-JSON response for evaluation_id=%s", evaluation_id)
+            return None
+
+        gif_url = None
+        if isinstance(payload, dict):
+            data_section = payload.get("data")
+            if isinstance(data_section, dict):
+                gif_url = data_section.get("gifUrl")
+
+        logger.info("IWAP upload_evaluation_gif completed for evaluation_id=%s url=%s", evaluation_id, gif_url)
+        return gif_url
+
     async def _post(self, path: str, payload: Dict[str, object], *, context: str) -> None:
         self._backup_payload(context, payload)
         request = self._client.build_request("POST", path, json=payload)
+        auth_headers = self._resolve_auth_headers()
+        if auth_headers:
+            request.headers.update(auth_headers)
         target_url = str(request.url)
         try:
             logger.info("IWAP %s POST %s started", context, target_url)

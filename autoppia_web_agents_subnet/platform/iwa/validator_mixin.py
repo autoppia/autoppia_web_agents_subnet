@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import base64
 import math
 import time
+from binascii import Error as BinasciiError
 from typing import Any, Dict, List, Optional
 
 import bittensor as bt
@@ -12,6 +14,7 @@ from autoppia_web_agents_subnet.validator.config import (
     IWAP_API_BASE_URL,
     VALIDATOR_NAME,
     VALIDATOR_IMAGE,
+    VALIDATOR_AUTH_MESSAGE,
 )
 from autoppia_web_agents_subnet.platform.iwa import models as iwa_models
 from autoppia_web_agents_subnet.platform.iwa import main as iwa_main
@@ -26,7 +29,12 @@ class ValidatorPlatformMixin:
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.iwap_client = iwa_main.IWAPClient(base_url=IWAP_API_BASE_URL)
+        self._validator_auth_message = VALIDATOR_AUTH_MESSAGE or "I am a honest validator"
+        self._auth_warning_emitted = False
+        self.iwap_client = iwa_main.IWAPClient(
+            base_url=IWAP_API_BASE_URL,
+            auth_provider=self._build_iwap_auth_headers,
+        )
         self.current_round_id: Optional[str] = None
         self.current_round_tasks: Dict[str, iwa_models.TaskIWAP] = {}
         self.current_agent_runs: Dict[int, iwa_models.AgentRunIWAP] = {}
@@ -60,6 +68,39 @@ class ValidatorPlatformMixin:
 
     def _generate_validator_round_id(self) -> str:
         return iwa_main.generate_validator_round_id()
+
+    def _build_iwap_auth_headers(self) -> Dict[str, str]:
+        hotkey = getattr(self.wallet.hotkey, "ss58_address", None)
+        if not hotkey:
+            raise RuntimeError("Validator hotkey is unavailable for IWAP authentication")
+
+        message = self._validator_auth_message
+        if not message:
+            if not self._auth_warning_emitted:
+                self._log_iwap_phase(
+                    "Auth",
+                    "Validator auth message not configured; IWAP requests will not be signed",
+                    level="warning",
+                )
+                self._auth_warning_emitted = True
+            return {}
+
+        try:
+            signature_bytes = self.wallet.hotkey.sign(message=message.encode("utf-8"))
+        except Exception as exc:
+            self._log_iwap_phase(
+                "Auth",
+                f"Failed to sign IWAP auth message: {exc}",
+                level="error",
+                exc_info=True,
+            )
+            raise
+
+        signature_b64 = base64.b64encode(signature_bytes).decode("ascii")
+        return {
+            iwa_main.VALIDATOR_HOTKEY_HEADER: hotkey,
+            iwa_main.VALIDATOR_SIGNATURE_HEADER: signature_b64,
+        }
 
     def _build_validator_identity(self) -> iwa_models.ValidatorIdentityIWAP:
         coldkey = getattr(getattr(self.wallet, "coldkeypub", None), "ss58_address", None)
@@ -405,6 +446,8 @@ class ValidatorPlatformMixin:
             evaluation_meta = evaluation_results[idx] if idx < len(evaluation_results) else {}
             if not isinstance(evaluation_meta, dict):
                 evaluation_meta = {}
+            evaluation_metadata = dict(evaluation_meta)
+            gif_payload = evaluation_metadata.pop("gif_recording", evaluation_meta.get("gif_recording"))
             test_matrix = test_results_matrices[idx] if idx < len(test_results_matrices) else []
             exec_time = float(execution_times[idx]) if idx < len(execution_times) else 0.0
             reward_value = rewards[idx] if idx < len(rewards) else final_score
@@ -440,8 +483,8 @@ class ValidatorPlatformMixin:
                 raw_score=evaluation_meta.get("raw_score", final_score),
                 evaluation_time=evaluation_meta.get("evaluation_time", exec_time),
                 stats=evaluation_meta.get("stats"),
-                gif_recording=evaluation_meta.get("gif_recording"),
-                metadata=evaluation_meta,
+                gif_recording=gif_payload,
+                metadata=evaluation_metadata,
             )
 
             add_evaluation_message = (
@@ -479,6 +522,33 @@ class ValidatorPlatformMixin:
                     level="success",
                 )
 
+                if gif_payload:
+                    gif_bytes = self._extract_gif_bytes(gif_payload)
+                    if gif_bytes:
+                        try:
+                            uploaded_url = await self.iwap_client.upload_evaluation_gif(evaluation_id, gif_bytes)
+                        except Exception:
+                            self._log_iwap_phase(
+                                "Phase 4",
+                                f"Failed to upload GIF for evaluation_id={evaluation_id}",
+                                level="error",
+                                exc_info=True,
+                            )
+                        else:
+                            if uploaded_url:
+                                evaluation_result_payload.gif_recording = uploaded_url
+                                self._log_iwap_phase(
+                                    "Phase 4",
+                                    f"Uploaded GIF for evaluation_id={evaluation_id}",
+                                    level="success",
+                                )
+                    else:
+                        self._log_iwap_phase(
+                            "Phase 4",
+                            f"Skipped GIF upload for evaluation_id={evaluation_id} (invalid payload)",
+                            level="warning",
+                        )
+
             accumulators = self.agent_run_accumulators.setdefault(
                 miner_uid,
                 {"reward": 0.0, "score": 0.0, "execution_time": 0.0, "tasks": 0},
@@ -494,6 +564,33 @@ class ValidatorPlatformMixin:
             agent_run.average_reward = accumulators["reward"] / accumulators["tasks"]
             agent_run.average_score = accumulators["score"] / accumulators["tasks"]
             agent_run.average_execution_time = accumulators["execution_time"] / accumulators["tasks"]
+
+    @staticmethod
+    def _extract_gif_bytes(payload: Optional[object]) -> Optional[bytes]:
+        if payload is None:
+            return None
+
+        if isinstance(payload, (bytes, bytearray)):
+            candidate = bytes(payload)
+            if candidate.startswith((b"GIF87a", b"GIF89a")):
+                return candidate
+            raw_source = candidate
+        elif isinstance(payload, str):
+            text = payload.strip()
+            if not text:
+                return None
+            raw_source = text.encode("utf-8")
+        else:
+            return None
+
+        try:
+            decoded = base64.b64decode(raw_source, validate=True)
+        except (BinasciiError, ValueError):
+            return None
+
+        if decoded.startswith((b"GIF87a", b"GIF89a")):
+            return decoded
+        return None
 
     async def _finish_iwap_round(
         self,
