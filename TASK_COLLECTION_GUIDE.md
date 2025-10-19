@@ -5,7 +5,7 @@
 `TaskCollection` es una estructura simplificada para manejar tareas en el validador.
 Reemplaza el uso de tuplas `(project, task)` con el modelo `TaskWithProject` más claro.
 
-## 🆕 Nuevos Modeloos
+## 🆕 Nuevos Modelos
 
 ### TaskWithProject
 
