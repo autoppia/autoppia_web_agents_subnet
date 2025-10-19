@@ -2,7 +2,10 @@ import os
 from distutils.util import strtobool
 from pathlib import Path
 from typing import Optional
+from dotenv import load_dotenv
 
+# Load environment variables from .env file
+load_dotenv()
 
 def _normalized(value: Optional[str]) -> Optional[str]:
     if value is None:
@@ -81,10 +84,10 @@ TIME_WEIGHT = 0.15                  # Weight of execution time (0-1)
 
 # ╭─────────────────────────── Leaderboard ─────────────────────────────╮
 
-VALIDATOR_NAME = _normalized(os.getenv("ValidatorName"))
-VALIDATOR_IMAGE = _normalized(os.getenv("ValidatorImage"))
-print(os.getenv("ValidatorName"))
-print(os.getenv("ValidatorImage"))
+VALIDATOR_NAME = _normalized(os.getenv("VALIDATOR_NAME"))
+VALIDATOR_IMAGE = _normalized(os.getenv("VALIDATOR_IMAGE"))
+print(os.getenv("VALIDATOR_NAME"))
+print(os.getenv("VALIDATOR_IMAGE"))
 input()
 
 LEADERBOARD_ENDPOINT = os.getenv("LEADERBOARD_ENDPOINT", "https://leaderboard-api.autoppia.com")

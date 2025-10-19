@@ -43,7 +43,7 @@ from autoppia_web_agents_subnet.platform.iwa.validator_mixin import ValidatorPla
 class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
     def __init__(self, config=None):
         if not VALIDATOR_NAME or not VALIDATOR_IMAGE:
-            bt.logging.error("ValidatorName and ValidatorImage must be set in the environment before starting the validator.")
+            bt.logging.error("VALIDATOR_NAME and VALIDATOR_IMAGE must be set in the environment before starting the validator.")
             raise SystemExit(1)
 
         super().__init__(config=config)
