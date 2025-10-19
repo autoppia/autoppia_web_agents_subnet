@@ -209,10 +209,31 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
 
                 mapped_uid = all_uids[i]
                 if not response:
+                    bt.logging.debug(f"  Skipping uid={mapped_uid}: no handshake response object")
                     continue
 
-                agent_name = _normalized_optional(getattr(response, "agent_name", None))
-                response.agent_name = agent_name or "Unknown"
+                status_code = getattr(getattr(response, "dendrite", None), "status_code", None)
+                status_numeric: int | None = None
+                if status_code is not None:
+                    try:
+                        status_numeric = int(status_code)
+                    except (TypeError, ValueError):
+                        status_numeric = None
+                if status_numeric is not None and status_numeric >= 400:
+                    bt.logging.debug(
+                        f"  Skipping uid={mapped_uid}: handshake returned status {status_numeric}"
+                    )
+                    continue
+
+                agent_name_raw = getattr(response, "agent_name", None)
+                agent_name = _normalized_optional(agent_name_raw)
+                if not agent_name:
+                    bt.logging.debug(
+                        f"  Skipping uid={mapped_uid}: handshake missing agent metadata"
+                    )
+                    continue
+
+                response.agent_name = agent_name
                 response.agent_image = _normalized_optional(getattr(response, "agent_image", None))
                 response.github_url = _normalized_optional(getattr(response, "github_url", None))
                 agent_version = _normalized_optional(getattr(response, "agent_version", None))

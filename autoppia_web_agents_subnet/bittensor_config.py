@@ -58,7 +58,7 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--neuron.sample_size", type=int, default=50, help="Number of miners to query per step.")
 
     # NOTE: Validators can opt-out of serving an Axon
-    parser.add_argument("--neuron.axon_off", "--axon_off", action="store_true", default=False, help="Set this flag to not attempt to serve an Axon (validators only).")
+    parser.add_argument("--neuron.axon_off", "--axon_off", action="store_true", default=True, help="Set this flag to not attempt to serve an Axon (validators only).")
 
     parser.add_argument("--neuron.vpermit_tao_limit", type=int, default=4096, help="Max TAO allowed to query a validator with a vpermit.")
 
