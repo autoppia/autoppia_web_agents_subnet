@@ -144,11 +144,19 @@ class MockRoundManager:
     # Bittensor constants
     BLOCKS_PER_EPOCH = 360
     SECONDS_PER_BLOCK = 12
+    ROUND_BLOCK_LENGTH = BLOCKS_PER_EPOCH * 20
 
-    def __init__(self, round_size_epochs: int, avg_task_duration_seconds: float, safety_buffer_epochs: float):
+    def __init__(
+        self,
+        round_size_epochs: int,
+        avg_task_duration_seconds: float,
+        safety_buffer_epochs: float,
+        minimum_start_block: int | None = None,
+    ):
         self.round_size_epochs = round_size_epochs
         self.avg_task_duration_seconds = avg_task_duration_seconds
         self.safety_buffer_epochs = safety_buffer_epochs
+        self.minimum_start_block = minimum_start_block
 
         # Round state management
         self.round_scores = {}  # {miner_uid: [score1, score2, ...]}
@@ -225,6 +233,26 @@ class MockRoundManager:
         print(f"   Avg task duration: {self.avg_task_duration_seconds}s")
         print(f"   Blocks per epoch: {self.BLOCKS_PER_EPOCH}")
         print(f"   Seconds per block: {self.SECONDS_PER_BLOCK}s")
+        if self.minimum_start_block is not None:
+            print(f"   Minimum start block: {self.minimum_start_block}")
+
+    def can_start_round(self, current_block: int) -> bool:
+        if self.minimum_start_block is None:
+            return True
+        return current_block > self.minimum_start_block
+
+    def blocks_until_allowed(self, current_block: int) -> int:
+        if self.minimum_start_block is None:
+            return 0
+        next_allowed_block = self.minimum_start_block + 1
+        return max(next_allowed_block - current_block, 0)
+
+    def calculate_round(self, current_block: int) -> int:
+        base_block = self.minimum_start_block or 0
+        if current_block <= base_block:
+            return 0
+        blocks_since_start = current_block - base_block
+        return (blocks_since_start // self.ROUND_BLOCK_LENGTH) + 1
 
     def accumulate_rewards(self, miner_uids, rewards, execution_times):
         """Accumulate scores for the round"""

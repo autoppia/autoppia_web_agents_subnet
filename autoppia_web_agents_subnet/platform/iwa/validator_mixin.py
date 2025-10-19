@@ -7,7 +7,12 @@ from typing import Any, Dict, List, Optional
 import bittensor as bt
 
 from autoppia_web_agents_subnet.validator.models import TaskWithProject
-from autoppia_web_agents_subnet.validator.config import ROUND_SIZE_EPOCHS, IWAP_API_BASE_URL
+from autoppia_web_agents_subnet.validator.config import (
+    ROUND_SIZE_EPOCHS,
+    IWAP_API_BASE_URL,
+    VALIDATOR_NAME,
+    VALIDATOR_IMAGE,
+)
 from autoppia_web_agents_subnet.platform.iwa import models as iwa_models
 from autoppia_web_agents_subnet.platform.iwa import main as iwa_main
 
@@ -63,10 +68,10 @@ class ValidatorPlatformMixin:
             validator_round_id=validator_round_id,
             validator_uid=int(self.uid),
             validator_hotkey=self.wallet.hotkey.ss58_address,
-            name=getattr(self.config.neuron, "name", None),
+            name=VALIDATOR_NAME,
             stake=stake,
             vtrust=vtrust,
-            image_url=None,
+            image_url=VALIDATOR_IMAGE,
             version=self.version,
             metadata=metadata,
         )
@@ -152,9 +157,11 @@ class ValidatorPlatformMixin:
             "target_epoch": boundaries.get("target_epoch"),
         }
 
+        round_number = self.round_manager.calculate_round(current_block)
+
         validator_round = iwa_models.ValidatorRoundIWAP(
             validator_round_id=self.current_round_id,
-            round_number=1,
+            round_number=round_number,
             validator_uid=int(self.uid),
             validator_hotkey=validator_identity.hotkey,
             validator_coldkey=validator_identity.coldkey,

@@ -1,7 +1,7 @@
 # autoppia_web_agents_subnet/validator/round_manager.py
 from __future__ import annotations
 import bittensor as bt
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import numpy as np
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
@@ -27,12 +27,14 @@ class RoundManager:
     # Bittensor constants
     BLOCKS_PER_EPOCH = 360
     SECONDS_PER_BLOCK = 12
+    ROUND_BLOCK_LENGTH = BLOCKS_PER_EPOCH * 20  # 20 epochs ≈ 24 hours → 7,200 blocks
 
     def __init__(
         self,
         round_size_epochs: float,
         avg_task_duration_seconds: float,
         safety_buffer_epochs: float,
+        minimum_start_block: Optional[int] = None,
     ):
         """
         Args:
@@ -43,6 +45,7 @@ class RoundManager:
         self.round_size_epochs = round_size_epochs
         self.avg_task_duration_seconds = avg_task_duration_seconds
         self.safety_buffer_epochs = safety_buffer_epochs
+        self.minimum_start_block = minimum_start_block
 
         # Round state management
         self.round_rewards = {} 
@@ -69,6 +72,18 @@ class RoundManager:
         Args:
             current_block: The block when the round starts
         """
+        if not self.can_start_round(current_block):
+            blocks_remaining = self.blocks_until_allowed(current_block)
+            next_block = (self.minimum_start_block + 1) if self.minimum_start_block is not None else None
+            message = (
+                f"Round start blocked. Current block {current_block} is not past minimum "
+                f"{self.minimum_start_block}."
+            )
+            if next_block is not None:
+                message += f" Next allowed block: {next_block} (≈{blocks_remaining} blocks remaining)."
+            ColoredLogger.warning(message, ColoredLogger.YELLOW)
+            raise RuntimeError("Round cannot start before minimum start block is reached")
+
         self.start_block = current_block
         self.reset_round()
 
@@ -194,6 +209,35 @@ class RoundManager:
         ColoredLogger.info(f"   Avg task duration: {self.avg_task_duration_seconds}s", ColoredLogger.CYAN)
         ColoredLogger.info(f"   Blocks per epoch: {self.BLOCKS_PER_EPOCH}", ColoredLogger.CYAN)
         ColoredLogger.info(f"   Seconds per block: {self.SECONDS_PER_BLOCK}s", ColoredLogger.CYAN)
+        ColoredLogger.info(f"   Round block length: {self.ROUND_BLOCK_LENGTH}", ColoredLogger.CYAN)
+        if self.minimum_start_block is not None:
+            ColoredLogger.info(
+                f"   Minimum start block: {self.minimum_start_block} (rounds allowed > this block)",
+                ColoredLogger.CYAN,
+            )
+
+    def can_start_round(self, current_block: int) -> bool:
+        """Return True when the chain height has passed the minimum start block gate."""
+        if self.minimum_start_block is None:
+            return True
+        return current_block > self.minimum_start_block
+
+    def blocks_until_allowed(self, current_block: int) -> int:
+        """Return how many blocks remain before a new round may begin."""
+        if self.minimum_start_block is None:
+            return 0
+        next_allowed_block = self.minimum_start_block + 1
+        return max(next_allowed_block - current_block, 0)
+
+    def calculate_round(self, current_block: int) -> int:
+        """Return the human-visible round number based on days elapsed since launch block."""
+        base_block = self.minimum_start_block or 0
+        if current_block <= base_block:
+            return 0
+
+        blocks_since_start = current_block - base_block
+        round_index = blocks_since_start // self.ROUND_BLOCK_LENGTH
+        return int(round_index + 1)
 
     # ═══════════════════════════════════════════════════════════════════════════════
     # SCORE MANAGEMENT METHODS

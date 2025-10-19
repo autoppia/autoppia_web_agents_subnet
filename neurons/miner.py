@@ -66,14 +66,18 @@ class Miner(BaseMinerNeuron):
         )
 
         # Respond with our metadata
-        synapse.agent_name = AGENT_NAME
-        synapse.agent_image = AGENT_IMAGE or None
-        synapse.github_url = GITHUB_URL or None
+        agent_name = AGENT_NAME.strip() if isinstance(AGENT_NAME, str) else ""
+        agent_image = AGENT_IMAGE.strip() if isinstance(AGENT_IMAGE, str) else ""
+        github_url = GITHUB_URL.strip() if isinstance(GITHUB_URL, str) else ""
+
+        synapse.agent_name = agent_name or None
+        synapse.agent_image = agent_image or None
+        synapse.github_url = github_url or None
         synapse.agent_version = AGENT_VERSION
         synapse.has_rl = HAS_RL
 
         ColoredLogger.success(
-            f"[StartRound] Responded with agent={AGENT_NAME} v{AGENT_VERSION} RL={HAS_RL}",
+            f"[StartRound] Responded with agent={agent_name or 'Unknown'} v{AGENT_VERSION} RL={HAS_RL}",
             ColoredLogger.GREEN,
         )
         return synapse

@@ -12,7 +12,18 @@ from loguru import logger
 from autoppia_web_agents_subnet import __version__
 from autoppia_web_agents_subnet.base.validator import BaseValidatorNeuron
 from autoppia_web_agents_subnet.bittensor_config import config
-from autoppia_web_agents_subnet.validator.config import EVAL_SCORE_WEIGHT, TIME_WEIGHT, ROUND_SIZE_EPOCHS, AVG_TASK_DURATION_SECONDS, SAFETY_BUFFER_EPOCHS, PROMPTS_PER_USECASE, PRE_GENERATED_TASKS
+from autoppia_web_agents_subnet.validator.config import (
+    EVAL_SCORE_WEIGHT,
+    TIME_WEIGHT,
+    ROUND_SIZE_EPOCHS,
+    AVG_TASK_DURATION_SECONDS,
+    SAFETY_BUFFER_EPOCHS,
+    PROMPTS_PER_USECASE,
+    PRE_GENERATED_TASKS,
+    VALIDATOR_NAME,
+    VALIDATOR_IMAGE,
+    DZ_STARTING_BLOCK,
+)
 from autoppia_web_agents_subnet.validator.tasks import get_task_collection_interleaved, collect_task_solutions_and_execution_times
 from autoppia_web_agents_subnet.validator.synapse_handlers import (
     send_start_round_synapse_to_miners,
@@ -31,6 +42,10 @@ from autoppia_web_agents_subnet.platform.iwa.validator_mixin import ValidatorPla
 
 class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
     def __init__(self, config=None):
+        if not VALIDATOR_NAME or not VALIDATOR_IMAGE:
+            bt.logging.error("ValidatorName and ValidatorImage must be set in the environment before starting the validator.")
+            raise SystemExit(1)
+
         super().__init__(config=config)
         self.forward_count = 0
         self.last_rewards: np.ndarray | None = None
@@ -45,6 +60,7 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
             round_size_epochs=ROUND_SIZE_EPOCHS,
             avg_task_duration_seconds=AVG_TASK_DURATION_SECONDS,
             safety_buffer_epochs=SAFETY_BUFFER_EPOCHS,
+            minimum_start_block=DZ_STARTING_BLOCK,
         )
 
         bt.logging.info("load_state()")
@@ -67,8 +83,34 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
         bt.logging.warning("🚀 STARTING ROUND-BASED FORWARD")
         bt.logging.warning("=" * 80)
 
-        # Get current block and calculate round boundaries
+        # Get current block and prevent early round execution
         current_block = self.metagraph.block.item()
+
+        if not self.round_manager.can_start_round(current_block):
+            blocks_remaining = self.round_manager.blocks_until_allowed(current_block)
+            seconds_remaining = blocks_remaining * self.round_manager.SECONDS_PER_BLOCK
+            ColoredLogger.warning(
+                (
+                    "⏳ Waiting for minimum launch block before starting rounds. "
+                    f"Current block: {current_block}, required > {DZ_STARTING_BLOCK}."
+                ),
+                ColoredLogger.YELLOW,
+            )
+            if blocks_remaining > 0:
+                ColoredLogger.warning(
+                    (
+                        f"   Blocks remaining: {blocks_remaining} "
+                        f"(≈{seconds_remaining/60:.1f} minutes)."
+                    ),
+                    ColoredLogger.YELLOW,
+                )
+
+            # Sleep for a bounded interval to re-check later without busy-waiting.
+            wait_seconds = min(max(seconds_remaining, 30), 600)
+            await asyncio.sleep(wait_seconds)
+            return
+
+        # Get current block and calculate round boundaries
         boundaries = self.round_manager.get_round_boundaries(current_block)
 
         bt.logging.info(f"Round boundaries: start={boundaries['round_start_epoch']}, target={boundaries['target_epoch']}")
@@ -150,21 +192,35 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                 timeout=30,
             )
 
-            # Filter and save UIDs of miners who responded successfully (must include agent_name)
+            # Filter and save UIDs of miners who responded successfully (normalize metadata)
             self.active_miner_uids = []
+
+            def _normalized_optional(value):
+                if value is None:
+                    return None
+                text = str(value).strip()
+                return text or None
 
             # Filter successful responses only
             for i, response in enumerate(handshake_responses):
-                if i < len(all_axons):
-                    mapped_uid = all_uids[i]
-                    agent_name = getattr(response, 'agent_name', None) if response else None
-
-                    if response:
-                        self.round_handshake_payloads[mapped_uid] = response
-                    if response and agent_name:
-                        self.active_miner_uids.append(mapped_uid)
-                else:
+                if i >= len(all_axons):
                     bt.logging.warning(f"  Response {i}: No corresponding axon (out of bounds)")
+                    continue
+
+                mapped_uid = all_uids[i]
+                if not response:
+                    continue
+
+                agent_name = _normalized_optional(getattr(response, "agent_name", None))
+                response.agent_name = agent_name or "Unknown"
+                response.agent_image = _normalized_optional(getattr(response, "agent_image", None))
+                response.github_url = _normalized_optional(getattr(response, "github_url", None))
+                agent_version = _normalized_optional(getattr(response, "agent_version", None))
+                if agent_version is not None:
+                    response.agent_version = agent_version
+
+                self.round_handshake_payloads[mapped_uid] = response
+                self.active_miner_uids.append(mapped_uid)
 
             # Log only successful responders for clarity
             if self.active_miner_uids:

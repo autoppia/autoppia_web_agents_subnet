@@ -58,7 +58,7 @@ class IWAPClient:
         resolved_base_url = (base_url or os.getenv("IWAP_API_BASE_URL", "http://217.154.10.168:8080")).rstrip("/")
         self._client = client or httpx.AsyncClient(base_url=resolved_base_url, timeout=timeout)
         self._owns_client = client is None
-        self._backup_dir = Path(backup_dir or os.getenv("IWAP_BACKUP_DIR", "iwap_payloads"))
+        self._backup_dir = Path(backup_dir or os.getenv("IWAP_BACKUP_DIR", "iwap_bakcup_dir"))
         logger.info("IWAP client initialized with base_url=%s", self._client.base_url)
         try:
             self._backup_dir.mkdir(parents=True, exist_ok=True)
@@ -242,6 +242,13 @@ def build_miner_identity(
     )
 
 
+def _normalized_optional(value: Optional[object]) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 def build_miner_snapshot(
     *,
     validator_round_id: str,
@@ -251,16 +258,19 @@ def build_miner_snapshot(
     agent_key: Optional[str],
     handshake_payload: Optional[object],
     now_ts: float,
-) -> models.MinerSnapshotIWAP:
+    ) -> models.MinerSnapshotIWAP:
     """
     Create a MinerSnapshotIWAP from handshake data.
     """
-    agent_name = getattr(handshake_payload, "agent_name", None) or (
-        f"Miner {miner_uid}" if miner_uid is not None else "Benchmark Agent"
-    )
-    image_url = getattr(handshake_payload, "agent_image", None)
-    github_url = getattr(handshake_payload, "github_url", None)
-    description = getattr(handshake_payload, "agent_version", None)
+    raw_name = getattr(handshake_payload, "agent_name", None)
+    if raw_name is None or not str(raw_name).strip():
+        agent_name = "Benchmark Agent" if miner_uid is None else "Unknown"
+    else:
+        agent_name = str(raw_name).strip()
+
+    image_url = _normalized_optional(getattr(handshake_payload, "agent_image", None))
+    github_url = _normalized_optional(getattr(handshake_payload, "github_url", None))
+    description = _normalized_optional(getattr(handshake_payload, "agent_version", None))
 
     return models.MinerSnapshotIWAP(
         validator_round_id=validator_round_id,

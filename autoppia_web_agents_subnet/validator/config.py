@@ -1,6 +1,14 @@
 import os
 from distutils.util import strtobool
 from pathlib import Path
+from typing import Optional
+
+
+def _normalized(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped or None
 
 
 # ╭─────────────────────────── Round System Configuration QUICK TEST─────────────────────────────╮
@@ -26,6 +34,10 @@ AVG_TASK_DURATION_SECONDS = 300     # ⚠️ CALIBRATE THIS VALUE based on real 
 PRE_GENERATED_TASKS = 1           # Number of tasks to pre-generate at round start
 # Generate all at the beginning to avoid on-the-fly errors
 # Testing: only 1 task
+
+# Minimum chain block required before the validator begins orchestrating rounds.
+# This gate keeps all validators aligned for the production launch window.
+DZ_STARTING_BLOCK = int(os.getenv("DZ_STARTING_BLOCK", "6709575"))
 
 
 # ╭─────────────────────────── Round System Configuration ─────────────────────────────╮
@@ -67,6 +79,9 @@ TIME_WEIGHT = 0.15                  # Weight of execution time (0-1)
 
 
 # ╭─────────────────────────── Leaderboard ─────────────────────────────╮
+
+VALIDATOR_NAME = _normalized(os.getenv("ValidatorName"))
+VALIDATOR_IMAGE = _normalized(os.getenv("ValidatorImage"))
 
 LEADERBOARD_ENDPOINT = os.getenv("LEADERBOARD_ENDPOINT", "https://leaderboard-api.autoppia.com")
 IWAP_API_BASE_URL = os.getenv("IWAP_API_BASE_URL", "https://api-leaderboard.autoppia.com")
