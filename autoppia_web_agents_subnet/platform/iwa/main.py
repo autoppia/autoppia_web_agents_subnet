@@ -227,7 +227,11 @@ class IWAPClient:
 
         path = f"/api/v1/evaluations/{evaluation_id}/gif"
         filename = f"{evaluation_id}.gif"
-        logger.info("IWAP upload_evaluation_gif prepared for evaluation_id=%s", evaluation_id)
+        logger.info(
+            "IWAP upload_evaluation_gif prepared for evaluation_id=%s payload_bytes=%s",
+            evaluation_id,
+            len(gif_bytes),
+        )
 
         try:
             response = await self._client.post(
@@ -260,7 +264,10 @@ class IWAPClient:
             if isinstance(data_section, dict):
                 gif_url = data_section.get("gifUrl")
 
-        logger.info("IWAP upload_evaluation_gif completed for evaluation_id=%s url=%s", evaluation_id, gif_url)
+        if gif_url:
+            logger.info("IWAP upload_evaluation_gif completed for evaluation_id=%s url=%s", evaluation_id, gif_url)
+        else:
+            logger.warning("IWAP upload_evaluation_gif completed for evaluation_id=%s without returned URL", evaluation_id)
         return gif_url
 
     async def _post(self, path: str, payload: Dict[str, object], *, context: str) -> None:

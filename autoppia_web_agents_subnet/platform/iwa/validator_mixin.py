@@ -426,6 +426,18 @@ class ValidatorPlatformMixin:
         if task_payload is None:
             return
 
+        # For demo (non-real) web projects, override the task.url that is
+        # sent with add_evaluation so the dashboard shows the demo project
+        # name instead of a localhost host:port. Real websites keep their URL.
+        try:
+            if not getattr(task_payload, "is_web_real", False):
+                project_name = getattr(task_item.project, "name", None)
+                if project_name:
+                    task_payload.url = str(project_name)
+        except Exception:
+            # Do not block the round on display-only override failures
+            pass
+
         validator_hotkey = self.wallet.hotkey.ss58_address
 
         for idx, miner_uid in enumerate(self.active_miner_uids):
@@ -535,8 +547,16 @@ class ValidatorPlatformMixin:
                 )
 
                 if gif_payload:
+                    self._log_iwap_phase(
+                        "Phase 4",
+                        f"Received GIF payload for evaluation_id={evaluation_id} payload_type={type(gif_payload).__name__}",
+                    )
                     gif_bytes = self._extract_gif_bytes(gif_payload)
                     if gif_bytes:
+                        self._log_iwap_phase(
+                            "Phase 4",
+                            f"Uploading GIF for evaluation_id={evaluation_id} bytes={len(gif_bytes)}",
+                        )
                         try:
                             uploaded_url = await self.iwap_client.upload_evaluation_gif(evaluation_id, gif_bytes)
                         except Exception:
@@ -554,12 +574,24 @@ class ValidatorPlatformMixin:
                                     f"Uploaded GIF for evaluation_id={evaluation_id}",
                                     level="success",
                                 )
+                            else:
+                                self._log_iwap_phase(
+                                    "Phase 4",
+                                    f"GIF upload completed without URL for evaluation_id={evaluation_id}",
+                                    level="warning",
+                                )
                     else:
                         self._log_iwap_phase(
                             "Phase 4",
                             f"Skipped GIF upload for evaluation_id={evaluation_id} (invalid payload)",
                             level="warning",
                         )
+                else:
+                    self._log_iwap_phase(
+                        "Phase 4",
+                        f"No GIF payload received for evaluation_id={evaluation_id}",
+                        level="error",
+                    )
 
             accumulators = self.agent_run_accumulators.setdefault(
                 miner_uid,
@@ -580,28 +612,38 @@ class ValidatorPlatformMixin:
     @staticmethod
     def _extract_gif_bytes(payload: Optional[object]) -> Optional[bytes]:
         if payload is None:
+            bt.logging.debug("🛰️ IWAP GIF extraction skipped: payload is None")
             return None
 
         if isinstance(payload, (bytes, bytearray)):
             candidate = bytes(payload)
             if candidate.startswith((b"GIF87a", b"GIF89a")):
+                bt.logging.debug("🛰️ IWAP GIF extraction succeeded for binary payload (bytes=%s)", len(candidate))
                 return candidate
             raw_source = candidate
         elif isinstance(payload, str):
             text = payload.strip()
             if not text:
+                bt.logging.warning("🛰️ IWAP GIF extraction failed: string payload is empty after strip")
                 return None
             raw_source = text.encode("utf-8")
         else:
+            bt.logging.warning(
+                "🛰️ IWAP GIF extraction failed: unsupported payload type %s",
+                type(payload).__name__,
+            )
             return None
 
         try:
             decoded = base64.b64decode(raw_source, validate=True)
-        except (BinasciiError, ValueError):
+        except (BinasciiError, ValueError) as exc:
+            bt.logging.warning("🛰️ IWAP GIF extraction failed: base64 decode error %s", exc)
             return None
 
         if decoded.startswith((b"GIF87a", b"GIF89a")):
+            bt.logging.debug("🛰️ IWAP GIF extraction decoded GIF successfully (bytes=%s)", len(decoded))
             return decoded
+        bt.logging.warning("🛰️ IWAP GIF extraction failed: decoded payload missing GIF header")
         return None
 
     async def _finish_iwap_round(
