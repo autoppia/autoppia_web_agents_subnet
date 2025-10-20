@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 # Load environment variables from .env filee
 load_dotenv()
 
+
 def _normalized(value: Optional[str]) -> Optional[str]:
     if value is None:
         return None
