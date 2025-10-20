@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 # Load environment variables from .env filee
 load_dotenv()
 
+
 def _normalized(value: Optional[str]) -> Optional[str]:
     if value is None:
         return None
@@ -90,6 +91,9 @@ MAX_ACTIONS_LENGTH = 60             # Maximum number of actions per solution
 
 TIMEOUT = 60 * 2                    # 2 min: timeout for receiving miner responses
 FEEDBACK_TIMEOUT = 60               # 1 min: timeout for sending feedback to miners
+
+# Dynamic HTML - Enable seed assignment to task URLs for HTML variation
+ENABLE_DYNAMIC_HTML = bool(strtobool(os.getenv("ENABLE_DYNAMIC_HTML", "true")))
 
 # ╭─────────────────────────── Rewards ─────────────────────────────╮
 

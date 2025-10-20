@@ -30,7 +30,6 @@ class RoundManager:
     # Bittensor constants
     BLOCKS_PER_EPOCH = 360
     SECONDS_PER_BLOCK = 12
-    ROUND_BLOCK_LENGTH = BLOCKS_PER_EPOCH * 20  # 20 epochs ≈ 24 hours → 7,200 blocks
 
     def __init__(
         self,
@@ -49,6 +48,9 @@ class RoundManager:
         self.avg_task_duration_seconds = avg_task_duration_seconds
         self.safety_buffer_epochs = safety_buffer_epochs
         self.minimum_start_block = minimum_start_block
+        
+        # Calculate round block length based on round_size_epochs (not hardcoded)
+        self.ROUND_BLOCK_LENGTH = int(self.BLOCKS_PER_EPOCH * self.round_size_epochs)
 
         # Round state management
         self.round_rewards = {} 

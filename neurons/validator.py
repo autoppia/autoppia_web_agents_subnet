@@ -245,6 +245,22 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
 
                 agent_name = _truncate_agent_name(agent_name)
 
+                # 🔍 DEBUG: Log TODA la metadata del miner
+                ColoredLogger.info(
+                    f"\n{'='*70}\n"
+                    f"📊 METADATA RECIBIDA DEL MINER UID={mapped_uid}\n"
+                    f"{'='*70}",
+                    ColoredLogger.CYAN
+                )
+                ColoredLogger.info(f"  🏷️  Agent Name (original): '{agent_name_raw}'", ColoredLogger.GREEN)
+                ColoredLogger.info(f"  🏷️  Agent Name (truncado):  '{agent_name}'", ColoredLogger.GREEN)
+                ColoredLogger.info(f"  🖼️  Agent Image:            '{getattr(response, 'agent_image', None)}'", ColoredLogger.BLUE)
+                ColoredLogger.info(f"  🔗 GitHub URL:             '{getattr(response, 'github_url', None)}'", ColoredLogger.BLUE)
+                ColoredLogger.info(f"  📦 Agent Version:          '{getattr(response, 'agent_version', None)}'", ColoredLogger.YELLOW)
+                ColoredLogger.info(f"  🧠 Has RL:                 {getattr(response, 'has_rl', False)}", ColoredLogger.MAGENTA)
+                ColoredLogger.info(f"  🔑 Hotkey:                 {self.metagraph.hotkeys[mapped_uid]}", ColoredLogger.GRAY)
+                ColoredLogger.info(f"{'='*70}\n", ColoredLogger.CYAN)
+
                 response.agent_name = agent_name
                 response.agent_image = _normalized_optional(getattr(response, "agent_image", None))
                 response.github_url = _normalized_optional(getattr(response, "github_url", None))
@@ -360,6 +376,23 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
 
             web_project_name = getattr(project, "name", None)
 
+            # 🔍 DEBUG: Log task details before sending
+            ColoredLogger.info("\n" + "=" * 80, ColoredLogger.CYAN)
+            ColoredLogger.info(f"🔍 TASK DETAILS - Task {task_idx}/{len(all_tasks)}", ColoredLogger.CYAN)
+            ColoredLogger.info("=" * 80, ColoredLogger.CYAN)
+            ColoredLogger.info(f"  📝 Prompt: {task.prompt}", ColoredLogger.BLUE)
+            ColoredLogger.info(f"  🌐 URL: {project.frontend_url}", ColoredLogger.BLUE)
+            ColoredLogger.info(f"  🎲 Seed: {seed}", ColoredLogger.BLUE)
+            ColoredLogger.info(f"  📦 Project: {web_project_name}", ColoredLogger.BLUE)
+            ColoredLogger.info(f"  🧪 Tests ({len(task.tests) if task.tests else 0}):", ColoredLogger.YELLOW)
+            if task.tests:
+                for test_idx, test in enumerate(task.tests, 1):
+                    ColoredLogger.info(f"     {test_idx}. {test.type}: {test.description}", ColoredLogger.GRAY)
+                    ColoredLogger.info(f"        Criteria: {getattr(test, 'event_criteria', 'N/A')}", ColoredLogger.GRAY)
+            else:
+                ColoredLogger.warning(f"     ⚠️  NO TESTS for this task", ColoredLogger.RED)
+            ColoredLogger.info("=" * 80 + "\n", ColoredLogger.CYAN)
+
             # Create TaskSynapse with the actual task
             task_synapse = TaskSynapse(
                 version=self.version,
@@ -385,13 +418,44 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                 miner_uids=list(self.active_miner_uids),
             )
 
+            # 🔍 DEBUG: Log received actions from each miner
+            ColoredLogger.info("\n" + "=" * 80, ColoredLogger.CYAN)
+            ColoredLogger.info("🔍 ACTIONS RECEIVED FROM MINERS", ColoredLogger.CYAN)
+            ColoredLogger.info("=" * 80, ColoredLogger.CYAN)
+            for i, (uid, solution) in enumerate(zip(self.active_miner_uids, task_solutions)):
+                if solution and solution.actions:
+                    ColoredLogger.info(f"\n📊 Miner UID={uid}: {len(solution.actions)} actions", ColoredLogger.GREEN)
+                    for j, action in enumerate(solution.actions, 1):
+                        ColoredLogger.info(f"  {j}. {action.type}: {vars(action)}", ColoredLogger.GRAY)
+                else:
+                    ColoredLogger.warning(f"\n📊 Miner UID={uid}: NO ACTIONS", ColoredLogger.YELLOW)
+            ColoredLogger.info("=" * 80 + "\n", ColoredLogger.CYAN)
+
             # Evaluate task solutions
+            ColoredLogger.info("🔍 STARTING EVALUATION...", ColoredLogger.CYAN)
             eval_scores, test_results_matrices, evaluation_results = await evaluate_task_solutions(
                 web_project=project,
                 task=task,
                 task_solutions=task_solutions,
                 execution_times=execution_times,
             )
+
+            # 🔍 DEBUG: Log evaluation results in detail
+            ColoredLogger.info("\n" + "=" * 80, ColoredLogger.CYAN)
+            ColoredLogger.info("🔍 EVALUATION RESULTS DETAILED", ColoredLogger.CYAN)
+            ColoredLogger.info("=" * 80, ColoredLogger.CYAN)
+            for i, uid in enumerate(self.active_miner_uids):
+                ColoredLogger.info(f"\n📊 Miner UID={uid}:", ColoredLogger.MAGENTA)
+                ColoredLogger.info(f"  📈 Eval Score: {eval_scores[i]:.4f}", ColoredLogger.GREEN)
+                ColoredLogger.info(f"  ⏱️  Execution Time: {execution_times[i]:.2f}s", ColoredLogger.BLUE)
+                ColoredLogger.info(f"  📋 Evaluation Result: {evaluation_results[i]}", ColoredLogger.YELLOW)
+                ColoredLogger.info(f"  🧪 Test Results Matrix ({len(test_results_matrices[i])} tests):", ColoredLogger.CYAN)
+                if test_results_matrices[i]:
+                    for test_idx, test_results in enumerate(test_results_matrices[i], 1):
+                        ColoredLogger.info(f"     Test {test_idx}: {test_results}", ColoredLogger.GRAY)
+                else:
+                    ColoredLogger.warning(f"     ⚠️  NO TEST RESULTS (empty matrix)", ColoredLogger.RED)
+            ColoredLogger.info("=" * 80 + "\n", ColoredLogger.CYAN)
 
             # Calculate final scores (combining eval quality + execution speed)
             rewards = calculate_rewards_for_task(
