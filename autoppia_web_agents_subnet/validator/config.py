@@ -56,7 +56,7 @@ PRE_GENERATED_TASKS = 1           # Number of tasks to pre-generate at round sta
 # This gate keeps all validators aligned for the production launch window.
 # Only used when TESTING=false
 TESTING = bool(strtobool(os.getenv("TESTING", "false")))
-DZ_STARTING_BLOCK = int(os.getenv("DZ_STARTING_BLOCK", "6709575")) if not TESTING else 0
+DZ_STARTING_BLOCK = int(os.getenv("DZ_STARTING_BLOCK", "6709875")) if not TESTING else 0
 
 
 # ╭─────────────────────────── Round System Configuration ─────────────────────────────╮
