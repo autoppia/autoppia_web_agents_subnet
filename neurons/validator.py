@@ -245,6 +245,22 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
 
                 agent_name = _truncate_agent_name(agent_name)
 
+                # 🔍 DEBUG: Log TODA la metadata del miner
+                ColoredLogger.info(
+                    f"\n{'='*70}\n"
+                    f"📊 METADATA RECIBIDA DEL MINER UID={mapped_uid}\n"
+                    f"{'='*70}",
+                    ColoredLogger.CYAN
+                )
+                ColoredLogger.info(f"  🏷️  Agent Name (original): '{agent_name_raw}'", ColoredLogger.GREEN)
+                ColoredLogger.info(f"  🏷️  Agent Name (truncado):  '{agent_name}'", ColoredLogger.GREEN)
+                ColoredLogger.info(f"  🖼️  Agent Image:            '{getattr(response, 'agent_image', None)}'", ColoredLogger.BLUE)
+                ColoredLogger.info(f"  🔗 GitHub URL:             '{getattr(response, 'github_url', None)}'", ColoredLogger.BLUE)
+                ColoredLogger.info(f"  📦 Agent Version:          '{getattr(response, 'agent_version', None)}'", ColoredLogger.YELLOW)
+                ColoredLogger.info(f"  🧠 Has RL:                 {getattr(response, 'has_rl', False)}", ColoredLogger.MAGENTA)
+                ColoredLogger.info(f"  🔑 Hotkey:                 {self.metagraph.hotkeys[mapped_uid]}", ColoredLogger.GRAY)
+                ColoredLogger.info(f"{'='*70}\n", ColoredLogger.CYAN)
+
                 response.agent_name = agent_name
                 response.agent_image = _normalized_optional(getattr(response, "agent_image", None))
                 response.github_url = _normalized_optional(getattr(response, "github_url", None))
