@@ -114,22 +114,76 @@ class ValidatorPlatformMixin:
     def _metagraph_numeric(self, attribute: str, uid: int) -> Optional[float]:
         collection = getattr(self.metagraph, attribute, None)
         if collection is None:
+            bt.logging.debug(f"Metagraph attribute '{attribute}' is unavailable when reading uid={uid}")
             return None
         try:
             value = collection[uid]
             if hasattr(value, "item"):
                 return float(value.item())
             return float(value)
-        except Exception:
+        except Exception as exc:
+            bt.logging.debug(
+                f"Failed to coerce metagraph attribute '{attribute}' for uid={uid}: {exc}",
+            )
             return None
 
-    def _build_validator_snapshot(self, validator_round_id: str) -> iwa_models.ValidatorSnapshotIWAP:
-        stake = self._metagraph_numeric("S", self.uid)
-        vtrust = (
-            self._metagraph_numeric("v_trust", self.uid)
-            or self._metagraph_numeric("vtrust", self.uid)
+    def _normalized_stake_tao(self, uid: int) -> Optional[float]:
+        raw_stake = self._metagraph_numeric("S", uid)
+        if raw_stake is None:
+            bt.logging.warning(f"Stake not available in metagraph for uid={uid}")
+            return None
+
+        try:
+            rao_per_tao = float(getattr(getattr(bt, "utils", None), "RAO_PER_TAO", 1_000_000_000))
+            if not rao_per_tao:
+                raise ValueError("Invalid RAO_PER_TAO constant")
+        except Exception as exc:
+            bt.logging.warning(
+                f"Unable to read RAO_PER_TAO constant ({exc}); defaulting to 1e9"
+            )
+            rao_per_tao = 1_000_000_000
+
+        normalized = raw_stake / rao_per_tao
+        bt.logging.debug(
+            f"Validator stake normalised for uid={uid}: raw={raw_stake} (RAO) -> {normalized} (TAO)"
         )
+        return normalized
+
+    def _validator_vtrust(self, uid: int) -> Optional[float]:
+        attribute_order = [
+            "validator_trust",
+            "validator_performance",
+            "v_trust",
+            "vtrust",
+        ]
+
+        for attribute in attribute_order:
+            value = self._metagraph_numeric(attribute, uid)
+            if value is not None:
+                bt.logging.debug(
+                    f"Validator vtrust for uid={uid} resolved via '{attribute}' -> {value}"
+                )
+                return value
+
+        bt.logging.warning(
+            f"Validator vtrust metric not found in metagraph for uid={uid} (checked: {', '.join(attribute_order)})"
+        )
+        return None
+
+    def _build_validator_snapshot(self, validator_round_id: str) -> iwa_models.ValidatorSnapshotIWAP:
+        stake = self._normalized_stake_tao(self.uid)
+        vtrust = self._validator_vtrust(self.uid)
         metadata: Dict[str, Any] = {"source": "autoppia_validator"}
+
+        if stake is None:
+            bt.logging.warning(
+                f"Validator snapshot stake is unavailable for uid={self.uid}; snapshot will omit stake"
+            )
+
+        if vtrust is None:
+            bt.logging.warning(
+                f"Validator snapshot vtrust is unavailable for uid={self.uid}; snapshot will omit vtrust"
+            )
 
         return iwa_models.ValidatorSnapshotIWAP(
             validator_round_id=validator_round_id,
