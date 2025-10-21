@@ -378,7 +378,7 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
 
             # 🔍 DEBUG: Log task details before sending
             ColoredLogger.info("\n" + "=" * 80, ColoredLogger.CYAN)
-            ColoredLogger.info(f"🔍 TASK DETAILS - Task {task_idx}/{len(all_tasks)}", ColoredLogger.CYAN)
+            ColoredLogger.info(f"🔍 TASK DETAILS - Task {task_index + 1}/{len(self.current_round_tasks)}", ColoredLogger.CYAN)
             ColoredLogger.info("=" * 80, ColoredLogger.CYAN)
             ColoredLogger.info(f"  📝 Prompt: {task.prompt}", ColoredLogger.BLUE)
             ColoredLogger.info(f"  🌐 URL: {project.frontend_url}", ColoredLogger.BLUE)
