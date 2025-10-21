@@ -134,6 +134,8 @@ async def send_feedback_synapse_to_miners(
     task_solutions,
     test_results_matrices: List[List[List]],
     evaluation_results: List[dict],
+    original_url: str = None,
+    original_seed: str = None,
 ) -> None:
     """
     Build and send a TaskFeedbackSynapse to each miner with their evaluation details.
@@ -169,6 +171,9 @@ async def send_feedback_synapse_to_miners(
                 evaluation_result=(
                     evaluation_results[i] if i < len(evaluation_results) else None
                 ),
+                # 🔍 DEBUG: Add original task details
+                original_url=original_url or task.url,
+                original_seed=original_seed,
             )
         )
 

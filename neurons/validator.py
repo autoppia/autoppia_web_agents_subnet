@@ -391,14 +391,14 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                     ColoredLogger.info(f"        Criteria: {getattr(test, 'event_criteria', 'N/A')}", ColoredLogger.GRAY)
             else:
                 ColoredLogger.warning(f"     ⚠️  NO TESTS for this task", ColoredLogger.RED)
-            
+
             # 🔍 DEBUG: Log URL construction details
             ColoredLogger.info(f"  🔗 URL Construction Details:", ColoredLogger.MAGENTA)
             ColoredLogger.info(f"     - Base URL: {project.frontend_url}", ColoredLogger.MAGENTA)
             ColoredLogger.info(f"     - Task URL: {getattr(task, 'url', 'N/A')}", ColoredLogger.MAGENTA)
             ColoredLogger.info(f"     - Task assign_seed: {getattr(task, 'assign_seed', 'N/A')}", ColoredLogger.MAGENTA)
             ColoredLogger.info(f"     - Final seed to use: {seed}", ColoredLogger.MAGENTA)
-            
+
             ColoredLogger.info("=" * 80 + "\n", ColoredLogger.CYAN)
 
             # Create TaskSynapse with the actual task
@@ -410,7 +410,7 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                 seed=seed,
                 web_project_name=web_project_name,
             )
-            
+
             # 🔍 DEBUG: Log TaskSynapse details
             ColoredLogger.info(f"  📤 TaskSynapse created:", ColoredLogger.MAGENTA)
             ColoredLogger.info(f"     - URL: {task_synapse.url}", ColoredLogger.MAGENTA)
@@ -441,11 +441,11 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                     ColoredLogger.info(f"\n📊 Miner UID={uid}: {len(solution.actions)} actions", ColoredLogger.GREEN)
                     for j, action in enumerate(solution.actions, 1):
                         ColoredLogger.info(f"  {j}. {action.type}: {vars(action)}", ColoredLogger.GRAY)
-                        
+
                         # 🔍 DEBUG: Check for seed discrepancies in NavigateAction
                         if hasattr(action, 'url') and action.url and action.type == 'NavigateAction':
                             ColoredLogger.info(f"     🔗 Navigation URL: {action.url}", ColoredLogger.MAGENTA)
-                            
+
                             # Check seed mismatch
                             if 'seed=' in action.url:
                                 action_seed = action.url.split('seed=')[1].split('&')[0].split('?')[0]
@@ -453,7 +453,7 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                                     ColoredLogger.warning(f"     ⚠️  SEED MISMATCH! Expected: {seed}, Got: {action_seed}", ColoredLogger.RED)
                                 else:
                                     ColoredLogger.info(f"     ✅ Seed matches: {action_seed}", ColoredLogger.GREEN)
-                            
+
                             # Check URL path discrepancies
                             expected_base = project.frontend_url.rstrip('/')
                             if not action.url.startswith(expected_base):
@@ -520,6 +520,8 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                     task_solutions=task_solutions,
                     test_results_matrices=test_results_matrices,
                     evaluation_results=evaluation_results,
+                    original_url=project.frontend_url,
+                    original_seed=str(seed),
                 )
             except Exception as e:
                 bt.logging.warning(f"Feedback failed: {e}")
