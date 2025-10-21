@@ -207,7 +207,7 @@ class IWAPClient:
         logger.info("🔍 DEBUG - add_evaluation MULTIPART PAYLOAD:")
         logger.info("=" * 80)
         logger.info(f"📍 Endpoint: POST /api/v1/validator-rounds/{validator_round_id}/agent-runs/{agent_run_id}/evaluations")
-        logger.info(f"📦 JSON Data:")
+        logger.info(f"📦 JSON Data Summary:")
         logger.info(f"   - task_id: {json_data['task']['task_id']}")
         logger.info(f"   - prompt: {json_data['task']['prompt'][:100]}...")
         logger.info(f"   - solution_id: {json_data['task_solution']['solution_id']}")
@@ -220,6 +220,10 @@ class IWAPClient:
             logger.info(f"   - {key}: {len(file_data)} bytes")
         logger.info(f"📊 JSON size: {len(str(json_data))} chars")
         logger.info(f"📊 Total files size: {sum(len(f) for f in files.values())} bytes")
+        logger.info("=" * 80)
+        logger.info("📄 COMPLETE JSON PAYLOAD:")
+        logger.info("=" * 80)
+        logger.info(json.dumps(json_data, indent=2, ensure_ascii=False))
         logger.info("=" * 80)
 
         logger.info(
