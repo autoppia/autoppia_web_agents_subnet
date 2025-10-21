@@ -97,7 +97,7 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
             # Calculate current epoch and target epoch
             current_epoch = current_block / 360
             target_epoch = DZ_STARTING_BLOCK / 360
-            
+
             bt.logging.warning("")
             bt.logging.warning("🔒 VALIDATOR LOCKED - WAITING FOR LAUNCH BLOCK")
             bt.logging.warning("=" * 80)
@@ -105,12 +105,12 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
             bt.logging.warning(f"🎯 Target block:      {DZ_STARTING_BLOCK:,} (Epoch {target_epoch:.2f})")
             bt.logging.warning(f"📊 Blocks remaining:  {blocks_remaining:,}")
             bt.logging.warning("")
-            
+
             if hours_remaining >= 1:
                 bt.logging.warning(f"⏰ Estimated time:    ~{hours_remaining:.1f} hours ({minutes_remaining:.0f} minutes)")
             else:
                 bt.logging.warning(f"⏰ Estimated time:    ~{minutes_remaining:.0f} minutes ({seconds_remaining:.0f} seconds)")
-            
+
             # Sleep for a bounded interval to re-check later without busy-waiting.
             wait_seconds = min(max(seconds_remaining, 30), 600)
             bt.logging.warning("")
