@@ -343,7 +343,7 @@ def build_miner_snapshot(
     agent_key: Optional[str],
     handshake_payload: Optional[object],
     now_ts: float,
-    ) -> models.MinerSnapshotIWAP:
+) -> models.MinerSnapshotIWAP:
     """
     Create a MinerSnapshotIWAP from handshake data.
     """
