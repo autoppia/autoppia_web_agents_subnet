@@ -495,7 +495,13 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                 ColoredLogger.info(f"\n📊 Miner UID={uid}:", ColoredLogger.MAGENTA)
                 ColoredLogger.info(f"  📈 Eval Score: {eval_scores[i]:.4f}", ColoredLogger.GREEN)
                 ColoredLogger.info(f"  ⏱️  Execution Time: {execution_times[i]:.2f}s", ColoredLogger.BLUE)
-                ColoredLogger.info(f"  📋 Evaluation Result: {evaluation_results[i]}", ColoredLogger.YELLOW)
+
+                # Show evaluation_result but replace GIF content with just its length
+                eval_result_display = evaluation_results[i].copy()
+                if 'gif_recording' in eval_result_display and eval_result_display['gif_recording']:
+                    eval_result_display['gif_recording'] = f"<length: {len(eval_result_display['gif_recording'])}>"
+
+                ColoredLogger.info(f"  📋 Evaluation Result: {eval_result_display}", ColoredLogger.YELLOW)
                 ColoredLogger.info(f"  🧪 Test Results ({len(test_results_list[i])} tests):", ColoredLogger.CYAN)
                 if test_results_list[i]:
                     for test_idx, test_result in enumerate(test_results_list[i], 1):

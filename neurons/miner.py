@@ -157,7 +157,15 @@ class Miner(BaseMinerNeuron):
         ColoredLogger.info(f"  - tests: {synapse.tests}", ColoredLogger.GRAY)
         ColoredLogger.info(f"  - test_results: {synapse.test_results}", ColoredLogger.GRAY)
         ColoredLogger.info(f"  - actions: {len(synapse.actions) if synapse.actions else 0} actions", ColoredLogger.GRAY)
-        ColoredLogger.info(f"  - evaluation_result: {synapse.evaluation_result}", ColoredLogger.GRAY)
+
+        # Show evaluation_result but replace GIF content with just its length
+        eval_result_display = None
+        if synapse.evaluation_result:
+            eval_result_display = synapse.evaluation_result.copy()
+            if 'gif_recording' in eval_result_display and eval_result_display['gif_recording']:
+                eval_result_display['gif_recording'] = f"<length: {len(eval_result_display['gif_recording'])}>"
+
+        ColoredLogger.info(f"  - evaluation_result: {eval_result_display}", ColoredLogger.GRAY)
 
         # 🔍 DEBUG: Log web project details
         ColoredLogger.info(f"  📦 WEB PROJECT DETAILS:", ColoredLogger.MAGENTA)
