@@ -618,6 +618,40 @@ class ValidatorPlatformMixin:
             else:
                 self._log_iwap_phase("Phase 4", f"  - GIF: None")
 
+            # 📄 Log complete payload as JSON
+            self._log_iwap_phase("Phase 4", "=" * 80)
+            self._log_iwap_phase("Phase 4", "📄 COMPLETE PAYLOAD TO API:")
+            self._log_iwap_phase("Phase 4", "=" * 80)
+            import json
+            complete_payload = {
+                "task": {
+                    "task_id": task_payload.task_id,
+                    "prompt": task_payload.prompt,
+                    "url": task_payload.url,
+                    "seed": getattr(task_payload, "seed", None),
+                    "web_project_name": getattr(task_payload, "web_project_name", None),
+                },
+                "task_solution": {
+                    "solution_id": task_solution_payload.solution_id,
+                    "task_id": task_solution_payload.task_id,
+                    "validator_uid": task_solution_payload.validator_uid,
+                    "miner_uid": task_solution_payload.miner_uid,
+                    "actions": task_solution_payload.actions,
+                    "web_agent_id": task_solution_payload.web_agent_id,
+                },
+                "evaluation_result": {
+                    "evaluation_id": evaluation_result_payload.evaluation_id,
+                    "task_id": evaluation_result_payload.task_id,
+                    "final_score": evaluation_result_payload.final_score,
+                    "test_results": evaluation_result_payload.test_results,
+                    "gif_recording": "<will_upload_separately>" if gif_to_upload else None,
+                }
+            }
+            payload_json = json.dumps(complete_payload, indent=2, ensure_ascii=False)
+            for line in payload_json.split('\n'):
+                self._log_iwap_phase("Phase 4", line)
+            self._log_iwap_phase("Phase 4", "=" * 80)
+
             try:
                 await self.iwap_client.add_evaluation(
                     validator_round_id=self.current_round_id,
