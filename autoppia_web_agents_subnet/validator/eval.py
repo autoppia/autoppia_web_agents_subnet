@@ -18,17 +18,21 @@ from autoppia_iwa.src.evaluation.evaluator.evaluator import (
 def _test_result_to_dict(tr: Any) -> Dict[str, Any]:
     """
     Converts a TestResult-like object to a compact, JSON-safe dict.
-    Only keeps simple, generally-present attributes.
+    TestResult has: success (bool) and extra_data (dict|None)
     """
     try:
-        # Common attributes on typical test result objects
+        # TestResult fields: success and extra_data
         success = bool(getattr(tr, "success", False))
-        message = str(getattr(tr, "message", ""))
-        name = str(getattr(tr, "name", "")) if hasattr(tr, "name") else ""
-        return {"success": success, "message": message, "name": name}
+        extra_data = getattr(tr, "extra_data", None) or {}
+        
+        # Return the dict with the actual TestResult fields
+        return {
+            "success": success,
+            "extra_data": extra_data  # Contains test type, event_name, criteria, etc.
+        }
     except Exception:
         # Fallback very defensive path
-        return {"success": False, "message": "unserializable test result"}
+        return {"success": False, "extra_data": {}}
 
 
 async def evaluate_task_solutions(

@@ -499,7 +499,17 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                 ColoredLogger.info(f"  🧪 Test Results ({len(test_results_list[i])} tests):", ColoredLogger.CYAN)
                 if test_results_list[i]:
                     for test_idx, test_result in enumerate(test_results_list[i], 1):
-                        ColoredLogger.info(f"     Test {test_idx}: {test_result}", ColoredLogger.GRAY)
+                        success = test_result.get("success", False)
+                        status_emoji = "✅" if success else "❌"
+                        extra_data = test_result.get("extra_data", {})
+                        
+                        # Show test type and criteria from extra_data
+                        test_type = extra_data.get("type", "Unknown")
+                        event_name = extra_data.get("event_name", "N/A")
+                        
+                        ColoredLogger.info(f"     Test {test_idx}: {status_emoji} {test_type} - Event: {event_name}", ColoredLogger.GRAY)
+                        if extra_data.get("event_criteria"):
+                            ColoredLogger.info(f"        Criteria: {extra_data.get('event_criteria')}", ColoredLogger.GRAY)
                 else:
                     ColoredLogger.warning(f"     ⚠️  NO TEST RESULTS", ColoredLogger.RED)
             ColoredLogger.info("=" * 80 + "\n", ColoredLogger.CYAN)
