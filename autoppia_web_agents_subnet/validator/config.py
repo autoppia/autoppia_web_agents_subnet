@@ -76,19 +76,26 @@ PRE_GENERATED_TASKS = 300            # Generate 300 tasks at round start
 # ⚠️  WARNING: This value MUST be identical across ALL validators
 # ⚠️  DO NOT CHANGE without coordinating with all validator operators
 # ════════════════════════════════════════════════════════════════════════════════
-# Epoch 18,640 = Block 6,710,400 (perfectly aligned with epoch start)
-# Estimated launch: ~21:00 PM, October 21, 2025
+# Epoch 18,660 = Block 6,717,600 (perfectly aligned with epoch start)
+# Estimated launch: ~22:12 PM, October 21, 2025
 # 
-# ⚠️  CRITICAL: This is the MINIMUM block - validators can start AFTER this
-# All validators will synchronize to the SAME epoch boundaries regardless of start time
-# Example: 
-#   - Validator A starts at block 6,710,400 (on time)
-#   - Validator B starts at block 6,711,000 (4h late)
-#   - BOTH end Round 1 at epoch 18,660 (same deadline)
+# 🌐 GLOBAL SYNCHRONIZATION (using modulo):
+# Round boundaries are calculated as: (current_epoch // 20) × 20
+# This creates ABSOLUTE synchronization points every 20 epochs
+# 
+# Example (ROUND_SIZE_EPOCHS = 20):
+#   Epoch 18,660-18,679 → Round 1 (ALL validators, regardless of start time)
+#   Epoch 18,680-18,699 → Round 2 (ALL validators)
+#   
+#   - Validator A starts at epoch 18,660.0 → ends at 18,680 (24h duration)
+#   - Validator B starts at epoch 18,665.0 (5h late) → STILL ends at 18,680 (19h duration)
+#   - Validator C crashes and restarts at epoch 18,675.0 → STILL ends at 18,680 (5h duration)
+#
+# All validators set weights at epoch 18,680 simultaneously (FAIR & SYNCHRONIZED)
 # ════════════════════════════════════════════════════════════════════════════════
 
 TESTING = _str_to_bool(os.getenv("TESTING", "false"))
-DZ_STARTING_BLOCK = 6_710_400 if not TESTING else 0  # FIXED - DO NOT CHANGE
+DZ_STARTING_BLOCK = 6_717_600 if not TESTING else 0  # Epoch 18,660 - FIXED - DO NOT CHANGE
 
 
 # ╭────────────────────── TESTING Configuration (Commented) ──────────────────────╮
