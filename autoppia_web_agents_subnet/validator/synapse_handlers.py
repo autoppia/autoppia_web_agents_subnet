@@ -183,7 +183,15 @@ async def send_feedback_synapse_to_miners(
         ColoredLogger.info(f"  - tests: {fb.tests}", ColoredLogger.CYAN)
         ColoredLogger.info(f"  - score: {fb.score}", ColoredLogger.CYAN)
         ColoredLogger.info(f"  - execution_time: {fb.execution_time}", ColoredLogger.CYAN)
-        ColoredLogger.info(f"  - evaluation_result: {fb.evaluation_result}", ColoredLogger.CYAN)
+
+        # Show evaluation_result but replace GIF content with just its length
+        eval_result_display = None
+        if fb.evaluation_result:
+            eval_result_display = fb.evaluation_result.copy() if isinstance(fb.evaluation_result, dict) else fb.evaluation_result
+            if isinstance(eval_result_display, dict) and 'gif_recording' in eval_result_display and eval_result_display['gif_recording']:
+                eval_result_display['gif_recording'] = f"<length: {len(eval_result_display['gif_recording'])}>"
+
+        ColoredLogger.info(f"  - evaluation_result: {eval_result_display}", ColoredLogger.CYAN)
         ColoredLogger.info(f"  - actions: {len(fb.actions) if fb.actions else 0} actions", ColoredLogger.CYAN)
     ColoredLogger.info(
         f"Sending TaskFeedbackSynapse to {len(miner_axons)} miners in parallel",
