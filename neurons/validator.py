@@ -402,20 +402,33 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
             ColoredLogger.info("=" * 80 + "\n", ColoredLogger.CYAN)
 
             # Create TaskSynapse with the actual task
+            # 🔧 FIX: Include seed in URL if available
+            task_url = project.frontend_url
+            if seed is not None:
+                separator = "&" if "?" in task_url else "?"
+                task_url = f"{task_url}{separator}seed={seed}"
+            
             task_synapse = TaskSynapse(
                 version=self.version,
                 prompt=task.prompt,
-                url=project.frontend_url,
+                url=task_url,  # URL with seed included
                 screenshot=None,  # Optional: could add screenshot support
-                seed=seed,
+                seed=seed,  # Also send seed separately for debugging
                 web_project_name=web_project_name,
             )
 
             # 🔍 DEBUG: Log TaskSynapse details
             ColoredLogger.info(f"  📤 TaskSynapse created:", ColoredLogger.MAGENTA)
-            ColoredLogger.info(f"     - URL: {task_synapse.url}", ColoredLogger.MAGENTA)
+            ColoredLogger.info(f"     - Base URL: {project.frontend_url}", ColoredLogger.MAGENTA)
+            ColoredLogger.info(f"     - Final URL: {task_synapse.url}", ColoredLogger.MAGENTA)
             ColoredLogger.info(f"     - Seed: {task_synapse.seed}", ColoredLogger.MAGENTA)
             ColoredLogger.info(f"     - Prompt: {task_synapse.prompt[:100]}...", ColoredLogger.MAGENTA)
+            
+            # 🔍 DEBUG: Verify URL construction
+            if seed is not None and f"seed={seed}" in task_synapse.url:
+                ColoredLogger.info(f"     ✅ URL includes seed correctly", ColoredLogger.GREEN)
+            elif seed is not None:
+                ColoredLogger.warning(f"     ⚠️  URL missing seed! Expected: seed={seed}", ColoredLogger.RED)
 
             # Send task to miners
             responses = await send_task_synapse_to_miners(
