@@ -94,27 +94,27 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
             minutes_remaining = seconds_remaining / 60
             hours_remaining = minutes_remaining / 60
 
-            # Calcular época actual y época objetivo
+            # Calculate current epoch and target epoch
             current_epoch = current_block / 360
             target_epoch = DZ_STARTING_BLOCK / 360
-
+            
             bt.logging.warning("")
-            bt.logging.warning("🔒 VALIDATOR BLOQUEADO - ESPERANDO BLOQUE DE LANZAMIENTO")
+            bt.logging.warning("🔒 VALIDATOR LOCKED - WAITING FOR LAUNCH BLOCK")
             bt.logging.warning("=" * 80)
-            bt.logging.warning(f"📍 Bloque actual:    {current_block:,} (Época {current_epoch:.2f})")
-            bt.logging.warning(f"🎯 Bloque objetivo:  {DZ_STARTING_BLOCK:,} (Época {target_epoch:.2f})")
-            bt.logging.warning(f"📊 Bloques restantes: {blocks_remaining:,}")
+            bt.logging.warning(f"📍 Current block:     {current_block:,} (Epoch {current_epoch:.2f})")
+            bt.logging.warning(f"🎯 Target block:      {DZ_STARTING_BLOCK:,} (Epoch {target_epoch:.2f})")
+            bt.logging.warning(f"📊 Blocks remaining:  {blocks_remaining:,}")
             bt.logging.warning("")
-
+            
             if hours_remaining >= 1:
-                bt.logging.warning(f"⏰ Tiempo estimado:   ~{hours_remaining:.1f} horas ({minutes_remaining:.0f} minutos)")
+                bt.logging.warning(f"⏰ Estimated time:    ~{hours_remaining:.1f} hours ({minutes_remaining:.0f} minutes)")
             else:
-                bt.logging.warning(f"⏰ Tiempo estimado:   ~{minutes_remaining:.0f} minutos ({seconds_remaining:.0f} segundos)")
-
+                bt.logging.warning(f"⏰ Estimated time:    ~{minutes_remaining:.0f} minutes ({seconds_remaining:.0f} seconds)")
+            
             # Sleep for a bounded interval to re-check later without busy-waiting.
             wait_seconds = min(max(seconds_remaining, 30), 600)
             bt.logging.warning("")
-            bt.logging.warning(f"💤 Esperando {wait_seconds:.0f}s antes de revisar de nuevo...")
+            bt.logging.warning(f"💤 Waiting {wait_seconds:.0f}s before checking again...")
             bt.logging.warning("=" * 80)
             bt.logging.warning("")
 
