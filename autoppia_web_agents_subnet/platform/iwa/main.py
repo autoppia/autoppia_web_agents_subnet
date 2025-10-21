@@ -188,6 +188,29 @@ class IWAPClient:
             },
             "evaluation_result": evaluation_result.to_payload(),
         }
+
+        # 🔍 DEBUG: Log full payload details
+        logger.info("=" * 80)
+        logger.info("🔍 DEBUG - add_evaluation FULL PAYLOAD:")
+        logger.info("=" * 80)
+        logger.info(f"📍 Endpoint: POST /api/v1/validator-rounds/{validator_round_id}/agent-runs/{agent_run_id}/evaluations")
+        logger.info(f"📦 Task:")
+        logger.info(f"   - task_id: {payload['task']['task_id']}")
+        logger.info(f"   - prompt: {payload['task']['prompt'][:100]}...")
+        logger.info(f"📦 Task Solution:")
+        logger.info(f"   - solution_id: {payload['task_solution']['solution_id']}")
+        logger.info(f"   - actions ({len(payload['task_solution']['actions'])}):")
+        for i, action in enumerate(payload['task_solution']['actions'][:3]):
+            logger.info(f"      [{i}] {action}")
+        logger.info(f"📦 Evaluation Result:")
+        logger.info(f"   - final_score: {payload['evaluation_result']['final_score']}")
+        logger.info(f"   - test_results: {payload['evaluation_result']['test_results']}")
+        gif_recording = payload['evaluation_result'].get('gif_recording', '')
+        gif_size = len(gif_recording) if gif_recording else 0
+        logger.info(f"   - gif_recording: {'<length: ' + str(gif_size) + '>' if gif_size > 0 else 'None'}")
+        logger.info(f"📊 Total payload size: {len(str(payload))} characters")
+        logger.info("=" * 80)
+
         logger.info(
             "IWAP add_evaluation prepared for validator_round_id=%s agent_run_id=%s task_solution_id=%s",
             validator_round_id,
@@ -281,6 +304,16 @@ class IWAPClient:
         if auth_headers:
             request.headers.update(auth_headers)
         target_url = str(request.url)
+
+        # 🔍 DEBUG: Log HTTP request details
+        logger.info("🌐 HTTP REQUEST DETAILS:")
+        logger.info(f"   Method: POST")
+        logger.info(f"   URL: {target_url}")
+        logger.info(f"   Context: {context}")
+        logger.info(f"   Headers: {dict(request.headers)}")
+        logger.info(f"   Payload keys: {list(payload.keys())}")
+        logger.info(f"   Payload size: {len(str(payload))} chars")
+
         try:
             logger.info("IWAP %s POST %s started", context, target_url)
             response = await self._client.send(request)
@@ -291,6 +324,11 @@ class IWAPClient:
                 target_url,
                 response.status_code,
             )
+            # 🔍 DEBUG: Log response details
+            logger.info(f"   Response status: {response.status_code}")
+            logger.info(f"   Response headers: {dict(response.headers)}")
+            if response.text:
+                logger.info(f"   Response body (first 500 chars): {response.text[:500]}")
         except httpx.HTTPStatusError as exc:
             body = exc.response.text
             logger.error("IWAP %s POST %s failed (%s): %s", context, target_url, exc.response.status_code, body)
