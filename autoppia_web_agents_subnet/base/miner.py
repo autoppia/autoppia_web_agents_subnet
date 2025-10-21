@@ -88,8 +88,11 @@ class BaseMinerNeuron(BaseNeuron):
             f"Serving miner axon {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
         )
         self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
+        bt.logging.info("🔧 Axon configured, about to start listening...")
         self.axon.start()
-        bt.logging.info(f"Miner starting at block: {self.block}")
+        bt.logging.success(f"✅ Miner axon STARTED and LISTENING at block: {self.block}")
+        bt.logging.success(f"✅ Miner IP: {self.axon.external_ip}:{self.axon.external_port}")
+        bt.logging.success(f"✅ Miner hotkey: {self.wallet.hotkey.ss58_address}")
 
         try:
             while not self.should_exit:
@@ -158,7 +161,10 @@ class BaseMinerNeuron(BaseNeuron):
     async def blacklist_start_round(
         self, synapse: StartRoundSynapse
     ) -> typing.Tuple[bool, str]:
-        return await self._common_blacklist(synapse)
+        bt.logging.info("🔍 blacklist_start_round called - synapse received!")
+        result = await self._common_blacklist(synapse)
+        bt.logging.info(f"🔍 blacklist_start_round result: blacklisted={result[0]}, reason='{result[1]}'")
+        return result
 
     async def _common_blacklist(
         self,
@@ -211,7 +217,10 @@ class BaseMinerNeuron(BaseNeuron):
         return await self._common_priority(synapse)
 
     async def priority_start_round(self, synapse: StartRoundSynapse) -> float:
-        return await self._common_priority(synapse)
+        bt.logging.info("🔍 priority_start_round called - calculating priority")
+        priority = await self._common_priority(synapse)
+        bt.logging.info(f"🔍 priority_start_round result: priority={priority}")
+        return priority
 
     async def _common_priority(
         self,

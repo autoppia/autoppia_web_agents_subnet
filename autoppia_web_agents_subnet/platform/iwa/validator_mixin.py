@@ -67,7 +67,26 @@ class ValidatorPlatformMixin:
             bt.logging.info(prefix)
 
     def _generate_validator_round_id(self) -> str:
-        return iwa_main.generate_validator_round_id()
+        """
+        Generate a unique validator round ID with round number.
+
+        Calculates round number based on current_block and ROUND_SIZE_EPOCHS.
+        """
+        # Calculate round number based on start_block
+        round_number = None
+        try:
+            round_mgr = getattr(self, 'round_manager', None)
+            if (round_mgr is not None 
+                and round_mgr.start_block is not None
+                    and round_mgr.ROUND_BLOCK_LENGTH > 0):
+                # Round number = start_block / ROUND_BLOCK_LENGTH
+                round_number = round_mgr.start_block // round_mgr.ROUND_BLOCK_LENGTH
+        except (AttributeError, ZeroDivisionError, TypeError) as e:
+            # If anything fails, just use None (will generate ID without round number)
+            bt.logging.debug(f"Could not calculate round number: {e}")
+            round_number = None
+
+        return iwa_main.generate_validator_round_id(round_number=round_number)
 
     def _build_iwap_auth_headers(self) -> Dict[str, str]:
         hotkey = getattr(self.wallet.hotkey, "ss58_address", None)

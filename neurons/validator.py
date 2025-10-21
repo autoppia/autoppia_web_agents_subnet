@@ -204,7 +204,7 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                 validator=self,
                 miner_axons=all_axons,
                 start_synapse=start_synapse,
-                timeout=30,
+                timeout=60,
             )
 
             # Filter and save UIDs of miners who responded successfully (normalize metadata)

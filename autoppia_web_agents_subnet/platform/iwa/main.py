@@ -26,7 +26,18 @@ def _uuid_suffix(length: int = 12) -> str:
     return uuid.uuid4().hex[:length]
 
 
-def generate_validator_round_id() -> str:
+def generate_validator_round_id(round_number: Optional[int] = None) -> str:
+    """
+    Generate a unique validator round ID.
+
+    Args:
+        round_number: Optional round number to include in the ID (e.g., 1, 2, 3...)
+
+    Returns:
+        Round ID in format: validator_round_{number}_{random_id} or validator_round_{random_id}
+    """
+    if round_number is not None:
+        return f"validator_round_{round_number}_{_uuid_suffix()}"
     return f"validator_round_{_uuid_suffix()}"
 
 

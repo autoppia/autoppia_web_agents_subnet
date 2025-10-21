@@ -35,7 +35,7 @@ async def send_start_round_synapse_to_miners(
     validator,
     miner_axons: List[AxonInfo],
     start_synapse: StartRoundSynapse,
-    timeout: int = 30,
+    timeout: int = 60,
 ) -> List[Optional[StartRoundSynapse]]:
     """
     Send StartRoundSynapse to miners for round handshake.
@@ -44,21 +44,21 @@ async def send_start_round_synapse_to_miners(
         validator: Validator instance
         miner_axons: List of miner axons to send to
         start_synapse: StartRoundSynapse to send
-        timeout: Timeout in seconds
+        timeout: Timeout in seconds (default: 60s, increased for better reliability)
 
     Returns:
         List of responses (None for failed responses)
     """
     start_synapse.version = validator.version
 
-    bt.logging.info(f"Sending StartRoundSynapse to {len(miner_axons)} miners...")
+    bt.logging.info(f"Sending StartRoundSynapse to {len(miner_axons)} miners with {timeout}s timeout and 3 retries...")
     responses: List[Optional[StartRoundSynapse]] = await dendrite_with_retries(
         dendrite=validator.dendrite,
         axons=miner_axons,
         synapse=start_synapse,
         deserialize=True,
         timeout=timeout,
-        retries=1,
+        retries=3,
     )
 
     # DEBUG: Log all responses with detailed status codes
