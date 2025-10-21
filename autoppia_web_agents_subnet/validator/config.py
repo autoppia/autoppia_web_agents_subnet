@@ -68,8 +68,11 @@ PRE_GENERATED_TASKS = 1           # Number of tasks to pre-generate at round sta
 # Minimum chain block required before the validator begins orchestrating rounds.
 # This gate keeps all validators aligned for the production launch window.
 # Only used when TESTING=false
+# 
+# DZ_STARTING_BLOCK debe estar alineado con el inicio de una época para sincronización perfecta
+# Época 18,639 = bloque 6,710,040 (inicio de época alineado)
 TESTING = _str_to_bool(os.getenv("TESTING", "false"))
-DZ_STARTING_BLOCK = int(os.getenv("DZ_STARTING_BLOCK", "6709875")) if not TESTING else 0
+DZ_STARTING_BLOCK = int(os.getenv("DZ_STARTING_BLOCK", "6710040")) if not TESTING else 0
 
 
 # ╭─────────────────────────── Round System Configuration ─────────────────────────────╮

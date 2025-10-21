@@ -91,24 +91,33 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
         if not self.round_manager.can_start_round(current_block):
             blocks_remaining = self.round_manager.blocks_until_allowed(current_block)
             seconds_remaining = blocks_remaining * self.round_manager.SECONDS_PER_BLOCK
-            ColoredLogger.warning(
-                (
-                    "⏳ Waiting for minimum launch block before starting rounds. "
-                    f"Current block: {current_block}, required > {DZ_STARTING_BLOCK}."
-                ),
-                ColoredLogger.YELLOW,
-            )
-            if blocks_remaining > 0:
-                ColoredLogger.warning(
-                    (
-                        f"   Blocks remaining: {blocks_remaining} "
-                        f"(≈{seconds_remaining/60:.1f} minutes)."
-                    ),
-                    ColoredLogger.YELLOW,
-                )
-
+            minutes_remaining = seconds_remaining / 60
+            hours_remaining = minutes_remaining / 60
+            
+            # Calcular época actual y época objetivo
+            current_epoch = current_block / 360
+            target_epoch = DZ_STARTING_BLOCK / 360
+            
+            bt.logging.warning("")
+            bt.logging.warning("🔒 VALIDATOR BLOQUEADO - ESPERANDO BLOQUE DE LANZAMIENTO")
+            bt.logging.warning("=" * 80)
+            bt.logging.warning(f"📍 Bloque actual:    {current_block:,} (Época {current_epoch:.2f})")
+            bt.logging.warning(f"🎯 Bloque objetivo:  {DZ_STARTING_BLOCK:,} (Época {target_epoch:.2f})")
+            bt.logging.warning(f"📊 Bloques restantes: {blocks_remaining:,}")
+            bt.logging.warning("")
+            
+            if hours_remaining >= 1:
+                bt.logging.warning(f"⏰ Tiempo estimado:   ~{hours_remaining:.1f} horas ({minutes_remaining:.0f} minutos)")
+            else:
+                bt.logging.warning(f"⏰ Tiempo estimado:   ~{minutes_remaining:.0f} minutos ({seconds_remaining:.0f} segundos)")
+            
             # Sleep for a bounded interval to re-check later without busy-waiting.
             wait_seconds = min(max(seconds_remaining, 30), 600)
+            bt.logging.warning("")
+            bt.logging.warning(f"💤 Esperando {wait_seconds:.0f}s antes de revisar de nuevo...")
+            bt.logging.warning("=" * 80)
+            bt.logging.warning("")
+
             await asyncio.sleep(wait_seconds)
             return
 
