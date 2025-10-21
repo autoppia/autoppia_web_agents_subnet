@@ -42,31 +42,31 @@ def _env_int(name: str, default: int) -> int:
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# 🎯 PRODUCTION CONFIGURATION - Round System (20 DAYS)
+# 🎯 PRODUCTION CONFIGURATION - Round System (21 HOURS)
 # ════════════════════════════════════════════════════════════════════════════════
 # Launch: Epoch 18,639 (Block 6,710,040) - ~21:04 Oct 21, 2025
-# Round duration: 20 days = 400 epochs = 144,000 blocks
-# All validators synchronize at epoch multiples of 400
+# Round duration: 21 hours = 17.5 epochs = 6,300 blocks
+# All validators synchronize at epoch multiples of 17.5
 # ════════════════════════════════════════════════════════════════════════════════
 
-ROUND_SIZE_EPOCHS = 400              # 20 days per round
-# 1 epoch = 360 blocks = 72 minutes
-# 400 epochs = 144,000 blocks = 28,800 minutes = 480 hours = 20 days
-# Round 1: epochs 18,639 - 19,038 (20 days)
-# Round 2: epochs 19,039 - 19,438 (next 20 days)
+ROUND_SIZE_EPOCHS = 17.5             # 21 hours per round
+# 1 epoch = 360 blocks = 72 minutes = 1.2 hours
+# 17.5 epochs = 6,300 blocks = 75,600 seconds = 1,260 minutes = 21 hours
+# Round 1: epochs 18,639.0 - 18,656.5 (21 hours)
+# Round 2: epochs 18,656.5 - 18,674.0 (next 21 hours)
 
-SAFETY_BUFFER_EPOCHS = 1.0           # 1 epoch = 72 minutes buffer before round ends
-# Stop sending tasks when less than 1 epoch remains
+SAFETY_BUFFER_EPOCHS = 0.5           # 0.5 epoch = 36 minutes buffer before round ends
+# Stop sending tasks when less than 0.5 epochs remains
 # Ensures last task completes + weights are set before round deadline
 
-AVG_TASK_DURATION_SECONDS = 600      # 10 minutes average per task
+AVG_TASK_DURATION_SECONDS = 300      # 5 minutes average per task
 # Includes: send task + miner execution + evaluation + API submission
-# 250 tasks × 10 min = 2,500 min = 41.67 hours
-# Leaves ~438 hours (18+ days) of buffer in a 20-day round
+# 250 tasks × 5 min = 1,250 min = 20.83 hours
+# Fits perfectly in 21 hours with 36-min buffer
 
 PRE_GENERATED_TASKS = 250            # Generate 250 tasks at round start
 # All tasks generated upfront to avoid runtime errors
-# Distribution: ~12.5 tasks/day over 20 days
+# Distribution: ~12 tasks/hour over 21 hours
 # Tasks sent dynamically based on time remaining
 
 # ════════════════════════════════════════════════════════════════════════════════
