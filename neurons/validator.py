@@ -93,11 +93,11 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
             seconds_remaining = blocks_remaining * self.round_manager.SECONDS_PER_BLOCK
             minutes_remaining = seconds_remaining / 60
             hours_remaining = minutes_remaining / 60
-            
+
             # Calcular época actual y época objetivo
             current_epoch = current_block / 360
             target_epoch = DZ_STARTING_BLOCK / 360
-            
+
             bt.logging.warning("")
             bt.logging.warning("🔒 VALIDATOR BLOQUEADO - ESPERANDO BLOQUE DE LANZAMIENTO")
             bt.logging.warning("=" * 80)
@@ -105,12 +105,12 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
             bt.logging.warning(f"🎯 Bloque objetivo:  {DZ_STARTING_BLOCK:,} (Época {target_epoch:.2f})")
             bt.logging.warning(f"📊 Bloques restantes: {blocks_remaining:,}")
             bt.logging.warning("")
-            
+
             if hours_remaining >= 1:
                 bt.logging.warning(f"⏰ Tiempo estimado:   ~{hours_remaining:.1f} horas ({minutes_remaining:.0f} minutos)")
             else:
                 bt.logging.warning(f"⏰ Tiempo estimado:   ~{minutes_remaining:.0f} minutos ({seconds_remaining:.0f} segundos)")
-            
+
             # Sleep for a bounded interval to re-check later without busy-waiting.
             wait_seconds = min(max(seconds_remaining, 30), 600)
             bt.logging.warning("")
