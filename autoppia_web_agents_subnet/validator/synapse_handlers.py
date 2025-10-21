@@ -61,17 +61,40 @@ async def send_start_round_synapse_to_miners(
         retries=1,
     )
 
-    # DEBUG: Log only successful responses
+    # DEBUG: Log all responses with detailed status codes
     successful_responses = []
+    failed_responses = []
+    status_422_responses = []
+
     for i, response in enumerate(responses):
-        if response is not None and getattr(response, 'agent_name', None):
-            successful_responses.append(f"  Response {i}: agent_name='{response.agent_name}'")
+        if response is not None:
+            status_code = getattr(response.dendrite, 'status_code', None)
+            agent_name = getattr(response, 'agent_name', None)
+
+            if status_code == 422:
+                # Log 422 errors with full details
+                status_422_responses.append({
+                    'uid': i,
+                    'hotkey': miner_axons[i].hotkey[:10] if i < len(miner_axons) else 'unknown',
+                    'status': status_code,
+                    'agent_name': agent_name,
+                })
+            elif agent_name:
+                successful_responses.append(f"  UID {i}: agent_name='{agent_name}' status={status_code}")
+            else:
+                failed_responses.append(f"  UID {i}: status={status_code}")
 
     if successful_responses:
-        bt.logging.info(f"🔍 DEBUG: Successful handshake responses:")
-        for response_log in successful_responses:
+        bt.logging.info(f"🔍 DEBUG: Successful handshake responses ({len(successful_responses)}):")
+        for response_log in successful_responses[:5]:  # Show first 5
             bt.logging.info(response_log)
-    else:
+
+    if status_422_responses:
+        bt.logging.warning(f"⚠️  DEBUG: Miners returning 422 ({len(status_422_responses)}):")
+        for r in status_422_responses[:5]:  # Show first 5
+            bt.logging.warning(f"  UID {r['uid']}: hotkey={r['hotkey']}... agent_name={r['agent_name']}")
+
+    if not successful_responses and not status_422_responses:
         bt.logging.info(f"🔍 DEBUG: No successful handshake responses")
 
     successful = sum(1 for r in responses if r is not None and hasattr(r, 'agent_name') and r.agent_name)

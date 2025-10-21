@@ -187,6 +187,19 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                 note=f"Starting round at epoch {boundaries['round_start_epoch']}"
             )
 
+            # 🔍 DEBUG: Show exactly what we're sending
+            bt.logging.info("=" * 80)
+            bt.logging.info("🔍 DEBUG: StartRoundSynapse content:")
+            bt.logging.info(f"  - version: {start_synapse.version}")
+            bt.logging.info(f"  - round_id: {start_synapse.round_id}")
+            bt.logging.info(f"  - validator_id: {start_synapse.validator_id}")
+            bt.logging.info(f"  - total_prompts: {start_synapse.total_prompts}")
+            bt.logging.info(f"  - prompts_per_use_case: {start_synapse.prompts_per_use_case}")
+            bt.logging.info(f"  - note: {start_synapse.note}")
+            bt.logging.info(f"  - has_rl: {getattr(start_synapse, 'has_rl', 'NOT_SET')}")
+            bt.logging.info(f"  - Sending to {len(all_axons)} miners")
+            bt.logging.info("=" * 80)
+
             handshake_responses = await send_start_round_synapse_to_miners(
                 validator=self,
                 miner_axons=all_axons,
