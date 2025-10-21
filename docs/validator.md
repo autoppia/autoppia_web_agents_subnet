@@ -61,6 +61,8 @@ cp .env.example .env
 # Edit .env with your specific settings
 ```
 
+> **Important:** Ensure `VALIDATOR_AUTH_MESSAGE` in your `.env` matches the backend configuration so IWAP requests are signed with the correct challenge.
+
 ---
 
 ## 🤖 2. LLM Configuration

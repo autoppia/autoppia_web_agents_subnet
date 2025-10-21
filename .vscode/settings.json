@@ -2,7 +2,7 @@
   "python.analysis.extraPaths": ["${workspaceFolder}/autoppia_iwa_module"],
   "python.autoComplete.extraPaths": ["${workspaceFolder}/autoppia_iwa_module"],
   "[python]": {
-    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.defaultFormatter": "ms-python.autopep8",
     "editor.formatOnSave": true
   }
 }
