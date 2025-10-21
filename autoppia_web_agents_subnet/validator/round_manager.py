@@ -123,6 +123,8 @@ class RoundManager:
         Returns:
             Dict with round_start_epoch, target_epoch, round_start_block, target_block
         """
+        import bittensor as bt
+
         current_epoch = self.block_to_epoch(current_block)
 
         # 🔑 KEY: Calculate round start as GLOBAL epoch multiple (not relative to start)
@@ -135,6 +137,24 @@ class RoundManager:
         # Convert to blocks
         round_start_block = self.epoch_to_block(round_start_epoch)
         target_block = self.epoch_to_block(target_epoch)
+
+        # 🔍 CRITICAL DEBUG: Verify global sync calculations
+        bt.logging.info("=" * 80)
+        bt.logging.info("🌐 GLOBAL SYNC CALCULATION (Modulo-based)")
+        bt.logging.info("=" * 80)
+        bt.logging.info(f"📍 Current block:      {current_block:,}")
+        bt.logging.info(f"📍 Current epoch:      {current_epoch:.4f}")
+        bt.logging.info("")
+        bt.logging.info(f"🔢 ROUND_SIZE_EPOCHS:  {self.round_size_epochs}")
+        bt.logging.info(f"🔢 Modulo calculation: ({current_epoch:.4f} // {self.round_size_epochs}) × {self.round_size_epochs}")
+        bt.logging.info(f"🔢 Result:             {current_epoch // self.round_size_epochs:.0f} × {self.round_size_epochs} = {round_start_epoch:.4f}")
+        bt.logging.info("")
+        bt.logging.info(f"🎯 Round start epoch:  {round_start_epoch:.4f} (Block {round_start_block:,})")
+        bt.logging.info(f"🎯 Round end epoch:    {target_epoch:.4f} (Block {target_block:,})")
+        bt.logging.info(f"⏱️  Round duration:     {target_epoch - round_start_epoch:.2f} epochs ({(target_block - round_start_block):,} blocks)")
+        bt.logging.info("")
+        bt.logging.info(f"✅ ALL validators will end at epoch {target_epoch:.4f} regardless of start time")
+        bt.logging.info("=" * 80)
 
         return {
             'round_start_epoch': round_start_epoch,

@@ -122,9 +122,19 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
             return
 
         # Get current block and calculate round boundaries
+        # 🌐 This call shows GLOBAL SYNC calculation with detailed logs
         boundaries = self.round_manager.get_round_boundaries(current_block)
 
-        bt.logging.info(f"Round boundaries: start={boundaries['round_start_epoch']}, target={boundaries['target_epoch']}")
+        # 🔍 VERIFICATION: Prove that the round is globally synchronized
+        bt.logging.info("")
+        bt.logging.warning("🔐 SYNCHRONIZATION VERIFICATION")
+        bt.logging.warning("=" * 80)
+        bt.logging.warning(f"⚠️  CRITICAL: This round will end at epoch {boundaries['target_epoch']:.2f}")
+        bt.logging.warning(f"⚠️  ANY validator starting between epochs {boundaries['round_start_epoch']:.2f} - {boundaries['target_epoch']:.2f}")
+        bt.logging.warning(f"⚠️  will ALSO end at epoch {boundaries['target_epoch']:.2f}")
+        bt.logging.warning(f"⚠️  This ensures FAIR competition with GLOBAL deadline")
+        bt.logging.warning("=" * 80)
+        bt.logging.info("")
 
         # Log configuration summary
         self.round_manager.log_calculation_summary()
