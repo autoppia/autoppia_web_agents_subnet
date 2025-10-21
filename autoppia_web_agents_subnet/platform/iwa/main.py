@@ -228,8 +228,9 @@ class IWAPClient:
         path = f"/api/v1/evaluations/{evaluation_id}/gif"
         filename = f"{evaluation_id}.gif"
         logger.info(
-            "IWAP upload_evaluation_gif prepared for evaluation_id=%s payload_bytes=%s",
+            "🎬 IWAP: Uploading GIF to API - evaluation_id=%s filename=%s payload_bytes=%s",
             evaluation_id,
+            filename,
             len(gif_bytes),
         )
 
@@ -239,23 +240,25 @@ class IWAPClient:
                 files={"gif": (filename, gif_bytes, "image/gif")},
             )
             response.raise_for_status()
+            logger.info(f"🎬 IWAP: GIF upload request successful - status_code={response.status_code}")
         except httpx.HTTPStatusError as exc:
             body = exc.response.text
             logger.error(
-                "IWAP upload_evaluation_gif POST %s failed (%s): %s",
+                "❌ IWAP: GIF upload failed - POST %s returned %s: %s",
                 path,
                 exc.response.status_code,
                 body,
             )
             raise
-        except Exception:
-            logger.exception("IWAP upload_evaluation_gif POST %s failed unexpectedly", path)
+        except Exception as e:
+            logger.exception(f"❌ IWAP: GIF upload failed unexpectedly - POST {path}: {str(e)}")
             raise
 
         try:
             payload = response.json()
-        except Exception:
-            logger.warning("IWAP upload_evaluation_gif received non-JSON response for evaluation_id=%s", evaluation_id)
+            logger.info(f"🎬 IWAP: GIF upload response payload: {payload}")
+        except Exception as e:
+            logger.warning(f"⚠️  IWAP: Received non-JSON response for evaluation_id={evaluation_id}: {str(e)}")
             return None
 
         gif_url = None
@@ -263,11 +266,12 @@ class IWAPClient:
             data_section = payload.get("data")
             if isinstance(data_section, dict):
                 gif_url = data_section.get("gifUrl")
+                logger.info(f"🎬 IWAP: Extracted GIF URL from response: {gif_url}")
 
         if gif_url:
-            logger.info("IWAP upload_evaluation_gif completed for evaluation_id=%s url=%s", evaluation_id, gif_url)
+            logger.info(f"✅ IWAP: GIF upload completed successfully - URL: {gif_url}")
         else:
-            logger.warning("IWAP upload_evaluation_gif completed for evaluation_id=%s without returned URL", evaluation_id)
+            logger.warning(f"⚠️  IWAP: GIF upload completed but no URL returned for evaluation_id={evaluation_id}")
         return gif_url
 
     async def _post(self, path: str, payload: Dict[str, object], *, context: str) -> None:
