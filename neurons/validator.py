@@ -243,9 +243,27 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                     except (TypeError, ValueError):
                         status_numeric = None
                 if status_numeric is not None and status_numeric >= 400:
-                    bt.logging.debug(
-                        f"  Skipping uid={mapped_uid}: handshake returned status {status_numeric}"
-                    )
+                    # 🔍 DEBUG: Show detailed info for 422 errors
+                    if status_numeric == 422:
+                        bt.logging.warning(f"=" * 80)
+                        bt.logging.warning(f"⚠️  UID {mapped_uid} returned 422 Unprocessable Entity")
+                        bt.logging.warning(f"  Response fields:")
+                        bt.logging.warning(f"    - agent_name: {getattr(response, 'agent_name', 'NOT_SET')}")
+                        bt.logging.warning(f"    - agent_version: {getattr(response, 'agent_version', 'NOT_SET')}")
+                        bt.logging.warning(f"    - has_rl: {getattr(response, 'has_rl', 'NOT_SET')}")
+                        bt.logging.warning(f"    - round_id: {getattr(response, 'round_id', 'NOT_SET')}")
+                        bt.logging.warning(f"    - version: {getattr(response, 'version', 'NOT_SET')}")
+
+                        # Try to get error message if available
+                        dendrite_obj = getattr(response, "dendrite", None)
+                        if dendrite_obj:
+                            bt.logging.warning(f"    - status_message: {getattr(dendrite_obj, 'status_message', 'NOT_SET')}")
+
+                        bt.logging.warning(f"=" * 80)
+                    else:
+                        bt.logging.debug(
+                            f"  Skipping uid={mapped_uid}: handshake returned status {status_numeric}"
+                        )
                     continue
 
                 agent_name_raw = getattr(response, "agent_name", None)

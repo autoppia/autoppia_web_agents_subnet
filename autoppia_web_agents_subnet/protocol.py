@@ -104,7 +104,7 @@ class StartRoundSynapse(Synapse):
     agent_image: Optional[str] = None  # URL or data URI
     github_url: Optional[str] = None
     agent_version: Optional[str] = None
-    has_rl:bool = False
+    has_rl: bool = False
 
     class Config:
         extra = "allow"
