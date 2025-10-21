@@ -6,7 +6,21 @@ including agent metadata, timeouts, and feature flags.
 """
 
 import os
-from distutils.util import strtobool
+
+
+def _str_to_bool(value: str) -> bool:
+    """
+    Lightweight replacement for distutils.util.strtobool.
+
+    Accepts common truthy/falsey strings and raises ValueError for unknown tokens
+    so callers notice misconfigurations early.
+    """
+    normalized = value.strip().lower()
+    if normalized in {"y", "yes", "t", "true", "on", "1"}:
+        return True
+    if normalized in {"n", "no", "f", "false", "off", "0"}:
+        return False
+    raise ValueError(f"Invalid truth value {value!r}")
 
 
 def _get_env(*names: str, default: str = "") -> str:
@@ -55,11 +69,11 @@ MAX_RETRIES = int(os.getenv("MINER_MAX_RETRIES", "3"))
 
 # ╭─────────────────────────── Feedback & Logging ─────────────────────────────╮
 
-SAVE_FEEDBACK_TO_JSON = bool(strtobool(os.getenv("MINER_SAVE_FEEDBACK", "false")))
+SAVE_FEEDBACK_TO_JSON = _str_to_bool(os.getenv("MINER_SAVE_FEEDBACK", "false"))
 """Whether to save feedback from validators to a local JSON file."""
 
 FEEDBACK_JSON_FILE = os.getenv("MINER_FEEDBACK_FILE", "feedback_tasks.json")
 """Path to JSON file where feedback is saved (if SAVE_FEEDBACK_TO_JSON is True)."""
 
-VERBOSE_LOGGING = bool(strtobool(os.getenv("MINER_VERBOSE", "true")))
+VERBOSE_LOGGING = _str_to_bool(os.getenv("MINER_VERBOSE", "true"))
 """Enable verbose logging with colors and detailed output."""

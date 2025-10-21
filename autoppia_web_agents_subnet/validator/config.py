@@ -1,11 +1,23 @@
 import os
-from distutils.util import strtobool
 from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
 
 # Load environment variables from .env filee
 load_dotenv()
+
+
+def _str_to_bool(value: str) -> bool:
+    """
+    Minimal replacement for distutils.util.strtobool that keeps behaviour consistent
+    while remaining compatible with Python 3.12+ where distutils is deprecated.
+    """
+    normalized = value.strip().lower()
+    if normalized in {"y", "yes", "t", "true", "on", "1"}:
+        return True
+    if normalized in {"n", "no", "f", "false", "off", "0"}:
+        return False
+    raise ValueError(f"Invalid truth value {value!r}")
 
 
 def _normalized(value: Optional[str]) -> Optional[str]:
@@ -56,7 +68,7 @@ PRE_GENERATED_TASKS = 1           # Number of tasks to pre-generate at round sta
 # Minimum chain block required before the validator begins orchestrating rounds.
 # This gate keeps all validators aligned for the production launch window.
 # Only used when TESTING=false
-TESTING = bool(strtobool(os.getenv("TESTING", "false")))
+TESTING = _str_to_bool(os.getenv("TESTING", "false"))
 DZ_STARTING_BLOCK = int(os.getenv("DZ_STARTING_BLOCK", "6709875")) if not TESTING else 0
 
 
@@ -93,7 +105,7 @@ TIMEOUT = 60 * 2                    # 2 min: timeout for receiving miner respons
 FEEDBACK_TIMEOUT = 60               # 1 min: timeout for sending feedback to miners
 
 # Dynamic HTML - Enable seed assignment to task URLs for HTML variation
-ENABLE_DYNAMIC_HTML = bool(strtobool(os.getenv("ENABLE_DYNAMIC_HTML", "true")))
+ENABLE_DYNAMIC_HTML = _str_to_bool(os.getenv("ENABLE_DYNAMIC_HTML", "true"))
 
 # ╭─────────────────────────── Rewards ─────────────────────────────╮
 
@@ -113,7 +125,7 @@ VALIDATOR_AUTH_MESSAGE = _normalized(os.getenv("VALIDATOR_AUTH_MESSAGE", "I am a
 LEADERBOARD_TASKS_ENDPOINT = "https://api-leaderboard.autoppia.com/tasks"
 LEADERBOARD_VALIDATOR_RUNS_ENDPOINT = "https://api-leaderboard.autoppia.com/validator-runs"
 
-SAVE_SUCCESSFUL_TASK_IN_JSON = bool(strtobool(os.getenv("SAVE_SUCCESSFUL_TASK_IN_JSON", "false")))
+SAVE_SUCCESSFUL_TASK_IN_JSON = _str_to_bool(os.getenv("SAVE_SUCCESSFUL_TASK_IN_JSON", "false"))
 
 # ╭─────────────────────────── Stats ─────────────────────────────╮
 STATS_FILE = Path("coldkey_web_usecase_stats.json")  # snapshot

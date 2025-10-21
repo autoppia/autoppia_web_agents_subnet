@@ -278,7 +278,7 @@ class ValidatorPlatformMixin:
             "target_epoch": boundaries.get("target_epoch"),
         }
 
-        round_number = self.round_manager.calculate_round(current_block)
+        round_number = await self.round_manager.calculate_round(current_block)
         miner_count = len(getattr(self, "active_miner_uids", []))
 
         start_round_message = (

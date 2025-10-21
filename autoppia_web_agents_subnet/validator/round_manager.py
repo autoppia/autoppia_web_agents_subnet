@@ -236,10 +236,10 @@ class RoundManager:
         next_allowed_block = self.minimum_start_block + 1
         return max(next_allowed_block - current_block, 0)
 
-    def calculate_round(self, current_block: int) -> int:
+    async def calculate_round(self, current_block: int) -> int:
         """Return the human-visible round number based on days elapsed since launch block."""
         if TESTING:
-            testing_round = self._calculate_round_from_backend()
+            testing_round = await self._calculate_round_from_backend()
             if testing_round is not None:
                 return testing_round
 
@@ -251,7 +251,7 @@ class RoundManager:
         round_index = blocks_since_start // self.ROUND_BLOCK_LENGTH
         return int(round_index + 1)
 
-    def _calculate_round_from_backend(self) -> Optional[int]:
+    async def _calculate_round_from_backend(self) -> Optional[int]:
         """Use the dashboard rounds endpoint to derive the next round number when testing."""
         base_url = (IWAP_API_BASE_URL or "").rstrip("/")
         if not base_url:
@@ -266,7 +266,8 @@ class RoundManager:
         }
 
         try:
-            response = httpx.get(url, params=params, timeout=10.0)
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(url, params=params)
             response.raise_for_status()
         except httpx.HTTPError as exc:
             ColoredLogger.warning(
