@@ -510,13 +510,27 @@ class ValidatorPlatformMixin:
 
             solution = task_solutions[idx]
             actions_payload: List[Dict[str, Any]] = []
-            for action in getattr(solution, "actions", []) or []:
+
+            # 🔍 DEBUG: Log actions conversion
+            raw_actions = getattr(solution, "actions", []) or []
+            self._log_iwap_phase("Phase 4", f"🔧 Converting {len(raw_actions)} actions for miner_uid={miner_uid}")
+
+            for action_idx, action in enumerate(raw_actions):
                 if hasattr(action, "model_dump"):
-                    actions_payload.append(action.model_dump(mode="json", exclude_none=True))
+                    action_dict = action.model_dump(mode="json", exclude_none=True)
+                    actions_payload.append(action_dict)
+                    if action_idx == 0:  # Log first action as example
+                        self._log_iwap_phase("Phase 4", f"  First action (model_dump): {action_dict}")
                 elif hasattr(action, "__dict__"):
-                    actions_payload.append(dict(action.__dict__))
+                    action_dict = dict(action.__dict__)
+                    actions_payload.append(action_dict)
+                    if action_idx == 0:
+                        self._log_iwap_phase("Phase 4", f"  First action (__dict__): {action_dict}")
                 else:
-                    actions_payload.append({"type": getattr(action, "type", "unknown")})
+                    action_dict = {"type": getattr(action, "type", "unknown")}
+                    actions_payload.append(action_dict)
+                    if action_idx == 0:
+                        self._log_iwap_phase("Phase 4", f"  First action (fallback): {action_dict}")
 
             task_solution_id = iwa_main.generate_task_solution_id(task_id, miner_uid)
             evaluation_id = iwa_main.generate_evaluation_id(task_id, miner_uid)
@@ -570,6 +584,25 @@ class ValidatorPlatformMixin:
                 f"task_id={task_id}, agent_run_id={agent_run.agent_run_id}"
             )
             self._log_iwap_phase("Phase 4", add_evaluation_message)
+
+            # 🔍 DEBUG: Log what we're sending to API
+            self._log_iwap_phase("Phase 4", f"📤 IWAP API Payload Details:")
+            self._log_iwap_phase("Phase 4", f"  - Task: id={task_payload.task_id}, prompt={task_payload.prompt[:100]}...")
+            self._log_iwap_phase("Phase 4", f"  - Solution: id={task_solution_payload.solution_id}, actions_count={len(task_solution_payload.actions)}")
+            if task_solution_payload.actions:
+                self._log_iwap_phase("Phase 4", f"  - Actions payload (first 2):")
+                for i, action in enumerate(task_solution_payload.actions[:2]):
+                    action_dict = action if isinstance(action, dict) else (action.model_dump() if hasattr(action, 'model_dump') else str(action))
+                    self._log_iwap_phase("Phase 4", f"    [{i}] {action_dict}")
+            self._log_iwap_phase("Phase 4", f"  - Evaluation: score={evaluation_result_payload.final_score}, test_results_count={len(evaluation_result_payload.test_results)}")
+            if evaluation_result_payload.test_results:
+                self._log_iwap_phase("Phase 4", f"  - Test results (first test): {evaluation_result_payload.test_results[0]}")
+            if evaluation_result_payload.gif_recording:
+                gif_size = len(evaluation_result_payload.gif_recording) if isinstance(evaluation_result_payload.gif_recording, (str, bytes)) else 0
+                self._log_iwap_phase("Phase 4", f"  - GIF: size={gif_size} bytes")
+            else:
+                self._log_iwap_phase("Phase 4", f"  - GIF: None")
+
             try:
                 await self.iwap_client.add_evaluation(
                     validator_round_id=self.current_round_id,
