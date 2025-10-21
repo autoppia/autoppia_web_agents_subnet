@@ -519,18 +519,15 @@ class ValidatorPlatformMixin:
                 if hasattr(action, "model_dump"):
                     action_dict = action.model_dump(mode="json", exclude_none=True)
                     actions_payload.append(action_dict)
-                    if action_idx == 0:  # Log first action as example
-                        self._log_iwap_phase("Phase 4", f"  First action (model_dump): {action_dict}")
+                    self._log_iwap_phase("Phase 4", f"  Action {action_idx} (model_dump): {action_dict}")
                 elif hasattr(action, "__dict__"):
                     action_dict = dict(action.__dict__)
                     actions_payload.append(action_dict)
-                    if action_idx == 0:
-                        self._log_iwap_phase("Phase 4", f"  First action (__dict__): {action_dict}")
+                    self._log_iwap_phase("Phase 4", f"  Action {action_idx} (__dict__): {action_dict}")
                 else:
                     action_dict = {"type": getattr(action, "type", "unknown")}
                     actions_payload.append(action_dict)
-                    if action_idx == 0:
-                        self._log_iwap_phase("Phase 4", f"  First action (fallback): {action_dict}")
+                    self._log_iwap_phase("Phase 4", f"  Action {action_idx} (fallback): {action_dict}")
 
             task_solution_id = iwa_main.generate_task_solution_id(task_id, miner_uid)
             evaluation_id = iwa_main.generate_evaluation_id(task_id, miner_uid)
@@ -608,8 +605,8 @@ class ValidatorPlatformMixin:
             self._log_iwap_phase("Phase 4", f"  - Task: id={task_payload.task_id}, prompt={task_payload.prompt[:100]}...")
             self._log_iwap_phase("Phase 4", f"  - Solution: id={task_solution_payload.solution_id}, actions_count={len(task_solution_payload.actions)}")
             if task_solution_payload.actions:
-                self._log_iwap_phase("Phase 4", f"  - Actions payload (first 2):")
-                for i, action in enumerate(task_solution_payload.actions[:2]):
+                self._log_iwap_phase("Phase 4", f"  - Actions payload (ALL {len(task_solution_payload.actions)} actions):")
+                for i, action in enumerate(task_solution_payload.actions):
                     action_dict = action if isinstance(action, dict) else (action.model_dump() if hasattr(action, 'model_dump') else str(action))
                     self._log_iwap_phase("Phase 4", f"    [{i}] {action_dict}")
             self._log_iwap_phase("Phase 4", f"  - Evaluation: score={evaluation_result_payload.final_score}, test_results_count={len(evaluation_result_payload.test_results)}")

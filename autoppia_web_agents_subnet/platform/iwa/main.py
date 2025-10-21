@@ -7,7 +7,7 @@ import os
 from datetime import datetime
 from pathlib import Path
 import uuid
-from typing import Callable, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional
 
 import httpx
 
@@ -211,8 +211,8 @@ class IWAPClient:
         logger.info(f"   - task_id: {json_data['task']['task_id']}")
         logger.info(f"   - prompt: {json_data['task']['prompt'][:100]}...")
         logger.info(f"   - solution_id: {json_data['task_solution']['solution_id']}")
-        logger.info(f"   - actions ({len(json_data['task_solution']['actions'])}):")
-        for i, action in enumerate(json_data['task_solution']['actions'][:3]):
+        logger.info(f"   - actions (ALL {len(json_data['task_solution']['actions'])} actions):")
+        for i, action in enumerate(json_data['task_solution']['actions']):
             logger.info(f"      [{i}] {action}")
         logger.info(f"   - final_score: {json_data['evaluation_result']['final_score']}")
         logger.info(f"📁 Files:")
