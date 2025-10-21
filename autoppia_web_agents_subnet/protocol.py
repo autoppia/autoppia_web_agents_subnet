@@ -62,9 +62,8 @@ class TaskFeedbackSynapse(Synapse):
     actions: Optional[List[AllActionsUnion]] = Field(default_factory=list)
     test_results_matrix: Optional[List[List[Any]]] = None
     evaluation_result: Optional[Dict[str, Any]] = None
-    # 🔍 DEBUG: Add original task details for debugging
-    original_url: Optional[str] = None
-    original_seed: Optional[str] = None
+    # 🔍 DEBUG: Add web project name for debugging
+    web_project_name: Optional[str] = None
 
     class Config:
         extra = "allow"

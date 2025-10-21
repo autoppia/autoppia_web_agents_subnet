@@ -158,19 +158,11 @@ class Miner(BaseMinerNeuron):
         ColoredLogger.info(f"  - test_results_matrix: {synapse.test_results_matrix}", ColoredLogger.GRAY)
         ColoredLogger.info(f"  - actions: {len(synapse.actions) if synapse.actions else 0} actions", ColoredLogger.GRAY)
         ColoredLogger.info(f"  - evaluation_result: {synapse.evaluation_result}", ColoredLogger.GRAY)
-        
-        # 🔍 DEBUG: Log original task details
-        ColoredLogger.info(f"  🔗 ORIGINAL TASK DETAILS:", ColoredLogger.MAGENTA)
-        ColoredLogger.info(f"     - Original URL: {getattr(synapse, 'original_url', 'N/A')}", ColoredLogger.MAGENTA)
-        ColoredLogger.info(f"     - Original Seed: {getattr(synapse, 'original_seed', 'N/A')}", ColoredLogger.MAGENTA)
+
+        # 🔍 DEBUG: Log web project details
+        ColoredLogger.info(f"  📦 WEB PROJECT DETAILS:", ColoredLogger.MAGENTA)
+        ColoredLogger.info(f"     - Web Project: {getattr(synapse, 'web_project_name', 'N/A')}", ColoredLogger.MAGENTA)
         ColoredLogger.info(f"     - Task URL: {synapse.task_url}", ColoredLogger.MAGENTA)
-        
-        # 🔍 DEBUG: Check for discrepancies
-        if hasattr(synapse, 'original_url') and synapse.original_url:
-            if synapse.original_url != synapse.task_url:
-                ColoredLogger.warning(f"     ⚠️  URL MISMATCH! Original: {synapse.original_url}, Task: {synapse.task_url}", ColoredLogger.RED)
-            else:
-                ColoredLogger.info(f"     ✅ URL matches: {synapse.original_url}", ColoredLogger.GREEN)
 
         try:
             # Defensive defaults

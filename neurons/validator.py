@@ -407,7 +407,7 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
             if seed is not None:
                 separator = "&" if "?" in task_url else "?"
                 task_url = f"{task_url}{separator}seed={seed}"
-            
+
             task_synapse = TaskSynapse(
                 version=self.version,
                 prompt=task.prompt,
@@ -423,7 +423,7 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
             ColoredLogger.info(f"     - Final URL: {task_synapse.url}", ColoredLogger.MAGENTA)
             ColoredLogger.info(f"     - Seed: {task_synapse.seed}", ColoredLogger.MAGENTA)
             ColoredLogger.info(f"     - Prompt: {task_synapse.prompt[:100]}...", ColoredLogger.MAGENTA)
-            
+
             # 🔍 DEBUG: Verify URL construction
             if seed is not None and f"seed={seed}" in task_synapse.url:
                 ColoredLogger.info(f"     ✅ URL includes seed correctly", ColoredLogger.GREEN)
@@ -533,8 +533,7 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                     task_solutions=task_solutions,
                     test_results_matrices=test_results_matrices,
                     evaluation_results=evaluation_results,
-                    original_url=project.frontend_url,
-                    original_seed=str(seed),
+                    web_project_name=web_project_name or "Unknown",
                 )
             except Exception as e:
                 bt.logging.warning(f"Feedback failed: {e}")
