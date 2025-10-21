@@ -38,13 +38,13 @@ async def evaluate_task_solutions(
     task_solutions: List[Optional[TaskSolution]],  # aligned to miner_uids
     execution_times: List[float],                  # aligned to miner_uids (not used here, but kept for interface symmetry)
     normalize_scores: bool = True,
-) -> Tuple[NDArray[np.float32], List[List[List[Any]]], List[Dict[str, Any]]]:
+) -> Tuple[NDArray[np.float32], List[List[Any]], List[Dict[str, Any]]]:
     """
     Single evaluation entrypoint.
 
     Returns:
       - eval_scores: float32 array in [0,1], aligned with input miners
-      - test_results_matrices: per-miner list of per-test dicts (List[List[Dict]])
+      - test_results_list: per-miner list of test result dicts (List[List[Dict]])
       - evaluation_results: per-miner summary dicts
     """
     # Replace Nones with empty-action solutions to keep alignment consistent
@@ -71,17 +71,17 @@ async def evaluate_task_solutions(
 
     # Build outputs with careful defaults
     eval_scores: List[float] = []
-    test_results_matrices: List[List[List[Any]]] = []
+    test_results_list: List[List[Any]] = []  # Simplified: one list per miner
     evaluation_results: List[Dict[str, Any]] = []
 
     for res in detailed_results:
         score = float(getattr(res, "final_score", 0.0) or 0.0)
         eval_scores.append(score)
 
-        # Tests
+        # Tests - simple list of test results
         tr_list: Iterable[Any] = getattr(res, "test_results", []) or []
         tr_dicts = [_test_result_to_dict(tr) for tr in tr_list]
-        test_results_matrices.append([tr_dicts])  # keep 2-level nesting (tests grouped as one batch)
+        test_results_list.append(tr_dicts)  # Just a simple list, no 2-level nesting
 
         # Summary (add simple, durable fields only)
         evaluation_results.append({
@@ -92,4 +92,4 @@ async def evaluate_task_solutions(
 
     scores_arr = np.asarray(eval_scores, dtype=np.float32).ravel()
     np.clip(scores_arr, 0.0, 1.0, out=scores_arr)
-    return scores_arr, test_results_matrices, evaluation_results
+    return scores_arr, test_results_list, evaluation_results

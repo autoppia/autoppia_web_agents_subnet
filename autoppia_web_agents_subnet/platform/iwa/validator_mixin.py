@@ -463,7 +463,7 @@ class ValidatorPlatformMixin:
         task_item: TaskWithProject,
         task_solutions,
         eval_scores,
-        test_results_matrices,
+        test_results_list,
         evaluation_results,
         execution_times,
         rewards: List[float],

@@ -132,7 +132,7 @@ async def send_feedback_synapse_to_miners(
     rewards: List[float],
     execution_times: List[float],
     task_solutions,
-    test_results_matrices: List[List[List]],
+    test_results_list: List[List],
     evaluation_results: List[dict],
     web_project_name: str = "Unknown",
 ) -> None:
@@ -147,7 +147,7 @@ async def send_feedback_synapse_to_miners(
         rewards: List of reward scores
         execution_times: List of execution times
         task_solutions: List of solutions from miners
-        test_results_matrices: Test results for each miner
+        test_results_list: Test results for each miner (list of dicts)
         evaluation_results: Evaluation results for each miner
     """
     feedback_list: List[TaskFeedbackSynapse] = []
@@ -165,7 +165,7 @@ async def send_feedback_synapse_to_miners(
                 tests=task.tests,
                 actions=task_solutions[i].actions if i < len(task_solutions) else [],
                 test_results_matrix=(
-                    test_results_matrices[i] if i < len(test_results_matrices) else None
+                    test_results_list[i] if i < len(test_results_list) else []
                 ),
                 evaluation_result=(
                     evaluation_results[i] if i < len(evaluation_results) else None

@@ -480,7 +480,7 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
 
             # Evaluate task solutions
             ColoredLogger.info("🔍 STARTING EVALUATION...", ColoredLogger.CYAN)
-            eval_scores, test_results_matrices, evaluation_results = await evaluate_task_solutions(
+            eval_scores, test_results_list, evaluation_results = await evaluate_task_solutions(
                 web_project=project,
                 task=task,
                 task_solutions=task_solutions,
@@ -496,12 +496,12 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                 ColoredLogger.info(f"  📈 Eval Score: {eval_scores[i]:.4f}", ColoredLogger.GREEN)
                 ColoredLogger.info(f"  ⏱️  Execution Time: {execution_times[i]:.2f}s", ColoredLogger.BLUE)
                 ColoredLogger.info(f"  📋 Evaluation Result: {evaluation_results[i]}", ColoredLogger.YELLOW)
-                ColoredLogger.info(f"  🧪 Test Results Matrix ({len(test_results_matrices[i])} tests):", ColoredLogger.CYAN)
-                if test_results_matrices[i]:
-                    for test_idx, test_results in enumerate(test_results_matrices[i], 1):
-                        ColoredLogger.info(f"     Test {test_idx}: {test_results}", ColoredLogger.GRAY)
+                ColoredLogger.info(f"  🧪 Test Results ({len(test_results_list[i])} tests):", ColoredLogger.CYAN)
+                if test_results_list[i]:
+                    for test_idx, test_result in enumerate(test_results_list[i], 1):
+                        ColoredLogger.info(f"     Test {test_idx}: {test_result}", ColoredLogger.GRAY)
                 else:
-                    ColoredLogger.warning(f"     ⚠️  NO TEST RESULTS (empty matrix)", ColoredLogger.RED)
+                    ColoredLogger.warning(f"     ⚠️  NO TEST RESULTS", ColoredLogger.RED)
             ColoredLogger.info("=" * 80 + "\n", ColoredLogger.CYAN)
 
             # Calculate final scores (combining eval quality + execution speed)
@@ -531,7 +531,7 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                     rewards=rewards.tolist(),
                     execution_times=execution_times,
                     task_solutions=task_solutions,
-                    test_results_matrices=test_results_matrices,
+                    test_results_list=test_results_list,
                     evaluation_results=evaluation_results,
                     web_project_name=web_project_name or "Unknown",
                 )
@@ -543,7 +543,7 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                     task_item=task_item,
                     task_solutions=task_solutions,
                     eval_scores=eval_scores,
-                    test_results_matrices=test_results_matrices,
+                    test_results_list=test_results_list,
                     evaluation_results=evaluation_results,
                     execution_times=execution_times,
                     rewards=rewards.tolist(),
