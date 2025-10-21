@@ -60,7 +60,7 @@ class TaskFeedbackSynapse(Synapse):
     execution_time: Optional[float] = 0.0
     tests: Optional[List["TestUnion"]] = None
     actions: Optional[List[AllActionsUnion]] = Field(default_factory=list)
-    test_results_matrix: Optional[List[List[Any]]] = None
+    test_results: Optional[List[Any]] = None  # Simplified from matrix to simple list
     evaluation_result: Optional[Dict[str, Any]] = None
     # 🔍 DEBUG: Add web project name for debugging
     web_project_name: Optional[str] = None

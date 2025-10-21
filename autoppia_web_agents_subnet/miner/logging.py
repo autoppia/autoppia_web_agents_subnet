@@ -66,14 +66,14 @@ def _render_visualization(console: Console, fb: TaskFeedbackSynapse) -> None:
                 task.__dict__['tests'] = fb.tests
                 console.print(f"[yellow]⚠️ Used __dict__ to assign tests[/yellow]")
 
-    # If we have actions + matrix, show full evaluation; else basic task/tests
-    if fb.actions and fb.test_results_matrix:
+    # If we have actions + test results, show full evaluation; else basic task/tests
+    if fb.actions and fb.test_results:
         visualizer.show_full_evaluation(
             agent_id=fb.miner_id,
             validator_id=fb.validator_id,
             task=task,
             actions=fb.actions or [],
-            test_results_matrix=fb.test_results_matrix or [],
+            test_results=fb.test_results or [],
             evaluation_result=fb.evaluation_result,
         )
     else:

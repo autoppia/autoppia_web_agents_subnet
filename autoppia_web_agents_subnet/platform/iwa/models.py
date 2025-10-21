@@ -202,7 +202,7 @@ class EvaluationResultIWAP:
     validator_uid: int
     miner_uid: Optional[int]
     final_score: float
-    test_results_matrix: List[List[Dict[str, Any]]] = field(default_factory=list)
+    test_results: List[Dict[str, Any]] = field(default_factory=list)  # Simplified from matrix to list
     execution_history: List[Dict[str, Any]] = field(default_factory=list)
     feedback: Optional[Dict[str, Any]] = None
     web_agent_id: Optional[str] = None

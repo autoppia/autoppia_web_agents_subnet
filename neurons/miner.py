@@ -155,7 +155,7 @@ class Miner(BaseMinerNeuron):
         ColoredLogger.info(f"  - score: {synapse.score}", ColoredLogger.GRAY)
         ColoredLogger.info(f"  - execution_time: {synapse.execution_time}", ColoredLogger.GRAY)
         ColoredLogger.info(f"  - tests: {synapse.tests}", ColoredLogger.GRAY)
-        ColoredLogger.info(f"  - test_results_matrix: {synapse.test_results_matrix}", ColoredLogger.GRAY)
+        ColoredLogger.info(f"  - test_results: {synapse.test_results}", ColoredLogger.GRAY)
         ColoredLogger.info(f"  - actions: {len(synapse.actions) if synapse.actions else 0} actions", ColoredLogger.GRAY)
         ColoredLogger.info(f"  - evaluation_result: {synapse.evaluation_result}", ColoredLogger.GRAY)
 

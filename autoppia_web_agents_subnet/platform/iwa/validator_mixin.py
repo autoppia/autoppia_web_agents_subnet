@@ -526,7 +526,7 @@ class ValidatorPlatformMixin:
                 evaluation_meta = {}
             evaluation_metadata = dict(evaluation_meta)
             gif_payload = evaluation_metadata.pop("gif_recording", evaluation_meta.get("gif_recording"))
-            test_matrix = test_results_matrices[idx] if idx < len(test_results_matrices) else []
+            test_results_data = test_results_list[idx] if idx < len(test_results_list) else []
             exec_time = float(execution_times[idx]) if idx < len(execution_times) else 0.0
             reward_value = rewards[idx] if idx < len(rewards) else final_score
 
@@ -554,7 +554,7 @@ class ValidatorPlatformMixin:
                 validator_uid=int(self.uid),
                 miner_uid=miner_uid,
                 final_score=final_score,
-                test_results_matrix=test_matrix or [],
+                test_results=test_results_data or [],
                 execution_history=evaluation_meta.get("execution_history", []),
                 feedback=evaluation_meta.get("feedback"),
                 web_agent_id=getattr(solution, "web_agent_id", None),

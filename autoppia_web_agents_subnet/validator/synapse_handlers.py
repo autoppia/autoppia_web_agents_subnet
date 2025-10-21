@@ -164,8 +164,8 @@ async def send_feedback_synapse_to_miners(
                 execution_time=execution_times[i],
                 tests=task.tests,
                 actions=task_solutions[i].actions if i < len(task_solutions) else [],
-                test_results_matrix=(
-                    [test_results_list[i]] if i < len(test_results_list) else []
+                test_results=(
+                    test_results_list[i] if i < len(test_results_list) else []
                 ),
                 evaluation_result=(
                     evaluation_results[i] if i < len(evaluation_results) else None
