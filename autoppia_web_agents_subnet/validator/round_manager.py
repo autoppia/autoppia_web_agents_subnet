@@ -107,15 +107,29 @@ class RoundManager:
     def get_round_boundaries(self, current_block: int) -> Dict[str, Any]:
         """
         Calculate round boundaries for the given block.
+        
+        🌐 GLOBAL SYNCHRONIZATION:
+        This method ensures ALL validators synchronize to the same epoch boundaries,
+        regardless of when they start. The round boundaries are calculated from
+        ABSOLUTE EPOCH MULTIPLES, not from each validator's start time.
+        
+        Example with ROUND_SIZE_EPOCHS = 20:
+            Validator A starts at epoch 18,640.0 → Round ends at 18,660
+            Validator B starts at epoch 18,642.5 (2.5 epochs late) → Round STILL ends at 18,660
+            Validator C starts at epoch 18,655.0 (15 epochs late) → Round STILL ends at 18,660
+        
+        All validators set weights at the SAME TIME (epoch 18,660), ensuring fair competition.
 
         Returns:
             Dict with round_start_epoch, target_epoch, round_start_block, target_block
         """
         current_epoch = self.block_to_epoch(current_block)
 
-        # Calculate round start (epoch multiple of round_size_epochs)
+        # 🔑 KEY: Calculate round start as GLOBAL epoch multiple (not relative to start)
+        # This ensures all validators synchronize to the same epoch boundaries
         round_start_epoch = (current_epoch // self.round_size_epochs) * self.round_size_epochs
-        # Target epoch is the end of the round
+        
+        # Target epoch is the end of the round (GLOBAL deadline for ALL validators)
         target_epoch = round_start_epoch + self.round_size_epochs
 
         # Convert to blocks

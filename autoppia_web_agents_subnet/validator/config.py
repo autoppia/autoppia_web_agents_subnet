@@ -42,18 +42,19 @@ def _env_int(name: str, default: int) -> int:
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# 🎯 PRODUCTION CONFIGURATION - Round System (21 HOURS)
+# 🎯 PRODUCTION CONFIGURATION - Round System (24 HOURS)
 # ════════════════════════════════════════════════════════════════════════════════
-# Launch: Epoch 18,639 (Block 6,710,040) - ~21:04 Oct 21, 2025
-# Round duration: 21 hours = 17.5 epochs = 6,300 blocks
-# All validators synchronize at epoch multiples of 17.5
+# Launch: Epoch 18,640 (Block 6,710,400) - ~21:00 Oct 21, 2025
+# Round duration: 24 hours = 20 epochs = 7,200 blocks
+# All validators synchronize at epoch multiples of 20 (GLOBAL SYNC)
 # ════════════════════════════════════════════════════════════════════════════════
 
-ROUND_SIZE_EPOCHS = 17.5             # 21 hours per round
+ROUND_SIZE_EPOCHS = 20               # 24 hours per round
 # 1 epoch = 360 blocks = 72 minutes = 1.2 hours
-# 17.5 epochs = 6,300 blocks = 75,600 seconds = 1,260 minutes = 21 hours
-# Round 1: epochs 18,639.0 - 18,656.5 (21 hours)
-# Round 2: epochs 18,656.5 - 18,674.0 (next 21 hours)
+# 20 epochs = 7,200 blocks = 86,400 seconds = 1,440 minutes = 24 hours
+# Round 1: epochs 18,640 - 18,659 (24h) - ALL validators end at epoch 18,660
+# Round 2: epochs 18,660 - 18,679 (24h) - ALL validators end at epoch 18,680
+# ⚠️ If validator starts late, it still ends at the same epoch as others!
 
 SAFETY_BUFFER_EPOCHS = 0.5           # 0.5 epoch = 36 minutes buffer before round ends
 # Stop sending tasks when less than 0.5 epochs remains
@@ -61,12 +62,12 @@ SAFETY_BUFFER_EPOCHS = 0.5           # 0.5 epoch = 36 minutes buffer before roun
 
 AVG_TASK_DURATION_SECONDS = 300      # 5 minutes average per task
 # Includes: send task + miner execution + evaluation + API submission
-# 250 tasks × 5 min = 1,250 min = 20.83 hours
-# Fits perfectly in 21 hours with 36-min buffer
+# 300 tasks × 5 min = 1,500 min = 25 hours
+# Distributed over ~23.4 hours (24h - 36min buffer) = ~13 tasks/hour
 
-PRE_GENERATED_TASKS = 250            # Generate 250 tasks at round start
+PRE_GENERATED_TASKS = 300            # Generate 300 tasks at round start
 # All tasks generated upfront to avoid runtime errors
-# Distribution: ~12 tasks/hour over 21 hours
+# Distribution: ~13 tasks/hour over 24 hours
 # Tasks sent dynamically based on time remaining
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -75,13 +76,19 @@ PRE_GENERATED_TASKS = 250            # Generate 250 tasks at round start
 # ⚠️  WARNING: This value MUST be identical across ALL validators
 # ⚠️  DO NOT CHANGE without coordinating with all validator operators
 # ════════════════════════════════════════════════════════════════════════════════
-# Epoch 18,639 = Block 6,710,040 (perfectly aligned with epoch start)
-# Estimated launch: ~21:04 PM, October 21, 2025
-# All validators synchronize at this exact block
+# Epoch 18,640 = Block 6,710,400 (perfectly aligned with epoch start)
+# Estimated launch: ~21:00 PM, October 21, 2025
+# 
+# ⚠️  CRITICAL: This is the MINIMUM block - validators can start AFTER this
+# All validators will synchronize to the SAME epoch boundaries regardless of start time
+# Example: 
+#   - Validator A starts at block 6,710,400 (on time)
+#   - Validator B starts at block 6,711,000 (4h late)
+#   - BOTH end Round 1 at epoch 18,660 (same deadline)
 # ════════════════════════════════════════════════════════════════════════════════
 
 TESTING = _str_to_bool(os.getenv("TESTING", "false"))
-DZ_STARTING_BLOCK = 6_710_040 if not TESTING else 0  # FIXED - DO NOT CHANGE
+DZ_STARTING_BLOCK = 6_710_400 if not TESTING else 0  # FIXED - DO NOT CHANGE
 
 
 # ╭────────────────────── TESTING Configuration (Commented) ──────────────────────╮
