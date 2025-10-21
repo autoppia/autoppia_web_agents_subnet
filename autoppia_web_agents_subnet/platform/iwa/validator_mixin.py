@@ -600,57 +600,7 @@ class ValidatorPlatformMixin:
                     level="warning",
                 )
 
-            # 🔍 DEBUG: Log what we're sending to API
-            self._log_iwap_phase("Phase 4", f"📤 IWAP API Payload Details:")
-            self._log_iwap_phase("Phase 4", f"  - Task: id={task_payload.task_id}, prompt={task_payload.prompt[:100]}...")
-            self._log_iwap_phase("Phase 4", f"  - Solution: id={task_solution_payload.solution_id}, actions_count={len(task_solution_payload.actions)}")
-            if task_solution_payload.actions:
-                self._log_iwap_phase("Phase 4", f"  - Actions payload (ALL {len(task_solution_payload.actions)} actions):")
-                for i, action in enumerate(task_solution_payload.actions):
-                    action_dict = action if isinstance(action, dict) else (action.model_dump() if hasattr(action, 'model_dump') else str(action))
-                    self._log_iwap_phase("Phase 4", f"    [{i}] {action_dict}")
-            self._log_iwap_phase("Phase 4", f"  - Evaluation: score={evaluation_result_payload.final_score}, test_results_count={len(evaluation_result_payload.test_results)}")
-            if evaluation_result_payload.test_results:
-                self._log_iwap_phase("Phase 4", f"  - Test results (first test): {evaluation_result_payload.test_results[0]}")
-            if evaluation_result_payload.gif_recording:
-                gif_size = len(evaluation_result_payload.gif_recording) if isinstance(evaluation_result_payload.gif_recording, (str, bytes)) else 0
-                self._log_iwap_phase("Phase 4", f"  - GIF: size={gif_size} bytes")
-            else:
-                self._log_iwap_phase("Phase 4", f"  - GIF: None")
-
-            # 📄 Log complete payload as JSON
-            self._log_iwap_phase("Phase 4", "=" * 80)
-            self._log_iwap_phase("Phase 4", "📄 COMPLETE PAYLOAD TO API:")
-            self._log_iwap_phase("Phase 4", "=" * 80)
-            import json
-            complete_payload = {
-                "task": {
-                    "task_id": task_payload.task_id,
-                    "prompt": task_payload.prompt,
-                    "url": task_payload.url,
-                    "seed": getattr(task_payload, "seed", None),
-                    "web_project_name": getattr(task_payload, "web_project_name", None),
-                },
-                "task_solution": {
-                    "solution_id": task_solution_payload.solution_id,
-                    "task_id": task_solution_payload.task_id,
-                    "validator_uid": task_solution_payload.validator_uid,
-                    "miner_uid": task_solution_payload.miner_uid,
-                    "actions": task_solution_payload.actions,
-                    "web_agent_id": task_solution_payload.web_agent_id,
-                },
-                "evaluation_result": {
-                    "evaluation_id": evaluation_result_payload.evaluation_id,
-                    "task_id": evaluation_result_payload.task_id,
-                    "final_score": evaluation_result_payload.final_score,
-                    "test_results": evaluation_result_payload.test_results,
-                    "gif_recording": "<will_upload_separately>" if gif_to_upload else None,
-                }
-            }
-            payload_json = json.dumps(complete_payload, indent=2, ensure_ascii=False)
-            for line in payload_json.split('\n'):
-                self._log_iwap_phase("Phase 4", line)
-            self._log_iwap_phase("Phase 4", "=" * 80)
+            # Skip detailed logs here - they're shown in main.py add_evaluation
 
             try:
                 await self.iwap_client.add_evaluation(

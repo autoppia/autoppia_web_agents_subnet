@@ -203,30 +203,15 @@ class IWAPClient:
             except Exception as e:
                 logger.warning(f"⚠️  Failed to decode GIF for multipart: {e}")
 
-        # 🔍 DEBUG: Log multipart payload details
+        # 🔍 DEBUG: Log summary before sending
         bt.logging.info("=" * 80)
-        bt.logging.info("🔍 DEBUG - add_evaluation MULTIPART PAYLOAD:")
-        bt.logging.info("=" * 80)
-        bt.logging.info(f"📍 Endpoint: POST /api/v1/validator-rounds/{validator_round_id}/agent-runs/{agent_run_id}/evaluations")
-        bt.logging.info(f"📦 JSON Data Summary:")
-        bt.logging.info(f"   - task_id: {json_data['task']['task_id']}")
-        bt.logging.info(f"   - prompt: {json_data['task']['prompt'][:100]}...")
-        bt.logging.info(f"   - solution_id: {json_data['task_solution']['solution_id']}")
-        bt.logging.info(f"   - actions (ALL {len(json_data['task_solution']['actions'])} actions):")
+        bt.logging.info(f"📤 SENDING TO API: POST .../evaluations")
+        bt.logging.info(f"📦 Task: {json_data['task']['task_id'][:20]}... | Prompt: {json_data['task']['prompt'][:60]}...")
+        bt.logging.info(f"🎯 Actions ({len(json_data['task_solution']['actions'])}):")
         for i, action in enumerate(json_data['task_solution']['actions']):
-            bt.logging.info(f"      [{i}] {action}")
-        bt.logging.info(f"   - final_score: {json_data['evaluation_result']['final_score']}")
-        bt.logging.info(f"📁 Files:")
-        for key, file_data in files.items():
-            bt.logging.info(f"   - {key}: {len(file_data)} bytes")
-        bt.logging.info(f"📊 JSON size: {len(str(json_data))} chars")
-        bt.logging.info(f"📊 Total files size: {sum(len(f) for f in files.values())} bytes")
-        bt.logging.info("=" * 80)
-        bt.logging.info("📄 COMPLETE JSON PAYLOAD:")
-        bt.logging.info("=" * 80)
-        payload_str = json.dumps(json_data, indent=2, ensure_ascii=False)
-        for line in payload_str.split('\n'):
-            bt.logging.info(line)
+            bt.logging.info(f"   [{i}] {action}")
+        bt.logging.info(f"✅ Score: {json_data['evaluation_result']['final_score']}")
+        bt.logging.info(f"📊 Payload: {len(str(json_data))} chars | Files: {sum(len(f) for f in files.values())} bytes")
         bt.logging.info("=" * 80)
 
         logger.info(
