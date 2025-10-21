@@ -70,15 +70,18 @@ PRE_GENERATED_TASKS = 250            # Generate 250 tasks at round start
 # Tasks sent dynamically based on time remaining
 
 # ════════════════════════════════════════════════════════════════════════════════
-# 🚀 LAUNCH BLOCK (Epoch-Aligned)
+# 🚀 LAUNCH BLOCK (Epoch-Aligned) - FIXED VALUE
+# ════════════════════════════════════════════════════════════════════════════════
+# ⚠️  WARNING: This value MUST be identical across ALL validators
+# ⚠️  DO NOT CHANGE without coordinating with all validator operators
 # ════════════════════════════════════════════════════════════════════════════════
 # Epoch 18,639 = Block 6,710,040 (perfectly aligned with epoch start)
 # Estimated launch: ~21:04 PM, October 21, 2025
-# All validators MUST use this exact block for synchronization
+# All validators synchronize at this exact block
 # ════════════════════════════════════════════════════════════════════════════════
 
 TESTING = _str_to_bool(os.getenv("TESTING", "false"))
-DZ_STARTING_BLOCK = int(os.getenv("DZ_STARTING_BLOCK", "6710040")) if not TESTING else 0
+DZ_STARTING_BLOCK = 6_710_040 if not TESTING else 0  # FIXED - DO NOT CHANGE
 
 
 # ╭────────────────────── TESTING Configuration (Commented) ──────────────────────╮
