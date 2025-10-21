@@ -224,7 +224,7 @@ class RoundManager:
     def can_start_round(self, current_block: int) -> bool:
         """Return True when the chain height has passed the minimum start block gate."""
         if TESTING:
-            return true
+            return True
         if self.minimum_start_block is None:
             return True
         return current_block > self.minimum_start_block
