@@ -13,6 +13,7 @@ from autoppia_iwa.src.evaluation.evaluator.evaluator import (
     ConcurrentEvaluator,
     EvaluatorConfig,
 )
+from autoppia_web_agents_subnet.validator.config import SHOULD_RECORD_GIF
 
 
 def _test_result_to_dict(tr: Any) -> Dict[str, Any]:
@@ -56,7 +57,7 @@ async def evaluate_task_solutions(
         s if s is not None else TaskSolution(actions=[]) for s in task_solutions
     ]
 
-    cfg = EvaluatorConfig(normalize_scores=normalize_scores)
+    cfg = EvaluatorConfig(normalize_scores=normalize_scores, should_record_gif=SHOULD_RECORD_GIF)
     evaluator = ConcurrentEvaluator(web_project, cfg)
 
     try:
@@ -87,11 +88,21 @@ async def evaluate_task_solutions(
         tr_dicts = [_test_result_to_dict(tr) for tr in tr_list]
         test_results_list.append(tr_dicts)  # Just a simple list, no 2-level nesting
 
+        # Extract GIF recording
+        gif_recording = getattr(res, "gif_recording", None)
+        if gif_recording:
+            # Log GIF info (first 100 chars of base64)
+            gif_preview = str(gif_recording)[:100] if gif_recording else "None"
+            bt.logging.info(f"🎬 GIF captured: {len(str(gif_recording)) if gif_recording else 0} bytes (base64), preview: {gif_preview}...")
+        else:
+            bt.logging.warning("⚠️  No GIF recording in evaluation result")
+
         # Summary (add simple, durable fields only)
         evaluation_results.append({
             "final_score": score,
             "version_ok": bool(getattr(res, "version_ok", True)),
             "notes": str(getattr(res, "notes", "")) if hasattr(res, "notes") else "",
+            "gif_recording": gif_recording,  # GIF base64 for leaderboard
         })
 
     scores_arr = np.asarray(eval_scores, dtype=np.float32).ravel()

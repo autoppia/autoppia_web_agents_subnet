@@ -107,6 +107,9 @@ FEEDBACK_TIMEOUT = 60               # 1 min: timeout for sending feedback to min
 # Dynamic HTML - Enable seed assignment to task URLs for HTML variation
 ENABLE_DYNAMIC_HTML = _str_to_bool(os.getenv("ENABLE_DYNAMIC_HTML", "true"))
 
+# GIF Recording - Enable recording of browser execution as animated GIF for leaderboard
+SHOULD_RECORD_GIF = _str_to_bool(os.getenv("SHOULD_RECORD_GIF", "true"))
+
 # ╭─────────────────────────── Rewards ─────────────────────────────╮
 
 EVAL_SCORE_WEIGHT = 1.0             # Weight of evaluation score (0-1) - Only quality matters
