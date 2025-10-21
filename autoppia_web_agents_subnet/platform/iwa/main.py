@@ -203,15 +203,21 @@ class IWAPClient:
             except Exception as e:
                 logger.warning(f"⚠️  Failed to decode GIF for multipart: {e}")
 
-        # 🔍 DEBUG: Log summary before sending
+        # 🔍 DEBUG: Log complete payload before sending
         bt.logging.info("=" * 80)
-        bt.logging.info(f"📤 SENDING TO API: POST .../evaluations")
-        bt.logging.info(f"📦 Task: {json_data['task']['task_id'][:20]}... | Prompt: {json_data['task']['prompt'][:60]}...")
-        bt.logging.info(f"🎯 Actions ({len(json_data['task_solution']['actions'])}):")
-        for i, action in enumerate(json_data['task_solution']['actions']):
-            bt.logging.info(f"   [{i}] {action}")
-        bt.logging.info(f"✅ Score: {json_data['evaluation_result']['final_score']}")
-        bt.logging.info(f"📊 Payload: {len(str(json_data))} chars | Files: {sum(len(f) for f in files.values())} bytes")
+        bt.logging.info("📤 COMPLETE PAYLOAD BEFORE SENDING TO API")
+        bt.logging.info("=" * 80)
+        bt.logging.info(f"📍 Endpoint: POST /api/v1/validator-rounds/{validator_round_id}/agent-runs/{agent_run_id}/evaluations")
+        bt.logging.info("")
+        bt.logging.info("📄 FULL JSON PAYLOAD:")
+        payload_str = json.dumps(json_data, indent=2, ensure_ascii=False)
+        for line in payload_str.split('\n'):
+            bt.logging.info(line)
+        bt.logging.info("")
+        if files:
+            bt.logging.info("📁 MULTIPART FILES:")
+            for key, file_data in files.items():
+                bt.logging.info(f"   - {key}: {len(file_data)} bytes (binary GIF)")
         bt.logging.info("=" * 80)
 
         logger.info(

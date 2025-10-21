@@ -600,7 +600,7 @@ class ValidatorPlatformMixin:
                     level="warning",
                 )
 
-            # Skip detailed logs here - they're shown in main.py add_evaluation
+            # Detailed payload will be logged in main.py add_evaluation method
 
             try:
                 await self.iwap_client.add_evaluation(
