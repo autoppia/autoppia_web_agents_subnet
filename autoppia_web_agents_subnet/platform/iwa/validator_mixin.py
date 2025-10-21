@@ -575,7 +575,7 @@ class ValidatorPlatformMixin:
                 raw_score=evaluation_meta.get("raw_score", final_score),
                 evaluation_time=evaluation_meta.get("evaluation_time", exec_time),
                 stats=evaluation_meta.get("stats"),
-                gif_recording=gif_payload,
+                gif_recording=None,  # Will be updated with URL after upload
                 metadata=evaluation_metadata,
             )
 
@@ -584,6 +584,48 @@ class ValidatorPlatformMixin:
                 f"task_id={task_id}, agent_run_id={agent_run.agent_run_id}"
             )
             self._log_iwap_phase("Phase 4", add_evaluation_message)
+
+            # 🎬 Upload GIF first (if present) and update payload with URL
+            if gif_payload:
+                payload_size = len(gif_payload) if isinstance(gif_payload, (bytes, str)) else 0
+                self._log_iwap_phase(
+                    "Phase 4",
+                    f"🎬 Uploading GIF first for evaluation_id={evaluation_id} type={type(gif_payload).__name__} size={payload_size} bytes",
+                )
+                gif_bytes = self._extract_gif_bytes(gif_payload)
+                if gif_bytes:
+                    self._log_iwap_phase(
+                        "Phase 4",
+                        f"🎬 Uploading GIF to AWS for evaluation_id={evaluation_id} bytes={len(gif_bytes)}",
+                    )
+                    try:
+                        uploaded_url = await self.iwap_client.upload_evaluation_gif(evaluation_id, gif_bytes)
+                        if uploaded_url:
+                            evaluation_result_payload.gif_recording = uploaded_url
+                            self._log_iwap_phase(
+                                "Phase 4",
+                                f"✅ GIF uploaded successfully to AWS: {uploaded_url}",
+                                level="success",
+                            )
+                        else:
+                            self._log_iwap_phase(
+                                "Phase 4",
+                                f"⚠️  GIF upload completed without URL for evaluation_id={evaluation_id}",
+                                level="warning",
+                            )
+                    except Exception as e:
+                        self._log_iwap_phase(
+                            "Phase 4",
+                            f"❌ Failed to upload GIF for evaluation_id={evaluation_id}: {str(e)}",
+                            level="error",
+                            exc_info=True,
+                        )
+                else:
+                    self._log_iwap_phase(
+                        "Phase 4",
+                        f"⚠️  Skipped GIF upload: invalid payload (failed to extract bytes) for evaluation_id={evaluation_id}",
+                        level="warning",
+                    )
 
             # 🔍 DEBUG: Log what we're sending to API
             self._log_iwap_phase("Phase 4", f"📤 IWAP API Payload Details:")
@@ -633,53 +675,7 @@ class ValidatorPlatformMixin:
                     level="success",
                 )
 
-                if gif_payload:
-                    payload_size = len(gif_payload) if isinstance(gif_payload, (bytes, str)) else 0
-                    self._log_iwap_phase(
-                        "Phase 4",
-                        f"🎬 Received GIF payload for evaluation_id={evaluation_id} type={type(gif_payload).__name__} size={payload_size} bytes",
-                    )
-                    gif_bytes = self._extract_gif_bytes(gif_payload)
-                    if gif_bytes:
-                        self._log_iwap_phase(
-                            "Phase 4",
-                            f"🎬 Uploading GIF to AWS for evaluation_id={evaluation_id} bytes={len(gif_bytes)}",
-                        )
-                        try:
-                            uploaded_url = await self.iwap_client.upload_evaluation_gif(evaluation_id, gif_bytes)
-                        except Exception as e:
-                            self._log_iwap_phase(
-                                "Phase 4",
-                                f"❌ Failed to upload GIF for evaluation_id={evaluation_id}: {str(e)}",
-                                level="error",
-                                exc_info=True,
-                            )
-                        else:
-                            if uploaded_url:
-                                evaluation_result_payload.gif_recording = uploaded_url
-                                self._log_iwap_phase(
-                                    "Phase 4",
-                                    f"✅ GIF uploaded successfully to AWS: {uploaded_url}",
-                                    level="success",
-                                )
-                            else:
-                                self._log_iwap_phase(
-                                    "Phase 4",
-                                    f"⚠️  GIF upload completed without URL for evaluation_id={evaluation_id}",
-                                    level="warning",
-                                )
-                    else:
-                        self._log_iwap_phase(
-                            "Phase 4",
-                            f"⚠️  Skipped GIF upload: invalid payload (failed to extract bytes) for evaluation_id={evaluation_id}",
-                            level="warning",
-                        )
-                else:
-                    self._log_iwap_phase(
-                        "Phase 4",
-                        f"⚠️  No GIF payload received for evaluation_id={evaluation_id}",
-                        level="warning",
-                    )
+                # GIF upload is now handled before add_evaluation
 
             accumulators = self.agent_run_accumulators.setdefault(
                 miner_uid,
