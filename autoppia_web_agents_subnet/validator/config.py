@@ -109,8 +109,8 @@ ENABLE_DYNAMIC_HTML = _str_to_bool(os.getenv("ENABLE_DYNAMIC_HTML", "true"))
 
 # ╭─────────────────────────── Rewards ─────────────────────────────╮
 
-EVAL_SCORE_WEIGHT = 0.85            # Weight of evaluation score (0-1)
-TIME_WEIGHT = 0.15                  # Weight of execution time (0-1)
+EVAL_SCORE_WEIGHT = 1.0             # Weight of evaluation score (0-1) - Only quality matters
+TIME_WEIGHT = 0.0                   # Weight of execution time (0-1) - Time doesn't affect score
 
 
 # ╭─────────────────────────── Leaderboard ─────────────────────────────╮
