@@ -24,7 +24,7 @@ def _test_result_to_dict(tr: Any) -> Dict[str, Any]:
         # TestResult fields: success and extra_data
         success = bool(getattr(tr, "success", False))
         extra_data = getattr(tr, "extra_data", None) or {}
-        
+
         # Return the dict with the actual TestResult fields
         return {
             "success": success,
