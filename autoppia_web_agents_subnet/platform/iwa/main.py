@@ -166,7 +166,8 @@ class IWAPClient:
         """
         Submit a TaskSolution + EvaluationResult bundle for persistence.
         """
-        payload = {
+        # Prepare JSON data (without GIF)
+        json_data = {
             "task": task.to_payload(),
             "task_solution": task_solution.to_payload(),
             "evaluation": {
@@ -189,26 +190,36 @@ class IWAPClient:
             "evaluation_result": evaluation_result.to_payload(),
         }
 
-        # 🔍 DEBUG: Log full payload details
+        # Prepare files (GIF as binary)
+        files = {}
+        if evaluation_result.gif_recording:
+            try:
+                # Convert base64 GIF to binary
+                import base64
+                gif_binary = base64.b64decode(evaluation_result.gif_recording)
+                files["gif_recording"] = gif_binary
+                logger.info(f"🎬 GIF prepared for multipart: {len(gif_binary)} bytes")
+            except Exception as e:
+                logger.warning(f"⚠️  Failed to decode GIF for multipart: {e}")
+
+        # 🔍 DEBUG: Log multipart payload details
         logger.info("=" * 80)
-        logger.info("🔍 DEBUG - add_evaluation FULL PAYLOAD:")
+        logger.info("🔍 DEBUG - add_evaluation MULTIPART PAYLOAD:")
         logger.info("=" * 80)
         logger.info(f"📍 Endpoint: POST /api/v1/validator-rounds/{validator_round_id}/agent-runs/{agent_run_id}/evaluations")
-        logger.info(f"📦 Task:")
-        logger.info(f"   - task_id: {payload['task']['task_id']}")
-        logger.info(f"   - prompt: {payload['task']['prompt'][:100]}...")
-        logger.info(f"📦 Task Solution:")
-        logger.info(f"   - solution_id: {payload['task_solution']['solution_id']}")
-        logger.info(f"   - actions ({len(payload['task_solution']['actions'])}):")
-        for i, action in enumerate(payload['task_solution']['actions'][:3]):
+        logger.info(f"📦 JSON Data:")
+        logger.info(f"   - task_id: {json_data['task']['task_id']}")
+        logger.info(f"   - prompt: {json_data['task']['prompt'][:100]}...")
+        logger.info(f"   - solution_id: {json_data['task_solution']['solution_id']}")
+        logger.info(f"   - actions ({len(json_data['task_solution']['actions'])}):")
+        for i, action in enumerate(json_data['task_solution']['actions'][:3]):
             logger.info(f"      [{i}] {action}")
-        logger.info(f"📦 Evaluation Result:")
-        logger.info(f"   - final_score: {payload['evaluation_result']['final_score']}")
-        logger.info(f"   - test_results: {payload['evaluation_result']['test_results']}")
-        gif_recording = payload['evaluation_result'].get('gif_recording', '')
-        gif_size = len(gif_recording) if gif_recording else 0
-        logger.info(f"   - gif_recording: {'<length: ' + str(gif_size) + '>' if gif_size > 0 else 'None'}")
-        logger.info(f"📊 Total payload size: {len(str(payload))} characters")
+        logger.info(f"   - final_score: {json_data['evaluation_result']['final_score']}")
+        logger.info(f"📁 Files:")
+        for key, file_data in files.items():
+            logger.info(f"   - {key}: {len(file_data)} bytes")
+        logger.info(f"📊 JSON size: {len(str(json_data))} chars")
+        logger.info(f"📊 Total files size: {sum(len(f) for f in files.values())} bytes")
         logger.info("=" * 80)
 
         logger.info(
@@ -217,11 +228,21 @@ class IWAPClient:
             agent_run_id,
             task_solution.solution_id,
         )
-        await self._post(
-            f"/api/v1/validator-rounds/{validator_round_id}/agent-runs/{agent_run_id}/evaluations",
-            payload,
-            context="add_evaluation",
-        )
+
+        # Use multipart if we have files, otherwise use regular JSON
+        if files:
+            await self._post_multipart(
+                f"/api/v1/validator-rounds/{validator_round_id}/agent-runs/{agent_run_id}/evaluations",
+                json_data,
+                files,
+                context="add_evaluation",
+            )
+        else:
+            await self._post(
+                f"/api/v1/validator-rounds/{validator_round_id}/agent-runs/{agent_run_id}/evaluations",
+                json_data,
+                context="add_evaluation",
+            )
 
     async def finish_round(
         self,
@@ -316,6 +337,89 @@ class IWAPClient:
 
         try:
             logger.info("IWAP %s POST %s started", context, target_url)
+            response = await self._client.send(request)
+            response.raise_for_status()
+            logger.info(
+                "IWAP %s POST %s succeeded with status %s",
+                context,
+                target_url,
+                response.status_code,
+            )
+            # 🔍 DEBUG: Log response details
+            logger.info(f"   Response status: {response.status_code}")
+            logger.info(f"   Response headers: {dict(response.headers)}")
+            if response.text:
+                logger.info(f"   Response body (first 500 chars): {response.text[:500]}")
+        except httpx.HTTPStatusError as exc:
+            body = exc.response.text
+            logger.error("IWAP %s POST %s failed (%s): %s", context, target_url, exc.response.status_code, body)
+            raise
+        except Exception:
+            logger.exception("IWAP %s POST %s failed unexpectedly", context, target_url)
+            raise
+
+    async def _post_multipart(self, path: str, data: Dict[str, Any], files: Dict[str, bytes], *, context: str) -> None:
+        """
+        Send multipart/form-data request with JSON data and binary files.
+        """
+        import io
+
+        # Create multipart form data
+        boundary = "----formdata-autoppia-iwap"
+        body_parts = []
+
+        # Add JSON data fields
+        for key, value in data.items():
+            body_parts.append(f"--{boundary}")
+            body_parts.append(f"Content-Disposition: form-data; name=\"{key}\"")
+            body_parts.append("Content-Type: application/json")
+            body_parts.append("")
+            body_parts.append(json.dumps(value))
+            body_parts.append("")
+
+        # Add binary files
+        for key, file_data in files.items():
+            body_parts.append(f"--{boundary}")
+            body_parts.append(f"Content-Disposition: form-data; name=\"{key}\"; filename=\"{key}.gif\"")
+            body_parts.append("Content-Type: image/gif")
+            body_parts.append("")
+            # Add binary data
+            body_parts.append(file_data)
+            body_parts.append("")
+
+        # Close boundary
+        body_parts.append(f"--{boundary}--")
+
+        # Join all parts
+        body = b"\r\n".join([
+            part.encode('utf-8') if isinstance(part, str) else part 
+            for part in body_parts
+        ])
+
+        # Build request
+        request = self._client.build_request("POST", path, content=body)
+        request.headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
+
+        auth_headers = self._resolve_auth_headers()
+        if auth_headers:
+            request.headers.update(auth_headers)
+
+        target_url = str(request.url)
+
+        # 🔍 DEBUG: Log multipart request details
+        logger.info("🌐 MULTIPART REQUEST DETAILS:")
+        logger.info(f"   Method: POST")
+        logger.info(f"   URL: {target_url}")
+        logger.info(f"   Context: {context}")
+        logger.info(f"   Content-Type: multipart/form-data; boundary={boundary}")
+        logger.info(f"   Data fields: {list(data.keys())}")
+        logger.info(f"   File fields: {list(files.keys())}")
+        logger.info(f"   Total body size: {len(body)} bytes")
+        for key, file_data in files.items():
+            logger.info(f"   File {key}: {len(file_data)} bytes")
+
+        try:
+            logger.info("IWAP %s POST %s started (multipart)", context, target_url)
             response = await self._client.send(request)
             response.raise_for_status()
             logger.info(
