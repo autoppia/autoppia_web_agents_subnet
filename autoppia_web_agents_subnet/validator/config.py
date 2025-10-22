@@ -93,7 +93,7 @@ PRE_GENERATED_TASKS = 75             # Generate fewer tasks (≈ 1/4)
 # ════════════════════════════════════════════════════════════════════════════════
 
 TESTING = _str_to_bool(os.getenv("TESTING", "false"))
-DZ_STARTING_BLOCK = 6_712_860 if not TESTING else 0  # Fixed start gate, aligned and > 6,712,258
+DZ_STARTING_BLOCK = 6_712_860  if not TESTING else 0  # Fixed start gate, aligned and > 6,712,258
 
 
 # ╭────────────────────── TESTING Configuration (Commented) ──────────────────────╮

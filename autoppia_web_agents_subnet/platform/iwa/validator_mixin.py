@@ -200,107 +200,107 @@ class ValidatorPlatformMixin:
     def _save_round_state(self, *, tasks: Optional[List[TaskWithProject]] = None) -> None:
         try:
             with self._state_lock:
-            # Try to read previous state once (to preserve tasks if not provided)
-            previous_state: Dict[str, Any] = {}
-            if self._round_state_path.exists():
-                try:
-                    with self._round_state_path.open("r", encoding="utf-8") as fh:
-                        previous_state = json.load(fh) or {}
-                except Exception:
-                    previous_state = {}
-
-            state: Dict[str, Any] = {
-                "validator_round_id": self.current_round_id,
-                "validator_hotkey": getattr(self.wallet.hotkey, "ss58_address", None),
-                "created_at": self.round_start_timestamp or time.time(),
-                "active_miner_uids": list(getattr(self, "active_miner_uids", []) or []),
-                "handshakes": {str(uid): self._serialize_handshake(p) for uid, p in self.round_handshake_payloads.items()},
-                "agent_runs": {str(uid): run.agent_run_id for uid, run in self.current_agent_runs.items()},
-                "completed": [[uid, task_id] for (uid, task_id) in sorted(self._completed_pairs)],
-            }
-            # Persist miner hotkeys at the time of the round to keep UID+hotkey identity stable across restarts
-            miner_hotkeys: Dict[str, Optional[str]] = {}
-            for uid in state["active_miner_uids"]:
-                try:
-                    miner_hotkeys[str(uid)] = self.metagraph.hotkeys[uid]
-                except Exception:
-                    miner_hotkeys[str(uid)] = None
-            state["miner_hotkeys"] = miner_hotkeys
-
-            # Compute serialized tasks with strong preservation semantics
-            serialized_tasks: Optional[List[Dict[str, Any]]] = None
-            if tasks is not None:
-                tmp: List[Dict[str, Any]] = []
-                for item in tasks:
+                # Try to read previous state once (to preserve tasks if not provided)
+                previous_state: Dict[str, Any] = {}
+                if self._round_state_path.exists():
                     try:
-                        proj = item.project
-                        project_payload = {
-                            "id": getattr(proj, "id", None),
-                            "name": getattr(proj, "name", None),
-                            "frontend_url": getattr(proj, "frontend_url", None),
-                            "is_web_real": bool(getattr(proj, "is_web_real", False)),
-                        }
-                        task_payload = (
-                            item.task.serialize() if hasattr(item.task, "serialize") else item.task.model_dump()
-                        )
-                        tmp.append({"project": project_payload, "task": task_payload})
+                        with self._round_state_path.open("r", encoding="utf-8") as fh:
+                            previous_state = json.load(fh) or {}
                     except Exception:
-                        continue
-                serialized_tasks = tmp
-                # Cache for subsequent incremental saves
-                try:
-                    self._cached_tasks_serialized = list(serialized_tasks)
-                except Exception:
-                    self._cached_tasks_serialized = serialized_tasks
-            else:
-                # Try to preserve from previous file
-                prev_tasks = list((previous_state.get("tasks") or [])) if previous_state else []
-                if prev_tasks:
-                    serialized_tasks = prev_tasks
-                else:
-                    # If we have a cached task list from earlier in the run, use it
-                    if self._cached_tasks_serialized:
-                        serialized_tasks = list(self._cached_tasks_serialized)
-                    else:
-                        # No tasks available to write; avoid clobbering state file with empty tasks
+                        previous_state = {}
+
+                state: Dict[str, Any] = {
+                    "validator_round_id": self.current_round_id,
+                    "validator_hotkey": getattr(self.wallet.hotkey, "ss58_address", None),
+                    "created_at": self.round_start_timestamp or time.time(),
+                    "active_miner_uids": list(getattr(self, "active_miner_uids", []) or []),
+                    "handshakes": {str(uid): self._serialize_handshake(p) for uid, p in self.round_handshake_payloads.items()},
+                    "agent_runs": {str(uid): run.agent_run_id for uid, run in self.current_agent_runs.items()},
+                    "completed": [[uid, task_id] for (uid, task_id) in sorted(self._completed_pairs)],
+                }
+                # Persist miner hotkeys at the time of the round to keep UID+hotkey identity stable across restarts
+                miner_hotkeys: Dict[str, Optional[str]] = {}
+                for uid in state["active_miner_uids"]:
+                    try:
+                        miner_hotkeys[str(uid)] = self.metagraph.hotkeys[uid]
+                    except Exception:
+                        miner_hotkeys[str(uid)] = None
+                state["miner_hotkeys"] = miner_hotkeys
+
+                # Compute serialized tasks with strong preservation semantics
+                serialized_tasks: Optional[List[Dict[str, Any]]] = None
+                if tasks is not None:
+                    tmp: List[Dict[str, Any]] = []
+                    for item in tasks:
                         try:
-                            import bittensor as bt
-                            bt.logging.debug(
-                                "Skipping state write: no tasks to persist yet (will persist after pre-generation)."
+                            proj = item.project
+                            project_payload = {
+                                "id": getattr(proj, "id", None),
+                                "name": getattr(proj, "name", None),
+                                "frontend_url": getattr(proj, "frontend_url", None),
+                                "is_web_real": bool(getattr(proj, "is_web_real", False)),
+                            }
+                            task_payload = (
+                                item.task.serialize() if hasattr(item.task, "serialize") else item.task.model_dump()
                             )
+                            tmp.append({"project": project_payload, "task": task_payload})
                         except Exception:
-                            pass
-                        return
+                            continue
+                    serialized_tasks = tmp
+                    # Cache for subsequent incremental saves
+                    try:
+                        self._cached_tasks_serialized = list(serialized_tasks)
+                    except Exception:
+                        self._cached_tasks_serialized = serialized_tasks
+                else:
+                    # Try to preserve from previous file
+                    prev_tasks = list((previous_state.get("tasks") or [])) if previous_state else []
+                    if prev_tasks:
+                        serialized_tasks = prev_tasks
+                    else:
+                        # If we have a cached task list from earlier in the run, use it
+                        if self._cached_tasks_serialized:
+                            serialized_tasks = list(self._cached_tasks_serialized)
+                        else:
+                            # No tasks available to write; avoid clobbering state file with empty tasks
+                            try:
+                                import bittensor as bt
+                                bt.logging.debug(
+                                    "Skipping state write: no tasks to persist yet (will persist after pre-generation)."
+                                )
+                            except Exception:
+                                pass
+                            return
 
-            state["tasks"] = serialized_tasks or []
-            # Persist evaluation records for rebuild on resume
-            state["eval_records"] = list(self._eval_records or [])
-            state["phases"] = dict(self._phases or {})
+                state["tasks"] = serialized_tasks or []
+                # Persist evaluation records for rebuild on resume
+                state["eval_records"] = list(self._eval_records or [])
+                state["phases"] = dict(self._phases or {})
 
-            # Atomic write: ensure dir, write to temp then replace
-            try:
-                self._round_state_path.parent.mkdir(parents=True, exist_ok=True)
-            except Exception:
-                pass
-            tmp_path = self._round_state_path.with_suffix(self._round_state_path.suffix + ".tmp")
-            # Dump JSON once to capture size and avoid partial writes across dumps
-            payload = json.dumps(state, ensure_ascii=False, indent=2)
-            with tmp_path.open("w", encoding="utf-8") as fh:
-                fh.write(payload)
+                # Atomic write: ensure dir, write to temp then replace
                 try:
-                    fh.flush()
-                    os.fsync(fh.fileno())
+                    self._round_state_path.parent.mkdir(parents=True, exist_ok=True)
                 except Exception:
                     pass
-            tmp_path.replace(self._round_state_path)
-            try:
-                import bittensor as bt
-                bt.logging.info(
-                    f"Round state persisted at {self._round_state_path} "
-                    f"(tasks={len(state.get('tasks') or [])}, uids={len(state.get('active_miner_uids') or [])}, chars={len(payload)})"
-                )
-            except Exception:
-                pass
+                tmp_path = self._round_state_path.with_suffix(self._round_state_path.suffix + ".tmp")
+                # Dump JSON once to capture size and avoid partial writes across dumps
+                payload = json.dumps(state, ensure_ascii=False, indent=2)
+                with tmp_path.open("w", encoding="utf-8") as fh:
+                    fh.write(payload)
+                    try:
+                        fh.flush()
+                        os.fsync(fh.fileno())
+                    except Exception:
+                        pass
+                tmp_path.replace(self._round_state_path)
+                try:
+                    import bittensor as bt
+                    bt.logging.info(
+                        f"Round state persisted at {self._round_state_path} "
+                        f"(tasks={len(state.get('tasks') or [])}, uids={len(state.get('active_miner_uids') or [])}, chars={len(payload)})"
+                    )
+                except Exception:
+                    pass
         except Exception as exc:
             bt.logging.warning(f"Failed to persist round state: {exc}")
 
