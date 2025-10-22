@@ -130,7 +130,7 @@ class TaskIWAP:
 
     def to_payload(self) -> Dict[str, Any]:
         from datetime import datetime, date, time as datetime_time
-        
+
         def make_json_serializable(obj):
             """Convert non-JSON-serializable objects to JSON-compatible types"""
             if isinstance(obj, (datetime, date)):
@@ -142,7 +142,7 @@ class TaskIWAP:
             if isinstance(obj, (list, tuple)):
                 return [make_json_serializable(item) for item in obj]
             return obj
-        
+
         data = asdict(self)
         data["specifications"] = make_json_serializable(self.specifications or {})
         data["tests"] = make_json_serializable(self.tests or [])
