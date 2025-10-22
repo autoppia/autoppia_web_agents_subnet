@@ -71,7 +71,7 @@ class RoundStateManager:
         """
         Resolve a stable path for checkpoints under /data by default.
 
-        Structure: /data/validator_state/netuid_36/round_state/{hotkey}.pkl
+        Structure: /data/validator_state/round_state/{hotkey}.pkl
 
         Priority:
         1) Env IWA_STATE_DIR or VALIDATOR_STATE_DIR
@@ -83,21 +83,16 @@ class RoundStateManager:
         else:
             base = Path("/data/validator_state")
 
-        # Determine netuid and hotkey
-        try:
-            netuid = getattr(self._validator.metagraph, "netuid", None)
-        except Exception:
-            netuid = None
+        # Determine hotkey
         try:
             hotkey = getattr(getattr(self._validator.wallet, "hotkey", None), "ss58_address", None)
         except Exception:
             hotkey = None
-        
-        netuid_part = f"netuid_{netuid}" if netuid is not None else "netuid_unknown"
+
         hotkey_part = hotkey or "hotkey_unknown"
-        
-        # Structure: /data/validator_state/netuid_36/round_state/{hotkey}.pkl
-        return Path(base) / netuid_part / "round_state" / f"{hotkey_part}.pkl"
+
+        # Structure: /data/validator_state/round_state/{hotkey}.pkl
+        return Path(base) / "round_state" / f"{hotkey_part}.pkl"
 
     # ──────────────────────────────────────────────────────────────────────
     # Public API

@@ -5,17 +5,15 @@
 ```
 /data/
 └── validator_state/
-    └── netuid_36/
-        └── round_state/
-            ├── 5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j.pkl
-            └── 5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j.pkl.tmp
+    └── round_state/
+        ├── 5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j.pkl
+        └── 5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j.pkl.tmp
 ```
 
 ### **¿Por qué esta estructura?**
 
 - ✅ **`/data/validator_state/`**: Separado del backend y otros datos
-- ✅ **`netuid_36/`**: Permite múltiples subnets en el mismo servidor
-- ✅ **`round_state/`**: Claridad sobre qué contiene
+- ✅ **`round_state/`**: Claridad sobre qué contiene (estado de rounds)
 - ✅ **`{hotkey}.pkl`**: Un archivo por validador (múltiples validadores posibles)
 - ✅ **`.pkl.tmp`**: Escritura atómica (temp → replace)
 

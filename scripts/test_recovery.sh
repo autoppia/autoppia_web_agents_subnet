@@ -22,7 +22,7 @@ echo ""
 
 # Variables
 VALIDATOR_PROCESS="validator_6am"
-CHECKPOINT_DIR="/data/validator_state/netuid_36/round_state"
+CHECKPOINT_DIR="/data/validator_state/round_state"
 LOG_FILE="/tmp/recovery_test_$(date +%Y%m%d_%H%M%S).log"
 
 # ═══════════════════════════════════════════════════════════════════════════════
