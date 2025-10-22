@@ -5,7 +5,6 @@ import json
 import math
 import time
 from binascii import Error as BinasciiError
-import os
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -57,6 +56,8 @@ class ValidatorPlatformMixin:
         self._eval_records: List[Dict[str, Any]] = []
         # Phase flags for IWAP steps (p1=start_round, p2=set_tasks)
         self._phases: Dict[str, Any] = {"p1_done": False, "p2_done": False}
+        # Cache serialized tasks so later incremental saves can persist even if tasks param omitted
+        self._cached_tasks_serialized: Optional[List[Dict[str, Any]]] = None
 
     def _log_iwap_phase(
         self,
@@ -151,22 +152,22 @@ class ValidatorPlatformMixin:
     # ──────────────────────────────────────────────────────────────────────────
     @property
     def _round_state_path(self) -> Path:
-        # Stable path independent of CWD with ENV override support:
-        #   - AUTOPPIA_ROUND_STATE_DIR (preferred)
-        #   - AUTOPPIA_STATE_DIR (fallback)
-        # Default: ~/.autoppia/state
-        env_base: str | None = os.getenv("AUTOPPIA_ROUND_STATE_DIR") or os.getenv("AUTOPPIA_STATE_DIR")
-        if env_base:
-            try:
-                # Expand ~ and environment variables if present
-                expanded = os.path.expanduser(env_base)
-                base = Path(expanded)
-            except Exception:
-                base = Path(env_base)
-        else:
-            # Default to a Docker/host-mounted volume under /data for durability
-            # e.g., /data/autoppia/state/netuid_<n>/<hotkey>.json
-            base = Path("/data") / "autoppia" / "state"
+        """Repo-local state file under <repo_root>/data/state/.
+
+        We resolve the repository root by walking parents of this file until we find
+        a directory that already contains a 'data' folder; otherwise we fall back to
+        the current working directory.
+        """
+        this_file = Path(__file__).resolve()
+        repo_root = None
+        for parent in this_file.parents:
+            if (parent / "data").exists():
+                repo_root = parent
+                break
+        if repo_root is None:
+            repo_root = Path.cwd()
+
+        base = repo_root / "data" / "state"
 
         # Determine netuid and hotkey, fall back to placeholders
         try:
@@ -190,29 +191,7 @@ class ValidatorPlatformMixin:
             "note": getattr(payload, "note", None),
         }
 
-    def _round_state_home_fallback_path(self) -> Path:
-        """Historical default location under the user's home directory.
-
-        Previous versions stored state at: ~/.autoppia/state/netuid_<n>/<hotkey>.json
-        Keep this as a compatibility fallback for resume.
-        """
-        try:
-            base = Path.home() / ".autoppia" / "state"
-        except Exception:
-            base = Path(".autoppia_state_fallback")
-
-        try:
-            netuid = getattr(self.metagraph, "netuid", None)
-        except Exception:
-            netuid = None
-        try:
-            hotkey = getattr(getattr(self.wallet, "hotkey", None), "ss58_address", None)
-        except Exception:
-            hotkey = None
-
-        netuid_part = f"netuid_{netuid}" if netuid is not None else "netuid_unknown"
-        hotkey_part = hotkey or "hotkey_unknown"
-        return base / netuid_part / f"{hotkey_part}.json"
+    # Removed legacy/home fallbacks per operator request: single source of truth in repo 'data'.
 
     def _save_round_state(self, *, tasks: Optional[List[TaskWithProject]] = None) -> None:
         try:
@@ -263,21 +242,30 @@ class ValidatorPlatformMixin:
                     except Exception:
                         continue
                 serialized_tasks = tmp
+                # Cache for subsequent incremental saves
+                try:
+                    self._cached_tasks_serialized = list(serialized_tasks)
+                except Exception:
+                    self._cached_tasks_serialized = serialized_tasks
             else:
                 # Try to preserve from previous file
                 prev_tasks = list((previous_state.get("tasks") or [])) if previous_state else []
                 if prev_tasks:
                     serialized_tasks = prev_tasks
                 else:
-                    # No tasks available to write; avoid clobbering state file with empty tasks
-                    try:
-                        import bittensor as bt
-                        bt.logging.warning(
-                            "Skipping state write: no tasks to persist (preserving existing file)."
-                        )
-                    except Exception:
-                        pass
-                    return
+                    # If we have a cached task list from earlier in the run, use it
+                    if self._cached_tasks_serialized:
+                        serialized_tasks = list(self._cached_tasks_serialized)
+                    else:
+                        # No tasks available to write; avoid clobbering state file with empty tasks
+                        try:
+                            import bittensor as bt
+                            bt.logging.debug(
+                                "Skipping state write: no tasks to persist yet (will persist after pre-generation)."
+                            )
+                        except Exception:
+                            pass
+                        return
 
             state["tasks"] = serialized_tasks or []
             # Persist evaluation records for rebuild on resume
@@ -298,73 +286,26 @@ class ValidatorPlatformMixin:
                 bt.logging.info(f"Round state persisted at {self._round_state_path}")
             except Exception:
                 pass
-
-            # Mirror write to historical home fallback for compatibility
-            try:
-                fallback_path = self._round_state_home_fallback_path()
-                fallback_path.parent.mkdir(parents=True, exist_ok=True)
-                with fallback_path.open("w", encoding="utf-8") as fh2:
-                    json.dump(state, fh2, ensure_ascii=False, indent=2)
-                try:
-                    import bittensor as bt
-                    bt.logging.debug(f"Round state mirrored at {fallback_path}")
-                except Exception:
-                    pass
-            except Exception:
-                pass
         except Exception as exc:
             bt.logging.warning(f"Failed to persist round state: {exc}")
 
     def _load_round_state(self) -> Optional[Dict[str, Any]]:
         state_path = self._round_state_path
-        home_fallback = self._round_state_home_fallback_path()
-        legacy_path = Path(".autoppia_round_state.json")
         chosen_path: Optional[Path] = None
-
-        # Probe in order: primary (/data or env), historical home path, legacy CWD file
-        try:
-            import bittensor as bt
-            bt.logging.debug(
-                f"Resume search: trying paths in order: {state_path} | {home_fallback} | {legacy_path}"
-            )
-        except Exception:
-            pass
 
         if state_path.exists():
             chosen_path = state_path
-        elif home_fallback.exists():
-            chosen_path = home_fallback
-            try:
-                import bittensor as bt
-                bt.logging.info(
-                    f"Resume migration: using fallback home state file at {home_fallback.resolve()}"
-                )
-            except Exception:
-                pass
-        elif legacy_path.exists():
-            chosen_path = legacy_path
-            try:
-                import bittensor as bt
-                bt.logging.info(
-                    f"Resume migration: using legacy state file at {legacy_path.resolve()}"
-                )
-            except Exception:
-                pass
         else:
             try:
                 import bittensor as bt
                 bt.logging.info(
-                    f"Resume skipped: state file not found in any known location"
-                )
-                bt.logging.debug(
-                    f"Checked paths: {state_path} | {home_fallback} | {legacy_path}"
+                    f"Resume skipped: state file not found at {state_path.resolve()}"
                 )
             except Exception:
                 pass
             self._last_resume_info = {
                 "status": "skipped",
-                "reason": "state file not found",
-                "checked": [str(state_path), str(home_fallback), str(legacy_path)],
+                "reason": f"state file not found at {state_path}",
             }
             return None
 
@@ -482,14 +423,7 @@ class ValidatorPlatformMixin:
             self._phases = dict(state.get("phases") or {})
         except Exception:
             self._phases = {"p1_done": False, "p2_done": False}
-        # If non-primary path used, mirror the file into the primary path for next time
-        try:
-            if chosen_path != state_path:
-                state_path.parent.mkdir(parents=True, exist_ok=True)
-                with state_path.open("w", encoding="utf-8") as fh:
-                    json.dump(state, fh, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
+        # No mirroring: single source of truth in repo 'data'.
         return state
 
     def _rebuild_from_saved_evaluations(self) -> None:
