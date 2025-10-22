@@ -651,7 +651,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 validator=self,
                 miner_axons=active_axons,
                 task_synapse=task_synapse,
-                timeout=60,
+                timeout=120,
             )
 
             # Process responses and calculate rewards

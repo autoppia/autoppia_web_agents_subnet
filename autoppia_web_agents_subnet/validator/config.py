@@ -49,6 +49,7 @@ def _env_int(name: str, default: int) -> int:
 # All validators synchronize at epoch multiples of 20 (GLOBAL SYNC)
 # ════════════════════════════════════════════════════════════════════════════════
 
+# Default production round size (overridden in TESTING below)
 ROUND_SIZE_EPOCHS = 6                # ~7.2 hours per round
 # 1 epoch = 360 blocks = 72 minutes = 1.2 hours
 # 6 epochs = 2,160 blocks = 25,920 seconds ≈ 432 minutes ≈ 7.2 hours
@@ -95,7 +96,13 @@ PRE_GENERATED_TASKS = 75             # Generate fewer tasks (≈ 1/4)
 TESTING = _str_to_bool(os.getenv("TESTING", "false"))
 # Move start gate forward by full-epoch increments (360 blocks) to be past 6,716,117
 # Previous: 6,713,220 → + (360 * 9) = 6,716,460 (> 6,716,117)
-DZ_STARTING_BLOCK = 6_716_460 if not TESTING else 0
+# In TESTING, use a fixed gate as requested: 6,717,750
+DZ_STARTING_BLOCK = 6_716_460 if not TESTING else 6_717_750
+
+# TESTING overrides
+if TESTING:
+    # Round duration = 1 epoch when TESTING is true
+    ROUND_SIZE_EPOCHS = 1
 
 
 # ╭────────────────────── TESTING Configuration (Commented) ──────────────────────╮
