@@ -62,6 +62,8 @@ class ValidatorPlatformMixin:
         self._cached_tasks_serialized: Optional[List[Dict[str, Any]]] = None
         # State file I/O lock to prevent concurrent clobbering
         self._state_lock: threading.Lock = threading.Lock()
+        # Optional override so we save back to the same base used when loading
+        self._state_base_override: Optional[Path] = None
 
     def _log_iwap_phase(
         self,
@@ -156,22 +158,60 @@ class ValidatorPlatformMixin:
     # ──────────────────────────────────────────────────────────────────────────
     @property
     def _round_state_path(self) -> Path:
-        """Repo-local state file under <repo_root>/data/state/.
+        """Resolve the on-disk path for the crash-resume state JSON.
 
-        We resolve the repository root by walking parents of this file until we find
-        a directory that already contains a 'data' folder; otherwise we fall back to
-        the current working directory.
+        Priority order for the state base directory (first that applies):
+        1) Env var IWA_STATE_DIR (absolute or relative)
+        2) '/data/state' if exists, else '/data' (we'll create '/data/state')
+        3) Repository local '<repo>/data/state' if a 'data' dir exists in parents
+        4) CWD fallback '<cwd>/data/state'
         """
-        this_file = Path(__file__).resolve()
-        repo_root = None
-        for parent in this_file.parents:
-            if (parent / "data").exists():
-                repo_root = parent
-                break
-        if repo_root is None:
-            repo_root = Path.cwd()
+        # 0) If we already picked a base during load, reuse it
+        if getattr(self, "_state_base_override", None) is not None:
+            chosen_base = self._state_base_override  # type: ignore[assignment]
+        else:
+            candidates: List[Path] = []
 
-        base = repo_root / "data" / "state"
+            # 1) Explicit env
+            env_base = os.getenv("IWA_STATE_DIR") or os.getenv("VALIDATOR_STATE_DIR")
+            if env_base:
+                p = Path(env_base).expanduser().resolve()
+                # If the env points at '/data', place 'state' under it for consistency
+                if p.name != "state":
+                    candidates.append(p / "state")
+                candidates.append(p)
+
+            # 2) Host-level mount preferred for persistence
+            candidates.append(Path("/data/state"))
+            candidates.append(Path("/data"))
+
+            # 3) Repository local '<repo>/data/state'
+            repo_base = None
+            try:
+                this_file = Path(__file__).resolve()
+                for parent in this_file.parents:
+                    if (parent / "data").exists():
+                        repo_base = parent / "data" / "state"
+                        break
+            except Exception:
+                repo_base = None
+            if repo_base is not None:
+                candidates.append(repo_base)
+
+            # 4) CWD fallback '<cwd>/data/state'
+            candidates.append(Path.cwd() / "data" / "state")
+
+            # Pick the first existing directory; otherwise use the first candidate
+            chosen_base = None
+            for c in candidates:
+                try:
+                    if c.exists() and c.is_dir():
+                        chosen_base = c
+                        break
+                except Exception:
+                    continue
+            if chosen_base is None:
+                chosen_base = candidates[0]
 
         # Determine netuid and hotkey, fall back to placeholders
         try:
@@ -184,7 +224,8 @@ class ValidatorPlatformMixin:
             hotkey = None
         netuid_part = f"netuid_{netuid}" if netuid is not None else "netuid_unknown"
         hotkey_part = hotkey or "hotkey_unknown"
-        return base / netuid_part / f"{hotkey_part}.json"
+
+        return Path(chosen_base) / netuid_part / f"{hotkey_part}.json"
 
     def _serialize_handshake(self, payload: Any) -> Dict[str, Any]:
         return {
@@ -305,8 +346,47 @@ class ValidatorPlatformMixin:
             bt.logging.warning(f"Failed to persist round state: {exc}")
 
     def _load_round_state(self) -> Optional[Dict[str, Any]]:
-        state_path = self._round_state_path
-        tmp_path = state_path.with_suffix(state_path.suffix + ".tmp")
+        # Build a search list of candidate state paths (final + tmp) across bases
+        def _candidates_for(path: Path) -> List[Tuple[Path, Path]]:
+            return [(path, path.with_suffix(path.suffix + ".tmp"))]
+
+        # Primary path based on current resolution
+        primary_path = self._round_state_path
+        search: List[Tuple[Path, Path]] = _candidates_for(primary_path)
+
+        # Also consider '/data/state' and repo-local/CWD variants when different
+        extra_bases: List[Path] = []
+        # Env override from the property builder already considered; include '/data/state'
+        try:
+            extra_bases.append(Path("/data/state"))
+            extra_bases.append(Path("/data"))
+        except Exception:
+            pass
+        # Repo-local base
+        try:
+            this_file = Path(__file__).resolve()
+            for parent in this_file.parents:
+                if (parent / "data").exists():
+                    extra_bases.append(parent / "data" / "state")
+                    break
+        except Exception:
+            pass
+        # CWD base
+        try:
+            extra_bases.append(Path.cwd() / "data" / "state")
+        except Exception:
+            pass
+
+        # Compose extra candidate paths for the same filename
+        try:
+            netuid_part = primary_path.parent.name  # 'netuid_36'
+            filename = primary_path.name
+            for base in extra_bases:
+                alt = base / netuid_part / filename
+                if alt != primary_path:
+                    search.extend(_candidates_for(alt))
+        except Exception:
+            pass
 
         def _try_read(path: Path) -> Optional[Dict[str, Any]]:
             text: Optional[str] = None
@@ -351,13 +431,39 @@ class ValidatorPlatformMixin:
         state: Optional[Dict[str, Any]] = None
 
         with self._state_lock:
-            # 1) Prefer final path when it exists and parses
-            if state_path.exists():
-                parsed = _try_read(state_path)
-                if parsed is not None:
-                    state = parsed
+            for state_path, tmp_path in search:
+                # Prefer final path when it exists and parses
+                if state_path.exists():
+                    parsed = _try_read(state_path)
+                    if parsed is not None:
+                        state = parsed
+                        # Remember the base so subsequent saves write back to the same location
+                        try:
+                            self._state_base_override = state_path.parent.parent  # .../state/netuid_x
+                        except Exception:
+                            self._state_base_override = None
+                        break
+                    else:
+                        # Final exists but is corrupt; try the temp file
+                        if tmp_path.exists():
+                            parsed_tmp = _try_read(tmp_path)
+                            if parsed_tmp is not None:
+                                try:
+                                    tmp_path.replace(state_path)
+                                    import bittensor as bt
+                                    bt.logging.warning(
+                                        f"Resume recovery: replaced corrupt state with temp from {tmp_path}"
+                                    )
+                                except Exception:
+                                    pass
+                                state = parsed_tmp
+                                try:
+                                    self._state_base_override = state_path.parent.parent
+                                except Exception:
+                                    self._state_base_override = None
+                                break
                 else:
-                    # Final exists but is corrupt; try the temp file
+                    # No final; attempt temp recovery if valid
                     if tmp_path.exists():
                         parsed_tmp = _try_read(tmp_path)
                         if parsed_tmp is not None:
@@ -365,31 +471,23 @@ class ValidatorPlatformMixin:
                                 tmp_path.replace(state_path)
                                 import bittensor as bt
                                 bt.logging.warning(
-                                    f"Resume recovery: replaced corrupt state with temp from {tmp_path}"
+                                    f"Resume recovery: moved temp state into place from {tmp_path}"
                                 )
                             except Exception:
                                 pass
                             state = parsed_tmp
-            else:
-                # 2) No final; attempt temp recovery if valid
-                if tmp_path.exists():
-                    parsed_tmp = _try_read(tmp_path)
-                    if parsed_tmp is not None:
-                        try:
-                            tmp_path.replace(state_path)
-                            import bittensor as bt
-                            bt.logging.warning(
-                                f"Resume recovery: moved temp state into place from {tmp_path}"
-                            )
-                        except Exception:
-                            pass
-                        state = parsed_tmp
+                            try:
+                                self._state_base_override = state_path.parent.parent
+                            except Exception:
+                                self._state_base_override = None
+                            break
 
         if state is None:
             try:
                 import bittensor as bt
+                locations = ", ".join(f"{p} (+ tmp)" for p, _ in search[:4])
                 bt.logging.info(
-                    f"Resume skipped: valid state not found (checked {state_path} and {tmp_path})"
+                    f"Resume skipped: valid state not found (checked {locations}...)"
                 )
             except Exception:
                 pass

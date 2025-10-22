@@ -78,7 +78,12 @@ class IWAPClient:
         resolved_base_url = (base_url or os.getenv("IWAP_API_BASE_URL", "http://217.154.10.168:8080")).rstrip("/")
         self._client = client or httpx.AsyncClient(base_url=resolved_base_url, timeout=timeout)
         self._owns_client = client is None
-        self._backup_dir = Path(backup_dir or os.getenv("IWAP_BACKUP_DIR", "iwap_bakcup_dir"))
+        # Determine backup directory for IWAP payload snapshots
+        # Priority: explicit arg > env var IWAP_BACKUP_DIR > repo-local data/iwap_payloads
+        env_dir = os.getenv("IWAP_BACKUP_DIR")
+        default_dir = Path.cwd() / "data" / "iwap_payloads"
+        resolved_backup = backup_dir or env_dir or default_dir
+        self._backup_dir = Path(resolved_backup)
         self._auth_provider = auth_provider
         bt.logging.info(f"IWAP client initialized with base_url={self._client.base_url}")
         try:
