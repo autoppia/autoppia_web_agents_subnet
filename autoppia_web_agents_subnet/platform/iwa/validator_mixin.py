@@ -309,45 +309,44 @@ class ValidatorPlatformMixin:
         tmp_path = state_path.with_suffix(state_path.suffix + ".tmp")
 
         def _try_read(path: Path) -> Optional[Dict[str, Any]]:
+            text: Optional[str] = None
             try:
-                text: Optional[str] = None
-                try:
-                    text = path.read_text(encoding="utf-8")
-                except Exception as read_exc:
-                    import bittensor as bt
-                    bt.logging.warning(f"State read error at {path}: {read_exc}")
-                    return None
-                if text is None:
-                    return None
-                try:
-                    return json.loads(text)
-                except json.JSONDecodeError as e:  # type: ignore[attr-defined]
-                    import bittensor as bt
-                    bt.logging.warning(
-                        (
-                            "State JSON decode error at {path}: line={line} col={col} pos={pos} size={size}"
-                        ).format(
-                            path=path,
-                            line=e.lineno,
-                            col=e.colno,
-                            pos=e.pos,
-                            size=len(text),
-                        )
+                text = path.read_text(encoding="utf-8")
+            except Exception as read_exc:
+                import bittensor as bt
+                bt.logging.warning(f"State read error at {path}: {read_exc}")
+                return None
+            if text is None:
+                return None
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError as e:  # type: ignore[attr-defined]
+                import bittensor as bt
+                bt.logging.warning(
+                    (
+                        "State JSON decode error at {path}: line={line} col={col} pos={pos} size={size}"
+                    ).format(
+                        path=path,
+                        line=e.lineno,
+                        col=e.colno,
+                        pos=e.pos,
+                        size=len(text),
                     )
-                    # Provide a small context around the error position
-                    start = max(0, e.pos - 160)
-                    end = min(len(text), e.pos + 160)
-                    context = text[start:end]
-                    bt.logging.debug(f"Context around error pos {e.pos}:\n{context}")
-                    # Simple heuristic: check for missing closing brace
-                    stripped = text.rstrip()
-                    if stripped and stripped[-1] not in ("}", "]"):
-                        bt.logging.debug("Heuristic: file appears truncated (missing closing bracket)")
-                    return None
-                except Exception as exc:
-                    import bittensor as bt
-                    bt.logging.warning(f"State parse error at {path}: {exc}")
-                    return None
+                )
+                # Provide a small context around the error position
+                start = max(0, e.pos - 160)
+                end = min(len(text), e.pos + 160)
+                context = text[start:end]
+                bt.logging.debug(f"Context around error pos {e.pos}:\n{context}")
+                # Simple heuristic: check for missing closing brace
+                stripped = text.rstrip()
+                if stripped and stripped[-1] not in ("}", "]"):
+                    bt.logging.debug("Heuristic: file appears truncated (missing closing bracket)")
+                return None
+            except Exception as exc:
+                import bittensor as bt
+                bt.logging.warning(f"State parse error at {path}: {exc}")
+                return None
 
         state: Optional[Dict[str, Any]] = None
 
