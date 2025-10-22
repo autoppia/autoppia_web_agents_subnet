@@ -336,15 +336,14 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     return name[:MAX_AGENT_NAME_LENGTH]
                 return name
 
-            # Filter successful responses only
+            # Filter successful responses - collect data without spamming logs
+            successful_miners = []
             for i, response in enumerate(handshake_responses):
                 if i >= len(all_axons):
-                    bt.logging.warning(f"  Response {i}: No corresponding axon (out of bounds)")
                     continue
 
                 mapped_uid = all_uids[i]
                 if not response:
-                    bt.logging.debug(f"  Skipping uid={mapped_uid}: no handshake response object")
                     continue
 
                 status_code = getattr(getattr(response, "dendrite", None), "status_code", None)
@@ -355,34 +354,14 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     except (TypeError, ValueError):
                         status_numeric = None
                 if status_numeric is not None and status_numeric >= 400:
-                    # 🔍 DEBUG: Show detailed info for 422 errors
-                    if status_numeric == 422:
-                        bt.logging.debug(
-                            "422 on handshake",
-                        )
-                    else:
-                        bt.logging.debug(
-                            f"  Skipping uid={mapped_uid}: handshake returned status {status_numeric}"
-                        )
                     continue
 
                 agent_name_raw = getattr(response, "agent_name", None)
                 agent_name = _normalized_optional(agent_name_raw)
                 if not agent_name:
-                    bt.logging.debug(
-                        f"  Skipping uid={mapped_uid}: handshake missing agent metadata"
-                    )
                     continue
 
                 agent_name = _truncate_agent_name(agent_name)
-
-                # Condensed per-miner metadata (debug only)
-                ColoredLogger.debug(
-                    f"uid={mapped_uid} | agent='{agent_name}' | version={getattr(response, 'agent_version', None)} | "
-                    f"rl={getattr(response, 'has_rl', False)} | hotkey={self.metagraph.hotkeys[mapped_uid]}",
-                    ColoredLogger.GRAY,
-                )
-
                 response.agent_name = agent_name
                 response.agent_image = _normalized_optional(getattr(response, "agent_image", None))
                 response.github_url = _normalized_optional(getattr(response, "github_url", None))
@@ -392,6 +371,26 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
                 self.round_handshake_payloads[mapped_uid] = response
                 self.active_miner_uids.append(mapped_uid)
+
+                # Collect for table display
+                successful_miners.append({
+                    'uid': mapped_uid,
+                    'agent': agent_name,
+                    'version': getattr(response, 'agent_version', 'N/A'),
+                    'rl': 'Yes' if getattr(response, 'has_rl', False) else 'No',
+                    'hotkey': self.metagraph.hotkeys[mapped_uid][:10] + '...'
+                })
+
+            # Display results in a clean table format (only if we sent handshake)
+            if not has_prior_handshake and successful_miners:
+                bt.logging.info("=" * 100)
+                bt.logging.info("📋 MINERS WHO RESPONDED TO HANDSHAKE:")
+                bt.logging.info("=" * 100)
+                bt.logging.info(f"{'UID':<6} | {'Agent Name':<20} | {'Version':<10} | {'RL':<4} | {'Hotkey':<15}")
+                bt.logging.info("-" * 100)
+                for m in successful_miners:
+                    bt.logging.info(f"{m['uid']:<6} | {m['agent']:<20} | {m['version']:<10} | {m['rl']:<4} | {m['hotkey']:<15}")
+                bt.logging.info("=" * 100)
 
             # Log results only if we actually sent the handshake (not when using saved state)
             if not has_prior_handshake:
