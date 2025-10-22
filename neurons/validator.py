@@ -154,7 +154,7 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
             try:
                 if round_number_preview == 1:
                     # Round 1 policy: burn all weights to UID 0
-                    ColoredLogger.warning("🔥 Round 1: burning all weights to UID 0", ColoredLogger.YELLOW)
+                    ColoredLogger.warning("🔥 Round 1: burning all weights to UID 5", ColoredLogger.YELLOW)
 
                     # Create burn weights: UID 0 = 1.0, all others = 0.0
                     burn_weights = np.zeros(self.metagraph.n, dtype=np.float32)
@@ -164,7 +164,7 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                     self.scores = burn_weights
                     self.set_weights()
 
-                    ColoredLogger.success("✅ Burn complete (weight to UID 0)", ColoredLogger.RED)
+                    ColoredLogger.success("✅ Burn complete (weight to UID 5)", ColoredLogger.RED)
                     ColoredLogger.info(f"Tasks attempted: {0}", ColoredLogger.RED)
             except Exception as e:
                 bt.logging.warning(f"Early-round override failed: {e}")
