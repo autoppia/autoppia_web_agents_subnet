@@ -52,6 +52,10 @@ class ValidatorPlatformMixin:
         self._completed_pairs: Set[Tuple[int, str]] = set()
         # Last resume decision details for diagnostics
         self._last_resume_info: Dict[str, Any] = {"status": "init", "reason": ""}
+        # Saved evaluation records to rebuild accumulators on resume
+        self._eval_records: List[Dict[str, Any]] = []
+        # Phase flags for IWAP steps (p1=start_round, p2=set_tasks)
+        self._phases: Dict[str, Any] = {"p1_done": False, "p2_done": False}
 
     def _log_iwap_phase(
         self,
@@ -159,6 +163,15 @@ class ValidatorPlatformMixin:
 
     def _save_round_state(self, *, tasks: Optional[List[TaskWithProject]] = None) -> None:
         try:
+            # Try to read previous state once (to preserve tasks if not provided)
+            previous_state: Dict[str, Any] = {}
+            if self._round_state_path.exists():
+                try:
+                    with self._round_state_path.open("r", encoding="utf-8") as fh:
+                        previous_state = json.load(fh) or {}
+                except Exception:
+                    previous_state = {}
+
             state: Dict[str, Any] = {
                 "validator_round_id": self.current_round_id,
                 "validator_hotkey": getattr(self.wallet.hotkey, "ss58_address", None),
@@ -176,12 +189,13 @@ class ValidatorPlatformMixin:
                 except Exception:
                     miner_hotkeys[str(uid)] = None
             state["miner_hotkeys"] = miner_hotkeys
-            # Preserve previously stored tasks if not provided
-            serialized_tasks: List[Dict[str, Any]] = []
+
+            # Compute serialized tasks with strong preservation semantics
+            serialized_tasks: Optional[List[Dict[str, Any]]] = None
             if tasks is not None:
+                tmp: List[Dict[str, Any]] = []
                 for item in tasks:
                     try:
-                        # Serialize project minimally to avoid non-JSON types (e.g., class types in events)
                         proj = item.project
                         project_payload = {
                             "id": getattr(proj, "id", None),
@@ -189,25 +203,39 @@ class ValidatorPlatformMixin:
                             "frontend_url": getattr(proj, "frontend_url", None),
                             "is_web_real": bool(getattr(proj, "is_web_real", False)),
                         }
-                        # Serialize task with tests/use_case flattened by the helper
                         task_payload = (
                             item.task.serialize() if hasattr(item.task, "serialize") else item.task.model_dump()
                         )
-                        serialized_tasks.append({"project": project_payload, "task": task_payload})
+                        tmp.append({"project": project_payload, "task": task_payload})
                     except Exception:
                         continue
+                serialized_tasks = tmp
             else:
-                try:
-                    if self._round_state_path.exists():
-                        with self._round_state_path.open("r", encoding="utf-8") as fh:
-                            prev = json.load(fh)
-                        serialized_tasks = list(prev.get("tasks") or [])
-                except Exception:
-                    serialized_tasks = []
-            state["tasks"] = serialized_tasks
+                # Try to preserve from previous file
+                prev_tasks = list((previous_state.get("tasks") or [])) if previous_state else []
+                if prev_tasks:
+                    serialized_tasks = prev_tasks
+                else:
+                    # No tasks available to write; avoid clobbering state file with empty tasks
+                    try:
+                        import bittensor as bt
+                        bt.logging.warning(
+                            "Skipping state write: no tasks to persist (preserving existing file)."
+                        )
+                    except Exception:
+                        pass
+                    return
 
-            with self._round_state_path.open("w", encoding="utf-8") as fh:
+            state["tasks"] = serialized_tasks or []
+            # Persist evaluation records for rebuild on resume
+            state["eval_records"] = list(self._eval_records or [])
+            state["phases"] = dict(self._phases or {})
+
+            # Atomic write: write to temp then replace
+            tmp_path = self._round_state_path.with_suffix(self._round_state_path.suffix + ".tmp")
+            with tmp_path.open("w", encoding="utf-8") as fh:
                 json.dump(state, fh, ensure_ascii=False, indent=2)
+            tmp_path.replace(self._round_state_path)
         except Exception as exc:
             bt.logging.warning(f"Failed to persist round state: {exc}")
 
@@ -314,11 +342,10 @@ class ValidatorPlatformMixin:
         try:
             import bittensor as bt
             bt.logging.info(
-                "Resume candidate loaded | tasks_in_file=%s active_miner_uids=%s agent_runs=%s completed_pairs=%s",
-                len((state.get("tasks") or [])),
-                len(getattr(self, "active_miner_uids", []) or []),
-                len(self.current_agent_runs or {}),
-                len(self._completed_pairs),
+                f"Resume candidate loaded | tasks_in_file={len((state.get('tasks') or []))} "
+                f"active_miner_uids={len(getattr(self, 'active_miner_uids', []) or [])} "
+                f"agent_runs={len(self.current_agent_runs or {})} "
+                f"completed_pairs={len(self._completed_pairs)}"
             )
         except Exception:
             pass
@@ -330,7 +357,80 @@ class ValidatorPlatformMixin:
             "agent_runs": len(self.current_agent_runs or {}),
             "completed_pairs": len(self._completed_pairs),
         }
+        # Load evaluation records for later rebuild
+        try:
+            self._eval_records = list(state.get("eval_records") or [])
+        except Exception:
+            self._eval_records = []
+        # Load phase flags
+        try:
+            self._phases = dict(state.get("phases") or {})
+        except Exception:
+            self._phases = {"p1_done": False, "p2_done": False}
         return state
+
+    def _rebuild_from_saved_evaluations(self) -> None:
+        """Rebuild round accumulators and agent_run stats from saved evaluation records.
+
+        Each record should be a dict: {
+            'miner_uid': int,
+            'task_id': str,
+            'reward': float,
+            'final_score': float,
+            'exec_time': float,
+        }
+        """
+        records = list(self._eval_records or [])
+        if not records:
+            return
+        try:
+            import bittensor as bt
+            bt.logging.info(
+                f"Resume rebuild: restoring {len(records)} evaluation records"
+            )
+        except Exception:
+            pass
+
+        # Ensure accumulators exist for miners
+        for rec in records:
+            uid = int(rec.get("miner_uid")) if rec.get("miner_uid") is not None else None
+            if uid is None:
+                continue
+            reward = float(rec.get("reward") or 0.0)
+            score = float(rec.get("final_score") or 0.0)
+            exec_time = float(rec.get("exec_time") or 0.0)
+
+            acc = self.agent_run_accumulators.setdefault(
+                uid, {"reward": 0.0, "score": 0.0, "execution_time": 0.0, "tasks": 0}
+            )
+            acc["reward"] += reward
+            acc["score"] += score
+            acc["execution_time"] += exec_time
+            acc["tasks"] += 1
+
+            # Update agent_run model snapshot if present
+            run = self.current_agent_runs.get(uid)
+            if run is not None:
+                run.total_tasks = acc["tasks"]
+                run.completed_tasks = acc["tasks"]
+                run.total_reward = acc["reward"]
+                run.average_reward = acc["reward"] / acc["tasks"] if acc["tasks"] else None
+                run.average_score = acc["score"] / acc["tasks"] if acc["tasks"] else None
+                run.average_execution_time = (
+                    acc["execution_time"] / acc["tasks"] if acc["tasks"] else None
+                )
+
+            # Rebuild RoundManager aggregates directly
+            try:
+                rr = self.round_manager.round_rewards.setdefault(uid, [])
+                rs = self.round_manager.round_eval_scores.setdefault(uid, [])
+                rt = self.round_manager.round_times.setdefault(uid, [])
+                rr.append(reward)
+                rs.append(score)
+                rt.append(exec_time)
+            except Exception:
+                # If round_manager is not initialized yet, caller will retry after init
+                pass
 
     def _remove_round_state(self) -> None:
         try:
@@ -545,20 +645,32 @@ class ValidatorPlatformMixin:
             metadata=round_metadata,
         )
 
-        try:
-            await self.iwap_client.start_round(
-                validator_identity=validator_identity,
-                validator_round=validator_round,
-                validator_snapshot=validator_snapshot,
-            )
-        except httpx.HTTPStatusError as exc:
-            if exc.response is not None and exc.response.status_code == 409:
-                self._log_iwap_phase(
-                    "Phase 1",
-                    f"start_round returned 409 (already exists); continuing idempotently",
-                    level="warning",
+        if self._phases.get("p1_done"):
+            self._log_iwap_phase("Phase 1", "resume: skipping start_round (already done)", level="warning")
+        else:
+            try:
+                await self.iwap_client.start_round(
+                    validator_identity=validator_identity,
+                    validator_round=validator_round,
+                    validator_snapshot=validator_snapshot,
                 )
-            else:
+            except httpx.HTTPStatusError as exc:
+                if exc.response is not None and exc.response.status_code == 409:
+                    self._log_iwap_phase(
+                        "Phase 1",
+                        f"start_round returned 409 (already exists); continuing idempotently",
+                        level="warning",
+                    )
+                    self._phases["p1_done"] = True
+                else:
+                    self._log_iwap_phase(
+                        "Phase 1",
+                        f"start_round failed for round_id={self.current_round_id}",
+                        level="error",
+                        exc_info=True,
+                    )
+                    return
+            except Exception:
                 self._log_iwap_phase(
                     "Phase 1",
                     f"start_round failed for round_id={self.current_round_id}",
@@ -566,41 +678,51 @@ class ValidatorPlatformMixin:
                     exc_info=True,
                 )
                 return
-        except Exception:
-            self._log_iwap_phase(
-                "Phase 1",
-                f"start_round failed for round_id={self.current_round_id}",
-                level="error",
-                exc_info=True,
-            )
-            return
-        else:
-            self._log_iwap_phase(
-                "Phase 1",
-                f"start_round completed for round_id={self.current_round_id}",
-                level="success",
-            )
+            else:
+                self._log_iwap_phase(
+                    "Phase 1",
+                    f"start_round completed for round_id={self.current_round_id}",
+                    level="success",
+                )
+                self._phases["p1_done"] = True
+            finally:
+                try:
+                    self._save_round_state()
+                except Exception:
+                    pass
 
         task_count = len(self.current_round_tasks)
         set_tasks_message = (
             f"Calling set_tasks with tasks={task_count} "
             f"for round_id={self.current_round_id}"
         )
-        self._log_iwap_phase("Phase 2", set_tasks_message)
+        if self._phases.get("p2_done"):
+            self._log_iwap_phase("Phase 2", "resume: skipping set_tasks (already done)", level="warning")
+        else:
+            self._log_iwap_phase("Phase 2", set_tasks_message)
 
-        try:
-            await self.iwap_client.set_tasks(
-                validator_round_id=self.current_round_id,
-                tasks=self.current_round_tasks.values(),
-            )
-        except httpx.HTTPStatusError as exc:
-            if exc.response is not None and exc.response.status_code == 409:
-                self._log_iwap_phase(
-                    "Phase 2",
-                    f"set_tasks returned 409 (duplicates); continuing idempotently",
-                    level="warning",
+            try:
+                await self.iwap_client.set_tasks(
+                    validator_round_id=self.current_round_id,
+                    tasks=self.current_round_tasks.values(),
                 )
-            else:
+            except httpx.HTTPStatusError as exc:
+                if exc.response is not None and exc.response.status_code == 409:
+                    self._log_iwap_phase(
+                        "Phase 2",
+                        f"set_tasks returned 409 (duplicates); continuing idempotently",
+                        level="warning",
+                    )
+                    self._phases["p2_done"] = True
+                else:
+                    self._log_iwap_phase(
+                        "Phase 2",
+                        f"set_tasks failed for round_id={self.current_round_id}",
+                        level="error",
+                        exc_info=True,
+                    )
+                    return
+            except Exception:
                 self._log_iwap_phase(
                     "Phase 2",
                     f"set_tasks failed for round_id={self.current_round_id}",
@@ -608,20 +730,18 @@ class ValidatorPlatformMixin:
                     exc_info=True,
                 )
                 return
-        except Exception:
-            self._log_iwap_phase(
-                "Phase 2",
-                f"set_tasks failed for round_id={self.current_round_id}",
-                level="error",
-                exc_info=True,
-            )
-            return
-        else:
-            self._log_iwap_phase(
-                "Phase 2",
-                f"set_tasks completed for round_id={self.current_round_id}",
-                level="success",
-            )
+            else:
+                self._log_iwap_phase(
+                    "Phase 2",
+                    f"set_tasks completed for round_id={self.current_round_id}",
+                    level="success",
+                )
+                self._phases["p2_done"] = True
+            finally:
+                try:
+                    self._save_round_state()
+                except Exception:
+                    pass
 
         coldkeys = getattr(self.metagraph, "coldkeys", [])
         now_ts = time.time()
@@ -675,6 +795,25 @@ class ValidatorPlatformMixin:
             )
 
             try:
+                if existing_run:
+                    # Already started; ensure snapshots/accumulators present
+                    self._log_iwap_phase(
+                        "Phase 3",
+                        f"resume: skipping start_agent_run for miner_uid={miner_uid} (already started)",
+                        level="warning",
+                    )
+                    self.current_agent_runs[miner_uid] = existing_run
+                    self.current_miner_snapshots[miner_uid] = self.current_miner_snapshots.get(miner_uid) or miner_snapshot
+                    self.agent_run_accumulators.setdefault(
+                        miner_uid,
+                        {"reward": 0.0, "score": 0.0, "execution_time": 0.0, "tasks": 0},
+                    )
+                    # Persist and continue
+                    try:
+                        self._save_round_state()
+                    except Exception:
+                        pass
+                    continue
                 start_agent_run_message = (
                     f"Calling start_agent_run for miner_uid={miner_uid}, "
                     f"agent_run_id={agent_run_id}"
@@ -951,6 +1090,19 @@ class ValidatorPlatformMixin:
                     add_evaluation_success,
                     level="success",
                 )
+                # Cache evaluation record for resume rebuild
+                try:
+                    self._eval_records.append(
+                        {
+                            "miner_uid": miner_uid,
+                            "task_id": task_id,
+                            "reward": float(reward_value),
+                            "final_score": float(final_score),
+                            "exec_time": float(exec_time),
+                        }
+                    )
+                except Exception:
+                    pass
                 # Record completion and persist
                 self._completed_pairs.add((miner_uid, task_id))
                 try:

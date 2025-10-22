@@ -160,17 +160,11 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
 
         # Emit a concise decision line for resume diagnostics
         try:
-            info = getattr(self, "_last_resume_info", None)
+            info = getattr(self, "_last_resume_info", None) or {"status": "unknown"}
             if resumed:
-                bt.logging.info(
-                    "Resume decision: used prior state (%s)",
-                    info or {"status": "loaded"},
-                )
+                bt.logging.info(f"Resume decision: used prior state ({info})")
             else:
-                bt.logging.info(
-                    "Resume decision: fresh start (%s)",
-                    info or {"status": "unknown", "reason": "no state"},
-                )
+                bt.logging.info(f"Resume decision: fresh start ({info})")
         except Exception:
             pass
 
@@ -385,6 +379,19 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
             return
 
         await self._iwap_start_round(current_block=current_block, n_tasks=len(all_tasks))
+
+        # If resuming and we have prior evaluations, rebuild accumulators and round aggregates
+        if resumed and getattr(self, "_eval_records", None):
+            ColoredLogger.info(
+                f"♻️ Resume: rebuilding accumulators from {len(self._eval_records)} evaluations",
+                ColoredLogger.CYAN,
+            )
+            # Ensure round_manager has been initialized with this round
+            try:
+                self._rebuild_from_saved_evaluations()
+                ColoredLogger.success("✅ Resume: accumulators restored", ColoredLogger.GREEN)
+            except Exception as e:
+                bt.logging.warning(f"Resume rebuild failed: {e}")
 
         # ═══════════════════════════════════════════════════════
         # DYNAMIC LOOP: Execute tasks one by one based on time
