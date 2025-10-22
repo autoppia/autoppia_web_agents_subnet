@@ -6,6 +6,7 @@ import math
 import time
 from binascii import Error as BinasciiError
 import os
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -59,6 +60,8 @@ class ValidatorPlatformMixin:
         self._phases: Dict[str, Any] = {"p1_done": False, "p2_done": False}
         # Cache serialized tasks so later incremental saves can persist even if tasks param omitted
         self._cached_tasks_serialized: Optional[List[Dict[str, Any]]] = None
+        # State file I/O lock to prevent concurrent clobbering
+        self._state_lock: threading.Lock = threading.Lock()
 
     def _log_iwap_phase(
         self,
@@ -196,6 +199,7 @@ class ValidatorPlatformMixin:
 
     def _save_round_state(self, *, tasks: Optional[List[TaskWithProject]] = None) -> None:
         try:
+            with self._state_lock:
             # Try to read previous state once (to preserve tasks if not provided)
             previous_state: Dict[str, Any] = {}
             if self._round_state_path.exists():
@@ -279,8 +283,10 @@ class ValidatorPlatformMixin:
             except Exception:
                 pass
             tmp_path = self._round_state_path.with_suffix(self._round_state_path.suffix + ".tmp")
+            # Dump JSON once to capture size and avoid partial writes across dumps
+            payload = json.dumps(state, ensure_ascii=False, indent=2)
             with tmp_path.open("w", encoding="utf-8") as fh:
-                json.dump(state, fh, ensure_ascii=False, indent=2)
+                fh.write(payload)
                 try:
                     fh.flush()
                     os.fsync(fh.fileno())
@@ -289,7 +295,10 @@ class ValidatorPlatformMixin:
             tmp_path.replace(self._round_state_path)
             try:
                 import bittensor as bt
-                bt.logging.info(f"Round state persisted at {self._round_state_path}")
+                bt.logging.info(
+                    f"Round state persisted at {self._round_state_path} "
+                    f"(tasks={len(state.get('tasks') or [])}, uids={len(state.get('active_miner_uids') or [])}, chars={len(payload)})"
+                )
             except Exception:
                 pass
         except Exception as exc:
@@ -301,20 +310,69 @@ class ValidatorPlatformMixin:
 
         def _try_read(path: Path) -> Optional[Dict[str, Any]]:
             try:
-                with path.open("r", encoding="utf-8") as fh:
-                    return json.load(fh)
-            except Exception:
-                return None
+                text: Optional[str] = None
+                try:
+                    text = path.read_text(encoding="utf-8")
+                except Exception as read_exc:
+                    import bittensor as bt
+                    bt.logging.warning(f"State read error at {path}: {read_exc}")
+                    return None
+                if text is None:
+                    return None
+                try:
+                    return json.loads(text)
+                except json.JSONDecodeError as e:  # type: ignore[attr-defined]
+                    import bittensor as bt
+                    bt.logging.warning(
+                        (
+                            "State JSON decode error at {path}: line={line} col={col} pos={pos} size={size}"
+                        ).format(
+                            path=path,
+                            line=e.lineno,
+                            col=e.colno,
+                            pos=e.pos,
+                            size=len(text),
+                        )
+                    )
+                    # Provide a small context around the error position
+                    start = max(0, e.pos - 160)
+                    end = min(len(text), e.pos + 160)
+                    context = text[start:end]
+                    bt.logging.debug(f"Context around error pos {e.pos}:\n{context}")
+                    # Simple heuristic: check for missing closing brace
+                    stripped = text.rstrip()
+                    if stripped and stripped[-1] not in ("}", "]"):
+                        bt.logging.debug("Heuristic: file appears truncated (missing closing bracket)")
+                    return None
+                except Exception as exc:
+                    import bittensor as bt
+                    bt.logging.warning(f"State parse error at {path}: {exc}")
+                    return None
 
         state: Optional[Dict[str, Any]] = None
 
-        # 1) Prefer final path when it exists and parses
-        if state_path.exists():
-            parsed = _try_read(state_path)
-            if parsed is not None:
-                state = parsed
+        with self._state_lock:
+            # 1) Prefer final path when it exists and parses
+            if state_path.exists():
+                parsed = _try_read(state_path)
+                if parsed is not None:
+                    state = parsed
+                else:
+                    # Final exists but is corrupt; try the temp file
+                    if tmp_path.exists():
+                        parsed_tmp = _try_read(tmp_path)
+                        if parsed_tmp is not None:
+                            try:
+                                tmp_path.replace(state_path)
+                                import bittensor as bt
+                                bt.logging.warning(
+                                    f"Resume recovery: replaced corrupt state with temp from {tmp_path}"
+                                )
+                            except Exception:
+                                pass
+                            state = parsed_tmp
             else:
-                # Final exists but is corrupt; try the temp file
+                # 2) No final; attempt temp recovery if valid
                 if tmp_path.exists():
                     parsed_tmp = _try_read(tmp_path)
                     if parsed_tmp is not None:
@@ -322,25 +380,11 @@ class ValidatorPlatformMixin:
                             tmp_path.replace(state_path)
                             import bittensor as bt
                             bt.logging.warning(
-                                f"Resume recovery: replaced corrupt state with temp from {tmp_path}"
+                                f"Resume recovery: moved temp state into place from {tmp_path}"
                             )
                         except Exception:
                             pass
                         state = parsed_tmp
-        else:
-            # 2) No final; attempt temp recovery if valid
-            if tmp_path.exists():
-                parsed_tmp = _try_read(tmp_path)
-                if parsed_tmp is not None:
-                    try:
-                        tmp_path.replace(state_path)
-                        import bittensor as bt
-                        bt.logging.warning(
-                            f"Resume recovery: moved temp state into place from {tmp_path}"
-                        )
-                    except Exception:
-                        pass
-                    state = parsed_tmp
 
         if state is None:
             try:
@@ -532,8 +576,13 @@ class ValidatorPlatformMixin:
 
     def _remove_round_state(self) -> None:
         try:
-            if self._round_state_path.exists():
-                self._round_state_path.unlink()
+            with self._state_lock:
+                path = self._round_state_path
+                tmp = path.with_suffix(path.suffix + ".tmp")
+                if path.exists():
+                    path.unlink()
+                if tmp.exists():
+                    tmp.unlink()
         except Exception:
             pass
 
