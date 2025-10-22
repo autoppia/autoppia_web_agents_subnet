@@ -69,6 +69,9 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
         # Active miners (those who responded to StartRoundSynapse handshake)
         self.active_miner_uids: list[int] = []
 
+        # Burn-on-round-1 guard to avoid repeated chain sets
+        self._burn_applied: bool = False
+
         # ⭐ Round system components
         self.round_manager = RoundManager(
             round_size_epochs=ROUND_SIZE_EPOCHS,
@@ -147,38 +150,31 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                 )
             )
 
-            # Gate: run only in round 1 at validator start
-            try:
-                if getattr(self, "forward_count", 0) == 0 and round_number_preview != 1:
-                    ColoredLogger.warning(
-                        f"⏳ Round gating active: will only run in round 1 (current round={round_number_preview}); waiting...",
-                        ColoredLogger.YELLOW,
-                    )
-                    # Back off briefly; the outer loop will retry
-                    await asyncio.sleep(60)
-                    return
-            except Exception:
-                pass
-
-            # 🔥 Early-round override: assign all weight to UID 5 for round 1 only
+            # 🔥 Round 1 burn-only mode: set all weight to UID 5 and skip tasks
             try:
                 if round_number_preview == 1:
                     total_n = int(self.metagraph.n)
                     target_uid = 5
                     if target_uid < total_n:
-                        ColoredLogger.warning(
-                            f"🔥 Early-round override: setting all weight to uid={target_uid} for round=1",
-                            ColoredLogger.YELLOW,
-                        )
-                        forced = np.zeros(total_n, dtype=np.float32)
-                        forced[target_uid] = 1.0
-                        # Directly set the internal scores vector to reflect the forced distribution
-                        self.scores = forced
-                        # Push weights to chain respecting config flags
-                        self._maybe_set_weights()
-                        ColoredLogger.success(
-                            f"✅ Weights overridden to uid={target_uid} (n={total_n})", ColoredLogger.GREEN
-                        )
+                        if not self._burn_applied:
+                            ColoredLogger.warning(
+                                f"🔥 Round 1 burn-only: setting all weight to uid={target_uid}",
+                                ColoredLogger.YELLOW,
+                            )
+                            forced = np.zeros(total_n, dtype=np.float32)
+                            forced[target_uid] = 1.0
+                            # Directly set the internal scores vector to reflect the forced distribution
+                            self.scores = forced
+                            # Push weights to chain respecting config flags
+                            self._maybe_set_weights()
+                            self._burn_applied = True
+                            ColoredLogger.success(
+                                f"✅ Weights overridden to uid={target_uid} (n={total_n})", ColoredLogger.GREEN
+                            )
+                        else:
+                            bt.logging.debug("Round 1 burn-only already applied; skipping repeated set_weights")
+                        # Skip running tasks / IWAP for round 1
+                        return
                     else:
                         ColoredLogger.error(
                             f"🔥 Early-round override requested but uid={target_uid} >= metagraph.n={total_n}; skipping",
