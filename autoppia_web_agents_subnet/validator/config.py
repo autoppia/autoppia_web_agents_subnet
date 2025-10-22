@@ -64,10 +64,9 @@ AVG_TASK_DURATION_SECONDS = 300      # 5 minutes average per task
 # 300 tasks × 5 min = 1,500 min = 25 hours
 # Distributed over ~23.4 hours (24h - 36min buffer) = ~13 tasks/hour
 
-PRE_GENERATED_TASKS = 300            # Generate 300 tasks at round start
-# All tasks generated upfront to avoid runtime errors
-# Distribution: ~13 tasks/hour over 24 hours
-# Tasks sent dynamically based on time remaining
+PRE_GENERATED_TASKS = 75             # Generate fewer tasks (≈ 1/4)
+# All tasks generated upfront; dynamic loop truncates based on time
+# With 6-epoch rounds and ~5 min/task, ~75 tasks fits comfortably
 
 # ════════════════════════════════════════════════════════════════════════════════
 # 🚀 LAUNCH BLOCK (Epoch-Aligned) - FIXED VALUE

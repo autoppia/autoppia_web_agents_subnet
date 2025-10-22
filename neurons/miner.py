@@ -142,14 +142,14 @@ class Miner(BaseMinerNeuron):
             bt.logging.warning("No actions to log.")
             return
 
-        bt.logging.info("Actions sent:")
+        bt.logging.debug("Actions sent:")
         for i, action in enumerate(actions, 1):
             action_attrs = vars(action)
-            ColoredLogger.info(
+            ColoredLogger.debug(
                 f"    {i}. {action.type}: {action_attrs}",
                 ColoredLogger.GREEN,
             )
-            bt.logging.info(f"  {i}. {action.type}: {action_attrs}")
+            bt.logging.debug(f"  {i}. {action.type}: {action_attrs}")
 
     async def forward(self, synapse: TaskSynapse) -> TaskSynapse:
         validator_hotkey = getattr(synapse.dendrite, "hotkey", None)
@@ -168,7 +168,7 @@ class Miner(BaseMinerNeuron):
             )
             task_for_agent = task.prepare_for_agent(str(self.uid))
 
-            ColoredLogger.info(
+            ColoredLogger.debug(
                 f"Task Prompt: {task_for_agent.prompt}", ColoredLogger.BLUE
             )
             bt.logging.info("Generating actions...")
