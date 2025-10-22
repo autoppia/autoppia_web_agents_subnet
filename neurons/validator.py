@@ -299,12 +299,12 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
             bt.logging.debug("=" * 80)
 
             handshake_responses = []
-            if resumed and getattr(self, "active_miner_uids", []):
-                ColoredLogger.info(
-                    "♻️ Resuming: reusing saved handshake payloads and active miners",
-                    ColoredLogger.CYAN,
-                )
-                # Skip sending synapse; use saved state
+            if resumed:
+                if not self.active_miner_uids:
+                    ColoredLogger.warning("♻️ Resumed: no active miners from previous handshake", ColoredLogger.YELLOW)
+                else:
+                    ColoredLogger.info(f"♻️ Resumed: {len(self.active_miner_uids)} active miners", ColoredLogger.CYAN)
+                    # Skip sending synapse; use saved state
                 pass
             else:
                 handshake_responses = await send_start_round_synapse_to_miners(
