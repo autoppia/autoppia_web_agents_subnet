@@ -69,19 +69,23 @@ class RoundStateManager:
     # ──────────────────────────────────────────────────────────────────────
     def _checkpoint_path(self) -> Path:
         """
-        Resolve a stable path for checkpoints under /data by default.
+        Resolve a stable path for checkpoints in the repo's data/ directory.
 
-        Structure: /data/validator_state/round_state/{hotkey}.pkl
+        Structure: <repo>/data/validator_state/round_state/{hotkey}.pkl
 
         Priority:
         1) Env IWA_STATE_DIR or VALIDATOR_STATE_DIR
-        2) /data/validator_state (default for production)
+        2) <repo>/data/validator_state (default, relative to repo root)
         """
         env_base = os.getenv("IWA_STATE_DIR") or os.getenv("VALIDATOR_STATE_DIR")
         if env_base:
             base = Path(env_base).expanduser().resolve()
         else:
-            base = Path("/data/validator_state")
+            # Use repo's data/ directory (relative to this file)
+            # state_manager.py is in autoppia_web_agents_subnet/platform/
+            # repo root is 2 levels up
+            repo_root = Path(__file__).parent.parent.parent
+            base = repo_root / "data" / "validator_state"
 
         # Determine hotkey
         try:
@@ -91,8 +95,10 @@ class RoundStateManager:
 
         hotkey_part = hotkey or "hotkey_unknown"
 
-        # Structure: /data/validator_state/round_state/{hotkey}.pkl
-        return Path(base) / "round_state" / f"{hotkey_part}.pkl"
+        # Structure: <repo>/data/validator_state/round_state/{hotkey}.pkl
+        checkpoint_dir = base / "round_state"
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        return checkpoint_dir / f"{hotkey_part}.pkl"
 
     # ──────────────────────────────────────────────────────────────────────
     # Public API

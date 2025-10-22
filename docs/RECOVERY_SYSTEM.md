@@ -3,16 +3,17 @@
 ## 📁 File Structure
 
 ```
-/data/
-└── validator_state/
-    └── round_state/
-        ├── 5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j.pkl
-        └── 5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j.pkl.tmp
+<repo>/
+└── data/
+    └── validator_state/
+        └── round_state/
+            ├── 5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j.pkl
+            └── 5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j.pkl.tmp
 ```
 
 ### **Why this structure?**
 
-- ✅ **`/data/validator_state/`**: Separated from backend and other data
+- ✅ **`<repo>/data/validator_state/`**: In repo's data/ directory (gitignored)
 - ✅ **`round_state/`**: Clear about what it contains (round state)
 - ✅ **`{hotkey}.pkl`**: One file per validator (multiple validators possible)
 - ✅ **`.pkl.tmp`**: Atomic write (temp → replace)
@@ -228,7 +229,7 @@ pm2 list
 pm2 logs validator_6am | grep "Task.*completed"
 
 # 3. Check checkpoint exists
-ls -lh /data/validator_state/round_state/
+ls -lh ~/autoppia_web_agents_subnet/data/validator_state/round_state/
 
 # 4. Simulate crash
 pm2 stop validator_6am
@@ -243,7 +244,7 @@ pm2 logs validator_6am --lines 50 | grep -E "Checkpoint|Resume|Skipping"
 **Expected logs after recovery:**
 
 ```
-[INFO] ♻️ Checkpoint loaded from /data/validator_state/round_state/5DUmb...pkl
+[INFO] ♻️ Checkpoint loaded from ~/autoppia_web_agents_subnet/data/validator_state/round_state/5DUmb...pkl
        (tasks=300 runs=6 completed=744)
 
 [INFO] ♻️ Resumed 300 tasks; validator_round_id=validator_round_3108_xxx
@@ -285,7 +286,7 @@ import pickle
 from pathlib import Path
 
 # Load checkpoint
-checkpoint_path = Path("/data/validator_state/round_state/5DUmb...pkl")
+checkpoint_path = Path("~/autoppia_web_agents_subnet/data/validator_state/round_state/5DUmb...pkl").expanduser()
 with checkpoint_path.open("rb") as f:
     ckpt = pickle.load(f)
 
@@ -310,14 +311,12 @@ for uid, rewards in ckpt.rm_round_rewards.items():
 
 ```bash
 # Check permissions
-ls -ld /data/validator_state/round_state/
+ls -ld ~/autoppia_web_agents_subnet/data/validator_state/round_state/
 
 # Should be:
-# drwxr-xr-x root root /data/validator_state/round_state/
+# drwxr-xr-x root root ~/autoppia_web_agents_subnet/data/validator_state/round_state/
 
-# If doesn't exist, create:
-mkdir -p /data/validator_state/round_state/
-chmod 755 /data/validator_state/round_state/
+# If doesn't exist, it will be created automatically by the validator
 ```
 
 ### **Problem: Recovery doesn't work**
@@ -327,11 +326,11 @@ chmod 755 /data/validator_state/round_state/
 pm2 logs validator_6am --lines 200 | grep -i checkpoint
 
 # Verify file is not corrupted
-python3 -c "import pickle; pickle.load(open('/data/validator_state/round_state/5DUmb...pkl', 'rb'))"
+python3 -c "import pickle; pickle.load(open('~/autoppia_web_agents_subnet/data/validator_state/round_state/5DUmb...pkl', 'rb'))"
 
 # If corrupted, use the .tmp
-mv /data/validator_state/round_state/5DUmb...pkl.tmp \
-   /data/validator_state/round_state/5DUmb...pkl
+cd ~/autoppia_web_agents_subnet/data/validator_state/round_state/
+mv 5DUmb...pkl.tmp 5DUmb...pkl
 ```
 
 ### **Problem: Tasks are re-evaluated**
@@ -343,7 +342,8 @@ pm2 logs validator_6am | grep "Skipping task"
 # If doesn't appear, verify checkpoint has completed_pairs
 python3 -c "
 import pickle
-ckpt = pickle.load(open('/data/validator_state/round_state/5DUmb...pkl', 'rb'))
+from pathlib import Path
+ckpt = pickle.load(open(Path('~/autoppia_web_agents_subnet/data/validator_state/round_state/5DUmb...pkl').expanduser(), 'rb'))
 print(f'Completed pairs: {len(ckpt.completed_pairs)}')
 print(f'Sample: {list(ckpt.completed_pairs)[:5]}')
 "

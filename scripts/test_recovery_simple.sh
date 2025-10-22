@@ -21,7 +21,9 @@ echo -e "${CYAN}╚════════════════════�
 echo ""
 
 VALIDATOR_PROCESS="validator_6am"
-CHECKPOINT_DIR="/data/validator_state/round_state"
+# Get repo root (script is in scripts/ directory)
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+CHECKPOINT_DIR="$REPO_ROOT/data/validator_state/round_state"
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Step 1: Check validator is running
