@@ -401,7 +401,8 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
             # Mark that handshake was sent (for resume logic)
             # This flag prevents re-sending handshake after restart, regardless of responses
-            if not resumed:
+            # Only mark if we actually sent it (not if we skipped due to prior handshake)
+            if not has_prior_handshake:
                 self._phases["handshake_sent"] = True
 
             # Persist handshake state for resume
