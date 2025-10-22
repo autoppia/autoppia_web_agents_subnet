@@ -976,30 +976,3 @@ if __name__ == "__main__":
         while True:
             bt.logging.info(f"Validator running... {time.time()}")
             time.sleep(30)
-            # Stop evaluation at configured fraction to reserve time for commitments/aggregation
-            try:
-                round_start_block = boundaries['round_start_block']
-                target_block = boundaries['target_block']
-                blocks_total = max(target_block - round_start_block, 1)
-                blocks_done = max(current_block - round_start_block, 0)
-                progress_frac = min(max(blocks_done / blocks_total, 0.0), 1.0)
-            except Exception:
-                progress_frac = 0.0
-
-            if SHARE_SCORING and (progress_frac >= float(SHARE_STOP_EVAL_AT_FRACTION)) and not self._consensus_published:
-                ColoredLogger.warning(
-                    f"🛑 Reached stop fraction {SHARE_STOP_EVAL_AT_FRACTION:.2f}; halting task dispatch to publish commitments.",
-                    ColoredLogger.YELLOW,
-                )
-                # Publish snapshot before exiting loop
-                try:
-                    round_number = await self.round_manager.calculate_round(current_block)
-                    await publish_round_snapshot(
-                        validator=self,
-                        round_number=round_number,
-                        tasks_completed=tasks_completed,
-                    )
-                    self._consensus_published = True
-                except Exception as e:
-                    bt.logging.warning(f"Consensus publish failed: {e}")
-                break
