@@ -162,7 +162,7 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
 
                     # Set these burn weights directly
                     self.scores = burn_weights
-                    self._maybe_set_weights()
+                    self.set_weights()
 
                     ColoredLogger.success("✅ Burn complete (weight to UID 0)", ColoredLogger.RED)
                     ColoredLogger.info(f"Tasks attempted: {0}", ColoredLogger.RED)
@@ -828,7 +828,7 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
 
             # Set these burn weights directly
             self.scores = burn_weights
-            self._maybe_set_weights()
+            self.set_weights()
 
             ColoredLogger.success("✅ Burn complete (weight to UID 0)", ColoredLogger.RED)
             ColoredLogger.info(f"Tasks attempted: {tasks_completed}", ColoredLogger.RED)
@@ -880,7 +880,7 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
         )
 
         # Set weights on blockchain
-        self._maybe_set_weights()
+        self.set_weights()
 
         try:
             await self._finish_iwap_round(
@@ -893,14 +893,6 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
 
         ColoredLogger.success("✅ Round complete", ColoredLogger.GREEN)
         ColoredLogger.info(f"Tasks completed: {tasks_completed}", ColoredLogger.GREEN)
-
-    def _maybe_set_weights(self) -> None:
-        """Commit weights to the chain only when permitted."""
-        disable = getattr(self.config.neuron, "disable_set_weights", False)
-        if disable:
-            bt.logging.warning("Skipping set_weights because neuron.disable_set_weights is true")
-            return
-        self.set_weights()
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ import json
 import math
 import time
 from binascii import Error as BinasciiError
+import os
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -280,6 +281,11 @@ class ValidatorPlatformMixin:
             tmp_path = self._round_state_path.with_suffix(self._round_state_path.suffix + ".tmp")
             with tmp_path.open("w", encoding="utf-8") as fh:
                 json.dump(state, fh, ensure_ascii=False, indent=2)
+                try:
+                    fh.flush()
+                    os.fsync(fh.fileno())
+                except Exception:
+                    pass
             tmp_path.replace(self._round_state_path)
             try:
                 import bittensor as bt
@@ -296,18 +302,34 @@ class ValidatorPlatformMixin:
         if state_path.exists():
             chosen_path = state_path
         else:
-            try:
-                import bittensor as bt
-                bt.logging.info(
-                    f"Resume skipped: state file not found at {state_path.resolve()}"
-                )
-            except Exception:
-                pass
-            self._last_resume_info = {
-                "status": "skipped",
-                "reason": f"state file not found at {state_path}",
-            }
-            return None
+            # Attempt recovery from an incomplete atomic write (.tmp file)
+            tmp_path = state_path.with_suffix(state_path.suffix + ".tmp")
+            if tmp_path.exists():
+                try:
+                    tmp_path.replace(state_path)
+                    try:
+                        import bittensor as bt
+                        bt.logging.warning(
+                            f"Resume recovery: moved temp state into place from {tmp_path}"
+                        )
+                    except Exception:
+                        pass
+                    chosen_path = state_path
+                except Exception:
+                    chosen_path = tmp_path  # As a last resort, read directly
+            if chosen_path is None:
+                try:
+                    import bittensor as bt
+                    bt.logging.info(
+                        f"Resume skipped: state file not found at {state_path.resolve()}"
+                    )
+                except Exception:
+                    pass
+                self._last_resume_info = {
+                    "status": "skipped",
+                    "reason": f"state file not found at {state_path}",
+                }
+                return None
 
         try:
             with chosen_path.open("r", encoding="utf-8") as fh:
