@@ -26,8 +26,8 @@ from autoppia_web_agents_subnet.validator.config import (
     DZ_STARTING_BLOCK,
     MAX_AGENT_NAME_LENGTH,
     SHARE_SCORING,
-    SHARE_STOP_EVAL_AT_FRACTION,
-    CONSENSUS_COMMIT_AT_FRACTION,
+    STOP_TASKS_AT_FRACTION,
+    SETTLEMENT_FETCH_FRACTION,
 )
 from autoppia_web_agents_subnet.validator.tasks import get_task_collection_interleaved, collect_task_solutions_and_execution_times
 from autoppia_iwa.src.demo_webs.classes import WebProject
@@ -81,6 +81,8 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         self._burn_applied: bool = False
         # Consensus sharing
         self._consensus_published: bool = False
+        self._consensus_mid_fetched: bool = False
+        self._agg_scores_cache: dict[int, float] | None = None
 
         # ⭐ Round system components
         self.round_manager = RoundManager(
@@ -523,6 +525,32 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             # Dynamic check: should we send another task?
             # Refresh block height after evaluation to get an accurate time window
             current_block = self.metagraph.block.item()
+            # Compute fractional progress for reserved-window stop
+            try:
+                boundaries_now = self.round_manager.get_round_boundaries(current_block, log_debug=False)
+                rsb = boundaries_now['round_start_block']
+                tb = boundaries_now['target_block']
+                bt_total = max(tb - rsb, 1)
+                bt_done = max(current_block - rsb, 0)
+                progress_frac = min(max(bt_done / bt_total, 0.0), 1.0)
+            except Exception:
+                progress_frac = 0.0
+            if SHARE_SCORING and not self._consensus_published and (progress_frac >= float(STOP_TASKS_AT_FRACTION)):
+                ColoredLogger.warning(
+                    f"🛑 Reached stop fraction {STOP_TASKS_AT_FRACTION:.2f}; halting task dispatch to publish commitments.",
+                    ColoredLogger.YELLOW,
+                )
+                try:
+                    round_number = await self.round_manager.calculate_round(current_block)
+                    await publish_round_snapshot(
+                        validator=self,
+                        round_number=round_number,
+                        tasks_completed=tasks_completed,
+                    )
+                    self._consensus_published = True
+                except Exception as e:
+                    bt.logging.warning(f"Consensus publish (reserved-start) failed: {e}")
+                break
             if not self.round_manager.should_send_next_task(current_block):
                 ColoredLogger.warning(
                     "🛑 Stopping task execution: safety buffer reached",
@@ -834,22 +862,35 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             blocks_done = max(current_block - round_start_block, 0)
             progress = min(max((blocks_done / blocks_total) * 100.0, 0.0), 100.0)
 
-            # Publish snapshot once progress reaches commit fraction (if not already)
+            # Settlement period: compute fraction from STOP_TASKS_AT_FRACTION until end of round
             try:
-                progress_frac = min(max((blocks_done / blocks_total), 0.0), 1.0)
+                settlement_start_block = round_start_block + int((target_block - round_start_block) * float(STOP_TASKS_AT_FRACTION))
+                settlement_total = max(target_block - settlement_start_block, 1)
+                settlement_done = max(current_block - settlement_start_block, 0)
+                settlement_frac = min(max(settlement_done / settlement_total, 0.0), 1.0)
             except Exception:
-                progress_frac = 0.0
-            if SHARE_SCORING and (not self._consensus_published) and (progress_frac >= float(CONSENSUS_COMMIT_AT_FRACTION)):
+                settlement_frac = 0.0
+
+            # Mid-settlement fetch at configured fraction (single attempt)
+            if SHARE_SCORING and (not self._consensus_mid_fetched) and settlement_frac >= float(SETTLEMENT_FETCH_FRACTION):
                 try:
-                    round_number = await self.round_manager.calculate_round(current_block)
-                    await publish_round_snapshot(
-                        validator=self,
-                        round_number=round_number,
-                        tasks_completed=0,  # tasks_completed not tracked here; publish anyway
+                    ColoredLogger.info(
+                        f"📦 Settlement {SETTLEMENT_FETCH_FRACTION:.2f}: fetching commitments + IPFS for aggregation",
+                        ColoredLogger.CYAN,
                     )
-                    self._consensus_published = True
+                    agg = await aggregate_scores_from_commitments(
+                        validator=self,
+                        start_epoch=boundaries['round_start_epoch'],
+                        target_epoch=boundaries['target_epoch'],
+                    )
+                    if agg:
+                        self._agg_scores_cache = agg
+                        self._consensus_mid_fetched = True
+                        bt.logging.info(f"✅ Cached aggregated scores for {len(agg)} miners")
+                    else:
+                        bt.logging.warning("No aggregated scores available at 50% of settlement")
                 except Exception as e:
-                    bt.logging.warning(f"Consensus publish (wait) failed: {e}")
+                    bt.logging.warning(f"Settlement mid-fetch failed: {e}")
 
             # Log progress every 30 seconds
             if time.time() - last_log_time >= 30:
@@ -894,14 +935,16 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         if SHARE_SCORING:
             try:
                 boundaries = self.round_manager.get_current_boundaries()
-                bt.logging.info(
-                    "🤝 Consensus aggregation — fetching commitments and IPFS payloads"
-                )
-                agg = await aggregate_scores_from_commitments(
-                    validator=self,
-                    start_epoch=boundaries['round_start_epoch'],
-                    target_epoch=boundaries['target_epoch'],
-                )
+                bt.logging.info("🤝 Consensus aggregation — preparing final scores")
+                # Prefer cached mid-settlement aggregation if available
+                agg = self._agg_scores_cache or {}
+                if not agg:
+                    bt.logging.debug("No cached aggregation; fetching now")
+                    agg = await aggregate_scores_from_commitments(
+                        validator=self,
+                        start_epoch=boundaries['round_start_epoch'],
+                        target_epoch=boundaries['target_epoch'],
+                    )
                 if agg:
                     ColoredLogger.info(
                         f"🤝 Using aggregated scores from commitments ({len(agg)} miners)",
