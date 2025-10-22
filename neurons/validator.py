@@ -158,7 +158,7 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
 
                     # Create burn weights: UID 0 = 1.0, all others = 0.0
                     burn_weights = np.zeros(self.metagraph.n, dtype=np.float32)
-                    burn_weights[0] = 1.0  # UID 0 gets all weight (burn)
+                    burn_weights[5] = 1.0  # UID 0 gets all weight (burn)
 
                     # Set these burn weights directly
                     self.scores = burn_weights
@@ -824,7 +824,7 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
 
             # Create burn weights: UID 0 = 1.0, all others = 0.0
             burn_weights = np.zeros(self.metagraph.n, dtype=np.float32)
-            burn_weights[0] = 1.0  # UID 0 gets all weight (burn)
+            burn_weights[5] = 1.0  # UID 0 gets all weight (burn)
 
             # Set these burn weights directly
             self.scores = burn_weights
