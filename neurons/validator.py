@@ -126,6 +126,29 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
         # Log configuration summary
         self.round_manager.log_calculation_summary()
 
+        # Round status snapshot before generation/resume
+        try:
+            boundaries_preview = self.round_manager.get_round_boundaries(current_block, log_debug=False)
+            current_epoch_preview = self.round_manager.block_to_epoch(current_block)
+            round_number_preview = await self.round_manager.calculate_round(current_block)
+            blocks_to_target = max(boundaries_preview['target_block'] - current_block, 0)
+            minutes_to_target = (blocks_to_target * self.round_manager.SECONDS_PER_BLOCK) / 60
+            epochs_to_target = max(boundaries_preview['target_epoch'] - current_epoch_preview, 0.0)
+            bt.logging.info(
+                (
+                    "Round status | round={round} | epoch {cur:.2f}/{target:.2f} | "
+                    "epochs_to_next={ep:.2f} | minutes_to_next={mins:.1f}"
+                ).format(
+                    round=round_number_preview,
+                    cur=current_epoch_preview,
+                    target=boundaries_preview['target_epoch'],
+                    ep=epochs_to_target,
+                    mins=minutes_to_target,
+                )
+            )
+        except Exception as e:
+            bt.logging.debug(f"Round status preview failed: {e}")
+
         # ═══════════════════════════════════════════════════════
         # PRE-GENERATION: Generate all tasks at the beginning
         # ═══════════════════════════════════════════════════════
@@ -365,9 +388,21 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
         # Early audit log of round info
         round_number = await self.round_manager.calculate_round(current_block)
         start_epoch = boundaries['round_start_epoch']
+        target_epoch = boundaries['target_epoch']
+        blocks_remaining = boundaries['target_block'] - current_block
+        minutes_remaining = (blocks_remaining * self.round_manager.SECONDS_PER_BLOCK) / 60
         bt.logging.info(
-            f"Round init: validator_round_id={self.current_round_id}, round_number={round_number}, "
-            f"start_block={current_block}, start_epoch={start_epoch}"
+            (
+                "Round init: validator_round_id={rid}, round={round}, "
+                "start_block={blk}, start_epoch={start:.2f} -> target_epoch={target:.2f} (~{mins:.1f}m)"
+            ).format(
+                rid=self.current_round_id,
+                round=round_number,
+                blk=current_block,
+                start=start_epoch,
+                target=target_epoch,
+                mins=max(minutes_remaining, 0.0),
+            )
         )
 
         # If no miners are active, skip task loop and finish round gracefully
