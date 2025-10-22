@@ -83,7 +83,7 @@ async def get_task_collection_interleaved(
     # Heuristic: cap how many distinct use-cases we touch per project
     use_cases_per_project = max(1, math.ceil(total_prompts / max(1, num_projects)))
 
-    bt.logging.info(
+    bt.logging.debug(
         f"[tasks] Generating {total_prompts} tasks across {num_projects} projects: "
         f"distribution={task_distribution}, use_cases/project={use_cases_per_project}, "
         f"prompts_per_use_case={prompts_per_use_case}"
@@ -131,20 +131,20 @@ async def get_task_collection_interleaved(
             if not task_queue:
                 queues.remove((project, task_queue))
 
-    bt.logging.info(
+    bt.logging.debug(
         f"[tasks] Generated {len(interleaved_tasks)} interleaved tasks "
         f"across {len(projects_tasks)} projects"
     )
 
     # Apply seed to task URLs if dynamic HTML is enabled
     if ENABLE_DYNAMIC_HTML:
-        bt.logging.info("[tasks] Applying seeds to task URLs (ENABLE_DYNAMIC_HTML=true)")
+        bt.logging.debug("[tasks] Applying seeds to task URLs (ENABLE_DYNAMIC_HTML=true)")
         for task_with_project in interleaved_tasks:
             task = task_with_project.task
             task.assign_seed = True
             if "?seed=" not in task.url:
                 task.assign_seed_to_url()
-        bt.logging.info(f"[tasks] Seeds assigned to {len(interleaved_tasks)} tasks")
+        bt.logging.debug(f"[tasks] Seeds assigned to {len(interleaved_tasks)} tasks")
 
     return interleaved_tasks
 

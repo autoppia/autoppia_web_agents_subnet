@@ -104,7 +104,7 @@ class RoundManager:
         estimated_minutes = (blocks_remaining * 12) / 60  # 12 seconds per block
         ColoredLogger.info(f"   Estimated duration: {estimated_minutes:.1f} min (~{blocks_remaining} blocks)", ColoredLogger.CYAN)
 
-    def get_round_boundaries(self, current_block: int) -> Dict[str, Any]:
+    def get_round_boundaries(self, current_block: int, *, log_debug: bool = True) -> Dict[str, Any]:
         """
         Calculate round boundaries for the given block.
 
@@ -138,23 +138,24 @@ class RoundManager:
         round_start_block = self.epoch_to_block(round_start_epoch)
         target_block = self.epoch_to_block(target_epoch)
 
-        # 🔍 CRITICAL DEBUG: Verify global sync calculations
-        bt.logging.debug("=" * 80)
-        bt.logging.debug("🌐 GLOBAL SYNC CALCULATION (Modulo-based)")
-        bt.logging.debug("=" * 80)
-        bt.logging.debug(f"📍 Current block:      {current_block:,}")
-        bt.logging.debug(f"📍 Current epoch:      {current_epoch:.4f}")
-        bt.logging.debug("")
-        bt.logging.debug(f"🔢 ROUND_SIZE_EPOCHS:  {self.round_size_epochs}")
-        bt.logging.debug(f"🔢 Modulo calculation: ({current_epoch:.4f} // {self.round_size_epochs}) × {self.round_size_epochs}")
-        bt.logging.debug(f"🔢 Result:             {current_epoch // self.round_size_epochs:.0f} × {self.round_size_epochs} = {round_start_epoch:.4f}")
-        bt.logging.debug("")
-        bt.logging.debug(f"🎯 Round start epoch:  {round_start_epoch:.4f} (Block {round_start_block:,})")
-        bt.logging.debug(f"🎯 Round end epoch:    {target_epoch:.4f} (Block {target_block:,})")
-        bt.logging.debug(f"⏱️  Round duration:     {target_epoch - round_start_epoch:.2f} epochs ({(target_block - round_start_block):,} blocks)")
-        bt.logging.debug("")
-        bt.logging.debug(f"✅ ALL validators will end at epoch {target_epoch:.4f} regardless of start time")
-        bt.logging.debug("=" * 80)
+        # 🔍 CRITICAL DEBUG: Verify global sync calculations (optional)
+        if log_debug:
+            bt.logging.debug("=" * 80)
+            bt.logging.debug("🌐 GLOBAL SYNC CALCULATION (Modulo-based)")
+            bt.logging.debug("=" * 80)
+            bt.logging.debug(f"📍 Current block:      {current_block:,}")
+            bt.logging.debug(f"📍 Current epoch:      {current_epoch:.4f}")
+            bt.logging.debug("")
+            bt.logging.debug(f"🔢 ROUND_SIZE_EPOCHS:  {self.round_size_epochs}")
+            bt.logging.debug(f"🔢 Modulo calculation: ({current_epoch:.4f} // {self.round_size_epochs}) × {self.round_size_epochs}")
+            bt.logging.debug(f"🔢 Result:             {current_epoch // self.round_size_epochs:.0f} × {self.round_size_epochs} = {round_start_epoch:.4f}")
+            bt.logging.debug("")
+            bt.logging.debug(f"🎯 Round start epoch:  {round_start_epoch:.4f} (Block {round_start_block:,})")
+            bt.logging.debug(f"🎯 Round end epoch:    {target_epoch:.4f} (Block {target_block:,})")
+            bt.logging.debug(f"⏱️  Round duration:     {target_epoch - round_start_epoch:.2f} epochs ({(target_block - round_start_block):,} blocks)")
+            bt.logging.debug("")
+            bt.logging.debug(f"✅ ALL validators will end at epoch {target_epoch:.4f} regardless of start time")
+            bt.logging.debug("=" * 80)
 
         return {
             'round_start_epoch': round_start_epoch,
@@ -193,7 +194,7 @@ class RoundManager:
         if self.start_block is None:
             raise ValueError("Round not started. Call start_new_round() first.")
 
-        boundaries = self.get_round_boundaries(self.start_block)
+        boundaries = self.get_round_boundaries(self.start_block, log_debug=False)
         safety_buffer_blocks = self.safety_buffer_epochs * self.BLOCKS_PER_EPOCH
         # Global deadline: do not schedule tasks that would start beyond
         # the target round boundary minus the safety buffer.
@@ -224,7 +225,7 @@ class RoundManager:
         if self.start_block is None:
             raise ValueError("Round not started. Call start_new_round() first.")
 
-        boundaries = self.get_round_boundaries(self.start_block)
+        boundaries = self.get_round_boundaries(self.start_block, log_debug=False)
         target_epoch = boundaries['target_epoch']
         current_epoch = self.block_to_epoch(current_block)
 

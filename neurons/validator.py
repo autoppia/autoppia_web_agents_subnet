@@ -123,20 +123,7 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
             await asyncio.sleep(wait_seconds)
             return
 
-        # Get current block and calculate round boundaries
-        # 🌐 This call shows GLOBAL SYNC calculation with detailed logs
-        boundaries = self.round_manager.get_round_boundaries(current_block)
-
-        # 🔍 VERIFICATION: Prove that the round is globally synchronized (debug only)
-        bt.logging.debug("")
-        bt.logging.debug("🔐 SYNCHRONIZATION VERIFICATION")
-        bt.logging.debug("=" * 80)
-        bt.logging.debug(f"Round will end at epoch {boundaries['target_epoch']:.2f}")
-        bt.logging.debug(
-            f"Any validator starting between epochs {boundaries['round_start_epoch']:.2f} - {boundaries['target_epoch']:.2f} will also end at the same epoch"
-        )
-        bt.logging.debug("Fair competition with global deadline")
-        bt.logging.debug("=" * 80)
+        # Skip early boundaries verification to avoid duplicate sync logs.
 
         # Log configuration summary
         self.round_manager.log_calculation_summary()
@@ -209,7 +196,7 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
         ColoredLogger.warning("🤝 SENDING START ROUND HANDSHAKE", ColoredLogger.CYAN)
         ColoredLogger.warning("=" * 80, ColoredLogger.CYAN)
 
-        # Initialize new round in RoundManager
+        # Initialize new round in RoundManager (logs sync math once)
         self.round_manager.start_new_round(current_block)
         boundaries = self.round_manager.get_current_boundaries()
         # If not resuming, reset ephemeral structures; if resuming, keep loaded ones
@@ -389,6 +376,14 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
             f"Round init: validator_round_id={self.current_round_id}, round_number={round_number}, "
             f"start_block={current_block}, start_epoch={start_epoch}"
         )
+
+        # If no miners are active, skip task loop and finish round gracefully
+        if not self.active_miner_uids:
+            ColoredLogger.warning("⚠️ No active miners after handshake; skipping tasks and finalizing round.", ColoredLogger.YELLOW)
+            # Minimal wait loop print and direct finalize
+            await self._wait_for_target_epoch()
+            await self._calculate_final_weights(0)
+            return
 
         await self._iwap_start_round(current_block=current_block, n_tasks=len(all_tasks))
 

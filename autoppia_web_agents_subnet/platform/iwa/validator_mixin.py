@@ -171,12 +171,19 @@ class ValidatorPlatformMixin:
             if tasks is not None:
                 for item in tasks:
                     try:
-                        serialized_tasks.append(
-                            {
-                                "project": item.project.model_dump(),
-                                "task": item.task.serialize() if hasattr(item.task, "serialize") else item.task.model_dump(),
-                            }
+                        # Serialize project minimally to avoid non-JSON types (e.g., class types in events)
+                        proj = item.project
+                        project_payload = {
+                            "id": getattr(proj, "id", None),
+                            "name": getattr(proj, "name", None),
+                            "frontend_url": getattr(proj, "frontend_url", None),
+                            "is_web_real": bool(getattr(proj, "is_web_real", False)),
+                        }
+                        # Serialize task with tests/use_case flattened by the helper
+                        task_payload = (
+                            item.task.serialize() if hasattr(item.task, "serialize") else item.task.model_dump()
                         )
+                        serialized_tasks.append({"project": project_payload, "task": task_payload})
                     except Exception:
                         continue
             else:
