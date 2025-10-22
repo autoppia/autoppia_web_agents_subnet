@@ -28,6 +28,7 @@ from autoppia_web_agents_subnet.validator.config import (
     SHARE_SCORING,
     STOP_TASKS_AT_FRACTION,
     SETTLEMENT_FETCH_FRACTION,
+    CONSENSUS_COMMIT_AT_FRACTION,
 )
 from autoppia_web_agents_subnet.validator.tasks import get_task_collection_interleaved, collect_task_solutions_and_execution_times
 from autoppia_iwa.src.demo_webs.classes import WebProject
