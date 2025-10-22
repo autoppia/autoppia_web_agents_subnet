@@ -28,28 +28,28 @@ RoundCheckpoint:
     # Identifiers
     validator_round_id: "validator_round_3108_f2b48b39ec5e"
     round_start_timestamp: 1761103313.73197
-    
+
     # Tasks (300 pre-generated)
     all_tasks: [TaskWithProject × 300]
     current_round_tasks: {task_id: TaskIWAP}
-    
+
     # Active miners
     active_miner_uids: [216, 223, 228, 246, 251, 252]
     miner_hotkeys: {216: "5Xxx...", 223: "5Yyy...", ...}
     round_handshake_payloads: {216: {...}, 223: {...}, ...}
-    
+
     # IWAP state
     current_agent_runs: {216: AgentRunIWAP, ...}
     current_miner_snapshots: {216: MinerSnapshotIWAP, ...}
     agent_run_accumulators: {216: {reward, score, time, tasks}, ...}
-    
+
     # Progress
     completed_pairs: {(216, "task_001"), (216, "task_002"), ...}
     eval_records: [{miner_uid, task_id, reward, score, time}, ...]
-    
+
     # IWAP phases (prevents duplicates)
     phases: {p1_done: True, p2_done: True}
-    
+
     # Round Manager (accumulated scores)
     rm_start_block: 6713220
     rm_round_rewards: {216: [0.85, 0.90, 0.88, ...], ...}
@@ -183,27 +183,32 @@ RoundCheckpoint:
 ## ✅ System Guarantees
 
 ### **1. Tasks are not lost**
+
 - ✅ The 300 pre-generated tasks are saved in the checkpoint
 - ✅ On restart, the same 300 tasks are recovered
 - ✅ Task IDs are stable (don't change)
 
 ### **2. Evaluations are not duplicated**
+
 - ✅ `completed_pairs` tracks which (miner, task) were already evaluated
 - ✅ The loop skips completed tasks
 - ✅ IWAP backend rejects duplicates (HTTP 409)
 
 ### **3. Synapses are not re-sent**
+
 - ✅ `handshake_payloads` are recovered from checkpoint
 - ✅ NO re-send of `StartRoundSynapse`
 - ✅ Miners don't receive duplicate handshakes
 
 ### **4. IWAP calls are not duplicated**
+
 - ✅ `phases` tracks which phases were already completed
 - ✅ NO re-send of `start_round` (p1_done=True)
 - ✅ NO re-send of `set_tasks` (p2_done=True)
 - ✅ NO re-send of `start_agent_run` (already exist)
 
 ### **5. Scores accumulate correctly**
+
 - ✅ `round_manager` scores are saved in checkpoint
 - ✅ On restart, accumulated scores are restored
 - ✅ New evaluations are added to existing scores
@@ -238,7 +243,7 @@ pm2 logs validator_6am --lines 50 | grep -E "Checkpoint|Resume|Skipping"
 **Expected logs after recovery:**
 
 ```
-[INFO] ♻️ Checkpoint loaded from /data/validator_state/round_state/5DUmb...pkl 
+[INFO] ♻️ Checkpoint loaded from /data/validator_state/round_state/5DUmb...pkl
        (tasks=300 runs=6 completed=744)
 
 [INFO] ♻️ Resumed 300 tasks; validator_round_id=validator_round_3108_xxx
@@ -261,6 +266,7 @@ bash scripts/test_recovery.sh
 ```
 
 The script:
+
 1. ✅ Verifies validator is running
 2. ✅ Waits for checkpoint to be generated (10 min)
 3. ✅ Kills the process (simulates crash)
@@ -370,6 +376,7 @@ The system saves metrics in each checkpoint:
 8. ✅ Accumulates scores correctly (round_manager)
 
 **To be 100% sure on YOUR server:**
+
 - Run `bash scripts/test_recovery.sh`
 - Check the logs
 - Confirm tasks are skipped after recovery
