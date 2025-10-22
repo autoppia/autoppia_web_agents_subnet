@@ -290,14 +290,19 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             bt.logging.debug("=" * 80)
 
             handshake_responses = []
-            if resumed and getattr(self, "active_miner_uids", []):
+            # Check if we already sent handshake in this round (via checkpoint)
+            has_prior_handshake = resumed and hasattr(self, "round_handshake_payloads") and self.round_handshake_payloads
+            
+            if has_prior_handshake:
+                # We already sent handshake before crash, use saved state
                 ColoredLogger.info(
-                    "♻️ Resuming: reusing saved handshake payloads and active miners",
+                    f"♻️ Resuming: reusing saved handshake from {len(self.active_miner_uids)} miners (no re-send)",
                     ColoredLogger.CYAN,
                 )
                 # Skip sending synapse; use saved state
                 pass
             else:
+                # First time sending handshake in this round
                 handshake_responses = await send_start_round_synapse_to_miners(
                     validator=self,
                     miner_axons=all_axons,
