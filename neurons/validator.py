@@ -253,7 +253,6 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         # ═══════════════════════════════════════════════════════
         # START ROUND HANDSHAKE: Send StartRoundSynapse ONCE
         # ═══════════════════════════════════════════════════════
-        ColoredLogger.info("🤝 Sending start-round handshake", ColoredLogger.CYAN)
 
         # Initialize new round in RoundManager (logs sync math once)
         self.round_manager.start_new_round(current_block)
@@ -269,46 +268,49 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
         # Send StartRoundSynapse to all miners ONCE at the beginning
         try:
-            # Build parallel lists of UIDs and axons to preserve mapping
-            all_uids = list(range(len(self.metagraph.uids)))
-            all_axons = [self.metagraph.axons[uid] for uid in all_uids]
-            start_synapse = StartRoundSynapse(
-                version=self.version,
-                round_id=self.current_round_id or f"round_{boundaries['round_start_epoch']}",
-                validator_id=str(self.uid),
-                total_prompts=len(all_tasks),
-                prompts_per_use_case=PROMPTS_PER_USECASE,
-                note=f"Starting round at epoch {boundaries['round_start_epoch']}"
-            )
-
-            # 🔍 DEBUG: Show exactly what we're sending
-            bt.logging.debug("=" * 80)
-            bt.logging.debug("StartRoundSynapse content:")
-            bt.logging.debug(f"  - version: {start_synapse.version}")
-            bt.logging.debug(f"  - round_id: {start_synapse.round_id}")
-            bt.logging.debug(f"  - validator_id: {start_synapse.validator_id}")
-            bt.logging.debug(f"  - total_prompts: {start_synapse.total_prompts}")
-            bt.logging.debug(f"  - prompts_per_use_case: {start_synapse.prompts_per_use_case}")
-            bt.logging.debug(f"  - note: {start_synapse.note}")
-            bt.logging.debug(f"  - has_rl: {getattr(start_synapse, 'has_rl', 'NOT_SET')}")
-            bt.logging.debug(f"  - Sending to {len(all_axons)} miners")
-            bt.logging.debug("=" * 80)
-
-            handshake_responses = []
             # Check if we already sent handshake in this round (via checkpoint)
             # Use phase flag to track if handshake was sent, not the presence of responses
             has_prior_handshake = resumed and self._phases.get("handshake_sent", False)
 
+            handshake_responses = []
+
             if has_prior_handshake:
                 # We already sent handshake before crash, use saved state
                 ColoredLogger.info(
-                    f"♻️ Resuming: handshake already sent (active_miners={len(self.active_miner_uids)}, no re-send)",
+                    f"🤝 Handshake: using saved state (active_miners={len(self.active_miner_uids)}, already sent before restart)",
                     ColoredLogger.CYAN,
                 )
                 # Skip sending synapse; use saved state
                 pass
             else:
-                # First time sending handshake in this round
+                # First time sending handshake in this round - BUILD AND SEND
+                ColoredLogger.info(f"🤝 Handshake: sending to {len(self.metagraph.uids)} miners...", ColoredLogger.CYAN)
+
+                # Build parallel lists of UIDs and axons to preserve mapping
+                all_uids = list(range(len(self.metagraph.uids)))
+                all_axons = [self.metagraph.axons[uid] for uid in all_uids]
+                start_synapse = StartRoundSynapse(
+                    version=self.version,
+                    round_id=self.current_round_id or f"round_{boundaries['round_start_epoch']}",
+                    validator_id=str(self.uid),
+                    total_prompts=len(all_tasks),
+                    prompts_per_use_case=PROMPTS_PER_USECASE,
+                    note=f"Starting round at epoch {boundaries['round_start_epoch']}"
+                )
+
+                # 🔍 DEBUG: Show exactly what we're sending
+                bt.logging.debug("=" * 80)
+                bt.logging.debug("StartRoundSynapse content:")
+                bt.logging.debug(f"  - version: {start_synapse.version}")
+                bt.logging.debug(f"  - round_id: {start_synapse.round_id}")
+                bt.logging.debug(f"  - validator_id: {start_synapse.validator_id}")
+                bt.logging.debug(f"  - total_prompts: {start_synapse.total_prompts}")
+                bt.logging.debug(f"  - prompts_per_use_case: {start_synapse.prompts_per_use_case}")
+                bt.logging.debug(f"  - note: {start_synapse.note}")
+                bt.logging.debug(f"  - has_rl: {getattr(start_synapse, 'has_rl', 'NOT_SET')}")
+                bt.logging.debug(f"  - Sending to {len(all_axons)} miners")
+                bt.logging.debug("=" * 80)
+
                 handshake_responses = await send_start_round_synapse_to_miners(
                     validator=self,
                     miner_axons=all_axons,
@@ -391,16 +393,17 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 self.round_handshake_payloads[mapped_uid] = response
                 self.active_miner_uids.append(mapped_uid)
 
-            # Log only successful responders for clarity
-            if self.active_miner_uids:
-                ColoredLogger.success(
-                    f"✅ Handshake complete: {len(self.active_miner_uids)}/{len(all_axons)} miners responded",
-                    ColoredLogger.GREEN,
-                )
-            else:
-                ColoredLogger.warning(
-                    f"⚠️ Handshake complete: 0/{len(all_axons)} miners responded", ColoredLogger.YELLOW
-                )
+            # Log results only if we actually sent the handshake (not when using saved state)
+            if not has_prior_handshake:
+                if self.active_miner_uids:
+                    ColoredLogger.success(
+                        f"✅ Handshake sent: {len(self.active_miner_uids)}/{len(all_axons)} miners responded",
+                        ColoredLogger.GREEN,
+                    )
+                else:
+                    ColoredLogger.warning(
+                        f"⚠️ Handshake sent: 0/{len(all_axons)} miners responded", ColoredLogger.YELLOW
+                    )
 
             # Mark that handshake was sent (for resume logic)
             # This flag prevents re-sending handshake after restart, regardless of responses
