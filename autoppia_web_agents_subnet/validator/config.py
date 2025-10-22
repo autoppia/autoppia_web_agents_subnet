@@ -49,22 +49,22 @@ def _env_int(name: str, default: int) -> int:
 # All validators synchronize at epoch multiples of 20 (GLOBAL SYNC)
 # ════════════════════════════════════════════════════════════════════════════════
 
-ROUND_SIZE_EPOCHS = 6                # ~7.2 hours per round
+# ROUND_SIZE_EPOCHS = 6                # ~7.2 hours per round
 # 1 epoch = 360 blocks = 72 minutes = 1.2 hours
 # 6 epochs = 2,160 blocks = 25,920 seconds ≈ 432 minutes ≈ 7.2 hours
 # Round boundaries still align to global multiples of ROUND_SIZE_EPOCHS
 # ⚠️ If validator starts late, it still ends at the same target epoch as others!
 
-SAFETY_BUFFER_EPOCHS = 0.5           # 0.5 epoch = 36 minutes buffer before round ends
+# SAFETY_BUFFER_EPOCHS = 0.5           # 0.5 epoch = 36 minutes buffer before round ends
 # Stop sending tasks when less than 0.5 epochs remains
 # Ensures last task completes + weights are set before round deadline
 
-AVG_TASK_DURATION_SECONDS = 300      # 5 minutes average per task
+# AVG_TASK_DURATION_SECONDS = 300      # 5 minutes average per task
 # Includes: send task + miner execution + evaluation + API submission
 # 300 tasks × 5 min = 1,500 min = 25 hours
 # Distributed over ~23.4 hours (24h - 36min buffer) = ~13 tasks/hour
-
-PRE_GENERATED_TASKS = 75             # Generate fewer tasks (≈ 1/4)
+#
+# PRE_GENERATED_TASKS = 75             # Generate fewer tasks (≈ 1/4)
 # All tasks generated upfront; dynamic loop truncates based on time
 # With 6-epoch rounds and ~5 min/task, ~75 tasks fits comfortably
 
@@ -95,17 +95,21 @@ PRE_GENERATED_TASKS = 75             # Generate fewer tasks (≈ 1/4)
 TESTING = _str_to_bool(os.getenv("TESTING", "false"))
 # Move start gate forward by full-epoch increments (360 blocks) to be past 6,716,117
 # Previous: 6,713,220 → + (360 * 9) = 6,716,460 (> 6,716,117)
-DZ_STARTING_BLOCK = 6_716_460 if not TESTING else 0
+# DZ_STARTING_BLOCK = 6_716_460 if not TESTING else 0
 
 
-# ╭────────────────────── TESTING Configuration (Commented) ──────────────────────╮
-# Uncomment for quick testing (rounds every ~14 minutes):
+# ╭────────────────────── TESTING Configuration (ACTIVE) ─────────────────────────╮
+# Quick testing configuration (rounds every ~14 minutes):
+# 1 epoch = 360 blocks = 72 minutes
 #
-# ROUND_SIZE_EPOCHS = 0.1               # 14.4 minutes per round
-# SAFETY_BUFFER_EPOCHS = 0.02           # 1.4 minutes buffer
-# AVG_TASK_DURATION_SECONDS = 300       # 5 minutes per task
-# PRE_GENERATED_TASKS = 1               # Only 1 task
-# DZ_STARTING_BLOCK = 0                 # Start immediately
+ROUND_SIZE_EPOCHS = 0.2               # 14.4 minutes per round (0.2 × 72)
+SAFETY_BUFFER_EPOCHS = 0.02           # 1.44 minutes buffer (0.02 × 72)
+AVG_TASK_DURATION_SECONDS = 300       # 5 minutes per task
+PRE_GENERATED_TASKS = 4               # Only 4 tasks (quick testing)
+DZ_STARTING_BLOCK = 0                 # Start immediately (no delay)
+# 
+# Timeline: 4 tasks × 5 min = 20 min total, fits in 14.4 min round with parallel miners
+# Perfect for testing recovery: crash at ~7 min, restart, verify checkpoint works
 # ╰───────────────────────────────────────────────────────────────────────────────╯
 
 # ╭─────────────────────────── Task Settings ─────────────────────────────╮
