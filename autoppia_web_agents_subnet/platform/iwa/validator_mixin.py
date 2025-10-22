@@ -297,48 +297,62 @@ class ValidatorPlatformMixin:
 
     def _load_round_state(self) -> Optional[Dict[str, Any]]:
         state_path = self._round_state_path
-        chosen_path: Optional[Path] = None
+        tmp_path = state_path.with_suffix(state_path.suffix + ".tmp")
 
+        def _try_read(path: Path) -> Optional[Dict[str, Any]]:
+            try:
+                with path.open("r", encoding="utf-8") as fh:
+                    return json.load(fh)
+            except Exception:
+                return None
+
+        state: Optional[Dict[str, Any]] = None
+
+        # 1) Prefer final path when it exists and parses
         if state_path.exists():
-            chosen_path = state_path
+            parsed = _try_read(state_path)
+            if parsed is not None:
+                state = parsed
+            else:
+                # Final exists but is corrupt; try the temp file
+                if tmp_path.exists():
+                    parsed_tmp = _try_read(tmp_path)
+                    if parsed_tmp is not None:
+                        try:
+                            tmp_path.replace(state_path)
+                            import bittensor as bt
+                            bt.logging.warning(
+                                f"Resume recovery: replaced corrupt state with temp from {tmp_path}"
+                            )
+                        except Exception:
+                            pass
+                        state = parsed_tmp
         else:
-            # Attempt recovery from an incomplete atomic write (.tmp file)
-            tmp_path = state_path.with_suffix(state_path.suffix + ".tmp")
+            # 2) No final; attempt temp recovery if valid
             if tmp_path.exists():
-                try:
-                    tmp_path.replace(state_path)
+                parsed_tmp = _try_read(tmp_path)
+                if parsed_tmp is not None:
                     try:
+                        tmp_path.replace(state_path)
                         import bittensor as bt
                         bt.logging.warning(
                             f"Resume recovery: moved temp state into place from {tmp_path}"
                         )
                     except Exception:
                         pass
-                    chosen_path = state_path
-                except Exception:
-                    chosen_path = tmp_path  # As a last resort, read directly
-            if chosen_path is None:
-                try:
-                    import bittensor as bt
-                    bt.logging.info(
-                        f"Resume skipped: state file not found at {state_path.resolve()}"
-                    )
-                except Exception:
-                    pass
-                self._last_resume_info = {
-                    "status": "skipped",
-                    "reason": f"state file not found at {state_path}",
-                }
-                return None
+                    state = parsed_tmp
 
-        try:
-            with chosen_path.open("r", encoding="utf-8") as fh:
-                state = json.load(fh)
-        except Exception as exc:
-            bt.logging.warning(f"Failed to read round state: {exc}")
+        if state is None:
+            try:
+                import bittensor as bt
+                bt.logging.info(
+                    f"Resume skipped: valid state not found (checked {state_path} and {tmp_path})"
+                )
+            except Exception:
+                pass
             self._last_resume_info = {
                 "status": "skipped",
-                "reason": f"failed to read state file: {exc}",
+                "reason": "valid state not found",
             }
             return None
 
