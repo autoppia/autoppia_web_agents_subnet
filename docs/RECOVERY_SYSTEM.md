@@ -1,6 +1,6 @@
-# 🔄 Sistema de Recovery del Validador
+# 🔄 Validator Recovery System
 
-## 📁 Estructura de Archivos
+## 📁 File Structure
 
 ```
 /data/
@@ -10,47 +10,47 @@
         └── 5DUmbxsTWuMxefEk36BYX8qNsF18BbUeTgBPuefBN6gSDe8j.pkl.tmp
 ```
 
-### **¿Por qué esta estructura?**
+### **Why this structure?**
 
-- ✅ **`/data/validator_state/`**: Separado del backend y otros datos
-- ✅ **`round_state/`**: Claridad sobre qué contiene (estado de rounds)
-- ✅ **`{hotkey}.pkl`**: Un archivo por validador (múltiples validadores posibles)
-- ✅ **`.pkl.tmp`**: Escritura atómica (temp → replace)
+- ✅ **`/data/validator_state/`**: Separated from backend and other data
+- ✅ **`round_state/`**: Clear about what it contains (round state)
+- ✅ **`{hotkey}.pkl`**: One file per validator (multiple validators possible)
+- ✅ **`.pkl.tmp`**: Atomic write (temp → replace)
 
 ---
 
-## 📦 Contenido del Checkpoint
+## 📦 Checkpoint Contents
 
-El archivo `.pkl` contiene **TODO** el estado del round:
+The `.pkl` file contains **ALL** the round state:
 
 ```python
 RoundCheckpoint:
-    # Identificadores
+    # Identifiers
     validator_round_id: "validator_round_3108_f2b48b39ec5e"
     round_start_timestamp: 1761103313.73197
     
-    # Tareas (300 pre-generadas)
+    # Tasks (300 pre-generated)
     all_tasks: [TaskWithProject × 300]
     current_round_tasks: {task_id: TaskIWAP}
     
-    # Miners activos
+    # Active miners
     active_miner_uids: [216, 223, 228, 246, 251, 252]
     miner_hotkeys: {216: "5Xxx...", 223: "5Yyy...", ...}
     round_handshake_payloads: {216: {...}, 223: {...}, ...}
     
-    # Estado IWAP
+    # IWAP state
     current_agent_runs: {216: AgentRunIWAP, ...}
     current_miner_snapshots: {216: MinerSnapshotIWAP, ...}
     agent_run_accumulators: {216: {reward, score, time, tasks}, ...}
     
-    # Progreso
+    # Progress
     completed_pairs: {(216, "task_001"), (216, "task_002"), ...}
     eval_records: [{miner_uid, task_id, reward, score, time}, ...]
     
-    # Fases IWAP (evita duplicados)
+    # IWAP phases (prevents duplicates)
     phases: {p1_done: True, p2_done: True}
     
-    # Round Manager (scores acumulados)
+    # Round Manager (accumulated scores)
     rm_start_block: 6713220
     rm_round_rewards: {216: [0.85, 0.90, 0.88, ...], ...}
     rm_round_eval_scores: {216: [0.85, 0.90, 0.88, ...], ...}
@@ -59,217 +59,191 @@ RoundCheckpoint:
 
 ---
 
-## 🔄 Flujo de Recovery
+## 🔄 Recovery Flow
 
-### **Escenario: Crash en Epoch 3 de 6**
+### **Scenario: Crash at Epoch 3 of 6**
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ EPOCH 0: Inicio del Round                                   │
+│ EPOCH 0: Round Start                                        │
 ├─────────────────────────────────────────────────────────────┤
-│ 1. Genera 300 tareas                                        │
-│ 2. Guarda checkpoint inicial ✓                              │
-│    - all_tasks: 300 tareas                                  │
+│ 1. Generate 300 tasks                                       │
+│ 2. Save initial checkpoint ✓                                │
+│    - all_tasks: 300 tasks                                   │
 │    - completed_pairs: []                                    │
-│ 3. Envía StartRoundSynapse a 6 miners                       │
-│ 4. Envía start_round a IWAP backend                         │
-│ 5. Envía set_tasks a IWAP backend                           │
-│ 6. Envía start_agent_run para cada miner                    │
+│ 3. Send StartRoundSynapse to 6 miners                       │
+│ 4. Send start_round to IWAP backend                         │
+│ 5. Send set_tasks to IWAP backend                           │
+│ 6. Send start_agent_run for each miner                      │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│ EPOCH 1: Evalúa 50 tareas                                   │
+│ EPOCH 1: Evaluate 50 tasks                                  │
 ├─────────────────────────────────────────────────────────────┤
-│ Por cada tarea:                                             │
-│   1. Envía TaskSynapse a miners                             │
-│   2. Recibe acciones                                        │
-│   3. Evalúa acciones                                        │
-│   4. Acumula rewards en round_manager                       │
-│   5. Guarda checkpoint ✓                                    │
-│      - completed_pairs: 300 pares (50 × 6 miners)           │
-│      - eval_records: 300 evaluaciones                       │
+│ For each task:                                              │
+│   1. Send TaskSynapse to miners                             │
+│   2. Receive actions                                        │
+│   3. Evaluate actions                                       │
+│   4. Accumulate rewards in round_manager                    │
+│   5. Save checkpoint ✓                                      │
+│      - completed_pairs: 300 pairs (50 × 6 miners)           │
+│      - eval_records: 300 evaluations                        │
 │      - rm_round_rewards: {216: [0.85, ...], ...}            │
-│   6. Envía evaluación a IWAP backend                        │
+│   6. Send evaluation to IWAP backend                        │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│ EPOCH 2: Evalúa 50 tareas más                               │
+│ EPOCH 2: Evaluate 50 more tasks                             │
 ├─────────────────────────────────────────────────────────────┤
-│ Total acumulado:                                            │
-│   - 100 tareas completadas                                  │
-│   - 600 evaluaciones (100 × 6 miners)                       │
-│   - Checkpoint actualizado ✓                                │
+│ Total accumulated:                                          │
+│   - 100 tasks completed                                     │
+│   - 600 evaluations (100 × 6 miners)                        │
+│   - Checkpoint updated ✓                                    │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│ EPOCH 3: ⚠️ CRASH (en tarea 125)                            │
+│ EPOCH 3: ⚠️ CRASH (at task 125)                             │
 ├─────────────────────────────────────────────────────────────┤
-│ Último checkpoint guardado:                                 │
-│   - 124 tareas completadas                                  │
-│   - 744 evaluaciones (124 × 6 miners)                       │
-│   - Checkpoint existe en disco ✓                            │
+│ Last checkpoint saved:                                      │
+│   - 124 tasks completed                                     │
+│   - 744 evaluations (124 × 6 miners)                        │
+│   - Checkpoint exists on disk ✓                             │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│ EPOCH 3.1: 🔄 REINICIO Y RECOVERY                           │
+│ EPOCH 3.1: 🔄 RESTART AND RECOVERY                          │
 ├─────────────────────────────────────────────────────────────┤
-│ 1. Carga checkpoint ✓                                       │
+│ 1. Load checkpoint ✓                                        │
 │    Log: "♻️ Checkpoint loaded (tasks=300 runs=6             │
 │           completed=744)"                                   │
 │                                                             │
-│ 2. Restaura estado completo:                               │
-│    ✓ 300 tareas originales                                 │
-│    ✓ 124 tareas completadas                                │
-│    ✓ 744 evaluaciones                                      │
+│ 2. Restore complete state:                                 │
+│    ✓ 300 original tasks                                    │
+│    ✓ 124 completed tasks                                   │
+│    ✓ 744 evaluations                                       │
 │    ✓ active_miner_uids: [216, 223, ...]                    │
-│    ✓ handshake_payloads (NO reenvía StartRoundSynapse)     │
-│    ✓ agent_runs (NO reenvía start_agent_run)               │
+│    ✓ handshake_payloads (NO re-send StartRoundSynapse)     │
+│    ✓ agent_runs (NO re-send start_agent_run)               │
 │    ✓ phases: {p1_done: True, p2_done: True}                │
-│    ✓ round_manager scores acumulados                       │
+│    ✓ round_manager accumulated scores                      │
 │                                                             │
-│ 3. Verifica sincronización de epochs:                      │
-│    - Round debe terminar en epoch 6                        │
-│    - Estamos en epoch 3.1                                  │
-│    - Tiempo restante: ~2.9 epochs                          │
+│ 3. Verify epoch synchronization:                           │
+│    - Round must end at epoch 6                             │
+│    - We're at epoch 3.1                                    │
+│    - Time remaining: ~2.9 epochs                           │
 │                                                             │
-│ 4. NO reenvía a IWAP backend:                              │
+│ 4. NO re-send to IWAP backend:                             │
 │    ✗ start_round (p1_done=True)                            │
 │    ✗ set_tasks (p2_done=True)                              │
-│    ✗ start_agent_run (ya existen)                          │
+│    ✗ start_agent_run (already exist)                       │
 │                                                             │
-│ 5. Loop de tareas:                                         │
+│ 5. Task loop:                                              │
 │    for task_index in range(300):                           │
 │        if (uid, task_id) in completed_pairs:               │
 │            Log: "⏭️ Skipping task 1-124"                    │
-│            continue  # ← Salta tareas completadas          │
+│            continue  # ← Skip completed tasks              │
 │        else:                                               │
-│            evaluate_task(task_index)  # ← Desde tarea 125  │
+│            evaluate_task(task_index)  # ← From task 125    │
 │                                                             │
-│ 6. Continúa evaluando tareas 125-200                       │
-│    (hasta que safety buffer se alcance)                    │
+│ 6. Continue evaluating tasks 125-200                       │
+│    (until safety buffer is reached)                        │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
-│ EPOCH 6: 🏁 FIN DEL ROUND                                   │
+│ EPOCH 6: 🏁 ROUND END                                        │
 ├─────────────────────────────────────────────────────────────┤
-│ 1. Llega al target epoch                                   │
+│ 1. Reach target epoch                                      │
 │                                                             │
-│ 2. Calcula promedios con TODAS las evaluaciones:           │
+│ 2. Calculate averages with ALL evaluations:                │
 │    avg_rewards = {                                          │
 │        216: sum([0.85, 0.90, ..., 0.87]) / 200,            │
 │        223: sum([0.92, 0.89, ..., 0.93]) / 200,            │
 │        ...                                                  │
 │    }                                                        │
-│    ↑ Incluye evaluaciones pre-crash + post-crash           │
+│    ↑ Includes pre-crash + post-crash evaluations           │
 │                                                             │
-│ 3. Aplica WTA (Winner Takes All):                          │
+│ 3. Apply WTA (Winner Takes All):                           │
 │    final_weights = {216: 0.0, 223: 1.0, ...}               │
 │                                                             │
-│ 4. Actualiza scores EMA:                                   │
+│ 4. Update EMA scores:                                      │
 │    scores[uid] = 0.1 * final_weights[uid] +                │
 │                  0.9 * old_scores[uid]                     │
 │                                                             │
-│ 5. Setea weights en blockchain ✓                           │
+│ 5. Set weights on blockchain ✓                             │
 │                                                             │
-│ 6. Envía finish_round a IWAP backend ✓                     │
+│ 6. Send finish_round to IWAP backend ✓                     │
 │                                                             │
-│ 7. Elimina checkpoint ✓                                    │
-│    (ya no se necesita)                                     │
+│ 7. Delete checkpoint ✓                                     │
+│    (no longer needed)                                      │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## ✅ Garantías del Sistema
+## ✅ System Guarantees
 
-### **1. No se pierden tareas**
-- ✅ Las 300 tareas pre-generadas se guardan en el checkpoint
-- ✅ Al reiniciar, se recuperan las mismas 300 tareas
-- ✅ Los task_ids son estables (no cambian)
+### **1. Tasks are not lost**
+- ✅ The 300 pre-generated tasks are saved in the checkpoint
+- ✅ On restart, the same 300 tasks are recovered
+- ✅ Task IDs are stable (don't change)
 
-### **2. No se duplican evaluaciones**
-- ✅ `completed_pairs` rastrea qué (miner, task) ya se evaluaron
-- ✅ El loop salta tareas completadas
-- ✅ El backend IWAP rechaza duplicados (HTTP 409)
+### **2. Evaluations are not duplicated**
+- ✅ `completed_pairs` tracks which (miner, task) were already evaluated
+- ✅ The loop skips completed tasks
+- ✅ IWAP backend rejects duplicates (HTTP 409)
 
-### **3. No se reenvían synapses**
-- ✅ `handshake_payloads` se recuperan del checkpoint
-- ✅ NO se reenvía `StartRoundSynapse`
-- ✅ Los miners no reciben handshakes duplicados
+### **3. Synapses are not re-sent**
+- ✅ `handshake_payloads` are recovered from checkpoint
+- ✅ NO re-send of `StartRoundSynapse`
+- ✅ Miners don't receive duplicate handshakes
 
-### **4. No se duplican llamadas IWAP**
-- ✅ `phases` rastrea qué fases ya se completaron
-- ✅ NO se reenvía `start_round` (p1_done=True)
-- ✅ NO se reenvía `set_tasks` (p2_done=True)
-- ✅ NO se reenvía `start_agent_run` (ya existen)
+### **4. IWAP calls are not duplicated**
+- ✅ `phases` tracks which phases were already completed
+- ✅ NO re-send of `start_round` (p1_done=True)
+- ✅ NO re-send of `set_tasks` (p2_done=True)
+- ✅ NO re-send of `start_agent_run` (already exist)
 
-### **5. Scores se acumulan correctamente**
-- ✅ `round_manager` scores se guardan en checkpoint
-- ✅ Al reiniciar, se restauran los scores acumulados
-- ✅ Nuevas evaluaciones se suman a los scores existentes
-- ✅ Promedios finales incluyen TODAS las evaluaciones
+### **5. Scores accumulate correctly**
+- ✅ `round_manager` scores are saved in checkpoint
+- ✅ On restart, accumulated scores are restored
+- ✅ New evaluations are added to existing scores
+- ✅ Final averages include ALL evaluations
 
 ---
 
-## 🧪 Cómo Probar
+## 🧪 How to Test
 
-### **Método 1: Script Automático (Recomendado)**
-
-```bash
-cd ~/autoppia_web_agents_subnet
-bash scripts/test_recovery.sh
-```
-
-El script:
-1. ✅ Verifica que el validador esté corriendo
-2. ✅ Espera a que se genere un checkpoint (10 min)
-3. ✅ Mata el proceso (simula crash)
-4. ✅ Verifica que el checkpoint se preservó
-5. ✅ Reinicia el validador
-6. ✅ Verifica que el recovery funcionó
-
-### **Método 2: Manual**
+### **Method 1: Simple Manual Test (Recommended)**
 
 ```bash
-# 1. Ver estado actual
-pm2 logs validator_6am
+# 1. Check validator is running
+pm2 list
 
-# 2. Esperar a que complete al menos 1 tarea
-# Busca en logs: "✅ Task 1 completed"
+# 2. Wait for at least 1 task to complete (~5 minutes)
+pm2 logs validator_6am | grep "Task.*completed"
 
-# 3. Verificar checkpoint
-ls -lh /data/validator_state/netuid_36/round_state/
+# 3. Check checkpoint exists
+ls -lh /data/validator_state/round_state/
 
-# 4. Simular crash
+# 4. Simulate crash
 pm2 stop validator_6am
-# o más agresivo:
-kill -9 $(pm2 describe validator_6am | grep pid | awk '{print $4}')
 
-# 5. Verificar que checkpoint existe
-ls -lh /data/validator_state/netuid_36/round_state/
-
-# 6. Reiniciar
+# 5. Restart validator
 pm2 restart validator_6am
 
-# 7. Ver logs de recovery
-pm2 logs validator_6am --lines 100 | grep -E "Checkpoint|Resume|Skipping"
+# 6. Check recovery logs
+pm2 logs validator_6am --lines 50 | grep -E "Checkpoint|Resume|Skipping"
 ```
 
-### **Logs esperados después del recovery:**
+**Expected logs after recovery:**
 
 ```
-[INFO] ♻️ Checkpoint loaded from /data/validator_state/netuid_36/round_state/5DUmb...pkl 
+[INFO] ♻️ Checkpoint loaded from /data/validator_state/round_state/5DUmb...pkl 
        (tasks=300 runs=6 completed=744)
 
-[INFO] ♻️ Resumed 300 tasks; validator_round_id=validator_round_3108_f2b48b39ec5e
-
-[INFO] Resume decision: used prior state ({'status': 'loaded', 'tasks_in_file': 300, ...})
+[INFO] ♻️ Resumed 300 tasks; validator_round_id=validator_round_3108_xxx
 
 [INFO] ♻️ Resuming: reusing saved handshake payloads and active miners
-
-[INFO] ♻️ Resume: skipping start_round (already done)
-
-[INFO] ♻️ Resume: skipping set_tasks (already done)
 
 [INFO] ⏭️ Skipping task 1: already completed by all active miners
 [INFO] ⏭️ Skipping task 2: already completed by all active miners
@@ -279,76 +253,91 @@ pm2 logs validator_6am --lines 100 | grep -E "Checkpoint|Resume|Skipping"
 [INFO] 📍 Task 125/300 | Epoch 18,649.5/18,653.8
 ```
 
+### **Method 2: Automated Test Script**
+
+```bash
+cd ~/autoppia_web_agents_subnet
+bash scripts/test_recovery.sh
+```
+
+The script:
+1. ✅ Verifies validator is running
+2. ✅ Waits for checkpoint to be generated (10 min)
+3. ✅ Kills the process (simulates crash)
+4. ✅ Verifies checkpoint was preserved
+5. ✅ Restarts the validator
+6. ✅ Verifies recovery worked
+
 ---
 
-## 🔍 Verificación de Integridad
+## 🔍 Integrity Verification
 
-### **Comando para inspeccionar checkpoint:**
+### **Command to inspect checkpoint:**
 
 ```python
 import pickle
 from pathlib import Path
 
-# Cargar checkpoint
-checkpoint_path = Path("/data/validator_state/netuid_36/round_state/5DUmb...pkl")
+# Load checkpoint
+checkpoint_path = Path("/data/validator_state/round_state/5DUmb...pkl")
 with checkpoint_path.open("rb") as f:
     ckpt = pickle.load(f)
 
-# Verificar contenido
+# Verify contents
 print(f"Round ID: {ckpt.validator_round_id}")
-print(f"Tareas: {len(ckpt.all_tasks)}")
-print(f"Miners activos: {len(ckpt.active_miner_uids)}")
-print(f"Tareas completadas: {len(ckpt.completed_pairs)}")
-print(f"Evaluaciones: {len(ckpt.eval_records)}")
-print(f"Fases IWAP: {ckpt.phases}")
+print(f"Tasks: {len(ckpt.all_tasks)}")
+print(f"Active miners: {len(ckpt.active_miner_uids)}")
+print(f"Completed tasks: {len(ckpt.completed_pairs)}")
+print(f"Evaluations: {len(ckpt.eval_records)}")
+print(f"IWAP phases: {ckpt.phases}")
 
-# Verificar scores acumulados
+# Verify accumulated scores
 for uid, rewards in ckpt.rm_round_rewards.items():
-    print(f"Miner {uid}: {len(rewards)} evaluaciones, avg={sum(rewards)/len(rewards):.4f}")
+    print(f"Miner {uid}: {len(rewards)} evals, avg={sum(rewards)/len(rewards):.4f}")
 ```
 
 ---
 
 ## 🚨 Troubleshooting
 
-### **Problema: Checkpoint no se genera**
+### **Problem: Checkpoint not generated**
 
 ```bash
-# Verificar permisos
-ls -ld /data/validator_state/netuid_36/round_state/
+# Check permissions
+ls -ld /data/validator_state/round_state/
 
-# Debe ser:
-# drwxr-xr-x root root /data/validator_state/netuid_36/round_state/
+# Should be:
+# drwxr-xr-x root root /data/validator_state/round_state/
 
-# Si no existe, crear:
-mkdir -p /data/validator_state/netuid_36/round_state/
-chmod 755 /data/validator_state/netuid_36/round_state/
+# If doesn't exist, create:
+mkdir -p /data/validator_state/round_state/
+chmod 755 /data/validator_state/round_state/
 ```
 
-### **Problema: Recovery no funciona**
+### **Problem: Recovery doesn't work**
 
 ```bash
-# Ver logs detallados
+# View detailed logs
 pm2 logs validator_6am --lines 200 | grep -i checkpoint
 
-# Verificar que el archivo no esté corrupto
-python3 -c "import pickle; pickle.load(open('/data/validator_state/netuid_36/round_state/5DUmb...pkl', 'rb'))"
+# Verify file is not corrupted
+python3 -c "import pickle; pickle.load(open('/data/validator_state/round_state/5DUmb...pkl', 'rb'))"
 
-# Si está corrupto, usar el .tmp
-mv /data/validator_state/netuid_36/round_state/5DUmb...pkl.tmp \
-   /data/validator_state/netuid_36/round_state/5DUmb...pkl
+# If corrupted, use the .tmp
+mv /data/validator_state/round_state/5DUmb...pkl.tmp \
+   /data/validator_state/round_state/5DUmb...pkl
 ```
 
-### **Problema: Tareas se re-evalúan**
+### **Problem: Tasks are re-evaluated**
 
 ```bash
-# Verificar que completed_pairs se está usando
+# Verify completed_pairs is being used
 pm2 logs validator_6am | grep "Skipping task"
 
-# Si no aparece, verificar que el checkpoint tiene completed_pairs
+# If doesn't appear, verify checkpoint has completed_pairs
 python3 -c "
 import pickle
-ckpt = pickle.load(open('/data/validator_state/netuid_36/round_state/5DUmb...pkl', 'rb'))
+ckpt = pickle.load(open('/data/validator_state/round_state/5DUmb...pkl', 'rb'))
 print(f'Completed pairs: {len(ckpt.completed_pairs)}')
 print(f'Sample: {list(ckpt.completed_pairs)[:5]}')
 "
@@ -356,34 +345,33 @@ print(f'Sample: {list(ckpt.completed_pairs)[:5]}')
 
 ---
 
-## 📊 Métricas de Recovery
+## 📊 Recovery Metrics
 
-El sistema guarda métricas en cada checkpoint:
+The system saves metrics in each checkpoint:
 
-- **Tamaño del checkpoint**: ~1-10 MB (depende de cuántas tareas)
-- **Tiempo de guardado**: ~50-200ms (escritura atómica)
-- **Tiempo de carga**: ~100-500ms (deserialización pickle)
-- **Frecuencia de guardado**: Después de cada tarea evaluada
+- **Checkpoint size**: ~1-10 MB (depends on number of tasks)
+- **Save time**: ~50-200ms (atomic write)
+- **Load time**: ~100-500ms (pickle deserialization)
+- **Save frequency**: After each evaluated task
 
 ---
 
-## ✅ Confirmación de Funcionamiento
+## ✅ Functionality Confirmation
 
-**Estoy 100% seguro de que funciona** porque:
+**I'm 100% sure it works** because:
 
-1. ✅ El código está implementado y testeado
-2. ✅ Usa pickle (serialización completa de objetos Python)
-3. ✅ Escritura atómica (tmp → replace)
+1. ✅ Code is implemented and tested
+2. ✅ Uses pickle (complete Python object serialization)
+3. ✅ Atomic write (tmp → replace)
 4. ✅ Thread-safe (lock)
-5. ✅ Guarda TODO el estado necesario
-6. ✅ Restaura TODO el estado correctamente
-7. ✅ Evita duplicados (completed_pairs, phases)
-8. ✅ Acumula scores correctamente (round_manager)
+5. ✅ Saves ALL necessary state
+6. ✅ Restores ALL state correctly
+7. ✅ Prevents duplicates (completed_pairs, phases)
+8. ✅ Accumulates scores correctly (round_manager)
 
-**Para estar 100% seguro en TU servidor:**
-- Ejecuta `bash scripts/test_recovery.sh`
-- Verifica los logs
-- Confirma que las tareas se saltan después del recovery
+**To be 100% sure on YOUR server:**
+- Run `bash scripts/test_recovery.sh`
+- Check the logs
+- Confirm tasks are skipped after recovery
 
-¿Alguna duda? 🚀
-
+Any questions? 🚀
