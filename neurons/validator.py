@@ -721,18 +721,28 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                         if hasattr(action, 'url') and action.url and action.type == 'NavigateAction':
                             ColoredLogger.debug(f"     🔗 Navigation URL: {action.url}", ColoredLogger.MAGENTA)
 
-                            # Check seed mismatch
-                            if 'seed=' in action.url:
-                                action_seed = action.url.split('seed=')[1].split('&')[0].split('?')[0]
-                                if action_seed != str(seed):
-                                    ColoredLogger.debug(f"     Seed mismatch: expected {seed}, got {action_seed}", ColoredLogger.GRAY)
+                            # Check seed presence and correctness
+                            if seed is not None:  # Only validate if task has assigned seed
+                                if 'seed=' in action.url:
+                                    action_seed = action.url.split('seed=')[1].split('&')[0].split('?')[0]
+                                    if action_seed != str(seed):
+                                        ColoredLogger.warning(
+                                            f"     ⚠️ Seed MISMATCH: expected seed={seed}, got seed={action_seed} (will score 0)",
+                                            ColoredLogger.YELLOW
+                                        )
+                                    else:
+                                        ColoredLogger.debug(f"     ✅ Seed matches: {action_seed}", ColoredLogger.GREEN)
                                 else:
-                                    ColoredLogger.debug(f"     ✅ Seed matches: {action_seed}", ColoredLogger.GREEN)
+                                    # Seed is missing from NavigateAction URL
+                                    ColoredLogger.warning(
+                                        f"     ⚠️ Seed MISSING: expected seed={seed} in URL (will score 0)",
+                                        ColoredLogger.RED
+                                    )
 
                             # Check URL path discrepancies
                             expected_base = project.frontend_url.rstrip('/')
                             if not action.url.startswith(expected_base):
-                                ColoredLogger.debug(f"     URL mismatch: expected base {expected_base}", ColoredLogger.GRAY)
+                                ColoredLogger.debug(f"     ⚠️ URL base mismatch: expected {expected_base}", ColoredLogger.GRAY)
                                 ColoredLogger.debug(f"     Got URL: {action.url}", ColoredLogger.GRAY)
                             else:
                                 ColoredLogger.debug(f"     ✅ URL base matches: {expected_base}", ColoredLogger.GREEN)
@@ -764,6 +774,12 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     eval_result_display['gif_recording'] = f"<length: {len(eval_result_display['gif_recording'])}>"
 
                 ColoredLogger.debug(f"  📋 Evaluation Result: {eval_result_display}", ColoredLogger.YELLOW)
+
+                # Show error message if present (e.g. seed validation failures)
+                error_msg = evaluation_results[i].get("error_message", "")
+                if error_msg:
+                    ColoredLogger.warning(f"  ⚠️ Error: {error_msg}", ColoredLogger.RED)
+
                 ColoredLogger.debug(f"  🧪 Test Results ({len(test_results_list[i])} tests):", ColoredLogger.CYAN)
                 if test_results_list[i]:
                     for test_idx, test_result in enumerate(test_results_list[i], 1):
