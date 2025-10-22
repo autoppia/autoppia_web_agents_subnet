@@ -147,14 +147,27 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                 )
             )
 
-            # 🔥 Early-round override: assign all weight to UID 5 for rounds 1 and 2
+            # Gate: run only in round 1 at validator start
             try:
-                if round_number_preview in (1, 2):
+                if getattr(self, "forward_count", 0) == 0 and round_number_preview != 1:
+                    ColoredLogger.warning(
+                        f"⏳ Round gating active: will only run in round 1 (current round={round_number_preview}); waiting...",
+                        ColoredLogger.YELLOW,
+                    )
+                    # Back off briefly; the outer loop will retry
+                    await asyncio.sleep(60)
+                    return
+            except Exception:
+                pass
+
+            # 🔥 Early-round override: assign all weight to UID 5 for round 1 only
+            try:
+                if round_number_preview == 1:
                     total_n = int(self.metagraph.n)
                     target_uid = 5
                     if target_uid < total_n:
                         ColoredLogger.warning(
-                            f"🔥 Early-round override: setting all weight to uid={target_uid} for round={round_number_preview}",
+                            f"🔥 Early-round override: setting all weight to uid={target_uid} for round=1",
                             ColoredLogger.YELLOW,
                         )
                         forced = np.zeros(total_n, dtype=np.float32)
@@ -179,6 +192,11 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
         # ═══════════════════════════════════════════════════════
         # PRE-GENERATION: Generate all tasks at the beginning
         # ═══════════════════════════════════════════════════════
+        # Mark that this validator has started its first round
+        try:
+            self.forward_count = int(getattr(self, "forward_count", 0)) + 1
+        except Exception:
+            self.forward_count = 1
         bt.logging.info("🔄 Pre-generating tasks or resuming state")
 
         pre_generation_start = time.time()

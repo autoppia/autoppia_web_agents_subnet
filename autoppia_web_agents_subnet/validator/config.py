@@ -74,8 +74,8 @@ PRE_GENERATED_TASKS = 75             # Generate fewer tasks (≈ 1/4)
 # ⚠️  WARNING: This value MUST be identical across ALL validators
 # ⚠️  DO NOT CHANGE without coordinating with all validator operators
 # ════════════════════════════════════════════════════════════════════════════════
-# Epoch 18,640 = Block 6,710,400 (perfectly aligned with epoch start)
-# Estimated launch: ~22:49 PM, October 21, 2025 (in ~2 hours from 20:50)
+# Epoch-aligned start gate: choose a block strictly greater than 6,712,258 and a multiple of 300
+# Selected: Block 6,712,500 (multiple of 300, +242 blocks over 6,712,258)
 # 
 # 🌐 GLOBAL SYNCHRONIZATION (using modulo):
 # Round boundaries are calculated as: (current_epoch // 20) × 20
@@ -93,7 +93,7 @@ PRE_GENERATED_TASKS = 75             # Generate fewer tasks (≈ 1/4)
 # ════════════════════════════════════════════════════════════════════════════════
 
 TESTING = _str_to_bool(os.getenv("TESTING", "false"))
-DZ_STARTING_BLOCK = 6_710_400 if not TESTING else 0  # Epoch 18,640 - FIXED - DO NOT CHANGE
+DZ_STARTING_BLOCK = 6_712_500 if not TESTING else 0  # Fixed start gate, aligned and > 6,712,258
 
 
 # ╭────────────────────── TESTING Configuration (Commented) ──────────────────────╮
