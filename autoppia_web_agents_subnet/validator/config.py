@@ -108,11 +108,11 @@ PRE_GENERATED_TASKS_PROD = 75             # Generate tasks upfront; loop truncat
 DZ_STARTING_BLOCK_PROD = 6_716_460
 
 # ── Testing defaults (quick dev cycles) ─
-ROUND_SIZE_EPOCHS_TEST = 0.278             # ~20 minutes per round
-SAFETY_BUFFER_EPOCHS_TEST = 0.02           # ~1.44 minutes buffer
+ROUND_SIZE_EPOCHS_TEST = 1.0               # 1 epoch per round in testing
+SAFETY_BUFFER_EPOCHS_TEST = 0.02           # ~1.44 minutes buffer (kept minimal for tests)
 AVG_TASK_DURATION_SECONDS_TEST = 300
 PRE_GENERATED_TASKS_TEST = 4               # Only a few tasks for quick iteration
-DZ_STARTING_BLOCK_TEST = 0                 # Start immediately
+DZ_STARTING_BLOCK_TEST = 6_717_750         # Fixed testing gate as requested
 
 # ── Final values selected by TESTING flag ─
 ROUND_SIZE_EPOCHS = ROUND_SIZE_EPOCHS_TEST if TESTING else ROUND_SIZE_EPOCHS_PROD
@@ -167,11 +167,16 @@ STATS_FILE = Path("coldkey_web_usecase_stats.json")  # snapshot
 SHARE_SCORING = _str_to_bool(os.getenv("SHARE_SCORING", "false"))
 
 # Fraction of the round when we stop sending tasks to reserve time for
-# publishing commitments and fetching others before finalization.
-SHARE_STOP_EVAL_AT_FRACTION = float(os.getenv("SHARE_STOP_EVAL_AT_FRACTION", "0.75"))
+# commitments and settlement (start of the reserved window). Example: 0.75 = stop at 75%.
+STOP_TASKS_AT_FRACTION = float(os.getenv("STOP_TASKS_AT_FRACTION", os.getenv("SHARE_STOP_EVAL_AT_FRACTION", "0.75")))
 
-# Fraction of the round progress at which we publish our snapshot (CID on-chain).
-CONSENSUS_COMMIT_AT_FRACTION = float(os.getenv("CONSENSUS_COMMIT_AT_FRACTION", "0.75"))
+# Fraction (0–1) of the settlement period after which we perform a mid-fetch
+# of commitments/IPFS to cache aggregated scores. Example: 0.5 = halfway point
+# between STOP_TASKS_AT_FRACTION and the end of the round.
+SETTLEMENT_FETCH_FRACTION = float(os.getenv("SETTLEMENT_FETCH_FRACTION", "0.5"))
+
+# Backward-compatible alias (deprecated in code use):
+SHARE_STOP_EVAL_AT_FRACTION = STOP_TASKS_AT_FRACTION
 
 # Minimum validator stake (in TAO) required to publish/participate in aggregation.
 # Use sensible defaults; operators can tune via env.
@@ -195,3 +200,8 @@ IPFS_GATEWAYS = [
         or ""
     ).split(",") if g.strip()
 ]
+
+# In TESTING, allow separate stop fraction via TEST_* env, falling back to prod fraction
+if TESTING:
+    STOP_TASKS_AT_FRACTION = float(os.getenv("TEST_STOP_TASKS_AT_FRACTION", str(STOP_TASKS_AT_FRACTION)))
+    SETTLEMENT_FETCH_FRACTION = float(os.getenv("TEST_SETTLEMENT_FETCH_FRACTION", str(SETTLEMENT_FETCH_FRACTION)))

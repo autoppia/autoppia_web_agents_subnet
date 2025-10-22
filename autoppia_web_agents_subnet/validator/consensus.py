@@ -233,7 +233,6 @@ async def aggregate_scores_from_commitments(
     skipped_wrong_epoch = 0
     skipped_missing_cid = 0
     skipped_low_stake = 0
-    skipped_bad_v = 0
     skipped_ipfs = 0
 
     fetched: list[tuple[str, str, float]] = []  # (hotkey, cid, stake)
@@ -241,10 +240,7 @@ async def aggregate_scores_from_commitments(
     for hk, entry in (commits or {}).items():
         if not isinstance(entry, dict):
             continue
-        # Accept only v4 objects with matching epoch window
-        if int(entry.get("v", 0)) != 4:
-            skipped_bad_v += 1
-            continue
+        # Match by epoch window only; do not filter by validator version or similar
         if int(entry.get("e", -1)) != e or int(entry.get("pe", -1)) != pe:
             skipped_wrong_epoch += 1
             continue
@@ -315,7 +311,7 @@ async def aggregate_scores_from_commitments(
         # Debug: breakdown of skips
         bt.logging.debug(
             f"Skips — wrong_epoch={skipped_wrong_epoch} missing_cid={skipped_missing_cid} "
-            f"low_stake={skipped_low_stake} bad_v={skipped_bad_v} ipfs_fail={skipped_ipfs}"
+            f"low_stake={skipped_low_stake} ipfs_fail={skipped_ipfs}"
         )
         # Debug: show a small sample of aggregated results
         try:
