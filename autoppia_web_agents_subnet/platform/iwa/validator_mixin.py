@@ -166,6 +166,14 @@ class ValidatorPlatformMixin:
                 "agent_runs": {str(uid): run.agent_run_id for uid, run in self.current_agent_runs.items()},
                 "completed": [[uid, task_id] for (uid, task_id) in sorted(self._completed_pairs)],
             }
+            # Persist miner hotkeys at the time of the round to keep UID+hotkey identity stable across restarts
+            miner_hotkeys: Dict[str, Optional[str]] = {}
+            for uid in state["active_miner_uids"]:
+                try:
+                    miner_hotkeys[str(uid)] = self.metagraph.hotkeys[uid]
+                except Exception:
+                    miner_hotkeys[str(uid)] = None
+            state["miner_hotkeys"] = miner_hotkeys
             # Preserve previously stored tasks if not provided
             serialized_tasks: List[Dict[str, Any]] = []
             if tasks is not None:
@@ -211,6 +219,15 @@ class ValidatorPlatformMixin:
             bt.logging.warning(f"Failed to read round state: {exc}")
             return None
 
+        # Guard against resuming with a different validator wallet
+        current_hotkey = getattr(self.wallet.hotkey, "ss58_address", None)
+        saved_hotkey = state.get("validator_hotkey")
+        if saved_hotkey and current_hotkey and saved_hotkey != current_hotkey:
+            bt.logging.warning(
+                "Saved round state belongs to a different validator hotkey; ignoring resume."
+            )
+            return None
+
         self.current_round_id = state.get("validator_round_id")
         self.round_start_timestamp = float(state.get("created_at") or time.time())
 
@@ -229,17 +246,25 @@ class ValidatorPlatformMixin:
         except Exception:
             self.active_miner_uids = []  # type: ignore[attr-defined]
 
-        # Agent runs
+        # Agent runs (prefer miner hotkeys captured at handshake time)
+        saved_miner_hotkeys: Dict[str, Any] = state.get("miner_hotkeys") or {}
         self.current_agent_runs = {}
         for k, run_id in (state.get("agent_runs") or {}).items():
             try:
                 uid = int(k)
             except Exception:
                 continue
+            # Use saved hotkey if present; fallback to current metagraph
+            miner_hotkey = None
             try:
-                miner_hotkey = self.metagraph.hotkeys[uid]
+                miner_hotkey = saved_miner_hotkeys.get(str(uid))
             except Exception:
                 miner_hotkey = None
+            if not miner_hotkey:
+                try:
+                    miner_hotkey = self.metagraph.hotkeys[uid]
+                except Exception:
+                    miner_hotkey = None
             self.current_agent_runs[uid] = iwa_models.AgentRunIWAP(
                 agent_run_id=run_id,
                 validator_round_id=self.current_round_id or "",
@@ -730,21 +755,21 @@ class ValidatorPlatformMixin:
 
             # 🔍 DEBUG: Log actions conversion
             raw_actions = getattr(solution, "actions", []) or []
-            self._log_iwap_phase("Phase 4", f"🔧 Converting {len(raw_actions)} actions for miner_uid={miner_uid}")
+            self._log_iwap_phase("Phase 4", f"🔧 Converting {len(raw_actions)} actions for miner_uid={miner_uid}", level="debug")
 
             for action_idx, action in enumerate(raw_actions):
                 if hasattr(action, "model_dump"):
                     action_dict = action.model_dump(mode="json", exclude_none=True)
                     actions_payload.append(action_dict)
-                    self._log_iwap_phase("Phase 4", f"  Action {action_idx} (model_dump): {action_dict}")
+                    self._log_iwap_phase("Phase 4", f"  Action {action_idx} (model_dump): {action_dict}", level="debug")
                 elif hasattr(action, "__dict__"):
                     action_dict = dict(action.__dict__)
                     actions_payload.append(action_dict)
-                    self._log_iwap_phase("Phase 4", f"  Action {action_idx} (__dict__): {action_dict}")
+                    self._log_iwap_phase("Phase 4", f"  Action {action_idx} (__dict__): {action_dict}", level="debug")
                 else:
                     action_dict = {"type": getattr(action, "type", "unknown")}
                     actions_payload.append(action_dict)
-                    self._log_iwap_phase("Phase 4", f"  Action {action_idx} (fallback): {action_dict}")
+                    self._log_iwap_phase("Phase 4", f"  Action {action_idx} (fallback): {action_dict}", level="debug")
 
             task_solution_id = iwa_main.generate_task_solution_id(task_id, miner_uid)
             evaluation_id = iwa_main.generate_evaluation_id(task_id, miner_uid)
@@ -815,6 +840,7 @@ class ValidatorPlatformMixin:
                 self._log_iwap_phase(
                     "Phase 4",
                     f"🎬 GIF detected: {payload_size} bytes - will upload after creating evaluation",
+                    level="debug",
                 )
                 gif_to_upload = gif_payload
                 # Don't include GIF in evaluation payload - will upload separately
@@ -822,8 +848,8 @@ class ValidatorPlatformMixin:
             else:
                 self._log_iwap_phase(
                     "Phase 4",
-                    f"⚠️  No GIF payload received for evaluation_id={evaluation_id}",
-                    level="warning",
+                    f"No GIF payload received for evaluation_id={evaluation_id}",
+                    level="debug",
                 )
 
             # Detailed payload will be logged in main.py add_evaluation method

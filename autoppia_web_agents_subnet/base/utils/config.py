@@ -157,7 +157,7 @@ def add_miner_args(cls, parser):
         "--blacklist.minimum_stake_requirement",
         type=int,
         help="Minimum amount of stake needed to send request to miners.",
-        default=1_000,
+        default=10_000,
     )
 
     parser.add_argument(

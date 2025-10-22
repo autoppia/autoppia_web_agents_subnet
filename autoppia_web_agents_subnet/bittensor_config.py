@@ -82,7 +82,7 @@ def add_miner_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--blacklist.force_validator_permit", action="store_true", default=True, help="Force incoming requests to have a validator permit.")
     parser.add_argument("--no-blacklist.force_validator_permit", action="store_false", dest="blacklist.force_validator_permit", help="Do NOT force incoming requests to have a validator permit.")
 
-    parser.add_argument("--blacklist.minimum_stake_requirement", type=int, default=1_000, help="Minimum stake required to send requests to miners.")
+    parser.add_argument("--blacklist.minimum_stake_requirement", type=int, default=10_000, help="Minimum stake required to send requests to miners.")
     parser.add_argument("--blacklist.allow_non_registered", action="store_true", default=False, help="Accept queries from non-registered entities (dangerous).")
 
 

@@ -243,16 +243,16 @@ class RoundManager:
         }
 
     def log_calculation_summary(self):
-        """Log calculation summary for debugging."""
-        ColoredLogger.debug("📊 Round Manager Configuration:", ColoredLogger.CYAN)
-        ColoredLogger.debug(f"   Round size: {self.round_size_epochs} epochs", ColoredLogger.CYAN)
-        ColoredLogger.debug(f"   Safety buffer: {self.safety_buffer_epochs} epochs", ColoredLogger.CYAN)
-        ColoredLogger.debug(f"   Avg task duration: {self.avg_task_duration_seconds}s", ColoredLogger.CYAN)
-        ColoredLogger.debug(f"   Blocks per epoch: {self.BLOCKS_PER_EPOCH}", ColoredLogger.CYAN)
-        ColoredLogger.debug(f"   Seconds per block: {self.SECONDS_PER_BLOCK}s", ColoredLogger.CYAN)
-        ColoredLogger.debug(f"   Round block length: {self.ROUND_BLOCK_LENGTH}", ColoredLogger.CYAN)
+        """Log concise configuration summary at INFO level."""
+        ColoredLogger.info("📊 Round Manager Configuration:", ColoredLogger.CYAN)
+        ColoredLogger.info(f"   Round size: {self.round_size_epochs} epochs", ColoredLogger.CYAN)
+        ColoredLogger.info(f"   Safety buffer: {self.safety_buffer_epochs} epochs", ColoredLogger.CYAN)
+        ColoredLogger.info(f"   Avg task duration: {self.avg_task_duration_seconds}s", ColoredLogger.CYAN)
+        ColoredLogger.info(f"   Blocks per epoch: {self.BLOCKS_PER_EPOCH}", ColoredLogger.CYAN)
+        ColoredLogger.info(f"   Seconds per block: {self.SECONDS_PER_BLOCK}s", ColoredLogger.CYAN)
+        ColoredLogger.info(f"   Round block length: {self.ROUND_BLOCK_LENGTH}", ColoredLogger.CYAN)
         if self.minimum_start_block is not None:
-            ColoredLogger.debug(
+            ColoredLogger.info(
                 f"   Minimum start block: {self.minimum_start_block} (rounds allowed > this block)",
                 ColoredLogger.CYAN,
             )

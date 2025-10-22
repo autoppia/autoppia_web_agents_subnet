@@ -216,26 +216,26 @@ class IWAPClient:
             except Exception as e:
                 logger.warning(f"⚠️  Failed to decode GIF for multipart: {e}")
 
-        # 🔍 DEBUG: Log complete payload before sending
-        bt.logging.info("=" * 80)
-        bt.logging.info("📤 COMPLETE PAYLOAD BEFORE SENDING TO API")
-        bt.logging.info("=" * 80)
-        bt.logging.info(f"📍 Endpoint: POST /api/v1/validator-rounds/{validator_round_id}/agent-runs/{agent_run_id}/evaluations")
-        bt.logging.info("")
-        bt.logging.info("📄 FULL JSON PAYLOAD:")
-        try:
-            payload_str = json.dumps(_sanitize_json(json_data), indent=2, ensure_ascii=False)
-        except Exception:
-            # Last-resort fallback to avoid crashing logging on non-serializable objects
-            payload_str = json.dumps({"error": "non-serializable-payload"})
-        for line in payload_str.split('\n'):
-            bt.logging.info(line)
-        bt.logging.info("")
-        if files:
-            bt.logging.info("📁 MULTIPART FILES:")
-            for key, file_data in files.items():
-                bt.logging.info(f"   - {key}: {len(file_data)} bytes (binary GIF)")
-        bt.logging.info("=" * 80)
+        # Payload preview (gated by env)
+        if os.getenv("IWAP_LOG_PAYLOADS", "false").strip().lower() in {"1", "true", "yes", "on"}:
+            bt.logging.debug("=" * 80)
+            bt.logging.debug("📤 COMPLETE PAYLOAD BEFORE SENDING TO API")
+            bt.logging.debug("=" * 80)
+            bt.logging.debug(f"📍 Endpoint: POST /api/v1/validator-rounds/{validator_round_id}/agent-runs/{agent_run_id}/evaluations")
+            bt.logging.debug("")
+            bt.logging.debug("📄 FULL JSON PAYLOAD:")
+            try:
+                payload_str = json.dumps(_sanitize_json(json_data), indent=2, ensure_ascii=False)
+            except Exception:
+                payload_str = json.dumps({"error": "non-serializable-payload"})
+            for line in payload_str.split('\n'):
+                bt.logging.debug(line)
+            bt.logging.debug("")
+            if files:
+                bt.logging.debug("📁 MULTIPART FILES:")
+                for key, file_data in files.items():
+                    bt.logging.debug(f"   - {key}: {len(file_data)} bytes (binary GIF)")
+            bt.logging.debug("=" * 80)
 
         logger.info(
             "IWAP add_evaluation prepared for validator_round_id=%s agent_run_id=%s task_solution_id=%s",
@@ -342,17 +342,18 @@ class IWAPClient:
             request.headers.update(auth_headers)
         target_url = str(request.url)
 
-        # 🔍 DEBUG: Log HTTP request details
-        logger.info("🌐 HTTP REQUEST DETAILS:")
-        logger.info(f"   Method: POST")
-        logger.info(f"   URL: {target_url}")
-        logger.info(f"   Context: {context}")
-        logger.info(f"   Headers: {dict(request.headers)}")
-        try:
-            logger.info(f"   Payload keys: {list(sanitized_payload.keys())}")
-            logger.info(f"   Payload size: {len(str(sanitized_payload))} chars")
-        except Exception:
-            logger.info("   Payload: <unprintable>")
+        # HTTP request details (gated by env)
+        if os.getenv("IWAP_HTTP_DEBUG", "false").strip().lower() in {"1", "true", "yes", "on"}:
+            logger.debug("🌐 HTTP REQUEST DETAILS:")
+            logger.debug(f"   Method: POST")
+            logger.debug(f"   URL: {target_url}")
+            logger.debug(f"   Context: {context}")
+            logger.debug(f"   Headers: {dict(request.headers)}")
+            try:
+                logger.debug(f"   Payload keys: {list(sanitized_payload.keys())}")
+                logger.debug(f"   Payload size: {len(str(sanitized_payload))} chars")
+            except Exception:
+                logger.debug("   Payload: <unprintable>")
 
         try:
             logger.info("IWAP %s POST %s started", context, target_url)
@@ -364,11 +365,11 @@ class IWAPClient:
                 target_url,
                 response.status_code,
             )
-            # 🔍 DEBUG: Log response details
-            logger.info(f"   Response status: {response.status_code}")
-            logger.info(f"   Response headers: {dict(response.headers)}")
-            if response.text:
-                logger.info(f"   Response body (first 500 chars): {response.text[:500]}")
+            if os.getenv("IWAP_HTTP_DEBUG", "false").strip().lower() in {"1", "true", "yes", "on"}:
+                logger.debug(f"   Response status: {response.status_code}")
+                logger.debug(f"   Response headers: {dict(response.headers)}")
+                if response.text:
+                    logger.debug(f"   Response body (first 500 chars): {response.text[:500]}")
         except httpx.HTTPStatusError as exc:
             body = exc.response.text
             logger.error("IWAP %s POST %s failed (%s): %s", context, target_url, exc.response.status_code, body)
@@ -426,17 +427,17 @@ class IWAPClient:
 
         target_url = str(request.url)
 
-        # 🔍 DEBUG: Log multipart request details
-        logger.info("🌐 MULTIPART REQUEST DETAILS:")
-        logger.info(f"   Method: POST")
-        logger.info(f"   URL: {target_url}")
-        logger.info(f"   Context: {context}")
-        logger.info(f"   Content-Type: multipart/form-data; boundary={boundary}")
-        logger.info(f"   Data fields: {list(sanitized_data.keys())}")
-        logger.info(f"   File fields: {list(files.keys())}")
-        logger.info(f"   Total body size: {len(body)} bytes")
-        for key, file_data in files.items():
-            logger.info(f"   File {key}: {len(file_data)} bytes")
+        if os.getenv("IWAP_HTTP_DEBUG", "false").strip().lower() in {"1", "true", "yes", "on"}:
+            logger.debug("🌐 MULTIPART REQUEST DETAILS:")
+            logger.debug(f"   Method: POST")
+            logger.debug(f"   URL: {target_url}")
+            logger.debug(f"   Context: {context}")
+            logger.debug(f"   Content-Type: multipart/form-data; boundary={boundary}")
+            logger.debug(f"   Data fields: {list(sanitized_data.keys())}")
+            logger.debug(f"   File fields: {list(files.keys())}")
+            logger.debug(f"   Total body size: {len(body)} bytes")
+            for key, file_data in files.items():
+                logger.debug(f"   File {key}: {len(file_data)} bytes")
 
         try:
             logger.info("IWAP %s POST %s started (multipart)", context, target_url)
@@ -448,11 +449,11 @@ class IWAPClient:
                 target_url,
                 response.status_code,
             )
-            # 🔍 DEBUG: Log response details
-            logger.info(f"   Response status: {response.status_code}")
-            logger.info(f"   Response headers: {dict(response.headers)}")
-            if response.text:
-                logger.info(f"   Response body (first 500 chars): {response.text[:500]}")
+            if os.getenv("IWAP_HTTP_DEBUG", "false").strip().lower() in {"1", "true", "yes", "on"}:
+                logger.debug(f"   Response status: {response.status_code}")
+                logger.debug(f"   Response headers: {dict(response.headers)}")
+                if response.text:
+                    logger.debug(f"   Response body (first 500 chars): {response.text[:500]}")
         except httpx.HTTPStatusError as exc:
             body = exc.response.text
             logger.error("IWAP %s POST %s failed (%s): %s", context, target_url, exc.response.status_code, body)

@@ -131,9 +131,9 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
         # ═══════════════════════════════════════════════════════
         # PRE-GENERATION: Generate all tasks at the beginning
         # ═══════════════════════════════════════════════════════
-        bt.logging.warning("")
-        bt.logging.warning("🔄 PRE-GENERATING TASKS / RESUME")
-        bt.logging.warning("=" * 80)
+        bt.logging.info("")
+        bt.logging.info("🔄 PRE-GENERATING TASKS / RESUME")
+        bt.logging.info("=" * 80)
 
         pre_generation_start = time.time()
         all_tasks: list[TaskWithProject] = []
