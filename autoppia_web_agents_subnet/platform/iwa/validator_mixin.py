@@ -5,6 +5,7 @@ import json
 import math
 import time
 from binascii import Error as BinasciiError
+import os
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -150,11 +151,22 @@ class ValidatorPlatformMixin:
     # ──────────────────────────────────────────────────────────────────────────
     @property
     def _round_state_path(self) -> Path:
-        # Stable path independent of CWD: ~/.autoppia/state/<netuid>/<hotkey>.json
-        try:
-            base = Path.home() / ".autoppia" / "state"
-        except Exception:
-            base = Path(".autoppia_state_fallback")
+        # Stable path independent of CWD with ENV override support:
+        #   - AUTOPPIA_ROUND_STATE_DIR (preferred)
+        #   - AUTOPPIA_STATE_DIR (fallback)
+        # Default: ~/.autoppia/state
+        env_base: str | None = os.getenv("AUTOPPIA_ROUND_STATE_DIR") or os.getenv("AUTOPPIA_STATE_DIR")
+        if env_base:
+            try:
+                # Expand ~ and environment variables if present
+                expanded = os.path.expanduser(env_base)
+                base = Path(expanded)
+            except Exception:
+                base = Path(env_base)
+        else:
+            # Default to a Docker/host-mounted volume under /data for durability
+            # e.g., /data/autoppia/state/netuid_<n>/<hotkey>.json
+            base = Path("/data") / "autoppia" / "state"
 
         # Determine netuid and hotkey, fall back to placeholders
         try:

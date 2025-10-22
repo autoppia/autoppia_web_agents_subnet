@@ -146,6 +146,33 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                     mins=minutes_to_target,
                 )
             )
+
+            # 🔥 Early-round override: assign all weight to UID 5 for rounds 1 and 2
+            try:
+                if round_number_preview in (1, 2):
+                    total_n = int(self.metagraph.n)
+                    target_uid = 5
+                    if target_uid < total_n:
+                        ColoredLogger.warning(
+                            f"🔥 Early-round override: setting all weight to uid={target_uid} for round={round_number_preview}",
+                            ColoredLogger.YELLOW,
+                        )
+                        forced = np.zeros(total_n, dtype=np.float32)
+                        forced[target_uid] = 1.0
+                        # Directly set the internal scores vector to reflect the forced distribution
+                        self.scores = forced
+                        # Push weights to chain respecting config flags
+                        self._maybe_set_weights()
+                        ColoredLogger.success(
+                            f"✅ Weights overridden to uid={target_uid} (n={total_n})", ColoredLogger.GREEN
+                        )
+                    else:
+                        ColoredLogger.error(
+                            f"🔥 Early-round override requested but uid={target_uid} >= metagraph.n={total_n}; skipping",
+                            ColoredLogger.RED,
+                        )
+            except Exception as e:
+                bt.logging.warning(f"Early-round override failed: {e}")
         except Exception as e:
             bt.logging.debug(f"Round status preview failed: {e}")
 
@@ -449,6 +476,32 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                 f"remaining {wait_info['minutes_remaining']:.1f}m",
                 ColoredLogger.CYAN,
             )
+
+            # Resume optimization: if every active miner already completed this task, skip re-sending
+            try:
+                # Find the IWAP task_id for this index (sequence)
+                target_task_id = None
+                for _tid, _payload in (self.current_round_tasks or {}).items():
+                    if getattr(_payload, "sequence", None) == task_index:
+                        target_task_id = _tid
+                        break
+                if target_task_id is None:
+                    # Fallback to Task object's id if present
+                    target_task_id = getattr(all_tasks[task_index].task, "id", None)
+
+                if target_task_id is not None and getattr(self, "_completed_pairs", None) is not None and self.active_miner_uids:
+                    all_done = all((uid, target_task_id) in self._completed_pairs for uid in self.active_miner_uids)  # type: ignore[attr-defined]
+                    if all_done:
+                        ColoredLogger.info(
+                            f"⏭️ Skipping task {task_index + 1}: already completed by all active miners",
+                            ColoredLogger.YELLOW,
+                        )
+                        tasks_completed += 1
+                        task_index += 1
+                        continue
+            except Exception:
+                # Never block the round on resume optimizations
+                pass
 
             # Execute single task
             task_sent = await self._send_task_and_evaluate(all_tasks[task_index], task_index)
