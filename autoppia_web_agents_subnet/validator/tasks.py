@@ -14,7 +14,7 @@ import bittensor as bt
 from autoppia_web_agents_subnet.validator.models import TaskWithProject, ProjectTasks
 from autoppia_web_agents_subnet.utils.random import split_tasks_evenly
 from autoppia_web_agents_subnet.protocol import TaskSynapse
-from autoppia_web_agents_subnet.validator.config import MAX_ACTIONS_LENGTH, TIMEOUT, ENABLE_DYNAMIC_HTML, PRE_GENERATED_TASKS
+from autoppia_web_agents_subnet.validator.config import MAX_ACTIONS_LENGTH, TIMEOUT, ENABLE_DYNAMIC_HTML
 
 # IWA (module-wrapped) imports
 from autoppia_iwa.src.demo_webs.config import demo_web_projects
@@ -67,7 +67,7 @@ async def get_task_collection_interleaved(
         List[TaskWithProject]: Flat list of tasks already interleaved across projects
     """
     num_projects = len(demo_web_projects)
-    total_prompts = PRE_GENERATED_TASKS  # Use config value instead of num_projects
+    total_prompts = num_projects
 
     if total_prompts <= 0:
         bt.logging.warning("[tasks] total_prompts <= 0 -> returning empty list")
