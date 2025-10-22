@@ -150,8 +150,29 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                     bt.logging.info(
                         f"♻️ Resumed {len(all_tasks)} tasks; validator_round_id={self.current_round_id}"
                     )
+                else:
+                    bt.logging.warning(
+                        "Resume found state file but contained 0 tasks; generating new tasks."
+                    )
             except Exception as e:
-                bt.logging.debug(f"Failed to restore tasks from resume state: {e}")
+                bt.logging.warning(f"Resume failed to restore tasks from state file: {e}")
+                # fall through to fresh generation
+
+        # Emit a concise decision line for resume diagnostics
+        try:
+            info = getattr(self, "_last_resume_info", None)
+            if resumed:
+                bt.logging.info(
+                    "Resume decision: used prior state (%s)",
+                    info or {"status": "loaded"},
+                )
+            else:
+                bt.logging.info(
+                    "Resume decision: fresh start (%s)",
+                    info or {"status": "unknown", "reason": "no state"},
+                )
+        except Exception:
+            pass
 
         if not resumed:
             # Fresh generation path

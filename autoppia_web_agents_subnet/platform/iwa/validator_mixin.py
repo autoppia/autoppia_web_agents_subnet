@@ -50,6 +50,8 @@ class ValidatorPlatformMixin:
         self.agent_run_accumulators: Dict[int, Dict[str, float]] = {}
         # Track completed (miner_uid, task_id) to avoid duplicates on resume
         self._completed_pairs: Set[Tuple[int, str]] = set()
+        # Last resume decision details for diagnostics
+        self._last_resume_info: Dict[str, Any] = {"status": "init", "reason": ""}
 
     def _log_iwap_phase(
         self,
@@ -211,12 +213,27 @@ class ValidatorPlatformMixin:
 
     def _load_round_state(self) -> Optional[Dict[str, Any]]:
         if not self._round_state_path.exists():
+            try:
+                import bittensor as bt
+                bt.logging.info(
+                    f"Resume skipped: state file not found at {self._round_state_path.resolve()}"
+                )
+            except Exception:
+                pass
+            self._last_resume_info = {
+                "status": "skipped",
+                "reason": f"state file not found at {self._round_state_path}",
+            }
             return None
         try:
             with self._round_state_path.open("r", encoding="utf-8") as fh:
                 state = json.load(fh)
         except Exception as exc:
             bt.logging.warning(f"Failed to read round state: {exc}")
+            self._last_resume_info = {
+                "status": "skipped",
+                "reason": f"failed to read state file: {exc}",
+            }
             return None
 
         # Guard against resuming with a different validator wallet
@@ -226,6 +243,12 @@ class ValidatorPlatformMixin:
             bt.logging.warning(
                 "Saved round state belongs to a different validator hotkey; ignoring resume."
             )
+            self._last_resume_info = {
+                "status": "skipped",
+                "reason": "validator hotkey mismatch",
+                "saved_hotkey": saved_hotkey,
+                "current_hotkey": current_hotkey,
+            }
             return None
 
         self.current_round_id = state.get("validator_round_id")
@@ -287,7 +310,26 @@ class ValidatorPlatformMixin:
                     self._completed_pairs.add((int(pair[0]), str(pair[1])))
                 except Exception:
                     continue
-
+        # Record resume summary for diagnostics
+        try:
+            import bittensor as bt
+            bt.logging.info(
+                "Resume candidate loaded | tasks_in_file=%s active_miner_uids=%s agent_runs=%s completed_pairs=%s",
+                len((state.get("tasks") or [])),
+                len(getattr(self, "active_miner_uids", []) or []),
+                len(self.current_agent_runs or {}),
+                len(self._completed_pairs),
+            )
+        except Exception:
+            pass
+        self._last_resume_info = {
+            "status": "loaded",
+            "reason": "state file parsed",
+            "tasks_in_file": len((state.get("tasks") or [])),
+            "active_miners": len(getattr(self, "active_miner_uids", []) or []),
+            "agent_runs": len(self.current_agent_runs or {}),
+            "completed_pairs": len(self._completed_pairs),
+        }
         return state
 
     def _remove_round_state(self) -> None:
