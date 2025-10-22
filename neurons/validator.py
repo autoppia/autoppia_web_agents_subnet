@@ -25,6 +25,9 @@ from autoppia_web_agents_subnet.validator.config import (
     VALIDATOR_IMAGE,
     DZ_STARTING_BLOCK,
     MAX_AGENT_NAME_LENGTH,
+    SHARE_SCORING,
+    SHARE_STOP_EVAL_AT_FRACTION,
+    CONSENSUS_COMMIT_AT_FRACTION,
 )
 from autoppia_web_agents_subnet.validator.tasks import get_task_collection_interleaved, collect_task_solutions_and_execution_times
 from autoppia_iwa.src.demo_webs.classes import WebProject
@@ -41,10 +44,15 @@ from autoppia_web_agents_subnet.validator.models import TaskWithProject
 from autoppia_web_agents_subnet.validator.round_manager import RoundManager
 from autoppia_web_agents_subnet.validator.visualization.round_table import render_round_summary_table
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
-from autoppia_web_agents_subnet.platform.iwa.validator_mixin import ValidatorPlatformMixin
+from autoppia_web_agents_subnet.platform.validator_mixin import ValidatorPlatformMixin
+from autoppia_web_agents_subnet.platform.round_phases import RoundPhaseValidatorMixin
+from autoppia_web_agents_subnet.validator.consensus import (
+    publish_round_snapshot,
+    aggregate_scores_from_commitments,
+)
 
 
-class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
+class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorNeuron):
     def __init__(self, config=None):
         if not VALIDATOR_NAME or not VALIDATOR_IMAGE:
             bt.logging.error("VALIDATOR_NAME and VALIDATOR_IMAGE must be set in the environment before starting the validator.")
@@ -71,6 +79,8 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
 
         # Burn-on-round-1 guard to avoid repeated chain sets
         self._burn_applied: bool = False
+        # Consensus sharing
+        self._consensus_published: bool = False
 
         # ⭐ Round system components
         self.round_manager = RoundManager(
@@ -150,24 +160,7 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                 )
             )
 
-            # 🔥 Round 1: copy burn-all logic exactly and do nothing else
-            try:
-                if round_number_preview == 1:
-                    # Round 1 policy: burn all weights to UID 0
-                    ColoredLogger.warning("🔥 Round 1: burning all weights to UID 5", ColoredLogger.YELLOW)
-
-                    # Create burn weights: UID 0 = 1.0, all others = 0.0
-                    burn_weights = np.zeros(self.metagraph.n, dtype=np.float32)
-                    burn_weights[5] = 1.0  # UID 0 gets all weight (burn)
-
-                    # Set these burn weights directly
-                    self.scores = burn_weights
-                    self.set_weights()
-
-                    ColoredLogger.success("✅ Burn complete (weight to UID 5)", ColoredLogger.RED)
-                    ColoredLogger.info(f"Tasks attempted: {0}", ColoredLogger.RED)
-            except Exception as e:
-                bt.logging.warning(f"Early-round override failed: {e}")
+            # Removed: Round 1 burn-all override
         except Exception as e:
             bt.logging.debug(f"Round status preview failed: {e}")
 
@@ -189,11 +182,9 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
         state = self._load_round_state()
         if state and state.get("validator_round_id"):
             try:
-                saved_tasks = state.get("tasks") or []
-                for item in saved_tasks:
-                    project = WebProject(**(item.get("project") or {}))
-                    task = Task.deserialize(item.get("task") or {})
-                    all_tasks.append(TaskWithProject(project=project, task=task))
+                cached = list(getattr(self, "_all_tasks_cache", []) or [])
+                if cached:
+                    all_tasks.extend(cached)
                 if all_tasks:
                     self.current_round_id = state["validator_round_id"]
                     resumed = True
@@ -202,10 +193,10 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                     )
                 else:
                     bt.logging.warning(
-                        "Resume found state file but contained 0 tasks; generating new tasks."
+                        "Resume checkpoint had 0 tasks; generating new tasks."
                     )
             except Exception as e:
-                bt.logging.warning(f"Resume failed to restore tasks from state file: {e}")
+                bt.logging.warning(f"Resume failed to restore tasks from checkpoint: {e}")
                 # fall through to fresh generation
 
         # Emit a concise decision line for resume diagnostics
@@ -509,6 +500,12 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                 tasks_completed += 1
             task_index += 1
 
+            # Persist checkpoint after each task iteration (covers any missed per-miner writes)
+            try:
+                self.state_manager.save_checkpoint()
+            except Exception:
+                pass
+
             # Dynamic check: should we send another task?
             # Refresh block height after evaluation to get an accurate time window
             current_block = self.metagraph.block.item()
@@ -526,12 +523,38 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                     "   Waiting for target epoch to set weights...",
                     ColoredLogger.YELLOW,
                 )
+                # Save state just before entering wait phase
+                try:
+                    self.state_manager.save_checkpoint()
+                except Exception:
+                    pass
+                # Try to publish commitments if sharing and not yet published.
+                if SHARE_SCORING and not self._consensus_published:
+                    try:
+                        round_number = await self.round_manager.calculate_round(current_block)
+                        await publish_round_snapshot(
+                            validator=self,
+                            round_number=round_number,
+                            tasks_completed=tasks_completed,
+                        )
+                        self._consensus_published = True
+                        try:
+                            self.state_manager.save_checkpoint()
+                        except Exception:
+                            pass
+                    except Exception as e:
+                        bt.logging.warning(f"Consensus publish (buffer) failed: {e}")
                 break
 
         # ═══════════════════════════════════════════════════════
         # WAIT FOR TARGET EPOCH: Wait until the round ends
         # ═══════════════════════════════════════════════════════
         if tasks_completed < len(all_tasks):
+            # Ensure we persist the checkpoint right before the wait window
+            try:
+                self.state_manager.save_checkpoint()
+            except Exception:
+                pass
             await self._wait_for_target_epoch()
 
         # ═══════════════════════════════════════════════════════
@@ -797,6 +820,23 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
             blocks_done = max(current_block - round_start_block, 0)
             progress = min(max((blocks_done / blocks_total) * 100.0, 0.0), 100.0)
 
+            # Publish snapshot once progress reaches commit fraction (if not already)
+            try:
+                progress_frac = min(max((blocks_done / blocks_total), 0.0), 1.0)
+            except Exception:
+                progress_frac = 0.0
+            if SHARE_SCORING and (not self._consensus_published) and (progress_frac >= float(CONSENSUS_COMMIT_AT_FRACTION)):
+                try:
+                    round_number = await self.round_manager.calculate_round(current_block)
+                    await publish_round_snapshot(
+                        validator=self,
+                        round_number=round_number,
+                        tasks_completed=0,  # tasks_completed not tracked here; publish anyway
+                    )
+                    self._consensus_published = True
+                except Exception as e:
+                    bt.logging.warning(f"Consensus publish (wait) failed: {e}")
+
             # Log progress every 30 seconds
             if time.time() - last_log_time >= 30:
                 # Concise status line
@@ -814,7 +854,8 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
 
     async def _calculate_final_weights(self, tasks_completed: int):
         """Calculate averages, apply WTA, set weights"""
-        ColoredLogger.info("🏁 Calculating final weights", ColoredLogger.PURPLE)
+        ColoredLogger.info("🏁 Phase: SetWeights — Calculating final weights", ColoredLogger.PURPLE)
+        bt.logging.info(f"Shared scoring active: {str(SHARE_SCORING).lower()}")
 
         # Check if no miners responded to handshake - BURN ALL WEIGHTS
         if not self.active_miner_uids:
@@ -834,6 +875,29 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
 
         # Calculate average scores using round_manager
         avg_rewards = self.round_manager.get_average_rewards()
+
+        # If sharing enabled, attempt to aggregate across validators via commitments/IPFS
+        if SHARE_SCORING:
+            try:
+                boundaries = self.round_manager.get_current_boundaries()
+                bt.logging.info(
+                    "🤝 Consensus aggregation — fetching commitments and IPFS payloads"
+                )
+                agg = await aggregate_scores_from_commitments(
+                    validator=self,
+                    start_epoch=boundaries['round_start_epoch'],
+                    target_epoch=boundaries['target_epoch'],
+                )
+                if agg:
+                    ColoredLogger.info(
+                        f"🤝 Using aggregated scores from commitments ({len(agg)} miners)",
+                        ColoredLogger.CYAN,
+                    )
+                    avg_rewards = agg
+                else:
+                    ColoredLogger.warning("No aggregated scores available; using local averages.", ColoredLogger.YELLOW)
+            except Exception as e:
+                bt.logging.warning(f"Aggregation failed; using local averages: {e}")
 
         # Log round summary
         self.round_manager.log_round_summary()
@@ -912,3 +976,30 @@ if __name__ == "__main__":
         while True:
             bt.logging.info(f"Validator running... {time.time()}")
             time.sleep(30)
+            # Stop evaluation at configured fraction to reserve time for commitments/aggregation
+            try:
+                round_start_block = boundaries['round_start_block']
+                target_block = boundaries['target_block']
+                blocks_total = max(target_block - round_start_block, 1)
+                blocks_done = max(current_block - round_start_block, 0)
+                progress_frac = min(max(blocks_done / blocks_total, 0.0), 1.0)
+            except Exception:
+                progress_frac = 0.0
+
+            if SHARE_SCORING and (progress_frac >= float(SHARE_STOP_EVAL_AT_FRACTION)) and not self._consensus_published:
+                ColoredLogger.warning(
+                    f"🛑 Reached stop fraction {SHARE_STOP_EVAL_AT_FRACTION:.2f}; halting task dispatch to publish commitments.",
+                    ColoredLogger.YELLOW,
+                )
+                # Publish snapshot before exiting loop
+                try:
+                    round_number = await self.round_manager.calculate_round(current_block)
+                    await publish_round_snapshot(
+                        validator=self,
+                        round_number=round_number,
+                        tasks_completed=tasks_completed,
+                    )
+                    self._consensus_published = True
+                except Exception as e:
+                    bt.logging.warning(f"Consensus publish failed: {e}")
+                break

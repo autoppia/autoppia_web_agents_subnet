@@ -22,8 +22,9 @@ from autoppia_web_agents_subnet.validator.config import (
     VALIDATOR_IMAGE,
     VALIDATOR_AUTH_MESSAGE,
 )
-from autoppia_web_agents_subnet.platform.iwa import models as iwa_models
-from autoppia_web_agents_subnet.platform.iwa import main as iwa_main
+from autoppia_web_agents_subnet.platform import models as iwa_models
+from autoppia_web_agents_subnet.platform import main as iwa_main
+from autoppia_web_agents_subnet.platform.state_manager import RoundStateManager
 from autoppia_iwa.src.demo_webs.classes import WebProject
 from autoppia_iwa.src.data_generation.domain.classes import Task
 
@@ -58,12 +59,8 @@ class ValidatorPlatformMixin:
         self._eval_records: List[Dict[str, Any]] = []
         # Phase flags for IWAP steps (p1=start_round, p2=set_tasks)
         self._phases: Dict[str, Any] = {"p1_done": False, "p2_done": False}
-        # Cache serialized tasks so later incremental saves can persist even if tasks param omitted
-        self._cached_tasks_serialized: Optional[List[Dict[str, Any]]] = None
-        # State file I/O lock to prevent concurrent clobbering
-        self._state_lock: threading.Lock = threading.Lock()
-        # Optional override so we save back to the same base used when loading
-        self._state_base_override: Optional[Path] = None
+        # Pickle-based checkpoint manager
+        self.state_manager = RoundStateManager(self)
 
     def _log_iwap_phase(
         self,
@@ -154,532 +151,38 @@ class ValidatorPlatformMixin:
         )
 
     # ──────────────────────────────────────────────────────────────────────────
-    # Crash-resume helpers: state file management
+    # Crash-resume helpers now routed to RoundStateManager
     # ──────────────────────────────────────────────────────────────────────────
-    @property
-    def _round_state_path(self) -> Path:
-        """Resolve the on-disk path for the crash-resume state JSON.
-
-        Priority order for the state base directory (first that applies):
-        1) Env var IWA_STATE_DIR (absolute or relative)
-        2) '/data/state' if exists, else '/data' (we'll create '/data/state')
-        3) Repository local '<repo>/data/state' if a 'data' dir exists in parents
-        4) CWD fallback '<cwd>/data/state'
-        """
-        # 0) If we already picked a base during load, reuse it
-        if getattr(self, "_state_base_override", None) is not None:
-            chosen_base = self._state_base_override  # type: ignore[assignment]
-        else:
-            candidates: List[Path] = []
-
-            # 1) Explicit env
-            env_base = os.getenv("IWA_STATE_DIR") or os.getenv("VALIDATOR_STATE_DIR")
-            if env_base:
-                p = Path(env_base).expanduser().resolve()
-                # If the env points at '/data', place 'state' under it for consistency
-                if p.name != "state":
-                    candidates.append(p / "state")
-                candidates.append(p)
-
-            # 2) Host-level mount preferred for persistence
-            candidates.append(Path("/data/state"))
-            candidates.append(Path("/data"))
-
-            # 3) Repository local '<repo>/data/state'
-            repo_base = None
-            try:
-                this_file = Path(__file__).resolve()
-                for parent in this_file.parents:
-                    if (parent / "data").exists():
-                        repo_base = parent / "data" / "state"
-                        break
-            except Exception:
-                repo_base = None
-            if repo_base is not None:
-                candidates.append(repo_base)
-
-            # 4) CWD fallback '<cwd>/data/state'
-            candidates.append(Path.cwd() / "data" / "state")
-
-            # Pick the first existing directory; otherwise use the first candidate
-            chosen_base = None
-            for c in candidates:
-                try:
-                    if c.exists() and c.is_dir():
-                        chosen_base = c
-                        break
-                except Exception:
-                    continue
-            if chosen_base is None:
-                chosen_base = candidates[0]
-
-        # Determine netuid and hotkey, fall back to placeholders
-        try:
-            netuid = getattr(self.metagraph, "netuid", None)
-        except Exception:
-            netuid = None
-        try:
-            hotkey = getattr(getattr(self.wallet, "hotkey", None), "ss58_address", None)
-        except Exception:
-            hotkey = None
-        netuid_part = f"netuid_{netuid}" if netuid is not None else "netuid_unknown"
-        hotkey_part = hotkey or "hotkey_unknown"
-
-        return Path(chosen_base) / netuid_part / f"{hotkey_part}.json"
-
-    def _serialize_handshake(self, payload: Any) -> Dict[str, Any]:
-        return {
-            "agent_name": getattr(payload, "agent_name", None),
-            "agent_image": getattr(payload, "agent_image", None),
-            "github_url": getattr(payload, "github_url", None),
-            "agent_version": getattr(payload, "agent_version", None),
-            "note": getattr(payload, "note", None),
-        }
-
-    # Removed legacy/home fallbacks per operator request: single source of truth in repo 'data'.
 
     def _save_round_state(self, *, tasks: Optional[List[TaskWithProject]] = None) -> None:
+        # Wrapper to new checkpoint manager
         try:
-            with self._state_lock:
-                # Try to read previous state once (to preserve tasks if not provided)
-                previous_state: Dict[str, Any] = {}
-                if self._round_state_path.exists():
-                    try:
-                        with self._round_state_path.open("r", encoding="utf-8") as fh:
-                            previous_state = json.load(fh) or {}
-                    except Exception:
-                        previous_state = {}
-
-                state: Dict[str, Any] = {
-                    "validator_round_id": self.current_round_id,
-                    "validator_hotkey": getattr(self.wallet.hotkey, "ss58_address", None),
-                    "created_at": self.round_start_timestamp or time.time(),
-                    "active_miner_uids": list(getattr(self, "active_miner_uids", []) or []),
-                    "handshakes": {str(uid): self._serialize_handshake(p) for uid, p in self.round_handshake_payloads.items()},
-                    "agent_runs": {str(uid): run.agent_run_id for uid, run in self.current_agent_runs.items()},
-                    "completed": [[uid, task_id] for (uid, task_id) in sorted(self._completed_pairs)],
-                }
-                # Persist miner hotkeys at the time of the round to keep UID+hotkey identity stable across restarts
-                miner_hotkeys: Dict[str, Optional[str]] = {}
-                for uid in state["active_miner_uids"]:
-                    try:
-                        miner_hotkeys[str(uid)] = self.metagraph.hotkeys[uid]
-                    except Exception:
-                        miner_hotkeys[str(uid)] = None
-                state["miner_hotkeys"] = miner_hotkeys
-
-                # Compute serialized tasks with strong preservation semantics
-                serialized_tasks: Optional[List[Dict[str, Any]]] = None
-                if tasks is not None:
-                    tmp: List[Dict[str, Any]] = []
-                    for item in tasks:
-                        try:
-                            proj = item.project
-                            project_payload = {
-                                "id": getattr(proj, "id", None),
-                                "name": getattr(proj, "name", None),
-                                "frontend_url": getattr(proj, "frontend_url", None),
-                                "is_web_real": bool(getattr(proj, "is_web_real", False)),
-                            }
-                            task_payload = (
-                                item.task.serialize() if hasattr(item.task, "serialize") else item.task.model_dump()
-                            )
-                            tmp.append({"project": project_payload, "task": task_payload})
-                        except Exception:
-                            continue
-                    serialized_tasks = tmp
-                    # Cache for subsequent incremental saves
-                    try:
-                        self._cached_tasks_serialized = list(serialized_tasks)
-                    except Exception:
-                        self._cached_tasks_serialized = serialized_tasks
-                else:
-                    # Try to preserve from previous file
-                    prev_tasks = list((previous_state.get("tasks") or [])) if previous_state else []
-                    if prev_tasks:
-                        serialized_tasks = prev_tasks
-                    else:
-                        # If we have a cached task list from earlier in the run, use it
-                        if self._cached_tasks_serialized:
-                            serialized_tasks = list(self._cached_tasks_serialized)
-                        else:
-                            # No tasks available to write; avoid clobbering state file with empty tasks
-                            try:
-                                import bittensor as bt
-                                bt.logging.debug(
-                                    "Skipping state write: no tasks to persist yet (will persist after pre-generation)."
-                                )
-                            except Exception:
-                                pass
-                            return
-
-                state["tasks"] = serialized_tasks or []
-                # Persist evaluation records for rebuild on resume
-                state["eval_records"] = list(self._eval_records or [])
-                state["phases"] = dict(self._phases or {})
-
-                # Atomic write: ensure dir, write to temp then replace
-                try:
-                    self._round_state_path.parent.mkdir(parents=True, exist_ok=True)
-                except Exception:
-                    pass
-                tmp_path = self._round_state_path.with_suffix(self._round_state_path.suffix + ".tmp")
-                # Dump JSON once to capture size and avoid partial writes across dumps
-                payload = json.dumps(state, ensure_ascii=False, indent=2)
-                with tmp_path.open("w", encoding="utf-8") as fh:
-                    fh.write(payload)
-                    try:
-                        fh.flush()
-                        os.fsync(fh.fileno())
-                    except Exception:
-                        pass
-                tmp_path.replace(self._round_state_path)
-                try:
-                    import bittensor as bt
-                    bt.logging.info(
-                        f"Round state persisted at {self._round_state_path} "
-                        f"(tasks={len(state.get('tasks') or [])}, uids={len(state.get('active_miner_uids') or [])}, chars={len(payload)})"
-                    )
-                except Exception:
-                    pass
+            self.state_manager.save_checkpoint(tasks=tasks)
         except Exception as exc:
-            bt.logging.warning(f"Failed to persist round state: {exc}")
+            bt.logging.warning(f"Failed to persist checkpoint: {exc}")
 
     def _load_round_state(self) -> Optional[Dict[str, Any]]:
-        # Build a search list of candidate state paths (final + tmp) across bases
-        def _candidates_for(path: Path) -> List[Tuple[Path, Path]]:
-            return [(path, path.with_suffix(path.suffix + ".tmp"))]
-
-        # Primary path based on current resolution
-        primary_path = self._round_state_path
-        search: List[Tuple[Path, Path]] = _candidates_for(primary_path)
-
-        # Also consider '/data/state' and repo-local/CWD variants when different
-        extra_bases: List[Path] = []
-        # Env override from the property builder already considered; include '/data/state'
-        try:
-            extra_bases.append(Path("/data/state"))
-            extra_bases.append(Path("/data"))
-        except Exception:
-            pass
-        # Repo-local base
-        try:
-            this_file = Path(__file__).resolve()
-            for parent in this_file.parents:
-                if (parent / "data").exists():
-                    extra_bases.append(parent / "data" / "state")
-                    break
-        except Exception:
-            pass
-        # CWD base
-        try:
-            extra_bases.append(Path.cwd() / "data" / "state")
-        except Exception:
-            pass
-
-        # Compose extra candidate paths for the same filename
-        try:
-            netuid_part = primary_path.parent.name  # 'netuid_36'
-            filename = primary_path.name
-            for base in extra_bases:
-                alt = base / netuid_part / filename
-                if alt != primary_path:
-                    search.extend(_candidates_for(alt))
-        except Exception:
-            pass
-
-        def _try_read(path: Path) -> Optional[Dict[str, Any]]:
-            text: Optional[str] = None
-            try:
-                text = path.read_text(encoding="utf-8")
-            except Exception as read_exc:
-                import bittensor as bt
-                bt.logging.warning(f"State read error at {path}: {read_exc}")
-                return None
-            if text is None:
-                return None
-            try:
-                return json.loads(text)
-            except json.JSONDecodeError as e:  # type: ignore[attr-defined]
-                import bittensor as bt
-                bt.logging.warning(
-                    (
-                        "State JSON decode error at {path}: line={line} col={col} pos={pos} size={size}"
-                    ).format(
-                        path=path,
-                        line=e.lineno,
-                        col=e.colno,
-                        pos=e.pos,
-                        size=len(text),
-                    )
-                )
-                # Provide a small context around the error position
-                start = max(0, e.pos - 160)
-                end = min(len(text), e.pos + 160)
-                context = text[start:end]
-                bt.logging.debug(f"Context around error pos {e.pos}:\n{context}")
-                # Simple heuristic: check for missing closing brace
-                stripped = text.rstrip()
-                if stripped and stripped[-1] not in ("}", "]"):
-                    bt.logging.debug("Heuristic: file appears truncated (missing closing bracket)")
-                return None
-            except Exception as exc:
-                import bittensor as bt
-                bt.logging.warning(f"State parse error at {path}: {exc}")
-                return None
-
-        state: Optional[Dict[str, Any]] = None
-
-        with self._state_lock:
-            for state_path, tmp_path in search:
-                # Prefer final path when it exists and parses
-                if state_path.exists():
-                    parsed = _try_read(state_path)
-                    if parsed is not None:
-                        state = parsed
-                        # Remember the base so subsequent saves write back to the same location
-                        try:
-                            self._state_base_override = state_path.parent.parent  # .../state/netuid_x
-                        except Exception:
-                            self._state_base_override = None
-                        break
-                    else:
-                        # Final exists but is corrupt; try the temp file
-                        if tmp_path.exists():
-                            parsed_tmp = _try_read(tmp_path)
-                            if parsed_tmp is not None:
-                                try:
-                                    tmp_path.replace(state_path)
-                                    import bittensor as bt
-                                    bt.logging.warning(
-                                        f"Resume recovery: replaced corrupt state with temp from {tmp_path}"
-                                    )
-                                except Exception:
-                                    pass
-                                state = parsed_tmp
-                                try:
-                                    self._state_base_override = state_path.parent.parent
-                                except Exception:
-                                    self._state_base_override = None
-                                break
-                else:
-                    # No final; attempt temp recovery if valid
-                    if tmp_path.exists():
-                        parsed_tmp = _try_read(tmp_path)
-                        if parsed_tmp is not None:
-                            try:
-                                tmp_path.replace(state_path)
-                                import bittensor as bt
-                                bt.logging.warning(
-                                    f"Resume recovery: moved temp state into place from {tmp_path}"
-                                )
-                            except Exception:
-                                pass
-                            state = parsed_tmp
-                            try:
-                                self._state_base_override = state_path.parent.parent
-                            except Exception:
-                                self._state_base_override = None
-                            break
-
-        if state is None:
-            try:
-                import bittensor as bt
-                locations = ", ".join(f"{p} (+ tmp)" for p, _ in search[:4])
-                bt.logging.info(
-                    f"Resume skipped: valid state not found (checked {locations}...)"
-                )
-            except Exception:
-                pass
-            self._last_resume_info = {
-                "status": "skipped",
-                "reason": "valid state not found",
-            }
+        # Wrapper to new checkpoint manager; returns a JSON-like shim for call sites
+        ckpt = self.state_manager.load_checkpoint()
+        if ckpt is None:
+            self._last_resume_info = {"status": "skipped", "reason": "checkpoint not found"}
             return None
-
-        # Guard against resuming with a different validator wallet
-        current_hotkey = getattr(self.wallet.hotkey, "ss58_address", None)
-        saved_hotkey = state.get("validator_hotkey")
-        if saved_hotkey and current_hotkey and saved_hotkey != current_hotkey:
-            bt.logging.warning(
-                "Saved round state belongs to a different validator hotkey; ignoring resume."
-            )
-            self._last_resume_info = {
-                "status": "skipped",
-                "reason": "validator hotkey mismatch",
-                "saved_hotkey": saved_hotkey,
-                "current_hotkey": current_hotkey,
-            }
-            return None
-
-        self.current_round_id = state.get("validator_round_id")
-        self.round_start_timestamp = float(state.get("created_at") or time.time())
-        # Cache tasks for subsequent incremental saves
-        try:
-            self._cached_tasks_serialized = list(state.get("tasks") or [])
-        except Exception:
-            self._cached_tasks_serialized = state.get("tasks") or []
-
-        # Handshakes
-        self.round_handshake_payloads = {}
-        for k, v in (state.get("handshakes") or {}).items():
-            try:
-                uid = int(k)
-            except Exception:
-                continue
-            self.round_handshake_payloads[uid] = SimpleNamespace(**(v or {}))
-
-        # Active miners
-        try:
-            self.active_miner_uids = [int(x) for x in state.get("active_miner_uids") or []]
-        except Exception:
-            self.active_miner_uids = []  # type: ignore[attr-defined]
-
-        # Agent runs (prefer miner hotkeys captured at handshake time)
-        saved_miner_hotkeys: Dict[str, Any] = state.get("miner_hotkeys") or {}
-        self.current_agent_runs = {}
-        for k, run_id in (state.get("agent_runs") or {}).items():
-            try:
-                uid = int(k)
-            except Exception:
-                continue
-            # Use saved hotkey if present; fallback to current metagraph
-            miner_hotkey = None
-            try:
-                miner_hotkey = saved_miner_hotkeys.get(str(uid))
-            except Exception:
-                miner_hotkey = None
-            if not miner_hotkey:
-                try:
-                    miner_hotkey = self.metagraph.hotkeys[uid]
-                except Exception:
-                    miner_hotkey = None
-            self.current_agent_runs[uid] = iwa_models.AgentRunIWAP(
-                agent_run_id=run_id,
-                validator_round_id=self.current_round_id or "",
-                validator_uid=int(self.uid),
-                validator_hotkey=getattr(self.wallet.hotkey, "ss58_address", None),
-                miner_uid=uid,
-                miner_hotkey=miner_hotkey,
-                miner_agent_key=None,
-                is_sota=False,
-                version=getattr(self.round_handshake_payloads.get(uid, None), "agent_version", None),
-                started_at=self.round_start_timestamp or time.time(),
-                metadata={"resumed": True},
-            )
-
-        # Completed pairs
-        self._completed_pairs = set()
-        for pair in state.get("completed") or []:
-            if isinstance(pair, (list, tuple)) and len(pair) == 2:
-                try:
-                    self._completed_pairs.add((int(pair[0]), str(pair[1])))
-                except Exception:
-                    continue
-        # Record resume summary for diagnostics
-        try:
-            import bittensor as bt
-            bt.logging.info(
-                f"Resume candidate loaded | tasks_in_file={len((state.get('tasks') or []))} "
-                f"active_miner_uids={len(getattr(self, 'active_miner_uids', []) or [])} "
-                f"agent_runs={len(self.current_agent_runs or {})} "
-                f"completed_pairs={len(self._completed_pairs)}"
-            )
-        except Exception:
-            pass
         self._last_resume_info = {
             "status": "loaded",
-            "reason": "state file parsed",
-            "tasks_in_file": len((state.get("tasks") or [])),
+            "reason": "checkpoint loaded",
+            "tasks_in_file": len(ckpt.all_tasks or []),
             "active_miners": len(getattr(self, "active_miner_uids", []) or []),
-            "agent_runs": len(self.current_agent_runs or {}),
-            "completed_pairs": len(self._completed_pairs),
+            "agent_runs": len(getattr(self, "current_agent_runs", {}) or {}),
+            "completed_pairs": len(getattr(self, "_completed_pairs", set()) or set()),
         }
-        # Load evaluation records for later rebuild
-        try:
-            self._eval_records = list(state.get("eval_records") or [])
-        except Exception:
-            self._eval_records = []
-        # Load phase flags
-        try:
-            self._phases = dict(state.get("phases") or {})
-        except Exception:
-            self._phases = {"p1_done": False, "p2_done": False}
-        # No mirroring: single source of truth in repo 'data'.
-        return state
+        return {"validator_round_id": ckpt.validator_round_id}
 
-    def _rebuild_from_saved_evaluations(self) -> None:
-        """Rebuild round accumulators and agent_run stats from saved evaluation records.
-
-        Each record should be a dict: {
-            'miner_uid': int,
-            'task_id': str,
-            'reward': float,
-            'final_score': float,
-            'exec_time': float,
-        }
-        """
-        records = list(self._eval_records or [])
-        if not records:
-            return
-        try:
-            import bittensor as bt
-            bt.logging.info(
-                f"Resume rebuild: restoring {len(records)} evaluation records"
-            )
-        except Exception:
-            pass
-
-        # Ensure accumulators exist for miners
-        for rec in records:
-            uid = int(rec.get("miner_uid")) if rec.get("miner_uid") is not None else None
-            if uid is None:
-                continue
-            reward = float(rec.get("reward") or 0.0)
-            score = float(rec.get("final_score") or 0.0)
-            exec_time = float(rec.get("exec_time") or 0.0)
-
-            acc = self.agent_run_accumulators.setdefault(
-                uid, {"reward": 0.0, "score": 0.0, "execution_time": 0.0, "tasks": 0}
-            )
-            acc["reward"] += reward
-            acc["score"] += score
-            acc["execution_time"] += exec_time
-            acc["tasks"] += 1
-
-            # Update agent_run model snapshot if present
-            run = self.current_agent_runs.get(uid)
-            if run is not None:
-                run.total_tasks = acc["tasks"]
-                run.completed_tasks = acc["tasks"]
-                run.total_reward = acc["reward"]
-                run.average_reward = acc["reward"] / acc["tasks"] if acc["tasks"] else None
-                run.average_score = acc["score"] / acc["tasks"] if acc["tasks"] else None
-                run.average_execution_time = (
-                    acc["execution_time"] / acc["tasks"] if acc["tasks"] else None
-                )
-
-            # Rebuild RoundManager aggregates directly
-            try:
-                rr = self.round_manager.round_rewards.setdefault(uid, [])
-                rs = self.round_manager.round_eval_scores.setdefault(uid, [])
-                rt = self.round_manager.round_times.setdefault(uid, [])
-                rr.append(reward)
-                rs.append(score)
-                rt.append(exec_time)
-            except Exception:
-                # If round_manager is not initialized yet, caller will retry after init
-                pass
+    # moved to RoundPhaseValidatorMixin
 
     def _remove_round_state(self) -> None:
+        # Wrapper to new checkpoint manager
         try:
-            with self._state_lock:
-                path = self._round_state_path
-                tmp = path.with_suffix(path.suffix + ".tmp")
-                if path.exists():
-                    path.unlink()
-                if tmp.exists():
-                    tmp.unlink()
+            self.state_manager.cleanup()
         except Exception:
             pass
 
@@ -899,10 +402,11 @@ class ValidatorPlatformMixin:
                     validator_snapshot=validator_snapshot,
                 )
             except httpx.HTTPStatusError as exc:
-                if exc.response is not None and exc.response.status_code == 409:
+                status = exc.response.status_code if exc.response is not None else None
+                if status in (409, 500):
                     self._log_iwap_phase(
                         "Phase 1",
-                        f"start_round returned 409 (already exists); continuing idempotently",
+                        f"start_round returned {status} (already exists); continuing idempotently",
                         level="warning",
                     )
                     self._phases["p1_done"] = True
@@ -951,10 +455,11 @@ class ValidatorPlatformMixin:
                     tasks=self.current_round_tasks.values(),
                 )
             except httpx.HTTPStatusError as exc:
-                if exc.response is not None and exc.response.status_code == 409:
+                status = exc.response.status_code if exc.response is not None else None
+                if status in (409, 500):
                     self._log_iwap_phase(
                         "Phase 2",
-                        f"set_tasks returned 409 (duplicates); continuing idempotently",
+                        f"set_tasks returned {status} (duplicates); continuing idempotently",
                         level="warning",
                     )
                     self._phases["p2_done"] = True
@@ -1070,10 +575,11 @@ class ValidatorPlatformMixin:
                     miner_snapshot=miner_snapshot,
                 )
             except httpx.HTTPStatusError as exc:
-                if exc.response is not None and exc.response.status_code == 409:
+                status = exc.response.status_code if exc.response is not None else None
+                if status in (409, 500):
                     self._log_iwap_phase(
                         "Phase 3",
-                        f"start_agent_run returned 409 for miner_uid={miner_uid} (already exists); continuing",
+                        f"start_agent_run returned {status} for miner_uid={miner_uid} (already exists); continuing",
                         level="warning",
                     )
                 else:

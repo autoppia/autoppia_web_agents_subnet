@@ -93,7 +93,9 @@ PRE_GENERATED_TASKS = 75             # Generate fewer tasks (≈ 1/4)
 # ════════════════════════════════════════════════════════════════════════════════
 
 TESTING = _str_to_bool(os.getenv("TESTING", "false"))
-DZ_STARTING_BLOCK = 6_713_220  if not TESTING else 0  # Fixed start gate, aligned and > 6,712,258
+# Move start gate forward by full-epoch increments (360 blocks) to be past 6,716,117
+# Previous: 6,713,220 → + (360 * 9) = 6,716,460 (> 6,716,117)
+DZ_STARTING_BLOCK = 6_716_460 if not TESTING else 0
 
 
 # ╭────────────────────── TESTING Configuration (Commented) ──────────────────────╮
@@ -142,3 +144,39 @@ SAVE_SUCCESSFUL_TASK_IN_JSON = _str_to_bool(os.getenv("SAVE_SUCCESSFUL_TASK_IN_J
 
 # ╭─────────────────────────── Stats ─────────────────────────────╮
 STATS_FILE = Path("coldkey_web_usecase_stats.json")  # snapshot
+
+# ╭─────────────────────────── Consensus Sharing ─────────────────────────────╮
+# Share mid-round scoring snapshots (IPFS + on-chain commitment), then aggregate
+# across validators by stake to choose a single winner.
+
+SHARE_SCORING = _str_to_bool(os.getenv("SHARE_SCORING", "false"))
+
+# Fraction of the round when we stop sending tasks to reserve time for
+# publishing commitments and fetching others before finalization.
+SHARE_STOP_EVAL_AT_FRACTION = float(os.getenv("SHARE_STOP_EVAL_AT_FRACTION", "0.75"))
+
+# Fraction of the round progress at which we publish our snapshot (CID on-chain).
+CONSENSUS_COMMIT_AT_FRACTION = float(os.getenv("CONSENSUS_COMMIT_AT_FRACTION", "0.75"))
+
+# Minimum validator stake (in TAO) required to publish/participate in aggregation.
+# Use sensible defaults; operators can tune via env.
+MIN_VALIDATOR_STAKE_TO_SHARE_SCORES = float(os.getenv("MIN_VALIDATOR_STAKE_TO_SHARE_SCORES", "10000"))
+MIN_VALIDATOR_STAKE_TO_AGGREGATE = float(os.getenv("MIN_VALIDATOR_STAKE_TO_AGGREGATE", "10000"))
+
+# Number of blocks to wait (best-effort) after publishing before we consider
+# reading others' commitments. This is a soft guideline; we still aggregate
+# at finalize even if we haven't waited the full amount.
+CONSENSUS_SPREAD_BLOCKS = int(os.getenv("CONSENSUS_SPREAD_BLOCKS", "60"))
+
+# IPFS configuration (API and gateways). API is required for adding JSON; reads
+# will try API, then CLI, then public gateways as fallback.
+IPFS_API_URL = os.getenv("IPFS_API_URL", "http://ipfs.metahash73.com:5001/api/v0")
+IPFS_GATEWAYS = [
+    g.strip() for g in (
+        os.getenv(
+            "IPFS_GATEWAYS",
+            "https://ipfs.io/ipfs,https://cloudflare-ipfs.com/ipfs,https://gateway.pinata.cloud/ipfs",
+        )
+        or ""
+    ).split(",") if g.strip()
+]

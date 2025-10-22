@@ -57,8 +57,8 @@ bs4_stub = types.ModuleType("bs4")
 bs4_stub.BeautifulSoup = object
 sys.modules.setdefault("bs4", bs4_stub)
 
-from autoppia_web_agents_subnet.platform.iwa import main as iwa_main  # noqa:E402
-from autoppia_web_agents_subnet.platform.iwa.validator_mixin import (  # noqa:E402
+from autoppia_web_agents_subnet.platform import main as iwa_main  # noqa:E402
+from autoppia_web_agents_subnet.platform.validator_mixin import (  # noqa:E402
     ValidatorPlatformMixin,
 )
 
