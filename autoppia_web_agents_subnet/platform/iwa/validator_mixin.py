@@ -337,6 +337,11 @@ class ValidatorPlatformMixin:
 
         self.current_round_id = state.get("validator_round_id")
         self.round_start_timestamp = float(state.get("created_at") or time.time())
+        # Cache tasks for subsequent incremental saves
+        try:
+            self._cached_tasks_serialized = list(state.get("tasks") or [])
+        except Exception:
+            self._cached_tasks_serialized = state.get("tasks") or []
 
         # Handshakes
         self.round_handshake_payloads = {}
