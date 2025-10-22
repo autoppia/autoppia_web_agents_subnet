@@ -176,7 +176,7 @@ class RoundManager:
         """
         if self.start_block is None:
             raise ValueError("Round not started. Call start_new_round() first.")
-        return self.get_round_boundaries(self.start_block)
+        return self.get_round_boundaries(self.start_block, log_debug=False)
 
     def should_send_next_task(self, current_block: int) -> bool:
         """
