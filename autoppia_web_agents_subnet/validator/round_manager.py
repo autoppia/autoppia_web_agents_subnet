@@ -92,17 +92,24 @@ class RoundManager:
         self.start_block = current_block
         self.reset_round()
 
-        boundaries = self.get_round_boundaries(current_block)
-        ColoredLogger.info("🔄 Starting new round", ColoredLogger.CYAN)
-        ColoredLogger.info(f"   Start block: {current_block}", ColoredLogger.CYAN)
-        ColoredLogger.info(f"   Target block: {boundaries['target_block']}", ColoredLogger.CYAN)
-        ColoredLogger.info(f"   Round epoch: {boundaries['round_start_epoch']}", ColoredLogger.CYAN)
-        ColoredLogger.info(f"   Target epoch: {boundaries['target_epoch']}", ColoredLogger.CYAN)
-
-        # Calculate estimated duration
+        boundaries = self.get_round_boundaries(current_block, log_debug=False)
+        # Concise round start line
         blocks_remaining = boundaries['target_block'] - current_block
         estimated_minutes = (blocks_remaining * 12) / 60  # 12 seconds per block
-        ColoredLogger.info(f"   Estimated duration: {estimated_minutes:.1f} min (~{blocks_remaining} blocks)", ColoredLogger.CYAN)
+        ColoredLogger.info(
+            (
+                "🔄 Starting new round | start_block={start_block} start_epoch={start_epoch:.2f} "
+                "-> target_epoch={target_epoch:.2f} target_block={target_block} | ETA ~{eta:.1f}m (~{blocks} blocks)"
+            ).format(
+                start_block=current_block,
+                start_epoch=boundaries['round_start_epoch'],
+                target_epoch=boundaries['target_epoch'],
+                target_block=boundaries['target_block'],
+                eta=estimated_minutes,
+                blocks=blocks_remaining,
+            ),
+            ColoredLogger.CYAN,
+        )
 
     def get_round_boundaries(self, current_block: int, *, log_debug: bool = True) -> Dict[str, Any]:
         """
@@ -138,24 +145,23 @@ class RoundManager:
         round_start_block = self.epoch_to_block(round_start_epoch)
         target_block = self.epoch_to_block(target_epoch)
 
-        # 🔍 CRITICAL DEBUG: Verify global sync calculations (optional)
+        # Compact debug for sync calculation
         if log_debug:
-            bt.logging.debug("=" * 80)
-            bt.logging.debug("🌐 GLOBAL SYNC CALCULATION (Modulo-based)")
-            bt.logging.debug("=" * 80)
-            bt.logging.debug(f"📍 Current block:      {current_block:,}")
-            bt.logging.debug(f"📍 Current epoch:      {current_epoch:.4f}")
-            bt.logging.debug("")
-            bt.logging.debug(f"🔢 ROUND_SIZE_EPOCHS:  {self.round_size_epochs}")
-            bt.logging.debug(f"🔢 Modulo calculation: ({current_epoch:.4f} // {self.round_size_epochs}) × {self.round_size_epochs}")
-            bt.logging.debug(f"🔢 Result:             {current_epoch // self.round_size_epochs:.0f} × {self.round_size_epochs} = {round_start_epoch:.4f}")
-            bt.logging.debug("")
-            bt.logging.debug(f"🎯 Round start epoch:  {round_start_epoch:.4f} (Block {round_start_block:,})")
-            bt.logging.debug(f"🎯 Round end epoch:    {target_epoch:.4f} (Block {target_block:,})")
-            bt.logging.debug(f"⏱️  Round duration:     {target_epoch - round_start_epoch:.2f} epochs ({(target_block - round_start_block):,} blocks)")
-            bt.logging.debug("")
-            bt.logging.debug(f"✅ ALL validators will end at epoch {target_epoch:.4f} regardless of start time")
-            bt.logging.debug("=" * 80)
+            bt.logging.debug(
+                (
+                    "🌐 Sync | block={blk:,} epoch={cur:.4f} | start_epoch={start:.4f} (b{sb:,}) -> "
+                    "target_epoch={end:.4f} (b{tb:,}) | duration={dur:.2f} epochs ({blocks:,} blocks)"
+                ).format(
+                    blk=current_block,
+                    cur=current_epoch,
+                    start=round_start_epoch,
+                    sb=round_start_block,
+                    end=target_epoch,
+                    tb=target_block,
+                    dur=(target_epoch - round_start_epoch),
+                    blocks=(target_block - round_start_block),
+                )
+            )
 
         return {
             'round_start_epoch': round_start_epoch,
@@ -244,18 +250,14 @@ class RoundManager:
 
     def log_calculation_summary(self):
         """Log concise configuration summary at INFO level."""
-        ColoredLogger.info("📊 Round Manager Configuration:", ColoredLogger.CYAN)
-        ColoredLogger.info(f"   Round size: {self.round_size_epochs} epochs", ColoredLogger.CYAN)
-        ColoredLogger.info(f"   Safety buffer: {self.safety_buffer_epochs} epochs", ColoredLogger.CYAN)
-        ColoredLogger.info(f"   Avg task duration: {self.avg_task_duration_seconds}s", ColoredLogger.CYAN)
-        ColoredLogger.info(f"   Blocks per epoch: {self.BLOCKS_PER_EPOCH}", ColoredLogger.CYAN)
-        ColoredLogger.info(f"   Seconds per block: {self.SECONDS_PER_BLOCK}s", ColoredLogger.CYAN)
-        ColoredLogger.info(f"   Round block length: {self.ROUND_BLOCK_LENGTH}", ColoredLogger.CYAN)
+        base = (
+            f"📊 Round config | size={self.round_size_epochs} epochs | buffer={self.safety_buffer_epochs} epochs | "
+            f"avg_task={self.avg_task_duration_seconds}s | b/epoch={self.BLOCKS_PER_EPOCH} | s/block={self.SECONDS_PER_BLOCK}s | "
+            f"round_blocks={self.ROUND_BLOCK_LENGTH}"
+        )
         if self.minimum_start_block is not None:
-            ColoredLogger.info(
-                f"   Minimum start block: {self.minimum_start_block} (rounds allowed > this block)",
-                ColoredLogger.CYAN,
-            )
+            base += f" | min_start_block>{self.minimum_start_block}"
+        ColoredLogger.info(base, ColoredLogger.CYAN)
 
     def can_start_round(self, current_block: int) -> bool:
         """Return True when the chain height has passed the minimum start block gate."""
@@ -440,13 +442,12 @@ class RoundManager:
         """Reset round state for new round."""
         self.round_rewards = {}
         self.round_times = {}
-        self.eval_scores = {}
+        self.round_eval_scores = {}
 
     def log_round_summary(self):
-        """Log round summary with statistics."""
+        """Log concise round summary with statistics (debug-level)."""
         stats = self.get_round_stats()
-        avg_rewards = self.get_average_rewards()
-
-        ColoredLogger.debug(f"Round stats: {stats['total_miners']} miners, {stats['total_tasks']} tasks", ColoredLogger.PURPLE)
-        for uid, score in avg_rewards.items():
-            ColoredLogger.debug(f"  Miner {uid}: {score:.3f} (from {len(self.round_rewards[uid])} tasks)", ColoredLogger.PURPLE)
+        ColoredLogger.debug(
+            f"Round stats | miners={stats['total_miners']} | tasks={stats['total_tasks']}",
+            ColoredLogger.PURPLE,
+        )
