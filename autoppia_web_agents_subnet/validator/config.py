@@ -102,7 +102,7 @@ TESTING = _str_to_bool(os.getenv("TESTING", "false"))
 # Quick testing configuration (rounds every ~14 minutes):
 # 1 epoch = 360 blocks = 72 minutes
 #
-ROUND_SIZE_EPOCHS = 0.2               # 14.4 minutes per round (0.2 × 72)
+ROUND_SIZE_EPOCHS = 0.278             # 20 minutes per round
 SAFETY_BUFFER_EPOCHS = 0.02           # 1.44 minutes buffer (0.02 × 72)
 AVG_TASK_DURATION_SECONDS = 300       # 5 minutes per task
 PRE_GENERATED_TASKS = 4               # Only 4 tasks (quick testing)
