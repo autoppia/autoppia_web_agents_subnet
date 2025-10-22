@@ -85,17 +85,17 @@ async def send_start_round_synapse_to_miners(
                 failed_responses.append(f"  UID {i}: status={status_code}")
 
     if successful_responses:
-        bt.logging.info(f"🔍 DEBUG: Successful handshake responses ({len(successful_responses)}):")
+        bt.logging.debug(f"Successful handshake responses ({len(successful_responses)}); showing first 5")
         for response_log in successful_responses[:5]:  # Show first 5
-            bt.logging.info(response_log)
+            bt.logging.debug(response_log)
 
     if status_422_responses:
-        bt.logging.warning(f"⚠️  DEBUG: Miners returning 422 ({len(status_422_responses)}):")
+        bt.logging.debug(f"Miners returning 422 ({len(status_422_responses)}); showing first 5")
         for r in status_422_responses[:5]:  # Show first 5
-            bt.logging.warning(f"  UID {r['uid']}: hotkey={r['hotkey']}... agent_name={r['agent_name']}")
+            bt.logging.debug(f"  UID {r['uid']}: hotkey={r['hotkey']}... agent_name={r['agent_name']}")
 
     if not successful_responses and not status_422_responses:
-        bt.logging.info(f"🔍 DEBUG: No successful handshake responses")
+        bt.logging.debug("No successful handshake responses")
 
     successful = sum(1 for r in responses if r is not None and hasattr(r, 'agent_name') and r.agent_name)
     bt.logging.info(f"✅ Handshake complete: {successful}/{len(miner_axons)} miners responded")
@@ -199,13 +199,13 @@ async def send_feedback_synapse_to_miners(
         )
 
     # DEBUG: Log detailed TaskFeedbackSynapse content being sent
-    ColoredLogger.info(f"🔍 DEBUG Sending TaskFeedbackSynapse content of the first miner:", ColoredLogger.YELLOW)
+    ColoredLogger.debug(f"🔍 Sending TaskFeedbackSynapse content of the first miner:", ColoredLogger.YELLOW)
     if feedback_list:
         fb = feedback_list[0]  # Log first feedback as example
-        ColoredLogger.info(f"  - task_id: {fb.task_id}", ColoredLogger.CYAN)
-        ColoredLogger.info(f"  - tests: {fb.tests}", ColoredLogger.CYAN)
-        ColoredLogger.info(f"  - score: {fb.score}", ColoredLogger.CYAN)
-        ColoredLogger.info(f"  - execution_time: {fb.execution_time}", ColoredLogger.CYAN)
+        ColoredLogger.debug(f"  - task_id: {fb.task_id}", ColoredLogger.CYAN)
+        ColoredLogger.debug(f"  - tests: {fb.tests}", ColoredLogger.CYAN)
+        ColoredLogger.debug(f"  - score: {fb.score}", ColoredLogger.CYAN)
+        ColoredLogger.debug(f"  - execution_time: {fb.execution_time}", ColoredLogger.CYAN)
 
         # Show evaluation_result but replace GIF content with just its length
         eval_result_display = None
@@ -214,8 +214,8 @@ async def send_feedback_synapse_to_miners(
             if isinstance(eval_result_display, dict) and 'gif_recording' in eval_result_display and eval_result_display['gif_recording']:
                 eval_result_display['gif_recording'] = f"<length: {len(eval_result_display['gif_recording'])}>"
 
-        ColoredLogger.info(f"  - evaluation_result: {eval_result_display}", ColoredLogger.CYAN)
-        ColoredLogger.info(f"  - actions: {len(fb.actions) if fb.actions else 0} actions", ColoredLogger.CYAN)
+        ColoredLogger.debug(f"  - evaluation_result: {eval_result_display}", ColoredLogger.CYAN)
+        ColoredLogger.debug(f"  - actions: {len(fb.actions) if fb.actions else 0} actions", ColoredLogger.CYAN)
     ColoredLogger.info(
         f"Sending TaskFeedbackSynapse to {len(miner_axons)} miners in parallel",
         ColoredLogger.BLUE,

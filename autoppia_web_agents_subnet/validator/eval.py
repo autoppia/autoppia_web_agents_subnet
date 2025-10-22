@@ -93,9 +93,9 @@ async def evaluate_task_solutions(
         if gif_recording:
             # Log GIF info (first 100 chars of base64)
             gif_preview = str(gif_recording)[:100] if gif_recording else "None"
-            bt.logging.info(f"🎬 GIF captured: {len(str(gif_recording)) if gif_recording else 0} bytes (base64), preview: {gif_preview}...")
+            bt.logging.debug(f"🎬 GIF captured: {len(str(gif_recording)) if gif_recording else 0} bytes (base64), preview: {gif_preview}...")
         else:
-            bt.logging.warning("⚠️  No GIF recording in evaluation result")
+            bt.logging.debug("No GIF recording in evaluation result")
 
         # Summary (add simple, durable fields only)
         evaluation_results.append({

@@ -27,6 +27,8 @@ from autoppia_web_agents_subnet.validator.config import (
     MAX_AGENT_NAME_LENGTH,
 )
 from autoppia_web_agents_subnet.validator.tasks import get_task_collection_interleaved, collect_task_solutions_and_execution_times
+from autoppia_iwa.src.demo_webs.classes import WebProject
+from autoppia_iwa.src.data_generation.domain.classes import Task
 from autoppia_web_agents_subnet.validator.synapse_handlers import (
     send_start_round_synapse_to_miners,
     send_task_synapse_to_miners,
@@ -125,16 +127,16 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
         # 🌐 This call shows GLOBAL SYNC calculation with detailed logs
         boundaries = self.round_manager.get_round_boundaries(current_block)
 
-        # 🔍 VERIFICATION: Prove that the round is globally synchronized
-        bt.logging.info("")
-        bt.logging.warning("🔐 SYNCHRONIZATION VERIFICATION")
-        bt.logging.warning("=" * 80)
-        bt.logging.warning(f"⚠️  CRITICAL: This round will end at epoch {boundaries['target_epoch']:.2f}")
-        bt.logging.warning(f"⚠️  ANY validator starting between epochs {boundaries['round_start_epoch']:.2f} - {boundaries['target_epoch']:.2f}")
-        bt.logging.warning(f"⚠️  will ALSO end at epoch {boundaries['target_epoch']:.2f}")
-        bt.logging.warning(f"⚠️  This ensures FAIR competition with GLOBAL deadline")
-        bt.logging.warning("=" * 80)
-        bt.logging.info("")
+        # 🔍 VERIFICATION: Prove that the round is globally synchronized (debug only)
+        bt.logging.debug("")
+        bt.logging.debug("🔐 SYNCHRONIZATION VERIFICATION")
+        bt.logging.debug("=" * 80)
+        bt.logging.debug(f"Round will end at epoch {boundaries['target_epoch']:.2f}")
+        bt.logging.debug(
+            f"Any validator starting between epochs {boundaries['round_start_epoch']:.2f} - {boundaries['target_epoch']:.2f} will also end at the same epoch"
+        )
+        bt.logging.debug("Fair competition with global deadline")
+        bt.logging.debug("=" * 80)
 
         # Log configuration summary
         self.round_manager.log_calculation_summary()
@@ -143,38 +145,61 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
         # PRE-GENERATION: Generate all tasks at the beginning
         # ═══════════════════════════════════════════════════════
         bt.logging.warning("")
-        bt.logging.warning("🔄 PRE-GENERATING TASKS")
+        bt.logging.warning("🔄 PRE-GENERATING TASKS / RESUME")
         bt.logging.warning("=" * 80)
 
         pre_generation_start = time.time()
         all_tasks: list[TaskWithProject] = []
 
-        # Generate all tasks in batches (already interleaved)
-        tasks_generated = 0
-        while tasks_generated < PRE_GENERATED_TASKS:
-            batch_start = time.time()
+        # Try to resume from previous round state
+        resumed = False
+        state = self._load_round_state()
+        if state and state.get("validator_round_id"):
+            try:
+                saved_tasks = state.get("tasks") or []
+                for item in saved_tasks:
+                    project = WebProject(**(item.get("project") or {}))
+                    task = Task.deserialize(item.get("task") or {})
+                    all_tasks.append(TaskWithProject(project=project, task=task))
+                if all_tasks:
+                    self.current_round_id = state["validator_round_id"]
+                    resumed = True
+                    bt.logging.warning(f"♻️ Loaded {len(all_tasks)} tasks from resume state; reusing validator_round_id={self.current_round_id}")
+            except Exception as e:
+                bt.logging.warning(f"Failed to restore tasks from resume state: {e}")
 
-            # Generate a batch of tasks (returns flat list, already interleaved)
-            batch_tasks = await get_task_collection_interleaved(prompts_per_use_case=PROMPTS_PER_USECASE)
+        if not resumed:
+            # Fresh generation path
+            tasks_generated = 0
+            while tasks_generated < PRE_GENERATED_TASKS:
+                batch_start = time.time()
 
-            # Take only what we need from this batch
-            remaining = PRE_GENERATED_TASKS - tasks_generated
-            tasks_to_add = batch_tasks[:remaining]
-            all_tasks.extend(tasks_to_add)
-            tasks_generated += len(tasks_to_add)
+                batch_tasks = await get_task_collection_interleaved(prompts_per_use_case=PROMPTS_PER_USECASE)
 
-            batch_elapsed = time.time() - batch_start
-            bt.logging.info(f"   Generated batch: {len(tasks_to_add)} tasks in {batch_elapsed:.1f}s (total: {tasks_generated}/{PRE_GENERATED_TASKS})")
+                remaining = PRE_GENERATED_TASKS - tasks_generated
+                tasks_to_add = batch_tasks[:remaining]
+                all_tasks.extend(tasks_to_add)
+                tasks_generated += len(tasks_to_add)
 
-        self.current_round_id = self._generate_validator_round_id()
-        self.round_start_timestamp = pre_generation_start
+                batch_elapsed = time.time() - batch_start
+                bt.logging.info(f"   Generated batch: {len(tasks_to_add)} tasks in {batch_elapsed:.1f}s (total: {tasks_generated}/{PRE_GENERATED_TASKS})")
+
+            self.current_round_id = self._generate_validator_round_id(current_block=current_block)
+            self.round_start_timestamp = pre_generation_start
+            # Save initial state with tasks for crash-resume
+            try:
+                self._save_round_state(tasks=all_tasks)
+            except Exception:
+                pass
+
+        # Build IWAP tasks from TaskWithProject list
         self.current_round_tasks = self._build_iwap_tasks(
             validator_round_id=self.current_round_id,
             tasks=all_tasks,
         )
 
         pre_generation_elapsed = time.time() - pre_generation_start
-        bt.logging.warning(f"✅ Pre-generation complete: {len(all_tasks)} tasks in {pre_generation_elapsed:.1f}s")
+        bt.logging.warning(f"✅ Task list ready: {len(all_tasks)} tasks in {pre_generation_elapsed:.1f}s (resumed={resumed})")
         bt.logging.warning("=" * 80)
 
         # ═══════════════════════════════════════════════════════
@@ -187,10 +212,12 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
         # Initialize new round in RoundManager
         self.round_manager.start_new_round(current_block)
         boundaries = self.round_manager.get_current_boundaries()
-        self.round_handshake_payloads = {}
-        self.current_agent_runs = {}
-        self.current_miner_snapshots = {}
-        self.agent_run_accumulators = {}
+        # If not resuming, reset ephemeral structures; if resuming, keep loaded ones
+        if not resumed:
+            self.round_handshake_payloads = {}
+            self.current_agent_runs = {}
+            self.current_miner_snapshots = {}
+            self.agent_run_accumulators = {}
 
         # Send StartRoundSynapse to all miners ONCE at the beginning
         try:
@@ -207,27 +234,34 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
             )
 
             # 🔍 DEBUG: Show exactly what we're sending
-            bt.logging.info("=" * 80)
-            bt.logging.info("🔍 DEBUG: StartRoundSynapse content:")
-            bt.logging.info(f"  - version: {start_synapse.version}")
-            bt.logging.info(f"  - round_id: {start_synapse.round_id}")
-            bt.logging.info(f"  - validator_id: {start_synapse.validator_id}")
-            bt.logging.info(f"  - total_prompts: {start_synapse.total_prompts}")
-            bt.logging.info(f"  - prompts_per_use_case: {start_synapse.prompts_per_use_case}")
-            bt.logging.info(f"  - note: {start_synapse.note}")
-            bt.logging.info(f"  - has_rl: {getattr(start_synapse, 'has_rl', 'NOT_SET')}")
-            bt.logging.info(f"  - Sending to {len(all_axons)} miners")
-            bt.logging.info("=" * 80)
+            bt.logging.debug("=" * 80)
+            bt.logging.debug("StartRoundSynapse content:")
+            bt.logging.debug(f"  - version: {start_synapse.version}")
+            bt.logging.debug(f"  - round_id: {start_synapse.round_id}")
+            bt.logging.debug(f"  - validator_id: {start_synapse.validator_id}")
+            bt.logging.debug(f"  - total_prompts: {start_synapse.total_prompts}")
+            bt.logging.debug(f"  - prompts_per_use_case: {start_synapse.prompts_per_use_case}")
+            bt.logging.debug(f"  - note: {start_synapse.note}")
+            bt.logging.debug(f"  - has_rl: {getattr(start_synapse, 'has_rl', 'NOT_SET')}")
+            bt.logging.debug(f"  - Sending to {len(all_axons)} miners")
+            bt.logging.debug("=" * 80)
 
-            handshake_responses = await send_start_round_synapse_to_miners(
-                validator=self,
-                miner_axons=all_axons,
-                start_synapse=start_synapse,
-                timeout=60,
-            )
+            handshake_responses = []
+            if resumed and getattr(self, "active_miner_uids", []):
+                ColoredLogger.info("♻️ Resuming: reusing saved handshake payloads and active miners", ColoredLogger.CYAN)
+                # Skip sending synapse; use saved state
+                pass
+            else:
+                handshake_responses = await send_start_round_synapse_to_miners(
+                    validator=self,
+                    miner_axons=all_axons,
+                    start_synapse=start_synapse,
+                    timeout=60,
+                )
 
             # Filter and save UIDs of miners who responded successfully (normalize metadata)
-            self.active_miner_uids = []
+            if not resumed:
+                self.active_miner_uids = []
 
             def _normalized_optional(value):
                 if value is None:
@@ -336,11 +370,25 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                     f"⚠️ Handshake complete: 0/{len(all_axons)} miners responded", ColoredLogger.YELLOW
                 )
 
+            # Persist handshake state for resume
+            try:
+                self._save_round_state()
+            except Exception:
+                pass
+
         except Exception as e:
             bt.logging.error(f"StartRoundSynapse handshake failed: {e}")
             # Do NOT silently use all miners; skip task execution if no handshake
             self.active_miner_uids = []
             bt.logging.warning("   No miners will be used this round due to handshake failure.")
+
+        # Early audit log of round info
+        round_number = await self.round_manager.calculate_round(current_block)
+        start_epoch = boundaries['round_start_epoch']
+        bt.logging.info(
+            f"Round init: validator_round_id={self.current_round_id}, round_number={round_number}, "
+            f"start_block={current_block}, start_epoch={start_epoch}"
+        )
 
         await self._iwap_start_round(current_block=current_block, n_tasks=len(all_tasks))
 
@@ -374,6 +422,8 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
             task_index += 1
 
             # Dynamic check: should we send another task?
+            # Refresh block height after evaluation to get an accurate time window
+            current_block = self.metagraph.block.item()
             if not self.round_manager.should_send_next_task(current_block):
                 ColoredLogger.warning("", ColoredLogger.YELLOW)
                 ColoredLogger.warning("🛑 STOPPING TASK EXECUTION - SAFETY BUFFER REACHED", ColoredLogger.YELLOW)
@@ -427,29 +477,29 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
             web_project_name = getattr(project, "name", None)
 
             # 🔍 DEBUG: Log task details before sending
-            ColoredLogger.info("\n" + "=" * 80, ColoredLogger.CYAN)
-            ColoredLogger.info(f"🔍 TASK DETAILS - Task {task_index + 1}/{len(self.current_round_tasks)}", ColoredLogger.CYAN)
-            ColoredLogger.info("=" * 80, ColoredLogger.CYAN)
-            ColoredLogger.info(f"  📝 Prompt: {task.prompt}", ColoredLogger.BLUE)
-            ColoredLogger.info(f"  🌐 URL: {project.frontend_url}", ColoredLogger.BLUE)
-            ColoredLogger.info(f"  🎲 Seed: {seed}", ColoredLogger.BLUE)
-            ColoredLogger.info(f"  📦 Project: {web_project_name}", ColoredLogger.BLUE)
-            ColoredLogger.info(f"  🧪 Tests ({len(task.tests) if task.tests else 0}):", ColoredLogger.YELLOW)
+            ColoredLogger.debug("\n" + "=" * 80, ColoredLogger.CYAN)
+            ColoredLogger.debug(f"🔍 TASK DETAILS - Task {task_index + 1}/{len(self.current_round_tasks)}", ColoredLogger.CYAN)
+            ColoredLogger.debug("=" * 80, ColoredLogger.CYAN)
+            ColoredLogger.debug(f"  📝 Prompt: {task.prompt}", ColoredLogger.BLUE)
+            ColoredLogger.debug(f"  🌐 URL: {project.frontend_url}", ColoredLogger.BLUE)
+            ColoredLogger.debug(f"  🎲 Seed: {seed}", ColoredLogger.BLUE)
+            ColoredLogger.debug(f"  📦 Project: {web_project_name}", ColoredLogger.BLUE)
+            ColoredLogger.debug(f"  🧪 Tests ({len(task.tests) if task.tests else 0}):", ColoredLogger.YELLOW)
             if task.tests:
                 for test_idx, test in enumerate(task.tests, 1):
-                    ColoredLogger.info(f"     {test_idx}. {test.type}: {test.description}", ColoredLogger.GRAY)
-                    ColoredLogger.info(f"        Criteria: {getattr(test, 'event_criteria', 'N/A')}", ColoredLogger.GRAY)
+                    ColoredLogger.debug(f"     {test_idx}. {test.type}: {test.description}", ColoredLogger.GRAY)
+                    ColoredLogger.debug(f"        Criteria: {getattr(test, 'event_criteria', 'N/A')}", ColoredLogger.GRAY)
             else:
                 ColoredLogger.warning(f"     ⚠️  NO TESTS for this task", ColoredLogger.RED)
 
             # 🔍 DEBUG: Log URL construction details
-            ColoredLogger.info(f"  🔗 URL Construction Details:", ColoredLogger.MAGENTA)
-            ColoredLogger.info(f"     - Base URL: {project.frontend_url}", ColoredLogger.MAGENTA)
-            ColoredLogger.info(f"     - Task URL: {getattr(task, 'url', 'N/A')}", ColoredLogger.MAGENTA)
-            ColoredLogger.info(f"     - Task assign_seed: {getattr(task, 'assign_seed', 'N/A')}", ColoredLogger.MAGENTA)
-            ColoredLogger.info(f"     - Final seed to use: {seed}", ColoredLogger.MAGENTA)
+            ColoredLogger.debug(f"  🔗 URL Construction Details:", ColoredLogger.MAGENTA)
+            ColoredLogger.debug(f"     - Base URL: {project.frontend_url}", ColoredLogger.MAGENTA)
+            ColoredLogger.debug(f"     - Task URL: {getattr(task, 'url', 'N/A')}", ColoredLogger.MAGENTA)
+            ColoredLogger.debug(f"     - Task assign_seed: {getattr(task, 'assign_seed', 'N/A')}", ColoredLogger.MAGENTA)
+            ColoredLogger.debug(f"     - Final seed to use: {seed}", ColoredLogger.MAGENTA)
 
-            ColoredLogger.info("=" * 80 + "\n", ColoredLogger.CYAN)
+            ColoredLogger.debug("=" * 80 + "\n", ColoredLogger.CYAN)
 
             # Create TaskSynapse with the actual task
             # 🔧 FIX: Include seed in URL if available
@@ -468,15 +518,15 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
             )
 
             # 🔍 DEBUG: Log TaskSynapse details
-            ColoredLogger.info(f"  📤 TaskSynapse created:", ColoredLogger.MAGENTA)
-            ColoredLogger.info(f"     - Base URL: {project.frontend_url}", ColoredLogger.MAGENTA)
-            ColoredLogger.info(f"     - Final URL: {task_synapse.url}", ColoredLogger.MAGENTA)
-            ColoredLogger.info(f"     - Seed: {task_synapse.seed}", ColoredLogger.MAGENTA)
-            ColoredLogger.info(f"     - Prompt: {task_synapse.prompt[:100]}...", ColoredLogger.MAGENTA)
+            ColoredLogger.debug(f"  📤 TaskSynapse created:", ColoredLogger.MAGENTA)
+            ColoredLogger.debug(f"     - Base URL: {project.frontend_url}", ColoredLogger.MAGENTA)
+            ColoredLogger.debug(f"     - Final URL: {task_synapse.url}", ColoredLogger.MAGENTA)
+            ColoredLogger.debug(f"     - Seed: {task_synapse.seed}", ColoredLogger.MAGENTA)
+            ColoredLogger.debug(f"     - Prompt: {task_synapse.prompt[:100]}...", ColoredLogger.MAGENTA)
 
             # 🔍 DEBUG: Verify URL construction
             if seed is not None and f"seed={seed}" in task_synapse.url:
-                ColoredLogger.info(f"     ✅ URL includes seed correctly", ColoredLogger.GREEN)
+                ColoredLogger.debug(f"     ✅ URL includes seed correctly", ColoredLogger.GREEN)
             elif seed is not None:
                 ColoredLogger.warning(f"     ⚠️  URL missing seed! Expected: seed={seed}", ColoredLogger.RED)
 
@@ -496,18 +546,18 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
             )
 
             # 🔍 DEBUG: Log received actions from each miner
-            ColoredLogger.info("\n" + "=" * 80, ColoredLogger.CYAN)
-            ColoredLogger.info("🔍 ACTIONS RECEIVED FROM MINERS", ColoredLogger.CYAN)
-            ColoredLogger.info("=" * 80, ColoredLogger.CYAN)
+            ColoredLogger.debug("\n" + "=" * 80, ColoredLogger.CYAN)
+            ColoredLogger.debug("🔍 ACTIONS RECEIVED FROM MINERS", ColoredLogger.CYAN)
+            ColoredLogger.debug("=" * 80, ColoredLogger.CYAN)
             for i, (uid, solution) in enumerate(zip(self.active_miner_uids, task_solutions)):
                 if solution and solution.actions:
-                    ColoredLogger.info(f"\n📊 Miner UID={uid}: {len(solution.actions)} actions", ColoredLogger.GREEN)
+                    ColoredLogger.debug(f"\n📊 Miner UID={uid}: {len(solution.actions)} actions", ColoredLogger.GREEN)
                     for j, action in enumerate(solution.actions, 1):
-                        ColoredLogger.info(f"  {j}. {action.type}: {vars(action)}", ColoredLogger.GRAY)
+                        ColoredLogger.debug(f"  {j}. {action.type}: {vars(action)}", ColoredLogger.GRAY)
 
                         # 🔍 DEBUG: Check for seed discrepancies in NavigateAction
                         if hasattr(action, 'url') and action.url and action.type == 'NavigateAction':
-                            ColoredLogger.info(f"     🔗 Navigation URL: {action.url}", ColoredLogger.MAGENTA)
+                            ColoredLogger.debug(f"     🔗 Navigation URL: {action.url}", ColoredLogger.MAGENTA)
 
                             # Check seed mismatch
                             if 'seed=' in action.url:
@@ -515,7 +565,7 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                                 if action_seed != str(seed):
                                     ColoredLogger.warning(f"     ⚠️  SEED MISMATCH! Expected: {seed}, Got: {action_seed}", ColoredLogger.RED)
                                 else:
-                                    ColoredLogger.info(f"     ✅ Seed matches: {action_seed}", ColoredLogger.GREEN)
+                                    ColoredLogger.debug(f"     ✅ Seed matches: {action_seed}", ColoredLogger.GREEN)
 
                             # Check URL path discrepancies
                             expected_base = project.frontend_url.rstrip('/')
@@ -523,13 +573,13 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                                 ColoredLogger.warning(f"     ⚠️  URL MISMATCH! Expected base: {expected_base}", ColoredLogger.RED)
                                 ColoredLogger.warning(f"     ⚠️  Got URL: {action.url}", ColoredLogger.RED)
                             else:
-                                ColoredLogger.info(f"     ✅ URL base matches: {expected_base}", ColoredLogger.GREEN)
+                                ColoredLogger.debug(f"     ✅ URL base matches: {expected_base}", ColoredLogger.GREEN)
                 else:
                     ColoredLogger.warning(f"\n📊 Miner UID={uid}: NO ACTIONS", ColoredLogger.YELLOW)
-            ColoredLogger.info("=" * 80 + "\n", ColoredLogger.CYAN)
+            ColoredLogger.debug("=" * 80 + "\n", ColoredLogger.CYAN)
 
             # Evaluate task solutions
-            ColoredLogger.info("🔍 STARTING EVALUATION...", ColoredLogger.CYAN)
+            ColoredLogger.debug("🔍 STARTING EVALUATION...", ColoredLogger.CYAN)
             eval_scores, test_results_list, evaluation_results = await evaluate_task_solutions(
                 web_project=project,
                 task=task,
@@ -538,21 +588,21 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
             )
 
             # 🔍 DEBUG: Log evaluation results in detail
-            ColoredLogger.info("\n" + "=" * 80, ColoredLogger.CYAN)
-            ColoredLogger.info("🔍 EVALUATION RESULTS DETAILED", ColoredLogger.CYAN)
-            ColoredLogger.info("=" * 80, ColoredLogger.CYAN)
+            ColoredLogger.debug("\n" + "=" * 80, ColoredLogger.CYAN)
+            ColoredLogger.debug("🔍 EVALUATION RESULTS DETAILED", ColoredLogger.CYAN)
+            ColoredLogger.debug("=" * 80, ColoredLogger.CYAN)
             for i, uid in enumerate(self.active_miner_uids):
-                ColoredLogger.info(f"\n📊 Miner UID={uid}:", ColoredLogger.MAGENTA)
-                ColoredLogger.info(f"  📈 Eval Score: {eval_scores[i]:.4f}", ColoredLogger.GREEN)
-                ColoredLogger.info(f"  ⏱️  Execution Time: {execution_times[i]:.2f}s", ColoredLogger.BLUE)
+                ColoredLogger.debug(f"\n📊 Miner UID={uid}:", ColoredLogger.MAGENTA)
+                ColoredLogger.debug(f"  📈 Eval Score: {eval_scores[i]:.4f}", ColoredLogger.GREEN)
+                ColoredLogger.debug(f"  ⏱️  Execution Time: {execution_times[i]:.2f}s", ColoredLogger.BLUE)
 
                 # Show evaluation_result but replace GIF content with just its length
                 eval_result_display = evaluation_results[i].copy()
                 if 'gif_recording' in eval_result_display and eval_result_display['gif_recording']:
                     eval_result_display['gif_recording'] = f"<length: {len(eval_result_display['gif_recording'])}>"
 
-                ColoredLogger.info(f"  📋 Evaluation Result: {eval_result_display}", ColoredLogger.YELLOW)
-                ColoredLogger.info(f"  🧪 Test Results ({len(test_results_list[i])} tests):", ColoredLogger.CYAN)
+                ColoredLogger.debug(f"  📋 Evaluation Result: {eval_result_display}", ColoredLogger.YELLOW)
+                ColoredLogger.debug(f"  🧪 Test Results ({len(test_results_list[i])} tests):", ColoredLogger.CYAN)
                 if test_results_list[i]:
                     for test_idx, test_result in enumerate(test_results_list[i], 1):
                         success = test_result.get("success", False)
@@ -563,12 +613,12 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                         test_type = extra_data.get("type", "Unknown")
                         event_name = extra_data.get("event_name", "N/A")
 
-                        ColoredLogger.info(f"     Test {test_idx}: {status_emoji} {test_type} - Event: {event_name}", ColoredLogger.GRAY)
+                        ColoredLogger.debug(f"     Test {test_idx}: {status_emoji} {test_type} - Event: {event_name}", ColoredLogger.GRAY)
                         if extra_data.get("event_criteria"):
-                            ColoredLogger.info(f"        Criteria: {extra_data.get('event_criteria')}", ColoredLogger.GRAY)
+                            ColoredLogger.debug(f"        Criteria: {extra_data.get('event_criteria')}", ColoredLogger.GRAY)
                 else:
                     ColoredLogger.warning(f"     ⚠️  NO TEST RESULTS", ColoredLogger.RED)
-            ColoredLogger.info("=" * 80 + "\n", ColoredLogger.CYAN)
+            ColoredLogger.debug("=" * 80 + "\n", ColoredLogger.CYAN)
 
             # Calculate final scores (combining eval quality + execution speed)
             rewards = calculate_rewards_for_task(

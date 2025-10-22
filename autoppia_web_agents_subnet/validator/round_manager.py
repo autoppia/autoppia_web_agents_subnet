@@ -139,22 +139,22 @@ class RoundManager:
         target_block = self.epoch_to_block(target_epoch)
 
         # 🔍 CRITICAL DEBUG: Verify global sync calculations
-        bt.logging.info("=" * 80)
-        bt.logging.info("🌐 GLOBAL SYNC CALCULATION (Modulo-based)")
-        bt.logging.info("=" * 80)
-        bt.logging.info(f"📍 Current block:      {current_block:,}")
-        bt.logging.info(f"📍 Current epoch:      {current_epoch:.4f}")
-        bt.logging.info("")
-        bt.logging.info(f"🔢 ROUND_SIZE_EPOCHS:  {self.round_size_epochs}")
-        bt.logging.info(f"🔢 Modulo calculation: ({current_epoch:.4f} // {self.round_size_epochs}) × {self.round_size_epochs}")
-        bt.logging.info(f"🔢 Result:             {current_epoch // self.round_size_epochs:.0f} × {self.round_size_epochs} = {round_start_epoch:.4f}")
-        bt.logging.info("")
-        bt.logging.info(f"🎯 Round start epoch:  {round_start_epoch:.4f} (Block {round_start_block:,})")
-        bt.logging.info(f"🎯 Round end epoch:    {target_epoch:.4f} (Block {target_block:,})")
-        bt.logging.info(f"⏱️  Round duration:     {target_epoch - round_start_epoch:.2f} epochs ({(target_block - round_start_block):,} blocks)")
-        bt.logging.info("")
-        bt.logging.info(f"✅ ALL validators will end at epoch {target_epoch:.4f} regardless of start time")
-        bt.logging.info("=" * 80)
+        bt.logging.debug("=" * 80)
+        bt.logging.debug("🌐 GLOBAL SYNC CALCULATION (Modulo-based)")
+        bt.logging.debug("=" * 80)
+        bt.logging.debug(f"📍 Current block:      {current_block:,}")
+        bt.logging.debug(f"📍 Current epoch:      {current_epoch:.4f}")
+        bt.logging.debug("")
+        bt.logging.debug(f"🔢 ROUND_SIZE_EPOCHS:  {self.round_size_epochs}")
+        bt.logging.debug(f"🔢 Modulo calculation: ({current_epoch:.4f} // {self.round_size_epochs}) × {self.round_size_epochs}")
+        bt.logging.debug(f"🔢 Result:             {current_epoch // self.round_size_epochs:.0f} × {self.round_size_epochs} = {round_start_epoch:.4f}")
+        bt.logging.debug("")
+        bt.logging.debug(f"🎯 Round start epoch:  {round_start_epoch:.4f} (Block {round_start_block:,})")
+        bt.logging.debug(f"🎯 Round end epoch:    {target_epoch:.4f} (Block {target_block:,})")
+        bt.logging.debug(f"⏱️  Round duration:     {target_epoch - round_start_epoch:.2f} epochs ({(target_block - round_start_block):,} blocks)")
+        bt.logging.debug("")
+        bt.logging.debug(f"✅ ALL validators will end at epoch {target_epoch:.4f} regardless of start time")
+        bt.logging.debug("=" * 80)
 
         return {
             'round_start_epoch': round_start_epoch,
@@ -194,9 +194,10 @@ class RoundManager:
             raise ValueError("Round not started. Call start_new_round() first.")
 
         boundaries = self.get_round_boundaries(self.start_block)
-        total_round_blocks = self.round_size_epochs * self.BLOCKS_PER_EPOCH
         safety_buffer_blocks = self.safety_buffer_epochs * self.BLOCKS_PER_EPOCH
-        absolute_limit_block = self.start_block + total_round_blocks - safety_buffer_blocks
+        # Global deadline: do not schedule tasks that would start beyond
+        # the target round boundary minus the safety buffer.
+        absolute_limit_block = int(boundaries['target_block'] - safety_buffer_blocks)
 
         if current_block >= absolute_limit_block:
             return False
@@ -242,15 +243,15 @@ class RoundManager:
 
     def log_calculation_summary(self):
         """Log calculation summary for debugging."""
-        ColoredLogger.info("📊 Round Manager Configuration:", ColoredLogger.CYAN)
-        ColoredLogger.info(f"   Round size: {self.round_size_epochs} epochs", ColoredLogger.CYAN)
-        ColoredLogger.info(f"   Safety buffer: {self.safety_buffer_epochs} epochs", ColoredLogger.CYAN)
-        ColoredLogger.info(f"   Avg task duration: {self.avg_task_duration_seconds}s", ColoredLogger.CYAN)
-        ColoredLogger.info(f"   Blocks per epoch: {self.BLOCKS_PER_EPOCH}", ColoredLogger.CYAN)
-        ColoredLogger.info(f"   Seconds per block: {self.SECONDS_PER_BLOCK}s", ColoredLogger.CYAN)
-        ColoredLogger.info(f"   Round block length: {self.ROUND_BLOCK_LENGTH}", ColoredLogger.CYAN)
+        ColoredLogger.debug("📊 Round Manager Configuration:", ColoredLogger.CYAN)
+        ColoredLogger.debug(f"   Round size: {self.round_size_epochs} epochs", ColoredLogger.CYAN)
+        ColoredLogger.debug(f"   Safety buffer: {self.safety_buffer_epochs} epochs", ColoredLogger.CYAN)
+        ColoredLogger.debug(f"   Avg task duration: {self.avg_task_duration_seconds}s", ColoredLogger.CYAN)
+        ColoredLogger.debug(f"   Blocks per epoch: {self.BLOCKS_PER_EPOCH}", ColoredLogger.CYAN)
+        ColoredLogger.debug(f"   Seconds per block: {self.SECONDS_PER_BLOCK}s", ColoredLogger.CYAN)
+        ColoredLogger.debug(f"   Round block length: {self.ROUND_BLOCK_LENGTH}", ColoredLogger.CYAN)
         if self.minimum_start_block is not None:
-            ColoredLogger.info(
+            ColoredLogger.debug(
                 f"   Minimum start block: {self.minimum_start_block} (rounds allowed > this block)",
                 ColoredLogger.CYAN,
             )
@@ -445,6 +446,6 @@ class RoundManager:
         stats = self.get_round_stats()
         avg_rewards = self.get_average_rewards()
 
-        ColoredLogger.info(f"Round stats: {stats['total_miners']} miners, {stats['total_tasks']} tasks", ColoredLogger.PURPLE)
+        ColoredLogger.debug(f"Round stats: {stats['total_miners']} miners, {stats['total_tasks']} tasks", ColoredLogger.PURPLE)
         for uid, score in avg_rewards.items():
-            ColoredLogger.info(f"  Miner {uid}: {score:.3f} (from {len(self.round_rewards[uid])} tasks)", ColoredLogger.PURPLE)
+            ColoredLogger.debug(f"  Miner {uid}: {score:.3f} (from {len(self.round_rewards[uid])} tasks)", ColoredLogger.PURPLE)

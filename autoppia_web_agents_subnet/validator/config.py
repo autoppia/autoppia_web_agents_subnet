@@ -49,12 +49,11 @@ def _env_int(name: str, default: int) -> int:
 # All validators synchronize at epoch multiples of 20 (GLOBAL SYNC)
 # ════════════════════════════════════════════════════════════════════════════════
 
-ROUND_SIZE_EPOCHS = 20               # 24 hours per round
+ROUND_SIZE_EPOCHS = 6                # ~7.2 hours per round
 # 1 epoch = 360 blocks = 72 minutes = 1.2 hours
-# 20 epochs = 7,200 blocks = 86,400 seconds = 1,440 minutes = 24 hours
-# Round 1: epochs 18,640 - 18,659 (24h) - ALL validators end at epoch 18,660
-# Round 2: epochs 18,660 - 18,679 (24h) - ALL validators end at epoch 18,680
-# ⚠️ If validator starts late, it still ends at the same epoch as others!
+# 6 epochs = 2,160 blocks = 25,920 seconds ≈ 432 minutes ≈ 7.2 hours
+# Round boundaries still align to global multiples of ROUND_SIZE_EPOCHS
+# ⚠️ If validator starts late, it still ends at the same target epoch as others!
 
 SAFETY_BUFFER_EPOCHS = 0.5           # 0.5 epoch = 36 minutes buffer before round ends
 # Stop sending tasks when less than 0.5 epochs remains

@@ -189,7 +189,7 @@ def collect_task_solutions_and_execution_times(
                 TaskSolution(task_id=task.id, actions=[], web_agent_id=str(miner_uid))
             )
             execution_times.append(TIMEOUT)
-            bt.logging.info(
+            bt.logging.debug(
                 f"[TIME] uid={miner_uid} response=None -> using TIMEOUT={TIMEOUT:.3f}s"
             )
             continue
@@ -216,12 +216,12 @@ def collect_task_solutions_and_execution_times(
             and response.dendrite.process_time is not None
         ):
             execution_times.append(response.dendrite.process_time)
-            bt.logging.info(
+            bt.logging.debug(
                 f"[TIME] uid={miner_uid} process_time={response.dendrite.process_time:.3f}s (taken)"
             )
         else:
             execution_times.append(TIMEOUT)
-            bt.logging.info(
+            bt.logging.debug(
                 f"[TIME] uid={miner_uid} process_time=None -> using TIMEOUT={TIMEOUT:.3f}s"
             )
 

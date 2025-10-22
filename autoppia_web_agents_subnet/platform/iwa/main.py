@@ -4,9 +4,11 @@ import asyncio
 import json
 import logging
 import os
-from datetime import datetime
-from pathlib import Path
 import uuid
+from dataclasses import asdict, is_dataclass
+from datetime import date, datetime, time as dtime
+from enum import Enum
+from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
 import httpx
@@ -221,7 +223,11 @@ class IWAPClient:
         bt.logging.info(f"📍 Endpoint: POST /api/v1/validator-rounds/{validator_round_id}/agent-runs/{agent_run_id}/evaluations")
         bt.logging.info("")
         bt.logging.info("📄 FULL JSON PAYLOAD:")
-        payload_str = json.dumps(json_data, indent=2, ensure_ascii=False)
+        try:
+            payload_str = json.dumps(_sanitize_json(json_data), indent=2, ensure_ascii=False)
+        except Exception:
+            # Last-resort fallback to avoid crashing logging on non-serializable objects
+            payload_str = json.dumps({"error": "non-serializable-payload"})
         for line in payload_str.split('\n'):
             bt.logging.info(line)
         bt.logging.info("")
@@ -328,8 +334,9 @@ class IWAPClient:
         return gif_url
 
     async def _post(self, path: str, payload: Dict[str, object], *, context: str) -> None:
-        self._backup_payload(context, payload)
-        request = self._client.build_request("POST", path, json=payload)
+        sanitized_payload = _sanitize_json(payload)
+        self._backup_payload(context, sanitized_payload)
+        request = self._client.build_request("POST", path, json=sanitized_payload)
         auth_headers = self._resolve_auth_headers()
         if auth_headers:
             request.headers.update(auth_headers)
@@ -341,8 +348,11 @@ class IWAPClient:
         logger.info(f"   URL: {target_url}")
         logger.info(f"   Context: {context}")
         logger.info(f"   Headers: {dict(request.headers)}")
-        logger.info(f"   Payload keys: {list(payload.keys())}")
-        logger.info(f"   Payload size: {len(str(payload))} chars")
+        try:
+            logger.info(f"   Payload keys: {list(sanitized_payload.keys())}")
+            logger.info(f"   Payload size: {len(str(sanitized_payload))} chars")
+        except Exception:
+            logger.info("   Payload: <unprintable>")
 
         try:
             logger.info("IWAP %s POST %s started", context, target_url)
@@ -378,7 +388,8 @@ class IWAPClient:
         body_parts = []
 
         # Add JSON data fields
-        for key, value in data.items():
+        sanitized_data = _sanitize_json(data)
+        for key, value in sanitized_data.items():
             body_parts.append(f"--{boundary}")
             body_parts.append(f"Content-Disposition: form-data; name=\"{key}\"")
             body_parts.append("Content-Type: application/json")
@@ -421,7 +432,7 @@ class IWAPClient:
         logger.info(f"   URL: {target_url}")
         logger.info(f"   Context: {context}")
         logger.info(f"   Content-Type: multipart/form-data; boundary={boundary}")
-        logger.info(f"   Data fields: {list(data.keys())}")
+        logger.info(f"   Data fields: {list(sanitized_data.keys())}")
         logger.info(f"   File fields: {list(files.keys())}")
         logger.info(f"   Total body size: {len(body)} bytes")
         for key, file_data in files.items():
@@ -458,7 +469,7 @@ class IWAPClient:
         target = self._backup_dir / filename
         try:
             with target.open("w", encoding="utf-8") as fh:
-                json.dump(payload, fh, ensure_ascii=False, indent=2)
+                json.dump(_sanitize_json(payload), fh, ensure_ascii=False, indent=2)
         except Exception:
             logger.warning("Failed to persist IWAP backup payload at %s", target, exc_info=True)
 
@@ -525,3 +536,72 @@ def build_miner_snapshot(
         first_seen_at=now_ts,
         last_seen_at=now_ts,
     )
+
+
+def _sanitize_json(obj: Any) -> Any:
+    """
+    Recursively convert complex Python objects into JSON-serializable forms.
+
+    - datetime/date/time -> ISO strings
+    - Enum -> value (or name if value not serializable)
+    - bytes/bytearray -> base64 text
+    - set/tuple -> list
+    - dataclasses -> asdict
+    - pydantic models -> model_dump(mode="json", exclude_none=True)
+    - objects with __dict__ -> dict of public attrs
+    """
+    from base64 import b64encode
+
+    if obj is None or isinstance(obj, (str, int, float, bool)):
+        return obj
+
+    if isinstance(obj, (datetime, date, dtime)):
+        try:
+            return obj.isoformat()
+        except Exception:
+            return str(obj)
+
+    if isinstance(obj, Enum):
+        try:
+            return _sanitize_json(obj.value)
+        except Exception:
+            return obj.name
+
+    if isinstance(obj, (bytes, bytearray)):
+        try:
+            return b64encode(obj).decode("ascii")
+        except Exception:
+            return str(obj)
+
+    if isinstance(obj, (list, tuple, set)):
+        return [_sanitize_json(item) for item in obj]
+
+    if isinstance(obj, dict):
+        return {str(k): _sanitize_json(v) for k, v in obj.items() if v is not None}
+
+    # Dataclasses
+    if is_dataclass(obj):
+        try:
+            return _sanitize_json(asdict(obj))
+        except Exception:
+            return str(obj)
+
+    # Pydantic BaseModel (duck-typed)
+    if hasattr(obj, "model_dump"):
+        try:
+            return obj.model_dump(mode="json", exclude_none=True)
+        except Exception:
+            try:
+                return dict(obj)
+            except Exception:
+                return str(obj)
+
+    # Fallback: try to use __dict__
+    if hasattr(obj, "__dict__"):
+        try:
+            return {k: _sanitize_json(v) for k, v in vars(obj).items() if not k.startswith("_")}
+        except Exception:
+            return str(obj)
+
+    # Final fallback
+    return str(obj)

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import base64
+import json
 import math
 import time
 from binascii import Error as BinasciiError
-from typing import Any, Dict, List, Optional
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, Dict, List, Optional, Set, Tuple
 
+import httpx
 import bittensor as bt
 
 from autoppia_web_agents_subnet.validator.models import TaskWithProject
@@ -18,6 +22,8 @@ from autoppia_web_agents_subnet.validator.config import (
 )
 from autoppia_web_agents_subnet.platform.iwa import models as iwa_models
 from autoppia_web_agents_subnet.platform.iwa import main as iwa_main
+from autoppia_iwa.src.demo_webs.classes import WebProject
+from autoppia_iwa.src.data_generation.domain.classes import Task
 
 IWAP_PHASE_ICON = "🛰️"
 
@@ -42,6 +48,8 @@ class ValidatorPlatformMixin:
         self.round_handshake_payloads: Dict[int, Any] = {}
         self.round_start_timestamp: float = 0.0
         self.agent_run_accumulators: Dict[int, Dict[str, float]] = {}
+        # Track completed (miner_uid, task_id) to avoid duplicates on resume
+        self._completed_pairs: Set[Tuple[int, str]] = set()
 
     def _log_iwap_phase(
         self,
@@ -66,23 +74,24 @@ class ValidatorPlatformMixin:
         else:
             bt.logging.info(prefix)
 
-    def _generate_validator_round_id(self) -> str:
+    def _generate_validator_round_id(self, *, current_block: int) -> str:
         """
         Generate a unique validator round ID with round number.
 
-        Calculates round number based on current_block and ROUND_SIZE_EPOCHS.
+        Calculates round number via round_manager.calculate_round(current_block).
         """
-        # Calculate round number based on start_block
-        round_number = None
+        round_number: Optional[int] = None
         try:
-            round_mgr = getattr(self, 'round_manager', None)
-            if (round_mgr is not None 
-                and round_mgr.start_block is not None
-                    and round_mgr.ROUND_BLOCK_LENGTH > 0):
-                # Round number = start_block / ROUND_BLOCK_LENGTH
-                round_number = round_mgr.start_block // round_mgr.ROUND_BLOCK_LENGTH
-        except (AttributeError, ZeroDivisionError, TypeError) as e:
-            # If anything fails, just use None (will generate ID without round number)
+            rm = getattr(self, "round_manager", None)
+            if rm is not None and getattr(rm, "ROUND_BLOCK_LENGTH", 0):
+                base_block = getattr(rm, "minimum_start_block", 0) or 0
+                if current_block <= base_block:
+                    round_number = 0
+                else:
+                    blocks_since_start = current_block - base_block
+                    round_index = blocks_since_start // rm.ROUND_BLOCK_LENGTH
+                    round_number = int(round_index + 1)
+        except Exception as e:  # noqa: BLE001
             bt.logging.debug(f"Could not calculate round number: {e}")
             round_number = None
 
@@ -129,6 +138,132 @@ class ValidatorPlatformMixin:
             hotkey=self.wallet.hotkey.ss58_address,
             coldkey=coldkey,
         )
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Crash-resume helpers: state file management
+    # ──────────────────────────────────────────────────────────────────────────
+    @property
+    def _round_state_path(self) -> Path:
+        return Path(".autoppia_round_state.json")
+
+    def _serialize_handshake(self, payload: Any) -> Dict[str, Any]:
+        return {
+            "agent_name": getattr(payload, "agent_name", None),
+            "agent_image": getattr(payload, "agent_image", None),
+            "github_url": getattr(payload, "github_url", None),
+            "agent_version": getattr(payload, "agent_version", None),
+            "note": getattr(payload, "note", None),
+        }
+
+    def _save_round_state(self, *, tasks: Optional[List[TaskWithProject]] = None) -> None:
+        try:
+            state: Dict[str, Any] = {
+                "validator_round_id": self.current_round_id,
+                "validator_hotkey": getattr(self.wallet.hotkey, "ss58_address", None),
+                "created_at": self.round_start_timestamp or time.time(),
+                "active_miner_uids": list(getattr(self, "active_miner_uids", []) or []),
+                "handshakes": {str(uid): self._serialize_handshake(p) for uid, p in self.round_handshake_payloads.items()},
+                "agent_runs": {str(uid): run.agent_run_id for uid, run in self.current_agent_runs.items()},
+                "completed": [[uid, task_id] for (uid, task_id) in sorted(self._completed_pairs)],
+            }
+            # Preserve previously stored tasks if not provided
+            serialized_tasks: List[Dict[str, Any]] = []
+            if tasks is not None:
+                for item in tasks:
+                    try:
+                        serialized_tasks.append(
+                            {
+                                "project": item.project.model_dump(),
+                                "task": item.task.serialize() if hasattr(item.task, "serialize") else item.task.model_dump(),
+                            }
+                        )
+                    except Exception:
+                        continue
+            else:
+                try:
+                    if self._round_state_path.exists():
+                        with self._round_state_path.open("r", encoding="utf-8") as fh:
+                            prev = json.load(fh)
+                        serialized_tasks = list(prev.get("tasks") or [])
+                except Exception:
+                    serialized_tasks = []
+            state["tasks"] = serialized_tasks
+
+            with self._round_state_path.open("w", encoding="utf-8") as fh:
+                json.dump(state, fh, ensure_ascii=False, indent=2)
+        except Exception as exc:
+            bt.logging.warning(f"Failed to persist round state: {exc}")
+
+    def _load_round_state(self) -> Optional[Dict[str, Any]]:
+        if not self._round_state_path.exists():
+            return None
+        try:
+            with self._round_state_path.open("r", encoding="utf-8") as fh:
+                state = json.load(fh)
+        except Exception as exc:
+            bt.logging.warning(f"Failed to read round state: {exc}")
+            return None
+
+        self.current_round_id = state.get("validator_round_id")
+        self.round_start_timestamp = float(state.get("created_at") or time.time())
+
+        # Handshakes
+        self.round_handshake_payloads = {}
+        for k, v in (state.get("handshakes") or {}).items():
+            try:
+                uid = int(k)
+            except Exception:
+                continue
+            self.round_handshake_payloads[uid] = SimpleNamespace(**(v or {}))
+
+        # Active miners
+        try:
+            self.active_miner_uids = [int(x) for x in state.get("active_miner_uids") or []]
+        except Exception:
+            self.active_miner_uids = []  # type: ignore[attr-defined]
+
+        # Agent runs
+        self.current_agent_runs = {}
+        for k, run_id in (state.get("agent_runs") or {}).items():
+            try:
+                uid = int(k)
+            except Exception:
+                continue
+            try:
+                miner_hotkey = self.metagraph.hotkeys[uid]
+            except Exception:
+                miner_hotkey = None
+            self.current_agent_runs[uid] = iwa_models.AgentRunIWAP(
+                agent_run_id=run_id,
+                validator_round_id=self.current_round_id or "",
+                validator_uid=int(self.uid),
+                validator_hotkey=getattr(self.wallet.hotkey, "ss58_address", None),
+                miner_uid=uid,
+                miner_hotkey=miner_hotkey,
+                miner_agent_key=None,
+                is_sota=False,
+                version=getattr(self.round_handshake_payloads.get(uid, None), "agent_version", None),
+                started_at=self.round_start_timestamp or time.time(),
+                metadata={"resumed": True},
+            )
+
+        # Completed pairs
+        self._completed_pairs = set()
+        for pair in state.get("completed") or []:
+            if isinstance(pair, (list, tuple)) and len(pair) == 2:
+                try:
+                    self._completed_pairs.add((int(pair[0]), str(pair[1])))
+                except Exception:
+                    continue
+
+        return state
+
+    def _remove_round_state(self) -> None:
+        try:
+            if self._round_state_path.exists():
+                self._round_state_path.unlink()
+        except Exception:
+            pass
 
     def _metagraph_numeric(self, attribute: str, uid: int) -> Optional[float]:
         collection = getattr(self.metagraph, attribute, None)
@@ -342,6 +477,21 @@ class ValidatorPlatformMixin:
                 validator_round=validator_round,
                 validator_snapshot=validator_snapshot,
             )
+        except httpx.HTTPStatusError as exc:
+            if exc.response is not None and exc.response.status_code == 409:
+                self._log_iwap_phase(
+                    "Phase 1",
+                    f"start_round returned 409 (already exists); continuing idempotently",
+                    level="warning",
+                )
+            else:
+                self._log_iwap_phase(
+                    "Phase 1",
+                    f"start_round failed for round_id={self.current_round_id}",
+                    level="error",
+                    exc_info=True,
+                )
+                return
         except Exception:
             self._log_iwap_phase(
                 "Phase 1",
@@ -369,6 +519,21 @@ class ValidatorPlatformMixin:
                 validator_round_id=self.current_round_id,
                 tasks=self.current_round_tasks.values(),
             )
+        except httpx.HTTPStatusError as exc:
+            if exc.response is not None and exc.response.status_code == 409:
+                self._log_iwap_phase(
+                    "Phase 2",
+                    f"set_tasks returned 409 (duplicates); continuing idempotently",
+                    level="warning",
+                )
+            else:
+                self._log_iwap_phase(
+                    "Phase 2",
+                    f"set_tasks failed for round_id={self.current_round_id}",
+                    level="error",
+                    exc_info=True,
+                )
+                return
         except Exception:
             self._log_iwap_phase(
                 "Phase 2",
@@ -418,7 +583,9 @@ class ValidatorPlatformMixin:
                 now_ts=now_ts,
             )
 
-            agent_run_id = iwa_main.generate_agent_run_id(miner_uid)
+            # Reuse saved agent_run_id if available
+            existing_run = self.current_agent_runs.get(miner_uid)
+            agent_run_id = existing_run.agent_run_id if existing_run else iwa_main.generate_agent_run_id(miner_uid)
             agent_run = iwa_models.AgentRunIWAP(
                 agent_run_id=agent_run_id,
                 validator_round_id=self.current_round_id,
@@ -445,6 +612,25 @@ class ValidatorPlatformMixin:
                     miner_identity=miner_identity,
                     miner_snapshot=miner_snapshot,
                 )
+            except httpx.HTTPStatusError as exc:
+                if exc.response is not None and exc.response.status_code == 409:
+                    self._log_iwap_phase(
+                        "Phase 3",
+                        f"start_agent_run returned 409 for miner_uid={miner_uid} (already exists); continuing",
+                        level="warning",
+                    )
+                else:
+                    start_agent_run_error = (
+                        f"start_agent_run failed for miner_uid={miner_uid}, "
+                        f"agent_run_id={agent_run_id}"
+                    )
+                    self._log_iwap_phase(
+                        "Phase 3",
+                        start_agent_run_error,
+                        level="error",
+                        exc_info=True,
+                    )
+                    continue
             except Exception:
                 start_agent_run_error = (
                     f"start_agent_run failed for miner_uid={miner_uid}, "
@@ -475,6 +661,11 @@ class ValidatorPlatformMixin:
                     "execution_time": 0.0,
                     "tasks": 0,
                 }
+                # Persist state progressively
+                try:
+                    self._save_round_state()
+                except Exception:
+                    pass
 
     async def _iwap_submit_task_results(
         self,
@@ -595,6 +786,15 @@ class ValidatorPlatformMixin:
                 metadata=evaluation_metadata,
             )
 
+            # Skip if already completed (resume mode)
+            if (miner_uid, task_id) in self._completed_pairs:
+                self._log_iwap_phase(
+                    "Phase 4",
+                    f"⏭️ Skipping add_evaluation for miner_uid={miner_uid}, task_id={task_id} (already completed)",
+                    level="warning",
+                )
+                continue
+
             add_evaluation_message = (
                 f"Calling add_evaluation for miner_uid={miner_uid}, "
                 f"task_id={task_id}, agent_run_id={agent_run.agent_run_id}"
@@ -629,6 +829,32 @@ class ValidatorPlatformMixin:
                     task_solution=task_solution_payload,
                     evaluation_result=evaluation_result_payload,
                 )
+            except httpx.HTTPStatusError as exc:
+                if exc.response is not None and exc.response.status_code == 409:
+                    # Treat as idempotent – mark completed
+                    self._log_iwap_phase(
+                        "Phase 4",
+                        f"add_evaluation returned 409 for miner_uid={miner_uid}, task_id={task_id}; marking as completed",
+                        level="warning",
+                    )
+                    self._completed_pairs.add((miner_uid, task_id))
+                    try:
+                        self._save_round_state()
+                    except Exception:
+                        pass
+                    continue
+                else:
+                    add_evaluation_error = (
+                        f"add_evaluation failed for miner_uid={miner_uid}, "
+                        f"task_id={task_id}"
+                    )
+                    self._log_iwap_phase(
+                        "Phase 4",
+                        add_evaluation_error,
+                        level="error",
+                        exc_info=True,
+                    )
+                    continue
             except Exception:
                 add_evaluation_error = (
                     f"add_evaluation failed for miner_uid={miner_uid}, "
@@ -650,6 +876,12 @@ class ValidatorPlatformMixin:
                     add_evaluation_success,
                     level="success",
                 )
+                # Record completion and persist
+                self._completed_pairs.add((miner_uid, task_id))
+                try:
+                    self._save_round_state()
+                except Exception:
+                    pass
 
                 # 🎬 Now upload GIF to AWS (evaluation exists now)
                 if gif_to_upload:
@@ -830,6 +1062,7 @@ class ValidatorPlatformMixin:
             )
         finally:
             self._reset_iwap_round_state()
+            self._remove_round_state()
 
     def _reset_iwap_round_state(self) -> None:
         self.current_round_id = None
@@ -839,3 +1072,4 @@ class ValidatorPlatformMixin:
         self.round_handshake_payloads = {}
         self.round_start_timestamp = 0.0
         self.agent_run_accumulators = {}
+        self._completed_pairs = set()
