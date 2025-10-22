@@ -150,36 +150,24 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
                 )
             )
 
-            # 🔥 Round 1 burn-only mode: set all weight to UID 5 and skip tasks
+            # 🔥 Round 1: copy burn-all logic exactly and do nothing else
             try:
                 if round_number_preview == 1:
-                    total_n = int(self.metagraph.n)
-                    target_uid = 5
-                    if target_uid < total_n:
-                        if not self._burn_applied:
-                            ColoredLogger.warning(
-                                f"🔥 Round 1 burn-only: setting all weight to uid={target_uid}",
-                                ColoredLogger.YELLOW,
-                            )
-                            forced = np.zeros(total_n, dtype=np.float32)
-                            forced[target_uid] = 1.0
-                            # Directly set the internal scores vector to reflect the forced distribution
-                            self.scores = forced
-                            # Push weights to chain respecting config flags
-                            self._maybe_set_weights()
-                            self._burn_applied = True
-                            ColoredLogger.success(
-                                f"✅ Weights overridden to uid={target_uid} (n={total_n})", ColoredLogger.GREEN
-                            )
-                        else:
-                            bt.logging.debug("Round 1 burn-only already applied; skipping repeated set_weights")
-                        # Skip running tasks / IWAP for round 1
-                        return
-                    else:
-                        ColoredLogger.error(
-                            f"🔥 Early-round override requested but uid={target_uid} >= metagraph.n={total_n}; skipping",
-                            ColoredLogger.RED,
-                        )
+                    # Round 1 policy: burn all weights to UID 0
+                    ColoredLogger.warning("🔥 Round 1: burning all weights to UID 0", ColoredLogger.YELLOW)
+
+                    # Create burn weights: UID 0 = 1.0, all others = 0.0
+                    burn_weights = np.zeros(self.metagraph.n, dtype=np.float32)
+                    burn_weights[0] = 1.0  # UID 0 gets all weight (burn)
+
+                    # Set these burn weights directly
+                    self.scores = burn_weights
+                    self._maybe_set_weights()
+
+                    ColoredLogger.success("✅ Burn complete (weight to UID 0)", ColoredLogger.RED)
+                    ColoredLogger.info(f"Tasks attempted: {0}", ColoredLogger.RED)
+                    # Do nothing else in round 1
+                    return
             except Exception as e:
                 bt.logging.warning(f"Early-round override failed: {e}")
         except Exception as e:
