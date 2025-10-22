@@ -49,23 +49,22 @@ def _env_int(name: str, default: int) -> int:
 # All validators synchronize at epoch multiples of 20 (GLOBAL SYNC)
 # ════════════════════════════════════════════════════════════════════════════════
 
-# Default production round size (overridden in TESTING below)
-ROUND_SIZE_EPOCHS = 6                # ~7.2 hours per round
+# ROUND_SIZE_EPOCHS = 6                # ~7.2 hours per round
 # 1 epoch = 360 blocks = 72 minutes = 1.2 hours
 # 6 epochs = 2,160 blocks = 25,920 seconds ≈ 432 minutes ≈ 7.2 hours
 # Round boundaries still align to global multiples of ROUND_SIZE_EPOCHS
 # ⚠️ If validator starts late, it still ends at the same target epoch as others!
 
-SAFETY_BUFFER_EPOCHS = 0.5           # 0.5 epoch = 36 minutes buffer before round ends
+# SAFETY_BUFFER_EPOCHS = 0.5           # 0.5 epoch = 36 minutes buffer before round ends
 # Stop sending tasks when less than 0.5 epochs remains
 # Ensures last task completes + weights are set before round deadline
 
-AVG_TASK_DURATION_SECONDS = 300      # 5 minutes average per task
+# AVG_TASK_DURATION_SECONDS = 300      # 5 minutes average per task
 # Includes: send task + miner execution + evaluation + API submission
 # 300 tasks × 5 min = 1,500 min = 25 hours
 # Distributed over ~23.4 hours (24h - 36min buffer) = ~13 tasks/hour
-
-PRE_GENERATED_TASKS = 75             # Generate fewer tasks (≈ 1/4)
+#
+# PRE_GENERATED_TASKS = 75             # Generate fewer tasks (≈ 1/4)
 # All tasks generated upfront; dynamic loop truncates based on time
 # With 6-epoch rounds and ~5 min/task, ~75 tasks fits comfortably
 
@@ -94,26 +93,35 @@ PRE_GENERATED_TASKS = 75             # Generate fewer tasks (≈ 1/4)
 # ════════════════════════════════════════════════════════════════════════════════
 
 TESTING = _str_to_bool(os.getenv("TESTING", "false"))
-# Move start gate forward by full-epoch increments (360 blocks) to be past 6,716,117
-# Previous: 6,713,220 → + (360 * 9) = 6,716,460 (> 6,716,117)
-# In TESTING, use a fixed gate as requested: 6,717,750
-DZ_STARTING_BLOCK = 6_716_460 if not TESTING else 6_717_750
 
-# TESTING overrides
-if TESTING:
-    # Round duration = 1 epoch when TESTING is true
-    ROUND_SIZE_EPOCHS = 1
+# ════════════════════════════════════════════════════════════════════════════════
+# 🎯 Round System Configuration (Production defaults + Testing overrides)
+# ════════════════════════════════════════════════════════════════════════════════
+# 1 epoch = 360 blocks = 72 minutes
 
+# ── Production defaults (24h rounds) ─
+ROUND_SIZE_EPOCHS_PROD = 20.0             # 24 hours per round (20 epochs)
+SAFETY_BUFFER_EPOCHS_PROD = 0.5           # 36 minutes buffer
+AVG_TASK_DURATION_SECONDS_PROD = 300      # 5 minutes average per task
+PRE_GENERATED_TASKS_PROD = 75             # Generate tasks upfront; loop truncates by time
+# Epoch-aligned start gate: strictly > 6,712,258 and multiple of 300
+DZ_STARTING_BLOCK_PROD = 6_716_460
 
-# ╭────────────────────── TESTING Configuration (Commented) ──────────────────────╮
-# Uncomment for quick testing (rounds every ~14 minutes):
-#
-# ROUND_SIZE_EPOCHS = 0.1               # 14.4 minutes per round
-# SAFETY_BUFFER_EPOCHS = 0.02           # 1.4 minutes buffer
-# AVG_TASK_DURATION_SECONDS = 300       # 5 minutes per task
-# PRE_GENERATED_TASKS = 1               # Only 1 task
-# DZ_STARTING_BLOCK = 0                 # Start immediately
-# ╰───────────────────────────────────────────────────────────────────────────────╯
+# ── Testing defaults (quick dev cycles) ─
+ROUND_SIZE_EPOCHS_TEST = 0.278             # ~20 minutes per round
+SAFETY_BUFFER_EPOCHS_TEST = 0.02           # ~1.44 minutes buffer
+AVG_TASK_DURATION_SECONDS_TEST = 300
+PRE_GENERATED_TASKS_TEST = 4               # Only a few tasks for quick iteration
+DZ_STARTING_BLOCK_TEST = 0                 # Start immediately
+
+# ── Final values selected by TESTING flag ─
+ROUND_SIZE_EPOCHS = ROUND_SIZE_EPOCHS_TEST if TESTING else ROUND_SIZE_EPOCHS_PROD
+SAFETY_BUFFER_EPOCHS = SAFETY_BUFFER_EPOCHS_TEST if TESTING else SAFETY_BUFFER_EPOCHS_PROD
+AVG_TASK_DURATION_SECONDS = (
+    AVG_TASK_DURATION_SECONDS_TEST if TESTING else AVG_TASK_DURATION_SECONDS_PROD
+)
+PRE_GENERATED_TASKS = PRE_GENERATED_TASKS_TEST if TESTING else PRE_GENERATED_TASKS_PROD
+DZ_STARTING_BLOCK = DZ_STARTING_BLOCK_TEST if TESTING else DZ_STARTING_BLOCK_PROD
 
 # ╭─────────────────────────── Task Settings ─────────────────────────────╮
 

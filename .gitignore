@@ -182,6 +182,8 @@ cython_debug/
 
 testing/
 data/mongodb_data/
+data/validator_state/
+data/iwap_payloads/
 
 # Archivos generados automáticamente
 forward_reports/
