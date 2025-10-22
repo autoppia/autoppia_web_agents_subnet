@@ -80,11 +80,11 @@ class IWAPClient:
         self._owns_client = client is None
         self._backup_dir = Path(backup_dir or os.getenv("IWAP_BACKUP_DIR", "iwap_bakcup_dir"))
         self._auth_provider = auth_provider
-        logger.info("IWAP client initialized with base_url=%s", self._client.base_url)
+        bt.logging.info(f"IWAP client initialized with base_url={self._client.base_url}")
         try:
             self._backup_dir.mkdir(parents=True, exist_ok=True)
         except Exception:
-            logger.warning("Unable to create IWAP backup directory at %s", self._backup_dir, exc_info=True)
+            bt.logging.warning(f"Unable to create IWAP backup directory at {self._backup_dir}")
             self._backup_dir = None
 
     async def close(self) -> None:
@@ -100,7 +100,7 @@ class IWAPClient:
         try:
             headers = dict(self._auth_provider())
         except Exception:
-            logger.exception("IWAP auth provider failed to generate headers")
+            bt.logging.error("IWAP auth provider failed to generate headers", exc_info=True)
             raise
         sanitized: Dict[str, str] = {}
         for key, value in headers.items():
@@ -121,10 +121,8 @@ class IWAPClient:
             "validator_round": validator_round.to_payload(),
             "validator_snapshot": validator_snapshot.to_payload(),
         }
-        logger.info(
-            "IWAP start_round prepared for validator_round_id=%s round_number=%s",
-            validator_round.validator_round_id,
-            validator_round.round_number,
+        bt.logging.debug(
+            f"IWAP start_round prepared for validator_round_id={validator_round.validator_round_id} round_number={validator_round.round_number}"
         )
         await self._post("/api/v1/validator-rounds/start", payload, context="start_round")
 
@@ -136,10 +134,8 @@ class IWAPClient:
     ) -> None:
         task_payloads = [task.to_payload() for task in tasks]
         payload = {"tasks": task_payloads}
-        logger.info(
-            "IWAP set_tasks prepared for validator_round_id=%s tasks=%s",
-            validator_round_id,
-            len(task_payloads),
+        bt.logging.debug(
+            f"IWAP set_tasks prepared for validator_round_id={validator_round_id} tasks={len(task_payloads)}"
         )
         await self._post(f"/api/v1/validator-rounds/{validator_round_id}/tasks", payload, context="set_tasks")
 
@@ -156,11 +152,8 @@ class IWAPClient:
             "miner_identity": miner_identity.to_payload(),
             "miner_snapshot": miner_snapshot.to_payload(),
         }
-        logger.info(
-            "IWAP start_agent_run prepared for validator_round_id=%s agent_run_id=%s miner_uid=%s",
-            validator_round_id,
-            agent_run.agent_run_id,
-            miner_identity.uid,
+        bt.logging.debug(
+            f"IWAP start_agent_run prepared for validator_round_id={validator_round_id} agent_run_id={agent_run.agent_run_id} miner_uid={miner_identity.uid}"
         )
         await self._post(
             f"/api/v1/validator-rounds/{validator_round_id}/agent-runs/start",
@@ -212,9 +205,9 @@ class IWAPClient:
                 import base64
                 gif_binary = base64.b64decode(evaluation_result.gif_recording)
                 files["gif_recording"] = gif_binary
-                logger.info(f"🎬 GIF prepared for multipart: {len(gif_binary)} bytes")
+                bt.logging.debug(f"🎬 GIF prepared for multipart: {len(gif_binary)} bytes")
             except Exception as e:
-                logger.warning(f"⚠️  Failed to decode GIF for multipart: {e}")
+                bt.logging.warning(f"⚠️  Failed to decode GIF for multipart: {e}")
 
         # Payload preview (gated by env)
         if os.getenv("IWAP_LOG_PAYLOADS", "false").strip().lower() in {"1", "true", "yes", "on"}:
@@ -237,11 +230,8 @@ class IWAPClient:
                     bt.logging.debug(f"   - {key}: {len(file_data)} bytes (binary GIF)")
             bt.logging.debug("=" * 80)
 
-        logger.info(
-            "IWAP add_evaluation prepared for validator_round_id=%s agent_run_id=%s task_solution_id=%s",
-            validator_round_id,
-            agent_run_id,
-            task_solution.solution_id,
+        bt.logging.debug(
+            f"IWAP add_evaluation prepared for validator_round_id={validator_round_id} agent_run_id={agent_run_id} task_solution_id={task_solution.solution_id}"
         )
 
         # Use multipart if we have files, otherwise use regular JSON
@@ -265,10 +255,8 @@ class IWAPClient:
         validator_round_id: str,
         finish_request: models.FinishRoundIWAP,
     ) -> None:
-        logger.info(
-            "IWAP finish_round prepared for validator_round_id=%s summary=%s",
-            validator_round_id,
-            finish_request.summary,
+        bt.logging.debug(
+            f"IWAP finish_round prepared for validator_round_id={validator_round_id} summary={finish_request.summary}"
         )
         await self._post(
             f"/api/v1/validator-rounds/{validator_round_id}/finish",
@@ -277,7 +265,7 @@ class IWAPClient:
         )
 
     async def auth_check(self) -> None:
-        logger.info("IWAP auth_check prepared")
+        bt.logging.debug("IWAP auth_check prepared")
         await self._post("/api/v1/validator-rounds/auth-check", {}, context="auth_check")
 
     async def upload_evaluation_gif(self, evaluation_id: str, gif_bytes: bytes) -> Optional[str]:
@@ -286,11 +274,8 @@ class IWAPClient:
 
         path = f"/api/v1/evaluations/{evaluation_id}/gif"
         filename = f"{evaluation_id}.gif"
-        logger.info(
-            "🎬 IWAP: Uploading GIF to API - evaluation_id=%s filename=%s payload_bytes=%s",
-            evaluation_id,
-            filename,
-            len(gif_bytes),
+        bt.logging.info(
+            f"🎬 IWAP: Uploading GIF to API - evaluation_id={evaluation_id} filename={filename} payload_bytes={len(gif_bytes)}"
         )
 
         try:
@@ -299,25 +284,22 @@ class IWAPClient:
                 files={"gif": (filename, gif_bytes, "image/gif")},
             )
             response.raise_for_status()
-            logger.info(f"🎬 IWAP: GIF upload request successful - status_code={response.status_code}")
+            bt.logging.debug(f"🎬 IWAP: GIF upload request successful - status_code={response.status_code}")
         except httpx.HTTPStatusError as exc:
             body = exc.response.text
-            logger.error(
-                "❌ IWAP: GIF upload failed - POST %s returned %s: %s",
-                path,
-                exc.response.status_code,
-                body,
+            bt.logging.error(
+                f"❌ IWAP: GIF upload failed - POST {path} returned {exc.response.status_code}: {body}"
             )
             raise
         except Exception as e:
-            logger.exception(f"❌ IWAP: GIF upload failed unexpectedly - POST {path}: {str(e)}")
+            bt.logging.error(f"❌ IWAP: GIF upload failed unexpectedly - POST {path}: {str(e)}", exc_info=True)
             raise
 
         try:
             payload = response.json()
-            logger.info(f"🎬 IWAP: GIF upload response payload: {payload}")
+            bt.logging.debug(f"🎬 IWAP: GIF upload response payload: {payload}")
         except Exception as e:
-            logger.warning(f"⚠️  IWAP: Received non-JSON response for evaluation_id={evaluation_id}: {str(e)}")
+            bt.logging.warning(f"⚠️  IWAP: Received non-JSON response for evaluation_id={evaluation_id}: {str(e)}")
             return None
 
         gif_url = None
@@ -325,12 +307,12 @@ class IWAPClient:
             data_section = payload.get("data")
             if isinstance(data_section, dict):
                 gif_url = data_section.get("gifUrl")
-                logger.info(f"🎬 IWAP: Extracted GIF URL from response: {gif_url}")
+                bt.logging.debug(f"🎬 IWAP: Extracted GIF URL from response: {gif_url}")
 
         if gif_url:
-            logger.info(f"✅ IWAP: GIF upload completed successfully - URL: {gif_url}")
+            bt.logging.info(f"✅ IWAP: GIF upload completed successfully - URL: {gif_url}")
         else:
-            logger.warning(f"⚠️  IWAP: GIF upload completed but no URL returned for evaluation_id={evaluation_id}")
+            bt.logging.warning(f"⚠️  IWAP: GIF upload completed but no URL returned for evaluation_id={evaluation_id}")
         return gif_url
 
     async def _post(self, path: str, payload: Dict[str, object], *, context: str) -> None:
@@ -342,40 +324,33 @@ class IWAPClient:
             request.headers.update(auth_headers)
         target_url = str(request.url)
 
-        # HTTP request details (gated by env)
-        if os.getenv("IWAP_HTTP_DEBUG", "false").strip().lower() in {"1", "true", "yes", "on"}:
-            logger.debug("🌐 HTTP REQUEST DETAILS:")
-            logger.debug(f"   Method: POST")
-            logger.debug(f"   URL: {target_url}")
-            logger.debug(f"   Context: {context}")
-            logger.debug(f"   Headers: {dict(request.headers)}")
-            try:
-                logger.debug(f"   Payload keys: {list(sanitized_payload.keys())}")
-                logger.debug(f"   Payload size: {len(str(sanitized_payload))} chars")
-            except Exception:
-                logger.debug("   Payload: <unprintable>")
+        # HTTP request details at DEBUG
+        bt.logging.debug("🌐 HTTP REQUEST DETAILS:")
+        bt.logging.debug(f"   Method: POST")
+        bt.logging.debug(f"   URL: {target_url}")
+        bt.logging.debug(f"   Context: {context}")
+        bt.logging.debug(f"   Headers: {dict(request.headers)}")
+        try:
+            bt.logging.debug(f"   Payload keys: {list(sanitized_payload.keys())}")
+            bt.logging.debug(f"   Payload size: {len(str(sanitized_payload))} chars")
+        except Exception:
+            bt.logging.debug("   Payload: <unprintable>")
 
         try:
-            logger.info("IWAP %s POST %s started", context, target_url)
+            bt.logging.info(f"IWAP {context} POST {target_url} started")
             response = await self._client.send(request)
             response.raise_for_status()
-            logger.info(
-                "IWAP %s POST %s succeeded with status %s",
-                context,
-                target_url,
-                response.status_code,
-            )
-            if os.getenv("IWAP_HTTP_DEBUG", "false").strip().lower() in {"1", "true", "yes", "on"}:
-                logger.debug(f"   Response status: {response.status_code}")
-                logger.debug(f"   Response headers: {dict(response.headers)}")
-                if response.text:
-                    logger.debug(f"   Response body (first 500 chars): {response.text[:500]}")
+            bt.logging.info(f"IWAP {context} POST {target_url} succeeded with status {response.status_code}")
+            bt.logging.debug(f"   Response status: {response.status_code}")
+            bt.logging.debug(f"   Response headers: {dict(response.headers)}")
+            if response.text:
+                bt.logging.debug(f"   Response body (first 500 chars): {response.text[:500]}")
         except httpx.HTTPStatusError as exc:
             body = exc.response.text
-            logger.error("IWAP %s POST %s failed (%s): %s", context, target_url, exc.response.status_code, body)
+            bt.logging.error(f"IWAP {context} POST {target_url} failed ({exc.response.status_code}): {body}")
             raise
         except Exception:
-            logger.exception("IWAP %s POST %s failed unexpectedly", context, target_url)
+            bt.logging.error(f"IWAP {context} POST {target_url} failed unexpectedly", exc_info=True)
             raise
 
     async def _post_multipart(self, path: str, data: Dict[str, Any], files: Dict[str, bytes], *, context: str) -> None:
@@ -427,39 +402,32 @@ class IWAPClient:
 
         target_url = str(request.url)
 
-        if os.getenv("IWAP_HTTP_DEBUG", "false").strip().lower() in {"1", "true", "yes", "on"}:
-            logger.debug("🌐 MULTIPART REQUEST DETAILS:")
-            logger.debug(f"   Method: POST")
-            logger.debug(f"   URL: {target_url}")
-            logger.debug(f"   Context: {context}")
-            logger.debug(f"   Content-Type: multipart/form-data; boundary={boundary}")
-            logger.debug(f"   Data fields: {list(sanitized_data.keys())}")
-            logger.debug(f"   File fields: {list(files.keys())}")
-            logger.debug(f"   Total body size: {len(body)} bytes")
-            for key, file_data in files.items():
-                logger.debug(f"   File {key}: {len(file_data)} bytes")
+        bt.logging.debug("🌐 MULTIPART REQUEST DETAILS:")
+        bt.logging.debug(f"   Method: POST")
+        bt.logging.debug(f"   URL: {target_url}")
+        bt.logging.debug(f"   Context: {context}")
+        bt.logging.debug(f"   Content-Type: multipart/form-data; boundary={boundary}")
+        bt.logging.debug(f"   Data fields: {list(sanitized_data.keys())}")
+        bt.logging.debug(f"   File fields: {list(files.keys())}")
+        bt.logging.debug(f"   Total body size: {len(body)} bytes")
+        for key, file_data in files.items():
+            bt.logging.debug(f"   File {key}: {len(file_data)} bytes")
 
         try:
-            logger.info("IWAP %s POST %s started (multipart)", context, target_url)
+            bt.logging.info(f"IWAP {context} POST {target_url} started (multipart)")
             response = await self._client.send(request)
             response.raise_for_status()
-            logger.info(
-                "IWAP %s POST %s succeeded with status %s",
-                context,
-                target_url,
-                response.status_code,
-            )
-            if os.getenv("IWAP_HTTP_DEBUG", "false").strip().lower() in {"1", "true", "yes", "on"}:
-                logger.debug(f"   Response status: {response.status_code}")
-                logger.debug(f"   Response headers: {dict(response.headers)}")
-                if response.text:
-                    logger.debug(f"   Response body (first 500 chars): {response.text[:500]}")
+            bt.logging.info(f"IWAP {context} POST {target_url} succeeded with status {response.status_code}")
+            bt.logging.debug(f"   Response status: {response.status_code}")
+            bt.logging.debug(f"   Response headers: {dict(response.headers)}")
+            if response.text:
+                bt.logging.debug(f"   Response body (first 500 chars): {response.text[:500]}")
         except httpx.HTTPStatusError as exc:
             body = exc.response.text
-            logger.error("IWAP %s POST %s failed (%s): %s", context, target_url, exc.response.status_code, body)
+            bt.logging.error(f"IWAP {context} POST {target_url} failed ({exc.response.status_code}): {body}")
             raise
         except Exception:
-            logger.exception("IWAP %s POST %s failed unexpectedly", context, target_url)
+            bt.logging.error(f"IWAP {context} POST {target_url} failed unexpectedly", exc_info=True)
             raise
 
     def _backup_payload(self, context: str, payload: Dict[str, object]) -> None:
@@ -472,7 +440,7 @@ class IWAPClient:
             with target.open("w", encoding="utf-8") as fh:
                 json.dump(_sanitize_json(payload), fh, ensure_ascii=False, indent=2)
         except Exception:
-            logger.warning("Failed to persist IWAP backup payload at %s", target, exc_info=True)
+            bt.logging.warning(f"Failed to persist IWAP backup payload at {target}")
 
 
 def build_miner_identity(

@@ -51,6 +51,16 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
             raise SystemExit(1)
 
         super().__init__(config=config)
+
+        # Configure IWA (loguru) logging level based on CLI flag
+        try:
+            from autoppia_iwa.src.bootstrap import AppBootstrap
+            iwa_debug = False
+            if hasattr(self.config, "iwa") and hasattr(self.config.iwa, "logging") and hasattr(self.config.iwa.logging, "debug"):
+                iwa_debug = bool(self.config.iwa.logging.debug)
+            AppBootstrap(debug=iwa_debug)
+        except Exception:
+            pass
         self.forward_count = 0
         self.last_rewards: np.ndarray | None = None
         self.last_round_responses: Dict[int, StartRoundSynapse] = {}

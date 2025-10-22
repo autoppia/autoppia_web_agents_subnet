@@ -240,8 +240,17 @@ class Miner(BaseMinerNeuron):
 
 
 if __name__ == "__main__":
-    # Initializing Dependency Injection In IWA
-    app = AppBootstrap()
-    with Miner(config=config(role="miner")) as miner:
+    # Build config first to read CLI flags
+    cfg = config(role="miner")
+    # Initializing Dependency Injection In IWA with logging level
+    try:
+        iwa_debug = False
+        if hasattr(cfg, "iwa") and hasattr(cfg.iwa, "logging") and hasattr(cfg.iwa.logging, "debug"):
+            iwa_debug = bool(cfg.iwa.logging.debug)
+        AppBootstrap(debug=iwa_debug)
+    except Exception:
+        pass
+
+    with Miner(config=cfg) as miner:
         while True:
             time.sleep(5)

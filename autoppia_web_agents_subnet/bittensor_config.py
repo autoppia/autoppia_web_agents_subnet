@@ -40,6 +40,14 @@ def add_shared_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--neuron.events_retention_size", type=int, default=2 * 1024 * 1024 * 1024, help="Max size for persisted event logs (bytes).")  # 2 GiB
     parser.add_argument("--neuron.dont_save_events", action="store_true", default=False, help="If set, events are not saved to a log file.")
 
+    # IWA logging toggle (controls loguru debug in IWA module)
+    parser.add_argument(
+        "--iwa.logging.debug",
+        action="store_true",
+        default=False,
+        help="Enable DEBUG logs for IWA (loguru).",
+    )
+
     # Fresh boot helper (shared)
     parser.add_argument(
         "--fresh",
