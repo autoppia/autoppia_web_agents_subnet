@@ -166,8 +166,6 @@ class Validator(ValidatorPlatformMixin, BaseValidatorNeuron):
 
                     ColoredLogger.success("✅ Burn complete (weight to UID 0)", ColoredLogger.RED)
                     ColoredLogger.info(f"Tasks attempted: {0}", ColoredLogger.RED)
-                    # Do nothing else in round 1
-                    return
             except Exception as e:
                 bt.logging.warning(f"Early-round override failed: {e}")
         except Exception as e:
