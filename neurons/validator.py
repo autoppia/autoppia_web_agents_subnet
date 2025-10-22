@@ -292,7 +292,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             handshake_responses = []
             # Check if we already sent handshake in this round (via checkpoint)
             has_prior_handshake = resumed and hasattr(self, "round_handshake_payloads") and self.round_handshake_payloads
-            
+
             if has_prior_handshake:
                 # We already sent handshake before crash, use saved state
                 ColoredLogger.info(
