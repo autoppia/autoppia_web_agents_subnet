@@ -263,6 +263,8 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             self.current_agent_runs = {}
             self.current_miner_snapshots = {}
             self.agent_run_accumulators = {}
+            # Reset handshake flag for new round
+            self._phases["handshake_sent"] = False
 
         # Send StartRoundSynapse to all miners ONCE at the beginning
         try:
@@ -293,12 +295,13 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
             handshake_responses = []
             # Check if we already sent handshake in this round (via checkpoint)
-            has_prior_handshake = resumed and hasattr(self, "round_handshake_payloads") and self.round_handshake_payloads
+            # Use phase flag to track if handshake was sent, not the presence of responses
+            has_prior_handshake = resumed and self._phases.get("handshake_sent", False)
 
             if has_prior_handshake:
                 # We already sent handshake before crash, use saved state
                 ColoredLogger.info(
-                    f"♻️ Resuming: reusing saved handshake from {len(self.active_miner_uids)} miners (no re-send)",
+                    f"♻️ Resuming: handshake already sent (active_miners={len(self.active_miner_uids)}, no re-send)",
                     ColoredLogger.CYAN,
                 )
                 # Skip sending synapse; use saved state
@@ -397,6 +400,11 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 ColoredLogger.warning(
                     f"⚠️ Handshake complete: 0/{len(all_axons)} miners responded", ColoredLogger.YELLOW
                 )
+
+            # Mark that handshake was sent (for resume logic)
+            # This flag prevents re-sending handshake after restart, regardless of responses
+            if not resumed:
+                self._phases["handshake_sent"] = True
 
             # Persist handshake state for resume
             try:
