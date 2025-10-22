@@ -150,7 +150,24 @@ class ValidatorPlatformMixin:
     # ──────────────────────────────────────────────────────────────────────────
     @property
     def _round_state_path(self) -> Path:
-        return Path(".autoppia_round_state.json")
+        # Stable path independent of CWD: ~/.autoppia/state/<netuid>/<hotkey>.json
+        try:
+            base = Path.home() / ".autoppia" / "state"
+        except Exception:
+            base = Path(".autoppia_state_fallback")
+
+        # Determine netuid and hotkey, fall back to placeholders
+        try:
+            netuid = getattr(self.metagraph, "netuid", None)
+        except Exception:
+            netuid = None
+        try:
+            hotkey = getattr(getattr(self.wallet, "hotkey", None), "ss58_address", None)
+        except Exception:
+            hotkey = None
+        netuid_part = f"netuid_{netuid}" if netuid is not None else "netuid_unknown"
+        hotkey_part = hotkey or "hotkey_unknown"
+        return base / netuid_part / f"{hotkey_part}.json"
 
     def _serialize_handshake(self, payload: Any) -> Dict[str, Any]:
         return {
@@ -231,7 +248,11 @@ class ValidatorPlatformMixin:
             state["eval_records"] = list(self._eval_records or [])
             state["phases"] = dict(self._phases or {})
 
-            # Atomic write: write to temp then replace
+            # Atomic write: ensure dir, write to temp then replace
+            try:
+                self._round_state_path.parent.mkdir(parents=True, exist_ok=True)
+            except Exception:
+                pass
             tmp_path = self._round_state_path.with_suffix(self._round_state_path.suffix + ".tmp")
             with tmp_path.open("w", encoding="utf-8") as fh:
                 json.dump(state, fh, ensure_ascii=False, indent=2)
@@ -240,21 +261,37 @@ class ValidatorPlatformMixin:
             bt.logging.warning(f"Failed to persist round state: {exc}")
 
     def _load_round_state(self) -> Optional[Dict[str, Any]]:
-        if not self._round_state_path.exists():
+        state_path = self._round_state_path
+        legacy_path = Path(".autoppia_round_state.json")
+        chosen_path: Optional[Path] = None
+
+        if state_path.exists():
+            chosen_path = state_path
+        elif legacy_path.exists():
+            chosen_path = legacy_path
             try:
                 import bittensor as bt
                 bt.logging.info(
-                    f"Resume skipped: state file not found at {self._round_state_path.resolve()}"
+                    f"Resume migration: using legacy state file at {legacy_path.resolve()}"
+                )
+            except Exception:
+                pass
+        else:
+            try:
+                import bittensor as bt
+                bt.logging.info(
+                    f"Resume skipped: state file not found at {state_path.resolve()}"
                 )
             except Exception:
                 pass
             self._last_resume_info = {
                 "status": "skipped",
-                "reason": f"state file not found at {self._round_state_path}",
+                "reason": f"state file not found at {state_path}",
             }
             return None
+
         try:
-            with self._round_state_path.open("r", encoding="utf-8") as fh:
+            with chosen_path.open("r", encoding="utf-8") as fh:
                 state = json.load(fh)
         except Exception as exc:
             bt.logging.warning(f"Failed to read round state: {exc}")
@@ -367,6 +404,14 @@ class ValidatorPlatformMixin:
             self._phases = dict(state.get("phases") or {})
         except Exception:
             self._phases = {"p1_done": False, "p2_done": False}
+        # If legacy path used, copy to stable location for future resumes
+        try:
+            if chosen_path == legacy_path and state_path != legacy_path:
+                state_path.parent.mkdir(parents=True, exist_ok=True)
+                with state_path.open("w", encoding="utf-8") as fh:
+                    json.dump(state, fh, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
         return state
 
     def _rebuild_from_saved_evaluations(self) -> None:
