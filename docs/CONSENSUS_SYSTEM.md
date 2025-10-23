@@ -81,16 +81,16 @@ Phase 4 (100%): Set Weights
   - Commit weights to blockchain
 ```
 
-### Production Mode (24 hour rounds)
+### Production Mode (4.8 hour rounds)
 
 ```
 0%──────────────────75%───────────87.5%───────100%
 │                   │           │          │
 │   TASK EVAL       │  PUBLISH  │  FETCH   │  WEIGHTS
 │                   │           │          │
-0h                 18h         21h        24h
+0h                 3.6h        4.2h       4.8h
 
-Phase 1 (0-75%): Task Evaluation (18 hours)
+Phase 1 (0-75%): Task Evaluation (3.6 hours)
   - Generate 75 tasks
   - Distribute to miners
   - Evaluate all responses
@@ -98,7 +98,7 @@ Phase 1 (0-75%): Task Evaluation (18 hours)
 Phase 2 (75%): IPFS Publish
   - Upload scores to IPFS
   - Commit CID to blockchain
-  - Gap: 3 hours (900 blocks) for propagation
+  - Gap: 36 minutes (180 blocks) for propagation
 
 Phase 3 (87.5%): IPFS Aggregation
   - Aggregate scores from all validators
@@ -283,11 +283,11 @@ TESTING=true
 
 | Setting             | Testing               | Production           | Reason                                       |
 | ------------------- | --------------------- | -------------------- | -------------------------------------------- |
-| **Round Duration**  | 0.2 epochs (14.4 min) | 20 epochs (24 hours) | Fast iteration vs thorough evaluation        |
+| **Round Duration**  | 0.2 epochs (14.4 min) | 4 epochs (4.8 hours) | Fast iteration vs thorough evaluation        |
 | **Tasks**           | 5 tasks               | 75 tasks             | Speed vs completeness                        |
-| **Stop Task Eval**  | 50% (7.2 min)         | 75% (18h)            | More time for consensus in testing           |
-| **Fetch IPFS**      | 75% (10.8 min)        | 87.5% (21h)          | Same gap ratio maintained                    |
-| **Propagation Gap** | 25% (18 blocks)       | 12.5% (900 blocks)   | Both sufficient for blockchain propagation   |
+| **Stop Task Eval**  | 50% (7.2 min)         | 75% (3.6h)           | More time for consensus in testing           |
+| **Fetch IPFS**      | 75% (10.8 min)        | 87.5% (4.2h)         | Same gap ratio maintained                    |
+| **Propagation Gap** | 25% (18 blocks)       | 12.5% (180 blocks)   | Both sufficient for blockchain propagation   |
 | **Late Start Skip** | 95% (permissive)      | 30% (conservative)   | Allow restarts in testing                    |
 | **Min Stake**       | 0 τ (anyone)          | 10,000 τ (vetted)    | Testing accessibility vs production security |
 | **Crash Recovery**  | Enabled               | Enabled              | Resume mid-round after restart               |
@@ -600,9 +600,9 @@ MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO = 0.0          # No stake required
 TESTING = false
 
 # Round Structure
-ROUND_SIZE_EPOCHS = 20.0                             # 24 hours
+ROUND_SIZE_EPOCHS = 4.0                              # 4.8 hours (changed from 20.0)
 PRE_GENERATED_TASKS = 75                             # 75 tasks
-DZ_STARTING_BLOCK = 6_720_066
+DZ_STARTING_BLOCK = 6_720_366
 
 # Phase Timing (absolute % of round)
 STOP_TASK_EVALUATION_AT_ROUND_FRACTION = 0.75        # Stop at 75%
@@ -661,8 +661,8 @@ FETCH = 87.5% (absolute)
 
 **Analysis:**
 
-- Testing gap: 25% of 72 blocks = **18 blocks** (> 10 needed)
-- Production gap: 12.5% of 7200 blocks = **900 blocks** (>> 10 needed)
+- Testing gap: 25% of 72 blocks = **18 blocks** (sufficient for propagation)
+- Production gap: 12.5% of 1440 blocks = **180 blocks** (sufficient for propagation)
 - Redundant safety check removed for simplicity
 
 ---

@@ -129,13 +129,29 @@ class TaskIWAP:
     success_criteria: Optional[str] = None
 
     def to_payload(self) -> Dict[str, Any]:
+        from datetime import datetime, date, time as datetime_time
+
+        def make_json_serializable(obj):
+            """Convert non-JSON-serializable objects to JSON-compatible types"""
+            if isinstance(obj, (datetime, date)):
+                return obj.isoformat()
+            if isinstance(obj, datetime_time):
+                return obj.isoformat()
+            if isinstance(obj, dict):
+                return {k: make_json_serializable(v) for k, v in obj.items()}
+            if isinstance(obj, (list, tuple)):
+                return [make_json_serializable(item) for item in obj]
+            return obj
+
         data = asdict(self)
-        data["specifications"] = self.specifications or {}
-        data["tests"] = self.tests or []
-        data["relevant_data"] = self.relevant_data or {}
-        data["use_case"] = self.use_case or {}
+        data["specifications"] = make_json_serializable(self.specifications or {})
+        data["tests"] = make_json_serializable(self.tests or [])
+        data["relevant_data"] = make_json_serializable(self.relevant_data or {})
+        data["use_case"] = make_json_serializable(self.use_case or {})
         if self.milestones is None:
             data["milestones"] = None
+        else:
+            data["milestones"] = make_json_serializable(self.milestones)
         return _drop_nones(data)
 
 

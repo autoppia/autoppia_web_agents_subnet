@@ -10,8 +10,6 @@ from autoppia_web_agents_subnet.validator.config import (
     ENABLE_DISTRIBUTED_CONSENSUS,
     MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO,
     IPFS_API_URL,
-    # Backwards compatibility (old names still work):
-    ENABLE_DISTRIBUTED_CONSENSUS,
 )
 from autoppia_web_agents_subnet.utils.ipfs_client import aadd_json, aget_json, minidumps
 from autoppia_web_agents_subnet.utils.commitments import (
