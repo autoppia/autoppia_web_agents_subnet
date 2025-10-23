@@ -55,7 +55,12 @@ def _hotkey_to_uid_map(mg) -> Dict[str, int]:
 
 
 async def _stxn_from_validator(validator) -> AsyncSubtensor:
-    """Create and initialize an AsyncSubtensor using validator's config endpoints."""
+    """
+    Create and initialize an AsyncSubtensor using validator's config endpoints.
+
+    Handles API differences across bittensor versions by falling back if
+    certain constructor parameters or methods are unavailable.
+    """
     network = None
     chain_endpoint = None
     try:
@@ -66,14 +71,36 @@ async def _stxn_from_validator(validator) -> AsyncSubtensor:
         chain_endpoint = validator.config.subtensor.chain_endpoint
     except Exception:
         pass
-    st = AsyncSubtensor(network=network, chain_endpoint=chain_endpoint)
-    await st.initialize()
+
+    st: AsyncSubtensor
+    # Try most specific signature first, then gracefully degrade
+    try:
+        st = AsyncSubtensor(network=network, chain_endpoint=chain_endpoint)  # type: ignore[arg-type]
+    except TypeError:
+        try:
+            st = AsyncSubtensor(network=network)  # type: ignore[arg-type]
+        except Exception:
+            st = AsyncSubtensor()  # type: ignore[call-arg]
+    except Exception:
+        # Unexpected error with provided args, fall back to default
+        st = AsyncSubtensor()  # type: ignore[call-arg]
+
+    # Some versions require explicit async initialize; others do not expose it
+    try:
+        init = getattr(st, "initialize", None)
+        if callable(init):
+            await init()
+    except Exception:
+        # Best-effort init; continue if not supported
+        pass
+
     return st
 
 
 async def publish_round_snapshot(
     *,
     validator,
+    st: AsyncSubtensor,
     round_number: Optional[int],
     tasks_completed: int,
 ) -> Optional[str]:
@@ -161,14 +188,12 @@ async def publish_round_snapshot(
     }
 
     try:
-        st = await _stxn_from_validator(validator)
         ok = await write_plain_commitment_json(
             st,
             wallet=validator.wallet,
             data=commit_v4,
             netuid=validator.config.netuid,
         )
-        await st.close()
         if ok:
             bt.logging.info(
                 "📬 CONSENSUS COMMIT | "
@@ -186,6 +211,7 @@ async def publish_round_snapshot(
 async def aggregate_scores_from_commitments(
     *,
     validator,
+    st: AsyncSubtensor,
     start_epoch: float,
     target_epoch: float,
 ) -> Dict[int, float]:
@@ -211,9 +237,7 @@ async def aggregate_scores_from_commitments(
 
     # Fetch all plain commitments and select those for this round (v4 with CID)
     try:
-        st = await _stxn_from_validator(validator)
         commits = await read_all_plain_commitments(st, netuid=validator.config.netuid, block=None)
-        await st.close()
         bt.logging.info(
             f"🔎 CONSENSUS AGGREGATE | expected e={int(target_epoch)-1} pe={int(target_epoch)} | commits_seen={len(commits or {})}"
         )

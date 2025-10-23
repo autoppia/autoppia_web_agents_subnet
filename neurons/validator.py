@@ -614,8 +614,10 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 )
                 try:
                     round_number = await self.round_manager.calculate_round(current_block)
+                    st = await self._get_async_subtensor()
                     await publish_round_snapshot(
                         validator=self,
+                        st=st,
                         round_number=round_number,
                         tasks_completed=tasks_completed,
                     )
@@ -992,8 +994,10 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                         f"📦 Settlement {SETTLEMENT_FETCH_FRACTION:.2f}: fetching commitments + IPFS for aggregation",
                         ColoredLogger.CYAN,
                     )
+                    st = await self._get_async_subtensor()
                     agg = await aggregate_scores_from_commitments(
                         validator=self,
+                        st=st,
                         start_epoch=boundaries['round_start_epoch'],
                         target_epoch=boundaries['target_epoch'],
                     )
@@ -1107,8 +1111,10 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 agg = self._agg_scores_cache or {}
                 if not agg:
                     bt.logging.debug("No cached aggregation; fetching now")
+                    st = await self._get_async_subtensor()
                     agg = await aggregate_scores_from_commitments(
                         validator=self,
+                        st=st,
                         start_epoch=boundaries['round_start_epoch'],
                         target_epoch=boundaries['target_epoch'],
                     )

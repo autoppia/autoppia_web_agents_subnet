@@ -95,6 +95,12 @@ def _env_float(name: str, default: float, *, alias: Optional[str] = None,
 
 TESTING = _str_to_bool(os.getenv("TESTING", "false"))
 
+# Enable/disable local state recovery (resume of validator rounds)
+# Default: disabled in TESTING for clean local cycles, enabled in prod.
+ENABLE_STATE_RECOVERY = _str_to_bool(
+    os.getenv("ENABLE_STATE_RECOVERY", "false" if TESTING else "true")
+)
+
 # ════════════════════════════════════════════════════════════════════════════════
 # 🎯 Round System Configuration (Production defaults + Testing overrides)
 # ════════════════════════════════════════════════════════════════════════════════

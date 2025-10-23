@@ -71,7 +71,39 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
     )
 
     if ctx._phases.get("p1_done"):
-        log_iwap_phase("Phase 1", "resume: skipping start_round (already done)", level="warning")
+        # Even on resume, ensure the backend still has this round (dev DBs may be reset).
+        # Re-send start_round idempotently; backend treats duplicates as OK.
+        log_iwap_phase("Phase 1", "resume: verifying start_round on backend", level="warning")
+        try:
+            await ctx.iwap_client.start_round(
+                validator_identity=validator_identity,
+                validator_round=validator_round,
+                validator_snapshot=validator_snapshot,
+            )
+            ctx._phases["p1_done"] = True
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code if exc.response is not None else None
+            if status in (409, 500):
+                # Treat as idempotent success
+                ctx._phases["p1_done"] = True
+                log_iwap_phase(
+                    "Phase 1",
+                    f"start_round returned {status} (already exists); continuing idempotently",
+                    level="warning",
+                )
+            else:
+                log_iwap_phase(
+                    "Phase 1",
+                    f"start_round verification failed for round_id={ctx.current_round_id}",
+                    level="error",
+                    exc_info=True,
+                )
+                return
+        finally:
+            try:
+                ctx._save_round_state()
+            except Exception:
+                pass
     else:
         try:
             await ctx.iwap_client.start_round(
@@ -122,7 +154,27 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
         f"Calling set_tasks with tasks={task_count} for round_id={ctx.current_round_id}"
     )
     if ctx._phases.get("p2_done"):
-        log_iwap_phase("Phase 2", "resume: skipping set_tasks (already done)", level="warning")
+        # Idempotently re-send tasks to ensure backend state is present after resumes.
+        log_iwap_phase("Phase 2", "resume: verifying set_tasks on backend", level="warning")
+        try:
+            await ctx.iwap_client.set_tasks(
+                validator_round_id=ctx.current_round_id,
+                tasks=list(ctx.current_round_tasks.values()),
+            )
+            ctx._phases["p2_done"] = True
+        except httpx.HTTPStatusError:
+            log_iwap_phase(
+                "Phase 2",
+                f"set_tasks verification failed for round_id={ctx.current_round_id}",
+                level="error",
+                exc_info=True,
+            )
+            return
+        finally:
+            try:
+                ctx._save_round_state()
+            except Exception:
+                pass
     else:
         log_iwap_phase("Phase 2", set_tasks_message)
 
@@ -244,12 +296,47 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                 f"Calling start_agent_run for miner_uid={miner_uid}, agent_run_id={agent_run_id}"
             )
             log_iwap_phase("Phase 3", start_agent_run_message)
-            await ctx.iwap_client.start_agent_run(
-                validator_round_id=ctx.current_round_id,
-                agent_run=agent_run,
-                miner_identity=miner_identity,
-                miner_snapshot=miner_snapshot,
-            )
+            try:
+                await ctx.iwap_client.start_agent_run(
+                    validator_round_id=ctx.current_round_id,
+                    agent_run=agent_run,
+                    miner_identity=miner_identity,
+                    miner_snapshot=miner_snapshot,
+                )
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code if exc.response is not None else None
+                body = exc.response.text if exc.response is not None else ""
+                # If validator_round is missing on backend (e.g., after API reset), re-create and retry once.
+                if status == 400 and "Validator round" in body and "not found" in body:
+                    log_iwap_phase(
+                        "Phase 3",
+                        "start_agent_run failed due to missing round; re-submitting start_round + set_tasks and retrying",
+                        level="warning",
+                    )
+                    try:
+                        await ctx.iwap_client.start_round(
+                            validator_identity=validator_identity,
+                            validator_round=validator_round,
+                            validator_snapshot=validator_snapshot,
+                        )
+                    except Exception:
+                        pass
+                    try:
+                        await ctx.iwap_client.set_tasks(
+                            validator_round_id=ctx.current_round_id,
+                            tasks=list(ctx.current_round_tasks.values()),
+                        )
+                    except Exception:
+                        pass
+                    # Retry once
+                    await ctx.iwap_client.start_agent_run(
+                        validator_round_id=ctx.current_round_id,
+                        agent_run=agent_run,
+                        miner_identity=miner_identity,
+                        miner_snapshot=miner_snapshot,
+                    )
+                else:
+                    raise
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code if exc.response is not None else None
             if status in (409, 500):
@@ -372,4 +459,3 @@ async def finish_round_flow(
     finally:
         ctx._reset_iwap_round_state()
         ctx._remove_round_state()
-

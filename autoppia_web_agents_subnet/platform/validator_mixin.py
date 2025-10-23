@@ -9,6 +9,7 @@ from autoppia_web_agents_subnet.validator.models import TaskWithProject
 from autoppia_web_agents_subnet.validator.config import (
     IWAP_API_BASE_URL,
     VALIDATOR_AUTH_MESSAGE,
+    ENABLE_STATE_RECOVERY,
 )
 from autoppia_web_agents_subnet.platform import models as iwa_models
 from autoppia_web_agents_subnet.platform import main as iwa_main
@@ -125,6 +126,10 @@ class ValidatorPlatformMixin:
 
     def _save_round_state(self, *, tasks: Optional[List[TaskWithProject]] = None) -> None:
         # Wrapper to new checkpoint manager
+        if not ENABLE_STATE_RECOVERY:
+            # Do not persist checkpoints when state recovery is disabled (TESTING)
+            bt.logging.debug("Checkpoint save skipped: state recovery disabled by config")
+            return
         try:
             self.state_manager.save_checkpoint(tasks=tasks)
         except Exception as exc:
@@ -132,6 +137,11 @@ class ValidatorPlatformMixin:
 
     def _load_round_state(self) -> Optional[Dict[str, Any]]:
         # Wrapper to new checkpoint manager; returns a JSON-like shim for call sites
+        if not ENABLE_STATE_RECOVERY:
+            # In TESTING, disable resume to avoid mismatches with dev backend resets
+            self._last_resume_info = {"status": "disabled", "reason": "state recovery disabled by config"}
+            bt.logging.info("Resume disabled by config (ENABLE_STATE_RECOVERY=false); starting fresh")
+            return None
         ckpt = self.state_manager.load_checkpoint()
         if ckpt is None:
             self._last_resume_info = {"status": "skipped", "reason": "checkpoint not found"}
@@ -227,3 +237,55 @@ class ValidatorPlatformMixin:
         self.round_start_timestamp = 0.0
         self.agent_run_accumulators = {}
         self._completed_pairs = set()
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # Async subtensor provider for consensus (single instance per validator)
+    # ──────────────────────────────────────────────────────────────────────────
+    async def _get_async_subtensor(self):
+        """
+        Return a shared AsyncSubtensor instance for this validator.
+
+        - If an async subtensor is already attached (e.g., self.async_subtensor or cached), reuse it.
+        - Otherwise, create one using safe constructor (without chain_endpoint), and initialize if needed.
+        """
+        # Reuse if already present on the instance (external init)
+        try:
+            existing = getattr(self, "async_subtensor", None) or getattr(self, "_async_subtensor", None)
+            if existing is not None:
+                return existing
+        except Exception:
+            pass
+
+        # Lazy-create and cache
+        try:
+            from bittensor import AsyncSubtensor  # type: ignore
+        except Exception as e:
+            bt.logging.warning(f"AsyncSubtensor import failed: {e}")
+            raise
+
+        network = None
+        try:
+            network = self.config.subtensor.network
+        except Exception:
+            network = None
+
+        st = None
+        try:
+            # Avoid chain_endpoint argument for broad compatibility
+            st = AsyncSubtensor(network=network)  # type: ignore[arg-type]
+        except Exception:
+            st = AsyncSubtensor()  # type: ignore[call-arg]
+
+        # Initialize if supported
+        try:
+            init = getattr(st, "initialize", None)
+            if callable(init):
+                await init()
+        except Exception:
+            pass
+
+        try:
+            self._async_subtensor = st
+        except Exception:
+            pass
+        return st
