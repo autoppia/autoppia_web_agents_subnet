@@ -121,9 +121,14 @@ async def publish_round_snapshot(
         )
         bt.logging.debug(
             "Consensus payload (preview keys): "
-            f"scores={len(payload.get('scores') or {})} hk={payload.get('hk')[:10]}… "
+            f"scores={len(payload.get('scores') or {})} hk={str(payload.get('hk', ''))[:10]}… "
             f"vrid={payload.get('validator_round_id')} vv={payload.get('validator_version')}"
         )
+
+        # 🔍 LOG: IPFS upload attempt
+        bt.logging.info(f"🌐 IPFS UPLOAD | api_url={IPFS_API_URL} | filename=autoppia_commit_r{payload['r'] or 'X'}.json")
+        bt.logging.debug(f"📦 Payload size: {len(str(payload))} chars, {len(payload.get('scores', {}))} miners with scores")
+
         cid, sha_hex, byte_len = await aadd_json(
             payload,
             filename=f"autoppia_commit_r{payload['r'] or 'X'}.json",
@@ -131,8 +136,12 @@ async def publish_round_snapshot(
             pin=True,
             sort_keys=True,
         )
+
+        # 🔍 LOG: IPFS upload success
+        bt.logging.info(f"✅ IPFS UPLOAD SUCCESS | cid={cid} | size={byte_len} bytes | sha256={sha_hex[:16]}...")
     except Exception as e:
-        bt.logging.warning(f"IPFS publish failed: {e}")
+        bt.logging.error(f"❌ IPFS UPLOAD FAILED | error={type(e).__name__}: {str(e)}")
+        bt.logging.debug(f"IPFS API URL: {IPFS_API_URL}")
         return None
 
     # On-chain commitment: v4 (CID-only), bind to epoch window
@@ -214,13 +223,20 @@ async def aggregate_scores_from_commitments(
         bt.logging.info(
             f"🔎 CONSENSUS AGGREGATE | expected e={int(target_epoch)-1} pe={int(target_epoch)} | commits_seen={len(commits or {})}"
         )
+        # 🔍 LOG: Show all commitments found
+        if commits:
+            bt.logging.debug(f"📋 Found commitments from {len(commits)} validators:")
+            for hk, entry in list(commits.items())[:5]:  # Show first 5
+                bt.logging.debug(f"  - {hk[:10]}…: e={entry.get('e')} pe={entry.get('pe')} cid={entry.get('c', 'N/A')[:20]}…")
     except Exception as e:
-        bt.logging.warning(f"Failed to read commitments: {e}")
+        bt.logging.error(f"❌ Failed to read commitments from blockchain: {e}")
         commits = {}
 
     # Decide expected e/pe
     e = int(target_epoch) - 1
     pe = int(target_epoch)
+
+    bt.logging.debug(f"🎯 Filtering for: e={e} pe={pe}")
 
     # Accumulate and weight
     weighted_sum: Dict[int, float] = {}
@@ -236,30 +252,41 @@ async def aggregate_scores_from_commitments(
 
     for hk, entry in (commits or {}).items():
         if not isinstance(entry, dict):
+            bt.logging.debug(f"⏭️ Skip {hk[:10]}…: entry is not dict")
             continue
+
         # Match by epoch window only; do not filter by validator version or similar
-        if int(entry.get("e", -1)) != e or int(entry.get("pe", -1)) != pe:
+        entry_e = int(entry.get("e", -1))
+        entry_pe = int(entry.get("pe", -1))
+        if entry_e != e or entry_pe != pe:
             skipped_wrong_epoch += 1
+            bt.logging.debug(f"⏭️ Skip {hk[:10]}…: wrong epoch (has e={entry_e} pe={entry_pe}, need e={e} pe={pe})")
             continue
+
         cid = entry.get("c")
         if not isinstance(cid, str) or not cid:
             skipped_missing_cid += 1
+            bt.logging.debug(f"⏭️ Skip {hk[:10]}…: missing or invalid CID")
             continue
 
         # Stake filter
         st_val = stake_for_hk(hk)
         if st_val < float(MIN_VALIDATOR_STAKE_TO_AGGREGATE):
             skipped_low_stake += 1
+            bt.logging.debug(f"⏭️ Skip {hk[:10]}…: low stake ({st_val:.1f} < {MIN_VALIDATOR_STAKE_TO_AGGREGATE})")
             continue
 
         # Fetch payload from IPFS
+        bt.logging.info(f"🌐 IPFS DOWNLOAD | validator={hk[:10]}… | cid={cid[:20]}… | api_url={IPFS_API_URL}")
         try:
             payload, _norm, _h = await aget_json(cid, api_url=IPFS_API_URL)
+            bt.logging.info(f"✅ IPFS DOWNLOAD SUCCESS | cid={cid[:20]}… | scores={len(payload.get('scores', {}))} miners")
         except Exception as e:
             skipped_ipfs += 1
-            bt.logging.debug(f"Skip hk={hk[:10]}… — IPFS fetch failed: {e}")
+            bt.logging.error(f"❌ IPFS DOWNLOAD FAILED | cid={cid[:20]}… | error={type(e).__name__}: {str(e)}")
             continue
         if not isinstance(payload, dict):
+            bt.logging.debug(f"⏭️ Skip {hk[:10]}…: payload is not dict")
             continue
 
         # Validate payload matches window
@@ -306,8 +333,8 @@ async def aggregate_scores_from_commitments(
             f"🤝 CONSENSUS INCLUDED | validators={included} | miners={len(result)} | {hk_list}"
         )
         # Debug: breakdown of skips
-        bt.logging.debug(
-            f"Skips — wrong_epoch={skipped_wrong_epoch} missing_cid={skipped_missing_cid} "
+        bt.logging.info(
+            f"📊 Skip summary — wrong_epoch={skipped_wrong_epoch} missing_cid={skipped_missing_cid} "
             f"low_stake={skipped_low_stake} ipfs_fail={skipped_ipfs}"
         )
         # Debug: show a small sample of aggregated results
@@ -320,5 +347,9 @@ async def aggregate_scores_from_commitments(
             pass
     else:
         bt.logging.warning("🤝 CONSENSUS INCLUDED | validators=0 (no aggregated scores)")
+        bt.logging.warning(
+            f"📊 Why no validators? — wrong_epoch={skipped_wrong_epoch} missing_cid={skipped_missing_cid} "
+            f"low_stake={skipped_low_stake} ipfs_fail={skipped_ipfs} | total_commits_seen={len(commits or {})}"
+        )
 
     return result
