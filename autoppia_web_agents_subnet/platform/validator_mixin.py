@@ -8,8 +8,8 @@ import bittensor as bt
 from autoppia_web_agents_subnet.validator.models import TaskWithProject
 from autoppia_web_agents_subnet.validator.config import (
     IWAP_API_BASE_URL,
-    VALIDATOR_AUTH_MESSAGE,
-    ENABLE_STATE_RECOVERY,
+    IWAP_VALIDATOR_AUTH_MESSAGE,
+    RESUME_ROUND_AFTER_CRASH,
 )
 from autoppia_web_agents_subnet.platform import models as iwa_models
 from autoppia_web_agents_subnet.platform import main as iwa_main
@@ -34,12 +34,13 @@ from autoppia_web_agents_subnet.platform.utils.task_flow import (
     submit_task_results as _utils_submit_task_results,
 )
 
+
 class ValidatorPlatformMixin:
     """Shared IWAP integration helpers extracted from the validator loop."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._validator_auth_message = VALIDATOR_AUTH_MESSAGE or "I am a honest validator"
+        self._IWAP_VALIDATOR_AUTH_MESSAGE = IWAP_VALIDATOR_AUTH_MESSAGE or "I am a honest validator"
         self._auth_warning_emitted = False
         self.iwap_client = iwa_main.IWAPClient(
             base_url=IWAP_API_BASE_URL,
@@ -95,7 +96,7 @@ class ValidatorPlatformMixin:
         if not hotkey:
             raise RuntimeError("Validator hotkey is unavailable for IWAP authentication")
 
-        message = self._validator_auth_message
+        message = self._IWAP_VALIDATOR_AUTH_MESSAGE
         if not message:
             if not self._auth_warning_emitted:
                 self._log_iwap_phase(
@@ -126,9 +127,9 @@ class ValidatorPlatformMixin:
 
     def _save_round_state(self, *, tasks: Optional[List[TaskWithProject]] = None) -> None:
         # Wrapper to new checkpoint manager
-        if not ENABLE_STATE_RECOVERY:
-            # Do not persist checkpoints when state recovery is disabled (TESTING)
-            bt.logging.debug("Checkpoint save skipped: state recovery disabled by config")
+        if not RESUME_ROUND_AFTER_CRASH:
+            # Do not persist checkpoints when crash recovery is disabled
+            bt.logging.debug("Checkpoint save skipped: crash recovery disabled by config")
             return
         try:
             self.state_manager.save_checkpoint(tasks=tasks)
@@ -137,10 +138,10 @@ class ValidatorPlatformMixin:
 
     def _load_round_state(self) -> Optional[Dict[str, Any]]:
         # Wrapper to new checkpoint manager; returns a JSON-like shim for call sites
-        if not ENABLE_STATE_RECOVERY:
-            # In TESTING, disable resume to avoid mismatches with dev backend resets
-            self._last_resume_info = {"status": "disabled", "reason": "state recovery disabled by config"}
-            bt.logging.info("Resume disabled by config (ENABLE_STATE_RECOVERY=false); starting fresh")
+        if not RESUME_ROUND_AFTER_CRASH:
+            # Crash recovery disabled - always start fresh rounds
+            self._last_resume_info = {"status": "disabled", "reason": "crash recovery disabled by config"}
+            bt.logging.info("Resume disabled by config (RESUME_ROUND_AFTER_CRASH=false); starting fresh")
             return None
         ckpt = self.state_manager.load_checkpoint()
         if ckpt is None:

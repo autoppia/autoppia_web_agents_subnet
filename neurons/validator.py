@@ -24,12 +24,11 @@ from autoppia_web_agents_subnet.validator.config import (
     VALIDATOR_NAME,
     VALIDATOR_IMAGE,
     DZ_STARTING_BLOCK,
-    MAX_AGENT_NAME_LENGTH,
-    SHARE_SCORING,
-    STOP_TASKS_AT_FRACTION,
-    SETTLEMENT_FETCH_FRACTION,
-    CONSENSUS_COMMIT_AT_FRACTION,
-    SKIP_ROUND_IF_LATE_FRACTION,
+    MAX_MINER_AGENT_NAME_LENGTH,
+    ENABLE_DISTRIBUTED_CONSENSUS,
+    STOP_TASK_EVALUATION_AT_ROUND_FRACTION,
+    FETCH_IPFS_VALIDATOR_PAYLOADS_AT_SETTLEMENT_FRACTION,
+    SKIP_ROUND_IF_STARTED_AFTER_FRACTION,
     BURN_UID,
 )
 from autoppia_web_agents_subnet.validator.tasks import get_task_collection_interleaved, collect_task_solutions_and_execution_times
@@ -264,12 +263,12 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 blocks_to_target = max(bounds['target_block'] - current_block, 0)
                 # If we're exactly at the previous boundary (0 blocks remaining), treat as new round start (do not skip)
                 at_boundary = (blocks_to_target == 0)
-                if (not at_boundary) and (frac >= float(SKIP_ROUND_IF_LATE_FRACTION)):
+                if (not at_boundary) and (frac >= float(SKIP_ROUND_IF_STARTED_AFTER_FRACTION)):
                     minutes_remaining = (blocks_to_target * self.round_manager.SECONDS_PER_BLOCK) / 60
                     ColoredLogger.warning(
                         (
                             f"⏭️ Fresh start late in round: {frac*100:.1f}% >= "
-                            f"{float(SKIP_ROUND_IF_LATE_FRACTION)*100:.0f}% — skipping to next round"
+                            f"{float(SKIP_ROUND_IF_STARTED_AFTER_FRACTION)*100:.0f}% — skipping to next round"
                         ),
                         ColoredLogger.YELLOW,
                     )
@@ -401,11 +400,11 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 return text or None
 
             def _truncate_agent_name(name: str) -> str:
-                if MAX_AGENT_NAME_LENGTH and len(name) > MAX_AGENT_NAME_LENGTH:
+                if MAX_MINER_AGENT_NAME_LENGTH and len(name) > MAX_MINER_AGENT_NAME_LENGTH:
                     bt.logging.debug(
-                        f"Truncating agent name '{name}' to {MAX_AGENT_NAME_LENGTH} characters."
+                        f"Truncating agent name '{name}' to {MAX_MINER_AGENT_NAME_LENGTH} characters."
                     )
-                    return name[:MAX_AGENT_NAME_LENGTH]
+                    return name[:MAX_MINER_AGENT_NAME_LENGTH]
                 return name
 
             # Filter successful responses - collect data without spamming logs
@@ -610,9 +609,9 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 progress_frac = min(max(bt_done / bt_total, 0.0), 1.0)
             except Exception:
                 progress_frac = 0.0
-            if SHARE_SCORING and not self._consensus_published and (progress_frac >= float(STOP_TASKS_AT_FRACTION)):
+            if ENABLE_DISTRIBUTED_CONSENSUS and not self._consensus_published and (progress_frac >= float(STOP_TASK_EVALUATION_AT_ROUND_FRACTION)):
                 ColoredLogger.warning(
-                    f"🛑 Reached stop fraction {STOP_TASKS_AT_FRACTION:.2f}; halting task dispatch to publish commitments.",
+                    f"🛑 Reached stop fraction {STOP_TASK_EVALUATION_AT_ROUND_FRACTION:.2f}; halting task dispatch to publish commitments.",
                     ColoredLogger.YELLOW,
                 )
                 try:
@@ -659,11 +658,13 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 except Exception:
                     pass
                 # Try to publish commitments if sharing and not yet published.
-                if SHARE_SCORING and not self._consensus_published:
+                if ENABLE_DISTRIBUTED_CONSENSUS and not self._consensus_published:
                     try:
                         round_number = await self.round_manager.calculate_round(current_block)
+                        st = await self._get_async_subtensor()
                         await publish_round_snapshot(
                             validator=self,
+                            st=st,
                             round_number=round_number,
                             tasks_completed=tasks_completed,
                         )
@@ -981,9 +982,9 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             blocks_done = max(current_block - round_start_block, 0)
             progress = min(max((blocks_done / blocks_total) * 100.0, 0.0), 100.0)
 
-            # Settlement period: compute fraction from STOP_TASKS_AT_FRACTION until end of round
+            # Settlement period: compute fraction from STOP_TASK_EVALUATION_AT_ROUND_FRACTION until end of round
             try:
-                settlement_start_block = round_start_block + int((target_block - round_start_block) * float(STOP_TASKS_AT_FRACTION))
+                settlement_start_block = round_start_block + int((target_block - round_start_block) * float(STOP_TASK_EVALUATION_AT_ROUND_FRACTION))
                 settlement_total = max(target_block - settlement_start_block, 1)
                 settlement_done = max(current_block - settlement_start_block, 0)
                 settlement_frac = min(max(settlement_done / settlement_total, 0.0), 1.0)
@@ -991,18 +992,18 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 settlement_frac = 0.0
 
             # Mid-settlement fetch at configured fraction (single attempt)
-            if SHARE_SCORING and (not self._consensus_mid_fetched) and settlement_frac >= float(SETTLEMENT_FETCH_FRACTION):
+            if ENABLE_DISTRIBUTED_CONSENSUS and (not self._consensus_mid_fetched) and settlement_frac >= float(FETCH_IPFS_VALIDATOR_PAYLOADS_AT_SETTLEMENT_FRACTION):
                 try:
                     ColoredLogger.info(
-                        f"📦 Settlement {SETTLEMENT_FETCH_FRACTION:.2f}: fetching commitments + IPFS for aggregation",
+                        f"📦 Settlement {FETCH_IPFS_VALIDATOR_PAYLOADS_AT_SETTLEMENT_FRACTION:.2f}: fetching commitments + IPFS for aggregation",
                         ColoredLogger.CYAN,
                     )
                     # Skip mid-fetch if our commit hasn't propagated enough blocks yet
                     try:
                         commit_block = getattr(self, "_consensus_commit_block", None)
-                        from autoppia_web_agents_subnet.validator.config import CONSENSUS_SPREAD_BLOCKS
-                        if commit_block is not None and current_block < int(commit_block) + int(CONSENSUS_SPREAD_BLOCKS):
-                            remaining = (int(commit_block) + int(CONSENSUS_SPREAD_BLOCKS)) - current_block
+                        from autoppia_web_agents_subnet.validator.config import IPFS_COMMIT_PROPAGATION_WAIT_BLOCKS
+                        if commit_block is not None and current_block < int(commit_block) + int(IPFS_COMMIT_PROPAGATION_WAIT_BLOCKS):
+                            remaining = (int(commit_block) + int(IPFS_COMMIT_PROPAGATION_WAIT_BLOCKS)) - current_block
                             ColoredLogger.info(
                                 f"⏳ Waiting for propagation: {remaining} blocks until aggregation window",
                                 ColoredLogger.BLUE,
@@ -1099,7 +1100,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
     async def _calculate_final_weights(self, tasks_completed: int):
         """Calculate averages, apply WTA, set weights"""
         ColoredLogger.info("🏁 Phase: SetWeights — Calculating final weights", ColoredLogger.PURPLE)
-        bt.logging.info(f"Shared scoring active: {str(SHARE_SCORING).lower()}")
+        bt.logging.info(f"Distributed consensus active: {str(ENABLE_DISTRIBUTED_CONSENSUS).lower()}")
 
         # Check if no miners responded to handshake - BURN ALL WEIGHTS
         if not self.active_miner_uids:
@@ -1123,7 +1124,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         avg_rewards = self.round_manager.get_average_rewards()
 
         # If sharing enabled, attempt to aggregate across validators via commitments/IPFS
-        if SHARE_SCORING:
+        if ENABLE_DISTRIBUTED_CONSENSUS:
             try:
                 boundaries = self.round_manager.get_current_boundaries()
                 bt.logging.info("🤝 Consensus aggregation — preparing final scores")
@@ -1133,12 +1134,12 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     bt.logging.debug("No cached aggregation; fetching now")
                     # Ensure commitment propagation window elapsed
                     try:
-                        from autoppia_web_agents_subnet.validator.config import CONSENSUS_SPREAD_BLOCKS
+                        from autoppia_web_agents_subnet.validator.config import IPFS_COMMIT_PROPAGATION_WAIT_BLOCKS
                         commit_block = getattr(self, "_consensus_commit_block", None)
                         if commit_block is not None:
                             while True:
                                 current_block = self.subtensor.get_current_block()
-                                needed = (int(commit_block) + int(CONSENSUS_SPREAD_BLOCKS)) - current_block
+                                needed = (int(commit_block) + int(IPFS_COMMIT_PROPAGATION_WAIT_BLOCKS)) - current_block
                                 if needed <= 0:
                                     break
                                 mins = (needed * self.round_manager.SECONDS_PER_BLOCK) / 60

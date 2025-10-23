@@ -7,11 +7,11 @@ import bittensor as bt
 from bittensor import AsyncSubtensor  # type: ignore
 
 from autoppia_web_agents_subnet.validator.config import (
-    SHARE_SCORING,
-    CONSENSUS_COMMIT_AT_FRACTION,
-    MIN_VALIDATOR_STAKE_TO_SHARE_SCORES,
-    MIN_VALIDATOR_STAKE_TO_AGGREGATE,
+    ENABLE_DISTRIBUTED_CONSENSUS,
+    MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO,
     IPFS_API_URL,
+    # Backwards compatibility (old names still work):
+    ENABLE_DISTRIBUTED_CONSENSUS,
 )
 from autoppia_web_agents_subnet.utils.ipfs_client import aadd_json, aget_json, minidumps
 from autoppia_web_agents_subnet.utils.commitments import (
@@ -66,20 +66,12 @@ async def publish_round_snapshot(
 
     Returns the CID if successful, else None.
     """
-    if not SHARE_SCORING:
+    if not ENABLE_DISTRIBUTED_CONSENSUS:
         return None
 
-    # Stake gate: only publish if our stake >= threshold
-    try:
-        my_uid = int(validator.uid)
-        my_stake = _stake_to_float(validator.metagraph.stake[my_uid])  # type: ignore[index]
-        if my_stake < float(MIN_VALIDATOR_STAKE_TO_SHARE_SCORES):
-            bt.logging.info(
-                f"Consensus publish skipped: stake {my_stake:.3f} < threshold {MIN_VALIDATOR_STAKE_TO_SHARE_SCORES:.3f}"
-            )
-            return None
-    except Exception:
-        pass
+    # Note: We don't filter by stake here (removed MIN_STAKE_TO_SHARE)
+    # Anyone can publish to IPFS for transparency
+    # The filtering happens during aggregation (MIN_STAKE_FOR_CONSENSUS)
 
     # Build payload: per-miner averages so far
     boundaries = validator.round_manager.get_current_boundaries()
@@ -117,7 +109,7 @@ async def publish_round_snapshot(
     try:
         bt.logging.info(
             f"📤 CONSENSUS PUBLISH | round={payload['r']} es={payload['es']} et={payload['et']} "
-            f"tasks={payload['n']} agents={payload['agents']} active={str(SHARE_SCORING).lower()}"
+            f"tasks={payload['n']} agents={payload['agents']} active={str(ENABLE_DISTRIBUTED_CONSENSUS).lower()}"
         )
         bt.logging.debug(
             "Consensus payload (preview keys): "
@@ -201,7 +193,7 @@ async def aggregate_scores_from_commitments(
     Read all validators' commitments for this round window and compute stake-weighted
     average scores per miner UID.
     """
-    if not SHARE_SCORING:
+    if not ENABLE_DISTRIBUTED_CONSENSUS:
         return {}
 
     # Build hotkey->uid and stake map
@@ -269,11 +261,11 @@ async def aggregate_scores_from_commitments(
             bt.logging.debug(f"⏭️ Skip {hk[:10]}…: missing or invalid CID")
             continue
 
-        # Stake filter
+        # Stake filter - only include validators with sufficient stake in consensus
         st_val = stake_for_hk(hk)
-        if st_val < float(MIN_VALIDATOR_STAKE_TO_AGGREGATE):
+        if st_val < float(MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO):
             skipped_low_stake += 1
-            bt.logging.debug(f"⏭️ Skip {hk[:10]}…: low stake ({st_val:.1f} < {MIN_VALIDATOR_STAKE_TO_AGGREGATE})")
+            bt.logging.debug(f"⏭️ Skip {hk[:10]}…: low stake ({st_val:.1f}τ < {MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO:.1f}τ)")
             continue
 
         # Fetch payload from IPFS

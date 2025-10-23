@@ -9,7 +9,6 @@ from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.validator.config import (
     IWAP_API_BASE_URL,
     TESTING,
-    USE_BACKEND_ROUND_FOR_TESTING,
 )
 
 
@@ -273,10 +272,6 @@ class RoundManager:
 
     async def calculate_round(self, current_block: int) -> int:
         """Return the human-visible round number based on days elapsed since launch block."""
-        if TESTING and USE_BACKEND_ROUND_FOR_TESTING:
-            testing_round = await self._calculate_round_from_backend()
-            if testing_round is not None:
-                return testing_round
 
         base_block = self.minimum_start_block or 0
         if current_block <= base_block:

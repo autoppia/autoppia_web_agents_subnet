@@ -14,7 +14,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional
 import httpx
 import bittensor as bt
 
-from autoppia_web_agents_subnet.validator.config import MAX_AGENT_NAME_LENGTH
+from autoppia_web_agents_subnet.validator.config import MAX_MINER_AGENT_NAME_LENGTH
 
 from . import models
 
@@ -493,8 +493,8 @@ def build_miner_snapshot(
     else:
         agent_name = str(raw_name).strip()
 
-    if MAX_AGENT_NAME_LENGTH and len(agent_name) > MAX_AGENT_NAME_LENGTH:
-        agent_name = agent_name[:MAX_AGENT_NAME_LENGTH]
+    if MAX_MINER_AGENT_NAME_LENGTH and len(agent_name) > MAX_MINER_AGENT_NAME_LENGTH:
+        agent_name = agent_name[:MAX_MINER_AGENT_NAME_LENGTH]
 
     image_url = _normalized_optional(getattr(handshake_payload, "agent_image", None))
     github_url = _normalized_optional(getattr(handshake_payload, "github_url", None))

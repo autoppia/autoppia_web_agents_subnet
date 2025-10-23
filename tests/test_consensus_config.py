@@ -30,25 +30,24 @@ def reload_config_with_env(env: dict[str, str]):
 def test_settlement_fetch_fraction_defaults():
     cfg = reload_config_with_env({
         'TESTING': 'false',
-        'SETTLEMENT_FETCH_FRACTION': None,
+        'FETCH_IPFS_VALIDATOR_PAYLOADS_AT_SETTLEMENT_FRACTION': None,
     })
-    assert isinstance(cfg.SETTLEMENT_FETCH_FRACTION, float)
-    assert abs(cfg.SETTLEMENT_FETCH_FRACTION - 0.5) < 1e-9
+    assert isinstance(cfg.FETCH_IPFS_VALIDATOR_PAYLOADS_AT_SETTLEMENT_FRACTION, float)
+    assert abs(cfg.FETCH_IPFS_VALIDATOR_PAYLOADS_AT_SETTLEMENT_FRACTION - 0.5) < 1e-9
 
 
 def test_settlement_fetch_fraction_override_prod():
     cfg = reload_config_with_env({
         'TESTING': 'false',
-        'SETTLEMENT_FETCH_FRACTION': '0.3',
+        'FETCH_IPFS_VALIDATOR_PAYLOADS_AT_SETTLEMENT_FRACTION': '0.3',
     })
-    assert abs(cfg.SETTLEMENT_FETCH_FRACTION - 0.3) < 1e-9
+    assert abs(cfg.FETCH_IPFS_VALIDATOR_PAYLOADS_AT_SETTLEMENT_FRACTION - 0.3) < 1e-9
 
 
 def test_settlement_fetch_fraction_override_test():
     cfg = reload_config_with_env({
         'TESTING': 'true',
-        'SETTLEMENT_FETCH_FRACTION': '0.5',
+        'FETCH_IPFS_VALIDATOR_PAYLOADS_AT_SETTLEMENT_FRACTION': '0.5',
         'TEST_SETTLEMENT_FETCH_FRACTION': '0.7',
     })
-    assert abs(cfg.SETTLEMENT_FETCH_FRACTION - 0.7) < 1e-9
-
+    assert abs(cfg.FETCH_IPFS_VALIDATOR_PAYLOADS_AT_SETTLEMENT_FRACTION - 0.7) < 1e-9

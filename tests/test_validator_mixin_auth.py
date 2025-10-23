@@ -11,6 +11,7 @@ iwa_module_root = PROJECT_ROOT / "autoppia_iwa_module"
 if str(iwa_module_root) not in sys.path:
     sys.path.insert(0, str(iwa_module_root))
 
+
 def _ensure_package(name: str) -> types.ModuleType:
     module = sys.modules.get(name)
     if module is None:
@@ -25,6 +26,7 @@ _ensure_package("autoppia_iwa.src")
 _ensure_package("autoppia_iwa.src.demo_webs")
 demo_classes = types.ModuleType("autoppia_iwa.src.demo_webs.classes")
 
+
 class WebProjectStub:  # pragma: no cover - simple stub
     ...
 
@@ -36,6 +38,7 @@ _ensure_package("autoppia_iwa.src.data_generation")
 _ensure_package("autoppia_iwa.src.data_generation.domain")
 domain_classes = types.ModuleType("autoppia_iwa.src.data_generation.domain.classes")
 
+
 class TaskStub:  # pragma: no cover - simple stub
     ...
 
@@ -45,6 +48,7 @@ sys.modules["autoppia_iwa.src.data_generation.domain.classes"] = domain_classes
 
 _ensure_package("autoppia_iwa.src.web_agents")
 web_agents_classes = types.ModuleType("autoppia_iwa.src.web_agents.classes")
+
 
 class TaskSolutionStub:  # pragma: no cover - simple stub
     ...
@@ -82,7 +86,7 @@ def _mixin_with_wallet(message: str = "test message") -> tuple[ValidatorPlatform
     )
     mixin.uid = 1
     mixin.version = "test"
-    mixin._validator_auth_message = message
+    mixin._IWAP_VALIDATOR_AUTH_MESSAGE = message
     mixin._auth_warning_emitted = False
     mixin._log_iwap_phase = lambda *args, **kwargs: None
     return mixin, hotkey

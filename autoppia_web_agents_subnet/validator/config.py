@@ -11,80 +11,117 @@ from autoppia_web_agents_subnet.utils.env import (  # noqa: E402
     _str_to_bool,
     _normalized,
     _env_int,
-    _env_float,
 )
 
-# ── Environment ───────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════════════
+# ENVIRONMENT MODE
+# ═══════════════════════════════════════════════════════════════════════════
 TESTING = _str_to_bool(os.getenv("TESTING", "false"))
-ENABLE_STATE_RECOVERY = _str_to_bool(os.getenv("ENABLE_STATE_RECOVERY", "false" if TESTING else "true"))
-USE_BACKEND_ROUND_FOR_TESTING = _str_to_bool(os.getenv("USE_BACKEND_ROUND_FOR_TESTING", "false"))
 
-# ── Round Timing (epochs/blocks) ──────────────────────────────────────────
-# 1 epoch = 360 blocks (≈72 min)
-ROUND_SIZE_EPOCHS_PROD = 20.0
-SAFETY_BUFFER_EPOCHS_PROD = 0.5
-AVG_TASK_DURATION_SECONDS_PROD = 300
-PRE_GENERATED_TASKS_PROD = 75
-DZ_STARTING_BLOCK_PROD = 6_720_066
+# ═══════════════════════════════════════════════════════════════════════════
+# TESTING CONFIGURATION (Fast iterations for development)
+# ═══════════════════════════════════════════════════════════════════════════
+if TESTING:
+    # ── Round Structure ──────────────────────────────────────────────────────
+    # Short rounds for rapid testing (~14.4 minutes per round)
+    ROUND_SIZE_EPOCHS = 0.2                    # 14.4 min = 72 blocks
+    SAFETY_BUFFER_EPOCHS = 0.02                # 1.44 min = 7 blocks
+    PRE_GENERATED_TASKS = 5                    # Fewer tasks for speed
+    DZ_STARTING_BLOCK = 6_717_750              # Test mode starting block
 
-ROUND_SIZE_EPOCHS_TEST = 0.2
-SAFETY_BUFFER_EPOCHS_TEST = 0.02
-AVG_TASK_DURATION_SECONDS_TEST = 300
-PRE_GENERATED_TASKS_TEST = 5
-DZ_STARTING_BLOCK_TEST = 6_717_750
+    # ── Task Execution Phase Timing ──────────────────────────────────────────
+    # Stop task evaluation at 50% of round (absolute) to allow 50% for consensus
+    STOP_TASK_EVALUATION_AT_ROUND_FRACTION = 0.50
 
-ROUND_SIZE_EPOCHS = ROUND_SIZE_EPOCHS_TEST if TESTING else ROUND_SIZE_EPOCHS_PROD
-SAFETY_BUFFER_EPOCHS = SAFETY_BUFFER_EPOCHS_TEST if TESTING else SAFETY_BUFFER_EPOCHS_PROD
-AVG_TASK_DURATION_SECONDS = AVG_TASK_DURATION_SECONDS_TEST if TESTING else AVG_TASK_DURATION_SECONDS_PROD
-PRE_GENERATED_TASKS = PRE_GENERATED_TASKS_TEST if TESTING else PRE_GENERATED_TASKS_PROD
-DZ_STARTING_BLOCK = DZ_STARTING_BLOCK_TEST if TESTING else DZ_STARTING_BLOCK_PROD
+    # ── Consensus Settlement Phase Timing ────────────────────────────────────
+    # After stopping tasks at 50%, fetch IPFS payloads at 50% of settlement window
+    # Effective time: 50% + (50% × 0.5) = 75% of total round
+    FETCH_IPFS_VALIDATOR_PAYLOADS_AT_SETTLEMENT_FRACTION = 0.50
 
-# ── Task / IWA Timeouts ──────────────────────────────────────────────────
+    # ── Late Start & Crash Recovery ──────────────────────────────────────────
+    # Resume from checkpoint if validator crashes/restarts mid-round
+    RESUME_ROUND_AFTER_CRASH = _str_to_bool(os.getenv("RESUME_ROUND_AFTER_CRASH", "true"))
+    # Skip round only if started when >95% complete (very permissive for testing)
+    SKIP_ROUND_IF_STARTED_AFTER_FRACTION = 0.95
+
+    # ── Consensus Participation Requirements ─────────────────────────────────
+    # Testing: No stake required (0 τ) - anyone can participate
+    MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO = 0.0
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PRODUCTION CONFIGURATION (24-hour rounds, conservative)
+# ═══════════════════════════════════════════════════════════════════════════
+else:
+    # ── Round Structure ──────────────────────────────────────────────────────
+    # Standard production rounds (~24 hours per round)
+    ROUND_SIZE_EPOCHS = 20.0                   # 24h = 7200 blocks
+    SAFETY_BUFFER_EPOCHS = 0.5                 # 36 min = 180 blocks
+    PRE_GENERATED_TASKS = 75                   # More tasks for thorough evaluation
+    DZ_STARTING_BLOCK = 6_720_066              # Production mode starting block
+
+    # ── Task Execution Phase Timing ──────────────────────────────────────────
+    # Stop task evaluation at 75% of round (absolute) to reserve 25% for consensus
+    STOP_TASK_EVALUATION_AT_ROUND_FRACTION = 0.75
+
+    # ── Consensus Settlement Phase Timing ────────────────────────────────────
+    # After stopping tasks at 75%, fetch IPFS payloads at 50% of settlement window
+    # Effective time: 75% + (25% × 0.5) = 87.5% of total round
+    FETCH_IPFS_VALIDATOR_PAYLOADS_AT_SETTLEMENT_FRACTION = 0.50
+
+    # ── Late Start & Crash Recovery ──────────────────────────────────────────
+    # Resume from checkpoint if validator crashes/restarts mid-round
+    RESUME_ROUND_AFTER_CRASH = _str_to_bool(os.getenv("RESUME_ROUND_AFTER_CRASH", "true"))
+    # Skip round if started when >30% complete (conservative for production)
+    SKIP_ROUND_IF_STARTED_AFTER_FRACTION = 0.30
+
+    # ── Consensus Participation Requirements ─────────────────────────────────
+    # Production: Minimum 10k τ stake required to be included in consensus calculations
+    MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO = 10000.0
+
+# ═══════════════════════════════════════════════════════════════════════════
+# SHARED CONFIGURATION (same for all modes)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ── Task Execution Settings ──────────────────────────────────────────────────
 PROMPTS_PER_USECASE = 1
 MAX_ACTIONS_LENGTH = 60
 TIMEOUT = 120
 FEEDBACK_TIMEOUT = 60
+AVG_TASK_DURATION_SECONDS = 300  # Used for round time calculations
 
-# ── HTML / Media ─────────────────────────────────────────────────────────
+# ── Dynamic HTML / Media ─────────────────────────────────────────────────────
 ENABLE_DYNAMIC_HTML = _str_to_bool(os.getenv("ENABLE_DYNAMIC_HTML", "true"))
 SHOULD_RECORD_GIF = _str_to_bool(os.getenv("SHOULD_RECORD_GIF", "true"))
 
-# ── Scoring Weights ──────────────────────────────────────────────────────
+# ── Scoring Weights ──────────────────────────────────────────────────────────
 EVAL_SCORE_WEIGHT = 1.0
 TIME_WEIGHT = 0.0
 
-# ── Identity / IWAP ──────────────────────────────────────────────────────
+# ── Validator Identity (IWAP) ────────────────────────────────────────────────
 VALIDATOR_NAME = _normalized(os.getenv("VALIDATOR_NAME"))
 VALIDATOR_IMAGE = _normalized(os.getenv("VALIDATOR_IMAGE"))
-MAX_AGENT_NAME_LENGTH = _env_int("MAX_AGENT_NAME_LENGTH", 12)
+MAX_MINER_AGENT_NAME_LENGTH = _env_int("MAX_MINER_AGENT_NAME_LENGTH", 12)
 
-LEADERBOARD_ENDPOINT = os.getenv("LEADERBOARD_ENDPOINT", "https://leaderboard-api.autoppia.com")
-IWAP_API_BASE_URL = os.getenv("IWAP_API_BASE_URL", "https://dev-api-leaderboard.autoppia.com" if TESTING else "https://api-leaderboard.autoppia.com")
-VALIDATOR_AUTH_MESSAGE = _normalized(os.getenv("VALIDATOR_AUTH_MESSAGE", "I am a honest validator"))
-_base = (IWAP_API_BASE_URL or "").rstrip("/")
-LEADERBOARD_TASKS_ENDPOINT = os.getenv("TEST_LEADERBOARD_TASKS_ENDPOINT" if TESTING else "LEADERBOARD_TASKS_ENDPOINT", f"{_base}/tasks")
-LEADERBOARD_VALIDATOR_RUNS_ENDPOINT = os.getenv("TEST_LEADERBOARD_VALIDATOR_RUNS_ENDPOINT" if TESTING else "LEADERBOARD_VALIDATOR_RUNS_ENDPOINT", f"{_base}/validator-runs")
-SAVE_SUCCESSFUL_TASK_IN_JSON = _str_to_bool(os.getenv("SAVE_SUCCESSFUL_TASK_IN_JSON", "false"))
+# ── IWAP Leaderboard API ─────────────────────────────────────────────────────
+IWAP_API_BASE_URL = os.getenv(
+    "IWAP_API_BASE_URL",
+    "https://dev-api-leaderboard.autoppia.com" if TESTING else "https://api-leaderboard.autoppia.com"
+)
+IWAP_VALIDATOR_AUTH_MESSAGE = _normalized(os.getenv("IWAP_VALIDATOR_AUTH_MESSAGE", "I am a honest validator"))
 
-# ── Burn / Stats ─────────────────────────────────────────────────────────
+# ── Burn Mechanism ───────────────────────────────────────────────────────────
 BURN_UID = _env_int("BURN_UID", 5)
 STATS_FILE = Path("coldkey_web_usecase_stats.json")
 
-# ── Consensus / Sharing ──────────────────────────────────────────────────
-_DEFAULT_SHARE_SCORING = "true"
-SHARE_SCORING = _str_to_bool(os.getenv("SHARE_SCORING", _DEFAULT_SHARE_SCORING))
-STOP_TASKS_AT_FRACTION = _env_float("STOP_TASKS_AT_FRACTION", 0.75, alias="SHARE_STOP_EVAL_AT_FRACTION", test_default=0.50)
-CONSENSUS_COMMIT_AT_FRACTION = _env_float("CONSENSUS_COMMIT_AT_FRACTION", 0.66)
-SETTLEMENT_FETCH_FRACTION = _env_float("SETTLEMENT_FETCH_FRACTION", 0.5)
-SHARE_STOP_EVAL_AT_FRACTION = STOP_TASKS_AT_FRACTION  # alias for compatibility
+# ── Distributed Consensus (IPFS + Blockchain) ────────────────────────────────
+ENABLE_DISTRIBUTED_CONSENSUS = _str_to_bool(os.getenv("ENABLE_DISTRIBUTED_CONSENSUS", "true"))
+# Wait N blocks after committing to IPFS before fetching (ensures blockchain propagation)
+IPFS_COMMIT_PROPAGATION_WAIT_BLOCKS = _env_int("IPFS_COMMIT_PROPAGATION_WAIT_BLOCKS", 10)
 
-MIN_VALIDATOR_STAKE_TO_SHARE_SCORES = float(os.getenv("MIN_VALIDATOR_STAKE_TO_SHARE_SCORES", "0" if TESTING else "10000"))
-MIN_VALIDATOR_STAKE_TO_AGGREGATE = float(os.getenv("MIN_VALIDATOR_STAKE_TO_AGGREGATE", "0" if TESTING else "10000"))
-CONSENSUS_SPREAD_BLOCKS = _env_int("CONSENSUS_SPREAD_BLOCKS", 10)
-
-# ── IPFS ────────────────────────────────────────────────────────────────
+# ── IPFS Storage ─────────────────────────────────────────────────────────────
 IPFS_API_URL = os.getenv("IPFS_API_URL", "http://ipfs.metahash73.com:5001/api/v0")
-IPFS_GATEWAYS = [g.strip() for g in (os.getenv("IPFS_GATEWAYS", "https://ipfs.io/ipfs,https://cloudflare-ipfs.com/ipfs,https://gateway.pinata.cloud/ipfs") or "").split(",") if g.strip()]
-
-# ── Late Start Skip ──────────────────────────────────────────────────────
-SKIP_ROUND_IF_LATE_FRACTION = _env_float("SKIP_ROUND_IF_LATE_FRACTION", 0.30)
+IPFS_GATEWAYS = [
+    g.strip() for g in 
+    (os.getenv("IPFS_GATEWAYS", "https://ipfs.io/ipfs,https://cloudflare-ipfs.com/ipfs,https://gateway.pinata.cloud/ipfs") or "")
+    .split(",") if g.strip()
+]
