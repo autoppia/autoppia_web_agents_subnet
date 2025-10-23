@@ -322,11 +322,11 @@ Consensus score[107] = 0.92 (only Validator A counts)
 
 ---
 
-## Crash Recovery
+## Checkpoint System
 
-### RESUME_ROUND_AFTER_CRASH
+### ENABLE_CHECKPOINT_SYSTEM
 
-**What it does:** Allows validator to resume mid-round after restart/crash.
+**What it does:** Enables checkpoint save/load system for crash recovery. When enabled, validator can resume mid-round after restart/crash.
 
 **Without recovery:**
 
@@ -496,10 +496,10 @@ Waiting ~5.8m to next boundary...
    SKIP_ROUND_IF_STARTED_AFTER_FRACTION=0.95
    ```
 
-2. **Enable crash recovery** (production):
+2. **Enable checkpoint system** (production):
 
    ```bash
-   RESUME_ROUND_AFTER_CRASH=true
+   ENABLE_CHECKPOINT_SYSTEM=true
    ```
 
 3. **Start at epoch boundary:**
@@ -586,8 +586,8 @@ DZ_STARTING_BLOCK = 6_717_750
 STOP_TASK_EVALUATION_AT_ROUND_FRACTION = 0.50        # Stop at 50%
 FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION = 0.75  # Fetch at 75%
 
-# Late Start & Recovery
-RESUME_ROUND_AFTER_CRASH = true
+# Checkpoint System & Late Start
+ENABLE_CHECKPOINT_SYSTEM = True
 SKIP_ROUND_IF_STARTED_AFTER_FRACTION = 0.95          # Very permissive
 
 # Consensus
@@ -608,8 +608,8 @@ DZ_STARTING_BLOCK = 6_720_066
 STOP_TASK_EVALUATION_AT_ROUND_FRACTION = 0.75        # Stop at 75%
 FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION = 0.875  # Fetch at 87.5%
 
-# Late Start & Recovery
-RESUME_ROUND_AFTER_CRASH = true
+# Checkpoint System & Late Start
+ENABLE_CHECKPOINT_SYSTEM = True
 SKIP_ROUND_IF_STARTED_AFTER_FRACTION = 0.30          # Conservative
 
 # Consensus
@@ -796,19 +796,3 @@ Each validator will then work independently (no IPFS sharing).
 - [Round System Documentation](./round_system.md)
 
 ---
-
-## Changelog
-
-### Version 2.0 (Current)
-
-- ✅ Simplified timing: all fractions now absolute (not relative to settlement)
-- ✅ Removed `IPFS_COMMIT_PROPAGATION_WAIT_BLOCKS` (redundant)
-- ✅ Removed `MIN_VALIDATOR_STAKE_TO_SHARE_SCORES` (unnecessary)
-- ✅ Renamed variables for clarity
-- ✅ Clear separation of TESTING vs PRODUCTION configs
-
-### Version 1.0 (Legacy)
-
-- Used relative settlement fractions
-- Had redundant propagation wait checks
-- Confusing variable names (SHARE_SCORING, etc.)

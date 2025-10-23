@@ -35,9 +35,9 @@ if TESTING:
     # Fetch IPFS payloads at 75% of round (gives 25% gap for propagation)
     FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION = 0.75
 
-    # ── Late Start & Crash Recovery ──────────────────────────────────────────
-    # Resume from checkpoint if validator crashes/restarts mid-round
-    RESUME_ROUND_AFTER_CRASH = _str_to_bool(os.getenv("RESUME_ROUND_AFTER_CRASH", "true"))
+    # ── Checkpoint System & Late Start ───────────────────────────────────────
+    # Enable checkpoint system (save/load round state for crash recovery)
+    ENABLE_CHECKPOINT_SYSTEM = _str_to_bool(os.getenv("ENABLE_CHECKPOINT_SYSTEM", "true"))
     # Skip round only if started when >95% complete (very permissive for testing)
     SKIP_ROUND_IF_STARTED_AFTER_FRACTION = 0.95
 
@@ -62,9 +62,9 @@ else:
     # Fetch IPFS payloads at 87.5% of round (gives 12.5% gap for propagation)
     FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION = 0.875
 
-    # ── Late Start & Crash Recovery ──────────────────────────────────────────
-    # Resume from checkpoint if validator crashes/restarts mid-round
-    RESUME_ROUND_AFTER_CRASH = _str_to_bool(os.getenv("RESUME_ROUND_AFTER_CRASH", "true"))
+    # ── Checkpoint System & Late Start ───────────────────────────────────────
+    # Enable checkpoint system (save/load round state for crash recovery)
+    ENABLE_CHECKPOINT_SYSTEM = _str_to_bool(os.getenv("ENABLE_CHECKPOINT_SYSTEM", "true"))
     # Skip round if started when >30% complete (conservative for production)
     SKIP_ROUND_IF_STARTED_AFTER_FRACTION = 0.30
 
@@ -117,3 +117,14 @@ IPFS_GATEWAYS = [
     (os.getenv("IPFS_GATEWAYS", "https://ipfs.io/ipfs,https://cloudflare-ipfs.com/ipfs,https://gateway.pinata.cloud/ipfs") or "")
     .split(",") if g.strip()
 ]
+
+# ═══════════════════════════════════════════════════════════════════════════
+# BACKWARDS COMPATIBILITY (for tests and legacy imports)
+# ═══════════════════════════════════════════════════════════════════════════
+ENABLE_STATE_RECOVERY = ENABLE_CHECKPOINT_SYSTEM
+RESUME_ROUND_AFTER_CRASH = ENABLE_CHECKPOINT_SYSTEM
+SHARE_SCORING = ENABLE_DISTRIBUTED_CONSENSUS
+STOP_TASKS_AT_FRACTION = STOP_TASK_EVALUATION_AT_ROUND_FRACTION
+SETTLEMENT_FETCH_FRACTION = FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION
+MIN_VALIDATOR_STAKE_TO_AGGREGATE = MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO
+SKIP_ROUND_IF_LATE_FRACTION = SKIP_ROUND_IF_STARTED_AFTER_FRACTION

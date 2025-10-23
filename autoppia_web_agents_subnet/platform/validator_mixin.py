@@ -9,7 +9,7 @@ from autoppia_web_agents_subnet.validator.models import TaskWithProject
 from autoppia_web_agents_subnet.validator.config import (
     IWAP_API_BASE_URL,
     IWAP_VALIDATOR_AUTH_MESSAGE,
-    RESUME_ROUND_AFTER_CRASH,
+    ENABLE_CHECKPOINT_SYSTEM,
 )
 from autoppia_web_agents_subnet.platform import models as iwa_models
 from autoppia_web_agents_subnet.platform import main as iwa_main
@@ -127,9 +127,9 @@ class ValidatorPlatformMixin:
 
     def _save_round_state(self, *, tasks: Optional[List[TaskWithProject]] = None) -> None:
         # Wrapper to new checkpoint manager
-        if not RESUME_ROUND_AFTER_CRASH:
-            # Do not persist checkpoints when crash recovery is disabled
-            bt.logging.debug("Checkpoint save skipped: crash recovery disabled by config")
+        if not ENABLE_CHECKPOINT_SYSTEM:
+            # Do not persist checkpoints when system is disabled
+            bt.logging.debug("Checkpoint save skipped: checkpoint system disabled")
             return
         try:
             self.state_manager.save_checkpoint(tasks=tasks)
@@ -138,10 +138,10 @@ class ValidatorPlatformMixin:
 
     def _load_round_state(self) -> Optional[Dict[str, Any]]:
         # Wrapper to new checkpoint manager; returns a JSON-like shim for call sites
-        if not RESUME_ROUND_AFTER_CRASH:
-            # Crash recovery disabled - always start fresh rounds
-            self._last_resume_info = {"status": "disabled", "reason": "crash recovery disabled by config"}
-            bt.logging.info("Resume disabled by config (RESUME_ROUND_AFTER_CRASH=false); starting fresh")
+        if not ENABLE_CHECKPOINT_SYSTEM:
+            # Checkpoint system disabled - always start fresh rounds
+            self._last_resume_info = {"status": "disabled", "reason": "checkpoint system disabled"}
+            bt.logging.info("Resume disabled by config (ENABLE_CHECKPOINT_SYSTEM=false); starting fresh")
             return None
         ckpt = self.state_manager.load_checkpoint()
         if ckpt is None:
