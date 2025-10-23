@@ -54,49 +54,6 @@ def _hotkey_to_uid_map(mg) -> Dict[str, int]:
     return mapping
 
 
-async def _stxn_from_validator(validator) -> AsyncSubtensor:
-    """
-    Create and initialize an AsyncSubtensor using validator's config endpoints.
-
-    Handles API differences across bittensor versions by falling back if
-    certain constructor parameters or methods are unavailable.
-    """
-    network = None
-    chain_endpoint = None
-    try:
-        network = validator.config.subtensor.network
-    except Exception:
-        pass
-    try:
-        chain_endpoint = validator.config.subtensor.chain_endpoint
-    except Exception:
-        pass
-
-    st: AsyncSubtensor
-    # Try most specific signature first, then gracefully degrade
-    try:
-        st = AsyncSubtensor(network=network, chain_endpoint=chain_endpoint)  # type: ignore[arg-type]
-    except TypeError:
-        try:
-            st = AsyncSubtensor(network=network)  # type: ignore[arg-type]
-        except Exception:
-            st = AsyncSubtensor()  # type: ignore[call-arg]
-    except Exception:
-        # Unexpected error with provided args, fall back to default
-        st = AsyncSubtensor()  # type: ignore[call-arg]
-
-    # Some versions require explicit async initialize; others do not expose it
-    try:
-        init = getattr(st, "initialize", None)
-        if callable(init):
-            await init()
-    except Exception:
-        # Best-effort init; continue if not supported
-        pass
-
-    return st
-
-
 async def publish_round_snapshot(
     *,
     validator,
