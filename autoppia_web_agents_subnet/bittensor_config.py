@@ -70,7 +70,7 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
         "--neuron.axon_off",
         "--axon_off",
         action="store_true",
-        default=False,
+        default=True,
         help="Set this flag to not attempt to serve an Axon (validators only).",
     )
 
