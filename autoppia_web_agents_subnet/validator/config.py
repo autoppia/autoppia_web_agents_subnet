@@ -46,6 +46,7 @@ if TESTING:
     # ── Consensus Participation Requirements ─────────────────────────────────
     # Testing: No stake required (0 τ) - anyone can participate
     MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO = 0.0
+    IWAP_API_BASE_URL = "https://dev-api-leaderboard.autoppia.com"
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PRODUCTION CONFIGURATION (4.8-hour rounds, conservative)
@@ -74,7 +75,7 @@ else:
     # ── Consensus Participation Requirements ─────────────────────────────────
     # Production: Minimum 10k τ stake required to be included in consensus calculations
     MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO = 10000.0
-
+    IWAP_API_BASE_URL = "https://api-leaderboard.autoppia.com"
 # ═══════════════════════════════════════════════════════════════════════════
 # SHARED CONFIGURATION (same for all modes)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -99,10 +100,7 @@ VALIDATOR_IMAGE = _normalized(os.getenv("VALIDATOR_IMAGE"))
 MAX_MINER_AGENT_NAME_LENGTH = _env_int("MAX_MINER_AGENT_NAME_LENGTH", 12)
 
 # ── IWAP Leaderboard API ─────────────────────────────────────────────────────
-IWAP_API_BASE_URL = os.getenv(
-    "IWAP_API_BASE_URL",
-    "https://dev-api-leaderboard.autoppia.com" if TESTING else "https://api-leaderboard.autoppia.com"
-)
+
 IWAP_VALIDATOR_AUTH_MESSAGE = _normalized(os.getenv("IWAP_VALIDATOR_AUTH_MESSAGE", "I am a honest validator"))
 
 # ── Burn Mechanism ───────────────────────────────────────────────────────────
