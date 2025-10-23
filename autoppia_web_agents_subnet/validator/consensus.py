@@ -109,15 +109,16 @@ async def publish_round_snapshot(
             f"📤 CONSENSUS PUBLISH | round={payload['r']} es={payload['es']} et={payload['et']} "
             f"tasks={payload['n']} agents={payload['agents']} active={str(ENABLE_DISTRIBUTED_CONSENSUS).lower()}"
         )
-        bt.logging.debug(
-            "Consensus payload (preview keys): "
-            f"scores={len(payload.get('scores') or {})} hk={str(payload.get('hk', ''))[:10]}… "
-            f"vrid={payload.get('validator_round_id')} vv={payload.get('validator_version')}"
-        )
 
-        # 🔍 LOG: IPFS upload attempt
-        bt.logging.info(f"🌐 IPFS UPLOAD | api_url={IPFS_API_URL} | filename=autoppia_commit_r{payload['r'] or 'X'}.json")
-        bt.logging.debug(f"📦 Payload size: {len(str(payload))} chars, {len(payload.get('scores', {}))} miners with scores")
+        # 🔍 LOG: Show FULL payload being uploaded
+        import json
+        payload_json = json.dumps(payload, indent=2, sort_keys=True)
+        bt.logging.info(f"🌐 IPFS UPLOAD START")
+        bt.logging.info(f"📍 ENDPOINT: {IPFS_API_URL}")
+        bt.logging.info(f"📦 ========== PAYLOAD BEING UPLOADED TO IPFS ==========")
+        bt.logging.info(f"\n{payload_json}")
+        bt.logging.info(f"📦 ======================================================")
+        bt.logging.info(f"   Summary: Round {payload['r']} | {len(payload.get('scores', {}))} miners | Validator UID {payload['uid']}")
 
         cid, sha_hex, byte_len = await aadd_json(
             payload,
@@ -128,7 +129,12 @@ async def publish_round_snapshot(
         )
 
         # 🔍 LOG: IPFS upload success
-        bt.logging.info(f"✅ IPFS UPLOAD SUCCESS | cid={cid} | size={byte_len} bytes | sha256={sha_hex[:16]}...")
+        bt.logging.info(f"✅ IPFS UPLOAD SUCCESS")
+        bt.logging.info(f"   CID: {cid}")
+        bt.logging.info(f"   Size: {byte_len} bytes | SHA256: {sha_hex}")
+        bt.logging.info(f"   📍 DOWNLOAD URL (FULL): http://ipfs.metahash73.com:5001/api/v0/cat?arg={cid}")
+        bt.logging.info(f"   📍 GATEWAY URL (FULL): https://ipfs.io/ipfs/{cid}")
+        bt.logging.info(f"   🧪 TEST WITH: curl -s -X POST 'http://ipfs.metahash73.com:5001/api/v0/cat?arg={cid}' | jq .")
     except Exception as e:
         bt.logging.error(f"❌ IPFS UPLOAD FAILED | error={type(e).__name__}: {str(e)}")
         bt.logging.debug(f"IPFS API URL: {IPFS_API_URL}")
@@ -261,16 +267,27 @@ async def aggregate_scores_from_commitments(
 
         # Stake filter - only include validators with sufficient stake in consensus
         st_val = stake_for_hk(hk)
+        validator_uid = hk_to_uid.get(hk, "?")
+        bt.logging.debug(f"📊 Validator {hk[:10]}… (UID {validator_uid}): stake={st_val:.2f}τ (min required: {MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO:.1f}τ)")
         if st_val < float(MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO):
             skipped_low_stake += 1
             bt.logging.debug(f"⏭️ Skip {hk[:10]}…: low stake ({st_val:.1f}τ < {MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO:.1f}τ)")
             continue
 
         # Fetch payload from IPFS
-        bt.logging.info(f"🌐 IPFS DOWNLOAD | validator={hk[:10]}… | cid={cid[:20]}… | api_url={IPFS_API_URL}")
+        bt.logging.info(f"🌐 IPFS DOWNLOAD START")
+        bt.logging.info(f"   Validator: {hk}")
+        bt.logging.info(f"   CID: {cid}")
+        bt.logging.info(f"   📍 FULL URL: {IPFS_API_URL}/cat?arg={cid}")
         try:
             payload, _norm, _h = await aget_json(cid, api_url=IPFS_API_URL)
-            bt.logging.info(f"✅ IPFS DOWNLOAD SUCCESS | cid={cid[:20]}… | scores={len(payload.get('scores', {}))} miners")
+            import json
+            payload_json = json.dumps(payload, indent=2, sort_keys=True)
+            bt.logging.info(f"✅ IPFS DOWNLOAD SUCCESS from validator {hk[:20]}...")
+            bt.logging.info(f"📦 ========== PAYLOAD DOWNLOADED FROM IPFS ==========")
+            bt.logging.info(f"\n{payload_json}")
+            bt.logging.info(f"📦 ====================================================")
+            bt.logging.info(f"   Summary: Round {payload.get('r')} | {len(payload.get('scores', {}))} miners | Validator UID {payload.get('uid')}")
         except Exception as e:
             skipped_ipfs += 1
             bt.logging.error(f"❌ IPFS DOWNLOAD FAILED | cid={cid[:20]}… | error={type(e).__name__}: {str(e)}")
@@ -294,7 +311,7 @@ async def aggregate_scores_from_commitments(
         if not isinstance(scores, dict):
             continue
 
-        # Accumulate stake-weighted
+        # Accumulate stake-weighted (or simple average if all stakes are 0)
         for uid_s, sc in scores.items():
             try:
                 uid = int(uid_s)
@@ -303,8 +320,11 @@ async def aggregate_scores_from_commitments(
                 continue
             if val <= 0:
                 continue
-            weighted_sum[uid] = weighted_sum.get(uid, 0.0) + st_val * val
-            weight_total[uid] = weight_total.get(uid, 0.0) + st_val
+            # Use weight=1.0 if stake is 0, otherwise use actual stake
+            # This allows consensus to work even with 0-stake validators (testing mode)
+            effective_weight = st_val if st_val > 0.0 else 1.0
+            weighted_sum[uid] = weighted_sum.get(uid, 0.0) + effective_weight * val
+            weight_total[uid] = weight_total.get(uid, 0.0) + effective_weight
         included += 1
         fetched.append((hk, cid, st_val))
 
@@ -317,24 +337,29 @@ async def aggregate_scores_from_commitments(
 
     # Summary logs
     if included > 0:
+        # Check if we're using simple average (all stakes are 0)
+        all_stakes_zero = all(stake == 0.0 for _, _, stake in fetched)
+        consensus_mode = "simple average (all 0τ)" if all_stakes_zero else "stake-weighted"
+
         # Info-level: who was included (short hk) and their CIDs
         hk_list = ", ".join([f"{hk[:10]}…:{cid[:12]}…({stake:.0f}τ)" for hk, cid, stake in fetched])
         bt.logging.info(
-            f"🤝 CONSENSUS INCLUDED | validators={included} | miners={len(result)} | {hk_list}"
+            f"🤝 CONSENSUS INCLUDED | validators={included} | miners={len(result)} | mode={consensus_mode} | {hk_list}"
         )
         # Debug: breakdown of skips
         bt.logging.info(
             f"📊 Skip summary — wrong_epoch={skipped_wrong_epoch} missing_cid={skipped_missing_cid} "
             f"low_stake={skipped_low_stake} ipfs_fail={skipped_ipfs}"
         )
-        # Debug: show a small sample of aggregated results
-        try:
-            top_sample = list(sorted(result.items(), key=lambda x: x[1], reverse=True))[:5]
-            bt.logging.debug(
-                "Aggregated sample: " + ", ".join([f"uid{u}:{s:.4f}" for u, s in top_sample])
-            )
-        except Exception:
-            pass
+        # Show aggregated consensus scores
+        if len(result) > 0:
+            bt.logging.info(f"🎯 CONSENSUS AGGREGATED SCORES ({len(result)} miners):")
+            top_sample = list(sorted(result.items(), key=lambda x: x[1], reverse=True))[:10]
+            for uid, score in top_sample:
+                bt.logging.info(f"   UID {uid}: {score:.4f}")
+        else:
+            bt.logging.warning(f"   ⚠️ NO MINERS AGGREGATED (all scores were <= 0 or no common miners)")
+        bt.logging.debug(f"Full consensus result: {result}")
     else:
         bt.logging.warning("🤝 CONSENSUS INCLUDED | validators=0 (no aggregated scores)")
         bt.logging.warning(
