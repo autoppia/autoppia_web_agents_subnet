@@ -706,9 +706,52 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 break
 
         # ═══════════════════════════════════════════════════════
-        # Note: If all tasks completed before 50%, we'll publish during
-        # the wait loop when we reach the 50% threshold
+        # PUBLISH IF NOT DONE YET
+        # If we completed all tasks before reaching 50%, publish NOW
+        # This ensures round_number and validator_round_id match
         # ═══════════════════════════════════════════════════════
+        if ENABLE_DISTRIBUTED_CONSENSUS and not self._consensus_published:
+            ColoredLogger.error(
+                "\n" + "=" * 80,
+                ColoredLogger.RED,
+            )
+            ColoredLogger.error(
+                f"📤📤📤 ALL TASKS DONE - PUBLISHING TO IPFS NOW 📤📤📤",
+                ColoredLogger.RED,
+            )
+            ColoredLogger.error(
+                f"📦 Tasks completed: {tasks_completed}/{len(all_tasks)}",
+                ColoredLogger.RED,
+            )
+            ColoredLogger.error(
+                "=" * 80 + "\n",
+                ColoredLogger.RED,
+            )
+            try:
+                current_block = self.metagraph.block.item()
+                round_number = await self.round_manager.calculate_round(current_block)
+                st = await self._get_async_subtensor()
+                await publish_round_snapshot(
+                    validator=self,
+                    st=st,
+                    round_number=round_number,
+                    tasks_completed=tasks_completed,
+                )
+                self._consensus_published = True
+                ColoredLogger.success(
+                    "\n" + "=" * 80,
+                    ColoredLogger.GREEN,
+                )
+                ColoredLogger.success(
+                    f"✅✅✅ IPFS PUBLISH COMPLETE ✅✅✅",
+                    ColoredLogger.GREEN,
+                )
+                ColoredLogger.success(
+                    "=" * 80 + "\n",
+                    ColoredLogger.GREEN,
+                )
+            except Exception as e:
+                bt.logging.error(f"Consensus publish (post-tasks) failed: {e}")
 
         # ═══════════════════════════════════════════════════════
         # WAIT FOR TARGET EPOCH: Wait until the round ends
@@ -972,15 +1015,18 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
     async def _wait_for_target_epoch(self):
         """Wait for the end-of-round target epoch (round boundary) to set weights."""
-        # Establish context up-front for clarity
+        # Get boundaries ONCE from round_manager.start_block (the round we just completed)
+        # Don't recalculate or it jumps to next round
+        boundaries = self.round_manager.get_current_boundaries()
+        target_epoch = boundaries['target_epoch']
+        target_block = boundaries['target_block']
+        round_start_block = boundaries['round_start_block']
+
         current_block_ctx = self.subtensor.get_current_block()
         try:
             round_no_ctx = await self.round_manager.calculate_round(current_block_ctx)
         except Exception:
             round_no_ctx = None
-        boundaries = self.round_manager.get_current_boundaries()
-        target_epoch = boundaries['target_epoch']
-        target_block = boundaries['target_block']
         if round_no_ctx is not None:
             ColoredLogger.info(
                 f"⏳ Waiting for end-of-round target epoch | round={round_no_ctx} | target_epoch={target_epoch:.3f} | target_block={target_block}",
@@ -1004,65 +1050,16 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 ColoredLogger.info(f"   Current epoch: {current_epoch:.2f}", ColoredLogger.GREEN)
                 break
 
-            # Recompute round boundaries and progress on each tick
-            boundaries = self.round_manager.get_round_boundaries(current_block, log_debug=False)
-            target_epoch = boundaries['target_epoch']
-            round_start_block = boundaries['round_start_block']
-            target_block = boundaries['target_block']
-
+            # Use FIXED boundaries from round start (locked at entry to this function)
+            # Don't recalculate or progress jumps to next round
             # Progress based on blocks within the round window (absolute %)
             blocks_total = max(target_block - round_start_block, 1)
             blocks_done = max(current_block - round_start_block, 0)
             progress = min(max((blocks_done / blocks_total) * 100.0, 0.0), 100.0)
             progress_frac = progress / 100.0  # Convert to 0-1 range
 
-            # Publish to IPFS at 50% (if not already published during task loop)
-            if ENABLE_DISTRIBUTED_CONSENSUS and (not self._consensus_published) and progress_frac >= float(STOP_TASK_EVALUATION_AT_ROUND_FRACTION):
-                try:
-                    ColoredLogger.error(
-                        "\n" + "=" * 80,
-                        ColoredLogger.RED,
-                    )
-                    ColoredLogger.error(
-                        f"🛑🛑🛑 PUBLISH THRESHOLD REACHED: {STOP_TASK_EVALUATION_AT_ROUND_FRACTION:.0%} 🛑🛑🛑",
-                        ColoredLogger.RED,
-                    )
-                    ColoredLogger.error(
-                        f"📤📤📤 PUBLISHING TO IPFS NOW 📤📤📤",
-                        ColoredLogger.RED,
-                    )
-                    ColoredLogger.error(
-                        "=" * 80 + "\n",
-                        ColoredLogger.RED,
-                    )
-                    round_number = await self.round_manager.calculate_round(current_block)
-                    st = await self._get_async_subtensor()
-                    # Get tasks_completed from outside scope (from validator state)
-                    try:
-                        tasks_done = len([uid for uid, arr in (self.round_manager.round_rewards or {}).items() if arr])
-                    except Exception:
-                        tasks_done = 0
-                    await publish_round_snapshot(
-                        validator=self,
-                        st=st,
-                        round_number=round_number,
-                        tasks_completed=tasks_done,
-                    )
-                    self._consensus_published = True
-                    ColoredLogger.success(
-                        "\n" + "=" * 80,
-                        ColoredLogger.GREEN,
-                    )
-                    ColoredLogger.success(
-                        f"✅✅✅ IPFS PUBLISH COMPLETE - CONTINUING WAIT ✅✅✅",
-                        ColoredLogger.GREEN,
-                    )
-                    ColoredLogger.success(
-                        "=" * 80 + "\n",
-                        ColoredLogger.GREEN,
-                    )
-                except Exception as e:
-                    bt.logging.error(f"Consensus publish (wait-loop) failed: {e}")
+            # Note: Publish now happens immediately after tasks (before wait loop)
+            # This block is kept as a safety fallback only
 
             # Mid-round fetch at configured absolute fraction (single attempt)
             if ENABLE_DISTRIBUTED_CONSENSUS and (not self._consensus_mid_fetched) and progress_frac >= float(FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION):
