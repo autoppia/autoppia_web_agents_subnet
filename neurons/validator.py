@@ -29,6 +29,8 @@ from autoppia_web_agents_subnet.validator.config import (
     STOP_TASKS_AT_FRACTION,
     SETTLEMENT_FETCH_FRACTION,
     CONSENSUS_COMMIT_AT_FRACTION,
+    SKIP_ROUND_IF_LATE_FRACTION,
+    BURN_UID,
 )
 from autoppia_web_agents_subnet.validator.tasks import get_task_collection_interleaved, collect_task_solutions_and_execution_times
 from autoppia_iwa.src.demo_webs.classes import WebProject
@@ -210,6 +212,73 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             else:
                 bt.logging.info(f"Resume decision: fresh start ({info})")
         except Exception:
+            pass
+
+        # Early round header with identifiers for clear traceability
+        try:
+            # Compute round number at current block
+            round_header_block = current_block
+            round_number_header = await self.round_manager.calculate_round(round_header_block)
+
+            # Prefer resumed validator_round_id when available; otherwise, show the planned ID
+            planned_round_id = None
+            try:
+                planned_round_id = self._generate_validator_round_id(current_block=round_header_block)
+            except Exception:
+                planned_round_id = None
+
+            rid = getattr(self, "current_round_id", None) or planned_round_id or "<unknown>"
+
+            # Validator identity (uid + hotkey short)
+            uid = getattr(self, "uid", None)
+            hotkey = getattr(getattr(self, "wallet", None), "hotkey", None)
+            hk = getattr(hotkey, "ss58_address", None) or "<unknown>"
+            hk_short = f"{hk[:8]}...{hk[-8:]}" if isinstance(hk, str) and len(hk) > 20 else hk
+
+            # Optional human-readable validator name from config
+            vname = VALIDATOR_NAME or "<unnamed>"
+
+            bt.logging.info(
+                (
+                    "🏁 Round header | round={round} | validator_uid={uid} | hotkey={hk} | "
+                    "validator_round_id={rid} | resumed={resumed} | name={vname}"
+                ).format(
+                    round=round_number_header,
+                    uid=uid,
+                    hk=hk_short,
+                    rid=rid,
+                    resumed=bool(resumed),
+                    vname=vname,
+                )
+            )
+        except Exception as e:
+            bt.logging.debug(f"Round header logging failed: {e}")
+
+        # Guard: if this is a fresh start and the current round is already too far
+        # progressed, skip this round and wait for the next boundary.
+        try:
+            if not resumed:
+                frac = float(self.round_manager.fraction_elapsed(current_block))
+                if frac >= float(SKIP_ROUND_IF_LATE_FRACTION):
+                    bounds = self.round_manager.get_round_boundaries(current_block, log_debug=False)
+                    blocks_remaining = max(bounds['target_block'] - current_block, 0)
+                    minutes_remaining = (blocks_remaining * self.round_manager.SECONDS_PER_BLOCK) / 60
+                    ColoredLogger.warning(
+                        (
+                            f"⏭️ Fresh start late in round: {frac*100:.1f}% >= "
+                            f"{float(SKIP_ROUND_IF_LATE_FRACTION)*100:.0f}% — skipping to next round"
+                        ),
+                        ColoredLogger.YELLOW,
+                    )
+                    ColoredLogger.info(
+                        f"   Waiting ~{minutes_remaining:.1f}m to next boundary...",
+                        ColoredLogger.YELLOW,
+                    )
+                    # Wait until next target epoch without touching IWAP or round state
+                    await self._wait_until_next_round_boundary()
+                    return
+        except Exception:
+            # Never block the loop on this guard
             pass
 
         if not resumed:
@@ -564,10 +633,21 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     f"buffer={SAFETY_BUFFER_EPOCHS} epochs, tasks={tasks_completed}/{len(all_tasks)}",
                     ColoredLogger.YELLOW,
                 )
-                ColoredLogger.info(
-                    "   Waiting for target epoch to set weights...",
-                    ColoredLogger.YELLOW,
-                )
+                try:
+                    # Provide explicit context about what the target is (end-of-round)
+                    bounds_ctx = self.round_manager.get_round_boundaries(current_block, log_debug=False)
+                    target_epoch_ctx = bounds_ctx['target_epoch']
+                    target_block_ctx = bounds_ctx['target_block']
+                    round_no_ctx = await self.round_manager.calculate_round(current_block)
+                    ColoredLogger.info(
+                        (
+                            f"   Waiting for end-of-round target epoch to set weights | "
+                            f"round={round_no_ctx} | target_epoch={target_epoch_ctx:.2f} | target_block={target_block_ctx}"
+                        ),
+                        ColoredLogger.YELLOW,
+                    )
+                except Exception:
+                    ColoredLogger.info("   Waiting for end-of-round target epoch to set weights", ColoredLogger.YELLOW)
                 # Save state just before entering wait phase
                 try:
                     self.state_manager.save_checkpoint()
@@ -852,11 +932,26 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             return False
 
     async def _wait_for_target_epoch(self):
-        """Wait for the target epoch to set weights"""
-        ColoredLogger.info("⏳ Waiting for target epoch", ColoredLogger.BLUE)
-
+        """Wait for the end-of-round target epoch (round boundary) to set weights."""
+        # Establish context up-front for clarity
+        current_block_ctx = self.subtensor.get_current_block()
+        try:
+            round_no_ctx = await self.round_manager.calculate_round(current_block_ctx)
+        except Exception:
+            round_no_ctx = None
         boundaries = self.round_manager.get_current_boundaries()
         target_epoch = boundaries['target_epoch']
+        target_block = boundaries['target_block']
+        if round_no_ctx is not None:
+            ColoredLogger.info(
+                f"⏳ Waiting for end-of-round target epoch | round={round_no_ctx} | target_epoch={target_epoch:.3f} | target_block={target_block}",
+                ColoredLogger.BLUE,
+            )
+        else:
+            ColoredLogger.info(
+                f"⏳ Waiting for end-of-round target epoch | target_epoch={target_epoch:.3f} | target_block={target_block}",
+                ColoredLogger.BLUE,
+            )
         last_log_time = time.time()
 
         while True:
@@ -914,17 +1009,68 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             # Log progress every 30 seconds
             if time.time() - last_log_time >= 30:
                 # Concise status line
-                ColoredLogger.info(
-                    f"Epoch {current_epoch:.3f}/{target_epoch:.3f} | Block {current_block}/{target_block} ({progress:.2f}%) | "
-                    f"Remaining {wait_info['minutes_remaining']:.1f}m",
-                    ColoredLogger.BLUE,
-                )
+                if round_no_ctx is not None:
+                    ColoredLogger.info(
+                        f"Round {round_no_ctx} — Epoch {current_epoch:.3f}/{target_epoch:.3f} | Block {current_block}/{target_block} ({progress:.2f}%) | Remaining {wait_info['minutes_remaining']:.1f}m",
+                        ColoredLogger.BLUE,
+                    )
+                else:
+                    ColoredLogger.info(
+                        f"Epoch {current_epoch:.3f}/{target_epoch:.3f} | Block {current_block}/{target_block} ({progress:.2f}%) | Remaining {wait_info['minutes_remaining']:.1f}m",
+                        ColoredLogger.BLUE,
+                    )
                 last_log_time = time.time()
 
             # Wait for next block
             await asyncio.sleep(12)  # Wait for next block
 
         # reached target: minimal separator not needed
+
+    async def _wait_until_next_round_boundary(self) -> None:
+        """Wait until the end of the current (global) round window.
+
+        This helper does not depend on round_manager.start_block, so it can be
+        used before a round is initialized, e.g., when skipping a late fresh start.
+        """
+        last_log_time = time.time()
+        while True:
+            try:
+                current_block = self.subtensor.get_current_block()
+                bounds = self.round_manager.get_round_boundaries(current_block, log_debug=False)
+                target_epoch = bounds['target_epoch']
+                current_epoch = self.round_manager.block_to_epoch(current_block)
+
+                if current_epoch >= target_epoch:
+                    ColoredLogger.success(
+                        f"🎯 Next round boundary reached at epoch {target_epoch}",
+                        ColoredLogger.GREEN,
+                    )
+                    break
+
+                # Progress within current window
+                rsb = bounds['round_start_block']
+                tb = bounds['target_block']
+                total = max(tb - rsb, 1)
+                done = max(current_block - rsb, 0)
+                progress = min(max((done / total) * 100.0, 0.0), 100.0)
+
+                blocks_remaining = max(tb - current_block, 0)
+                minutes_remaining = (
+                    blocks_remaining * self.round_manager.SECONDS_PER_BLOCK
+                ) / 60
+
+                if time.time() - last_log_time >= 30:
+                    ColoredLogger.info(
+                        f"Waiting — next round boundary (global) — epoch {current_epoch:.3f}/{target_epoch:.3f} "
+                        f"({progress:.2f}%) | ~{minutes_remaining:.1f}m left",
+                        ColoredLogger.BLUE,
+                    )
+                    last_log_time = time.time()
+            except Exception:
+                # Conservative sleep if anything goes wrong
+                pass
+
+            await asyncio.sleep(12)
 
     async def _calculate_final_weights(self, tasks_completed: int):
         """Calculate averages, apply WTA, set weights"""
@@ -935,15 +1081,17 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         if not self.active_miner_uids:
             ColoredLogger.error("🔥 No active miners: burning all weights", ColoredLogger.RED)
 
-            # Create burn weights: UID 0 = 1.0, all others = 0.0
+            # Create burn weights: UID BURN_UID = 1.0, all others = 0.0
             burn_weights = np.zeros(self.metagraph.n, dtype=np.float32)
-            burn_weights[5] = 1.0  # UID 0 gets all weight (burn)
+            idx = int(BURN_UID) if 0 <= int(BURN_UID) < self.metagraph.n else min(5, self.metagraph.n - 1)
+            burn_weights[idx] = 1.0  # burn recipient
 
-            # Set these burn weights directly
-            self.scores = burn_weights
+            # Update scores via standard path to keep behavior consistent
+            all_uids = list(range(self.metagraph.n))
+            self.update_scores(rewards=burn_weights, uids=all_uids)
             self.set_weights()
 
-            ColoredLogger.success("✅ Burn complete (weight to UID 0)", ColoredLogger.RED)
+            ColoredLogger.success(f"✅ Burn complete (weight to UID {idx})", ColoredLogger.RED)
             ColoredLogger.info(f"Tasks attempted: {tasks_completed}", ColoredLogger.RED)
             return
 
@@ -974,6 +1122,22 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     ColoredLogger.warning("No aggregated scores available; using local averages.", ColoredLogger.YELLOW)
             except Exception as e:
                 bt.logging.warning(f"Aggregation failed; using local averages: {e}")
+
+        # If all miners have non-positive average scores, burn all weights and exit
+        try:
+            has_positive = any((float(s) > 0.0) for s in (avg_rewards or {}).values())
+        except Exception:
+            has_positive = False
+        if not has_positive:
+            ColoredLogger.error("🔥 All miners scored <= 0: burning all weights", ColoredLogger.RED)
+            # Zero-out via standard update_scores path to keep flow consistent
+            zero_vec = np.zeros(self.metagraph.n, dtype=np.float32)
+            all_uids = list(range(self.metagraph.n))
+            self.update_scores(rewards=zero_vec, uids=all_uids)
+            self.set_weights()
+            ColoredLogger.success("✅ Burn complete (no winners)", ColoredLogger.RED)
+            ColoredLogger.info(f"Tasks attempted: {tasks_completed}", ColoredLogger.RED)
+            return
 
         # Log round summary
         self.round_manager.log_round_summary()
@@ -1050,5 +1214,5 @@ if __name__ == "__main__":
 
     with Validator(config=config(role="validator")) as validator:
         while True:
-            bt.logging.info(f"Validator running... {time.time()}")
+            bt.logging.info(f"Heartbeat — validator running... {time.time()}")
             time.sleep(30)

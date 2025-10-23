@@ -130,8 +130,12 @@ class RoundStateManager:
                 except Exception:
                     pass
             tmp.replace(path)
+            try:
+                rid = ckpt.validator_round_id or getattr(self._validator, "current_round_id", None) or "<unknown>"
+            except Exception:
+                rid = "<unknown>"
             bt.logging.info(
-                f"💾 Checkpoint saved at {path} (tasks={len(ckpt.all_tasks)} uids={len(ckpt.active_miner_uids)} bytes={len(data)})"
+                f"💾 Checkpoint saved at {path} (rid={rid} tasks={len(ckpt.all_tasks)} uids={len(ckpt.active_miner_uids)} bytes={len(data)})"
             )
 
     def load_checkpoint(self) -> Optional[RoundCheckpoint]:
@@ -159,8 +163,12 @@ class RoundStateManager:
             return None
 
         self._apply_checkpoint(ckpt)
+        try:
+            rid = ckpt.validator_round_id or getattr(self._validator, "current_round_id", None) or "<unknown>"
+        except Exception:
+            rid = "<unknown>"
         bt.logging.info(
-            f"♻️ Checkpoint loaded from {chosen} (tasks={len(ckpt.all_tasks)} runs={len(ckpt.current_agent_runs)} completed={len(ckpt.completed_pairs)})"
+            f"♻️ Checkpoint loaded from {chosen} (rid={rid} tasks={len(ckpt.all_tasks)} runs={len(ckpt.current_agent_runs)} completed={len(ckpt.completed_pairs)})"
         )
         return ckpt
 

@@ -25,9 +25,11 @@ from autoppia_web_agents_subnet.platform.utils.iwa_core import (
     build_iwap_tasks as _utils_build_iwap_tasks,
     extract_gif_bytes as _utils_extract_gif_bytes,
 )
-from autoppia_web_agents_subnet.platform.utils.iwa_flow import (
+from autoppia_web_agents_subnet.platform.utils.round_flow import (
     start_round_flow as _utils_start_round_flow,
     finish_round_flow as _utils_finish_round_flow,
+)
+from autoppia_web_agents_subnet.platform.utils.task_flow import (
     submit_task_results as _utils_submit_task_results,
 )
 

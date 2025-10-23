@@ -184,6 +184,25 @@ class RoundManager:
             raise ValueError("Round not started. Call start_new_round() first.")
         return self.get_round_boundaries(self.start_block, log_debug=False)
 
+    def fraction_elapsed(self, current_block: int) -> float:
+        """
+        Return fraction of the CURRENT round that has elapsed at `current_block`.
+
+        Uses global round boundaries derived from `current_block`, so it does not
+        rely on internal state (e.g., `start_block`). Result is clamped to [0.0, 1.0].
+        """
+        bounds = self.get_round_boundaries(current_block, log_debug=False)
+        rsb = int(bounds['round_start_block'])
+        tb = int(bounds['target_block'])
+        total = max(tb - rsb, 1)
+        done = max(current_block - rsb, 0)
+        frac = done / total
+        if frac < 0.0:
+            return 0.0
+        if frac > 1.0:
+            return 1.0
+        return frac
+
     def should_send_next_task(self, current_block: int) -> bool:
         """
         Check if there's enough time to send another task.
