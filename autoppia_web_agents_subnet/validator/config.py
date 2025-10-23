@@ -22,7 +22,7 @@ USE_BACKEND_ROUND_FOR_TESTING = _str_to_bool(os.getenv("USE_BACKEND_ROUND_FOR_TE
 # ── Round Timing (epochs/blocks) ──────────────────────────────────────────
 # 1 epoch = 360 blocks (≈72 min)
 # Allow overriding core timing with env vars for production deployments.
-ROUND_SIZE_EPOCHS_PROD = _env_float("ROUND_SIZE_EPOCHS", 20.0)
+ROUND_SIZE_EPOCHS_PROD = _env_float("ROUND_SIZE_EPOCHS", 4.0)
 SAFETY_BUFFER_EPOCHS_PROD = _env_float("SAFETY_BUFFER_EPOCHS", 0.5)
 AVG_TASK_DURATION_SECONDS_PROD = _env_int("AVG_TASK_DURATION_SECONDS", 300)
 PRE_GENERATED_TASKS_PROD = _env_int("PRE_GENERATED_TASKS", 75)

@@ -133,7 +133,7 @@ WTA Result: [0.0, 1.0, 0.0]
 
 ```python
 # Adjust these parameters in config.py
-ROUND_SIZE_EPOCHS = 20              # Longer/shorter rounds
+ROUND_SIZE_EPOCHS = 4               # Longer/shorter rounds (prod default)
 SAFETY_BUFFER_EPOCHS = 0.5          # More/less safety margin
 PRE_GENERATED_TASKS = 120           # More/fewer tasks
 ```
