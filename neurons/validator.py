@@ -53,6 +53,7 @@ from autoppia_web_agents_subnet.validator.consensus import (
     publish_round_snapshot,
     aggregate_scores_from_commitments,
 )
+from autoppia_iwa.src.bootstrap import AppBootstrap
 
 
 class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorNeuron):
@@ -259,10 +260,12 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         try:
             if not resumed:
                 frac = float(self.round_manager.fraction_elapsed(current_block))
-                if frac >= float(SKIP_ROUND_IF_LATE_FRACTION):
-                    bounds = self.round_manager.get_round_boundaries(current_block, log_debug=False)
-                    blocks_remaining = max(bounds['target_block'] - current_block, 0)
-                    minutes_remaining = (blocks_remaining * self.round_manager.SECONDS_PER_BLOCK) / 60
+                bounds = self.round_manager.get_round_boundaries(current_block, log_debug=False)
+                blocks_to_target = max(bounds['target_block'] - current_block, 0)
+                # If we're exactly at the previous boundary (0 blocks remaining), treat as new round start (do not skip)
+                at_boundary = (blocks_to_target == 0)
+                if (not at_boundary) and (frac >= float(SKIP_ROUND_IF_LATE_FRACTION)):
+                    minutes_remaining = (blocks_to_target * self.round_manager.SECONDS_PER_BLOCK) / 60
                     ColoredLogger.warning(
                         (
                             f"⏭️ Fresh start late in round: {frac*100:.1f}% >= "
@@ -1188,8 +1191,6 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             rewards=active_rewards,           # Array of rewards for active miners
             uids=self.active_miner_uids       # List of active miner UIDs (same length)
         )
-
-        # Set weights on blockchain
         self.set_weights()
 
         try:
@@ -1206,19 +1207,16 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
 
 if __name__ == "__main__":
-    # Optional IWA bootstrap (if available)
+    # Optional IWA bootstrap: only skip when the package is missing
     try:
-        # Optional dependency: autoppia_iwa (may not be installed)
-        import importlib
-        _mod = importlib.import_module("autoppia_iwa.src.bootstrap")
-        _AppBootstrap = getattr(_mod, "AppBootstrap")
-        _app = _AppBootstrap()
+        AppBootstrap()
         # IWA logging works with loguru
         logger.remove()
         logger.add("logfile.log", level="INFO")
         logger.add(lambda msg: print(msg, end=""), level="WARNING")
-    except Exception:
-        pass
+    except ImportError as e:
+        bt.logging.warning("Autoppia_iwa init failed")
+        raise e
 
     with Validator(config=config(role="validator")) as validator:
         while True:

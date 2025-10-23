@@ -101,6 +101,12 @@ ENABLE_STATE_RECOVERY = _str_to_bool(
     os.getenv("ENABLE_STATE_RECOVERY", "false" if TESTING else "true")
 )
 
+# In testing, optionally derive round numbers from the backend rounds API.
+# Default: disabled to avoid divergence between chain epoch windows and API state.
+USE_BACKEND_ROUND_FOR_TESTING = _str_to_bool(
+    os.getenv("USE_BACKEND_ROUND_FOR_TESTING", "false")
+)
+
 # ════════════════════════════════════════════════════════════════════════════════
 # 🎯 Round System Configuration (Production defaults + Testing overrides)
 # ════════════════════════════════════════════════════════════════════════════════

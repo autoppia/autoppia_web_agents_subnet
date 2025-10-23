@@ -65,7 +65,7 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--neuron.num_concurrent_forwards", type=int, default=1, help="Concurrent forwards.")
     parser.add_argument("--neuron.sample_size", type=int, default=50, help="Number of miners to query per step.")
 
-    # NOTE: Validators can opt-out of serving an Axon; default is to serve.
+    # NOTE: Validators can opt-out of serving an Axon; default is to NOTserve.
     parser.add_argument(
         "--neuron.axon_off",
         "--axon_off",
@@ -81,7 +81,7 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--neuron.moving_average_alpha",
         type=float,
-        default=0.1,
+        default=1,
         help="Moving average alpha parameter for validator rewards blending.",
     )
 

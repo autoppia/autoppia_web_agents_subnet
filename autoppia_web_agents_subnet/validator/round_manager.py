@@ -6,7 +6,11 @@ from typing import Any, Dict, List, Optional
 import httpx
 
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
-from autoppia_web_agents_subnet.validator.config import IWAP_API_BASE_URL, TESTING
+from autoppia_web_agents_subnet.validator.config import (
+    IWAP_API_BASE_URL,
+    TESTING,
+    USE_BACKEND_ROUND_FOR_TESTING,
+)
 
 
 class RoundManager:
@@ -295,7 +299,7 @@ class RoundManager:
 
     async def calculate_round(self, current_block: int) -> int:
         """Return the human-visible round number based on days elapsed since launch block."""
-        if TESTING:
+        if TESTING and USE_BACKEND_ROUND_FOR_TESTING:
             testing_round = await self._calculate_round_from_backend()
             if testing_round is not None:
                 return testing_round
