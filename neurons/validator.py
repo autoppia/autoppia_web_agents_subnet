@@ -28,6 +28,7 @@ from autoppia_web_agents_subnet.validator.config import (
     SHARE_SCORING,
     STOP_TASKS_AT_FRACTION,
     SETTLEMENT_FETCH_FRACTION,
+    CONSENSUS_COMMIT_AT_FRACTION,
 )
 from autoppia_web_agents_subnet.validator.tasks import get_task_collection_interleaved, collect_task_solutions_and_execution_times
 from autoppia_iwa.src.demo_webs.classes import WebProject
@@ -252,7 +253,6 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         # ═══════════════════════════════════════════════════════
         # START ROUND HANDSHAKE: Send StartRoundSynapse ONCE
         # ═══════════════════════════════════════════════════════
-        ColoredLogger.info("🤝 Sending start-round handshake", ColoredLogger.CYAN)
 
         # Initialize new round in RoundManager (logs sync math once)
         self.round_manager.start_new_round(current_block)
@@ -268,46 +268,49 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
         # Send StartRoundSynapse to all miners ONCE at the beginning
         try:
-            # Build parallel lists of UIDs and axons to preserve mapping
-            all_uids = list(range(len(self.metagraph.uids)))
-            all_axons = [self.metagraph.axons[uid] for uid in all_uids]
-            start_synapse = StartRoundSynapse(
-                version=self.version,
-                round_id=self.current_round_id or f"round_{boundaries['round_start_epoch']}",
-                validator_id=str(self.uid),
-                total_prompts=len(all_tasks),
-                prompts_per_use_case=PROMPTS_PER_USECASE,
-                note=f"Starting round at epoch {boundaries['round_start_epoch']}"
-            )
-
-            # 🔍 DEBUG: Show exactly what we're sending
-            bt.logging.debug("=" * 80)
-            bt.logging.debug("StartRoundSynapse content:")
-            bt.logging.debug(f"  - version: {start_synapse.version}")
-            bt.logging.debug(f"  - round_id: {start_synapse.round_id}")
-            bt.logging.debug(f"  - validator_id: {start_synapse.validator_id}")
-            bt.logging.debug(f"  - total_prompts: {start_synapse.total_prompts}")
-            bt.logging.debug(f"  - prompts_per_use_case: {start_synapse.prompts_per_use_case}")
-            bt.logging.debug(f"  - note: {start_synapse.note}")
-            bt.logging.debug(f"  - has_rl: {getattr(start_synapse, 'has_rl', 'NOT_SET')}")
-            bt.logging.debug(f"  - Sending to {len(all_axons)} miners")
-            bt.logging.debug("=" * 80)
-
-            handshake_responses = []
             # Check if we already sent handshake in this round (via checkpoint)
             # Use phase flag to track if handshake was sent, not the presence of responses
             has_prior_handshake = resumed and self._phases.get("handshake_sent", False)
 
+            handshake_responses = []
+
             if has_prior_handshake:
                 # We already sent handshake before crash, use saved state
                 ColoredLogger.info(
-                    f"♻️ Resuming: handshake already sent (active_miners={len(self.active_miner_uids)}, no re-send)",
+                    f"🤝 Handshake: using saved state (active_miners={len(self.active_miner_uids)}, already sent before restart)",
                     ColoredLogger.CYAN,
                 )
                 # Skip sending synapse; use saved state
                 pass
             else:
-                # First time sending handshake in this round
+                # First time sending handshake in this round - BUILD AND SEND
+                ColoredLogger.info(f"🤝 Handshake: sending to {len(self.metagraph.uids)} miners...", ColoredLogger.CYAN)
+
+                # Build parallel lists of UIDs and axons to preserve mapping
+                all_uids = list(range(len(self.metagraph.uids)))
+                all_axons = [self.metagraph.axons[uid] for uid in all_uids]
+                start_synapse = StartRoundSynapse(
+                    version=self.version,
+                    round_id=self.current_round_id or f"round_{boundaries['round_start_epoch']}",
+                    validator_id=str(self.uid),
+                    total_prompts=len(all_tasks),
+                    prompts_per_use_case=PROMPTS_PER_USECASE,
+                    note=f"Starting round at epoch {boundaries['round_start_epoch']}"
+                )
+
+                # 🔍 DEBUG: Show exactly what we're sending
+                bt.logging.debug("=" * 80)
+                bt.logging.debug("StartRoundSynapse content:")
+                bt.logging.debug(f"  - version: {start_synapse.version}")
+                bt.logging.debug(f"  - round_id: {start_synapse.round_id}")
+                bt.logging.debug(f"  - validator_id: {start_synapse.validator_id}")
+                bt.logging.debug(f"  - total_prompts: {start_synapse.total_prompts}")
+                bt.logging.debug(f"  - prompts_per_use_case: {start_synapse.prompts_per_use_case}")
+                bt.logging.debug(f"  - note: {start_synapse.note}")
+                bt.logging.debug(f"  - has_rl: {getattr(start_synapse, 'has_rl', 'NOT_SET')}")
+                bt.logging.debug(f"  - Sending to {len(all_axons)} miners")
+                bt.logging.debug("=" * 80)
+
                 handshake_responses = await send_start_round_synapse_to_miners(
                     validator=self,
                     miner_axons=all_axons,
@@ -333,15 +336,14 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     return name[:MAX_AGENT_NAME_LENGTH]
                 return name
 
-            # Filter successful responses only
+            # Filter successful responses - collect data without spamming logs
+            successful_miners = []
             for i, response in enumerate(handshake_responses):
                 if i >= len(all_axons):
-                    bt.logging.warning(f"  Response {i}: No corresponding axon (out of bounds)")
                     continue
 
                 mapped_uid = all_uids[i]
                 if not response:
-                    bt.logging.debug(f"  Skipping uid={mapped_uid}: no handshake response object")
                     continue
 
                 status_code = getattr(getattr(response, "dendrite", None), "status_code", None)
@@ -352,34 +354,14 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     except (TypeError, ValueError):
                         status_numeric = None
                 if status_numeric is not None and status_numeric >= 400:
-                    # 🔍 DEBUG: Show detailed info for 422 errors
-                    if status_numeric == 422:
-                        bt.logging.debug(
-                            "422 on handshake",
-                        )
-                    else:
-                        bt.logging.debug(
-                            f"  Skipping uid={mapped_uid}: handshake returned status {status_numeric}"
-                        )
                     continue
 
                 agent_name_raw = getattr(response, "agent_name", None)
                 agent_name = _normalized_optional(agent_name_raw)
                 if not agent_name:
-                    bt.logging.debug(
-                        f"  Skipping uid={mapped_uid}: handshake missing agent metadata"
-                    )
                     continue
 
                 agent_name = _truncate_agent_name(agent_name)
-
-                # Condensed per-miner metadata (debug only)
-                ColoredLogger.debug(
-                    f"uid={mapped_uid} | agent='{agent_name}' | version={getattr(response, 'agent_version', None)} | "
-                    f"rl={getattr(response, 'has_rl', False)} | hotkey={self.metagraph.hotkeys[mapped_uid]}",
-                    ColoredLogger.GRAY,
-                )
-
                 response.agent_name = agent_name
                 response.agent_image = _normalized_optional(getattr(response, "agent_image", None))
                 response.github_url = _normalized_optional(getattr(response, "github_url", None))
@@ -390,20 +372,42 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 self.round_handshake_payloads[mapped_uid] = response
                 self.active_miner_uids.append(mapped_uid)
 
-            # Log only successful responders for clarity
-            if self.active_miner_uids:
-                ColoredLogger.success(
-                    f"✅ Handshake complete: {len(self.active_miner_uids)}/{len(all_axons)} miners responded",
-                    ColoredLogger.GREEN,
-                )
-            else:
-                ColoredLogger.warning(
-                    f"⚠️ Handshake complete: 0/{len(all_axons)} miners responded", ColoredLogger.YELLOW
-                )
+                # Collect for table display
+                successful_miners.append({
+                    'uid': mapped_uid,
+                    'agent': agent_name,
+                    'version': getattr(response, 'agent_version', 'N/A'),
+                    'rl': 'Yes' if getattr(response, 'has_rl', False) else 'No',
+                    'hotkey': self.metagraph.hotkeys[mapped_uid][:10] + '...'
+                })
+
+            # Display results in a clean table format (only if we sent handshake)
+            if not has_prior_handshake and successful_miners:
+                bt.logging.info("=" * 100)
+                bt.logging.info("📋 MINERS WHO RESPONDED TO HANDSHAKE:")
+                bt.logging.info("=" * 100)
+                bt.logging.info(f"{'UID':<6} | {'Agent Name':<20} | {'Version':<10} | {'RL':<4} | {'Hotkey':<15}")
+                bt.logging.info("-" * 100)
+                for m in successful_miners:
+                    bt.logging.info(f"{m['uid']:<6} | {m['agent']:<20} | {m['version']:<10} | {m['rl']:<4} | {m['hotkey']:<15}")
+                bt.logging.info("=" * 100)
+
+            # Log results only if we actually sent the handshake (not when using saved state)
+            if not has_prior_handshake:
+                if self.active_miner_uids:
+                    ColoredLogger.success(
+                        f"✅ Handshake sent: {len(self.active_miner_uids)}/{len(all_axons)} miners responded",
+                        ColoredLogger.GREEN,
+                    )
+                else:
+                    ColoredLogger.warning(
+                        f"⚠️ Handshake sent: 0/{len(all_axons)} miners responded", ColoredLogger.YELLOW
+                    )
 
             # Mark that handshake was sent (for resume logic)
             # This flag prevents re-sending handshake after restart, regardless of responses
-            if not resumed:
+            # Only mark if we actually sent it (not if we skipped due to prior handshake)
+            if not has_prior_handshake:
                 self._phases["handshake_sent"] = True
 
             # Persist handshake state for resume
@@ -716,18 +720,28 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                         if hasattr(action, 'url') and action.url and action.type == 'NavigateAction':
                             ColoredLogger.debug(f"     🔗 Navigation URL: {action.url}", ColoredLogger.MAGENTA)
 
-                            # Check seed mismatch
-                            if 'seed=' in action.url:
-                                action_seed = action.url.split('seed=')[1].split('&')[0].split('?')[0]
-                                if action_seed != str(seed):
-                                    ColoredLogger.debug(f"     Seed mismatch: expected {seed}, got {action_seed}", ColoredLogger.GRAY)
+                            # Check seed presence and correctness
+                            if seed is not None:  # Only validate if task has assigned seed
+                                if 'seed=' in action.url:
+                                    action_seed = action.url.split('seed=')[1].split('&')[0].split('?')[0]
+                                    if action_seed != str(seed):
+                                        ColoredLogger.warning(
+                                            f"     ⚠️ Seed MISMATCH: expected seed={seed}, got seed={action_seed} (will score 0)",
+                                            ColoredLogger.YELLOW
+                                        )
+                                    else:
+                                        ColoredLogger.debug(f"     ✅ Seed matches: {action_seed}", ColoredLogger.GREEN)
                                 else:
-                                    ColoredLogger.debug(f"     ✅ Seed matches: {action_seed}", ColoredLogger.GREEN)
+                                    # Seed is missing from NavigateAction URL
+                                    ColoredLogger.warning(
+                                        f"     ⚠️ Seed MISSING: expected seed={seed} in URL (will score 0)",
+                                        ColoredLogger.RED
+                                    )
 
                             # Check URL path discrepancies
                             expected_base = project.frontend_url.rstrip('/')
                             if not action.url.startswith(expected_base):
-                                ColoredLogger.debug(f"     URL mismatch: expected base {expected_base}", ColoredLogger.GRAY)
+                                ColoredLogger.debug(f"     ⚠️ URL base mismatch: expected {expected_base}", ColoredLogger.GRAY)
                                 ColoredLogger.debug(f"     Got URL: {action.url}", ColoredLogger.GRAY)
                             else:
                                 ColoredLogger.debug(f"     ✅ URL base matches: {expected_base}", ColoredLogger.GREEN)
@@ -759,6 +773,12 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     eval_result_display['gif_recording'] = f"<length: {len(eval_result_display['gif_recording'])}>"
 
                 ColoredLogger.debug(f"  📋 Evaluation Result: {eval_result_display}", ColoredLogger.YELLOW)
+
+                # Show error message if present (e.g. seed validation failures)
+                error_msg = evaluation_results[i].get("error_message", "")
+                if error_msg:
+                    ColoredLogger.warning(f"  ⚠️ Error: {error_msg}", ColoredLogger.RED)
+
                 ColoredLogger.debug(f"  🧪 Test Results ({len(test_results_list[i])} tests):", ColoredLogger.CYAN)
                 if test_results_list[i]:
                     for test_idx, test_result in enumerate(test_results_list[i], 1):

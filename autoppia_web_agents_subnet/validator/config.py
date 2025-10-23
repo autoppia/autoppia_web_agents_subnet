@@ -170,6 +170,11 @@ SHARE_SCORING = _str_to_bool(os.getenv("SHARE_SCORING", "false"))
 # commitments and settlement (start of the reserved window). Example: 0.75 = stop at 75%.
 STOP_TASKS_AT_FRACTION = float(os.getenv("STOP_TASKS_AT_FRACTION", os.getenv("SHARE_STOP_EVAL_AT_FRACTION", "0.75")))
 
+# Fraction of the round at which to commit consensus snapshot (publish to IPFS + on-chain).
+# Should happen before STOP_TASKS_AT_FRACTION to ensure snapshot is available for aggregation.
+# Example: 0.66 = commit at 66% of round duration.
+CONSENSUS_COMMIT_AT_FRACTION = float(os.getenv("CONSENSUS_COMMIT_AT_FRACTION", "0.66"))
+
 # Fraction (0–1) of the settlement period after which we perform a mid-fetch
 # of commitments/IPFS to cache aggregated scores. Example: 0.5 = halfway point
 # between STOP_TASKS_AT_FRACTION and the end of the round.

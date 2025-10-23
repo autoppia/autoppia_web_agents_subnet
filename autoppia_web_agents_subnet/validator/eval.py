@@ -97,11 +97,17 @@ async def evaluate_task_solutions(
         else:
             bt.logging.debug("No GIF recording in evaluation result")
 
+        # Extract error message from stats if present
+        error_msg = ""
+        if hasattr(res, "stats") and res.stats:
+            error_msg = str(getattr(res.stats, "error_message", "")) or ""
+
         # Summary (add simple, durable fields only)
         evaluation_results.append({
             "final_score": score,
             "version_ok": bool(getattr(res, "version_ok", True)),
             "notes": str(getattr(res, "notes", "")) if hasattr(res, "notes") else "",
+            "error_message": error_msg,  # Include validation errors (e.g. seed mismatch)
             "gif_recording": gif_recording,  # GIF base64 for leaderboard
         })
 
