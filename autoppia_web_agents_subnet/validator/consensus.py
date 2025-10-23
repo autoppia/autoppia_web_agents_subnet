@@ -195,10 +195,26 @@ async def publish_round_snapshot(
             netuid=validator.config.netuid,
         )
         if ok:
+            # Record commit context on validator for later aggregation spread checks
+            try:
+                commit_block = validator.subtensor.get_current_block()
+            except Exception:
+                commit_block = None
+            try:
+                validator._consensus_commit_block = commit_block
+                validator._consensus_commit_cid = str(cid)
+            except Exception:
+                pass
+
             bt.logging.info(
                 "📬 CONSENSUS COMMIT | "
-                f"e={commit_v4['e']}→pe={commit_v4['pe']} r={commit_v4.get('r')} cid={cid[:46]}… bytes={byte_len} sha256={sha_hex[:10]}…"
+                f"e={commit_v4['e']}→pe={commit_v4['pe']} r={commit_v4.get('r')} "
+                f"cid={cid} bytes={byte_len} sha256={sha_hex}"
             )
+            if commit_block is not None:
+                bt.logging.debug(
+                    f"Commit recorded at block {commit_block} (will wait for spread before aggregation)"
+                )
             return str(cid)
         else:
             bt.logging.warning("On-chain commitment write returned False")

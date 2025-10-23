@@ -93,10 +93,11 @@ class RoundManager:
             ColoredLogger.warning(message, ColoredLogger.YELLOW)
             raise RuntimeError("Round cannot start before minimum start block is reached")
 
-        self.start_block = current_block
+        boundaries = self.get_round_boundaries(current_block, log_debug=False)
+        # Fix start_block to the beginning of the computed window for stability
+        self.start_block = int(boundaries['round_start_block'])
         self.reset_round()
 
-        boundaries = self.get_round_boundaries(current_block, log_debug=False)
         # Concise round start line
         blocks_remaining = boundaries['target_block'] - current_block
         estimated_minutes = (blocks_remaining * 12) / 60  # 12 seconds per block
@@ -105,7 +106,7 @@ class RoundManager:
                 "🔄 Starting new round | start_block={start_block} start_epoch={start_epoch:.2f} "
                 "-> target_epoch={target_epoch:.2f} target_block={target_block} | ETA ~{eta:.1f}m (~{blocks} blocks)"
             ).format(
-                start_block=current_block,
+                start_block=self.start_block,
                 start_epoch=boundaries['round_start_epoch'],
                 target_epoch=boundaries['target_epoch'],
                 target_block=boundaries['target_block'],
@@ -116,53 +117,26 @@ class RoundManager:
         )
 
     def get_round_boundaries(self, current_block: int, *, log_debug: bool = True) -> Dict[str, Any]:
-        """
-        Calculate round boundaries for the given block.
-
-        🌐 GLOBAL SYNCHRONIZATION:
-        This method ensures ALL validators synchronize to the same epoch boundaries,
-        regardless of when they start. The round boundaries are calculated from
-        ABSOLUTE EPOCH MULTIPLES, not from each validator's start time.
-
-        Example with ROUND_SIZE_EPOCHS = 20:
-            Validator A starts at epoch 18,640.0 → Round ends at 18,660
-            Validator B starts at epoch 18,642.5 (2.5 epochs late) → Round STILL ends at 18,660
-            Validator C starts at epoch 18,655.0 (15 epochs late) → Round STILL ends at 18,660
-
-        All validators set weights at the SAME TIME (epoch 18,660), ensuring fair competition.
-
-        Returns:
-            Dict with round_start_epoch, target_epoch, round_start_block, target_block
-        """
+        """Calculate round boundaries using integer block math to avoid float precision issues."""
         import bittensor as bt
 
-        current_epoch = self.block_to_epoch(current_block)
+        rbl = int(self.ROUND_BLOCK_LENGTH) if self.ROUND_BLOCK_LENGTH else int(self.BLOCKS_PER_EPOCH * max(self.round_size_epochs, 0.01))
+        window_index = current_block // rbl
+        round_start_block = int(window_index * rbl)
+        target_block = int(round_start_block + rbl)
+        round_start_epoch = round_start_block / self.BLOCKS_PER_EPOCH
+        target_epoch = target_block / self.BLOCKS_PER_EPOCH
 
-        # 🔑 KEY: Calculate round start as GLOBAL epoch multiple (not relative to start)
-        # This ensures all validators synchronize to the same epoch boundaries
-        round_start_epoch = (current_epoch // self.round_size_epochs) * self.round_size_epochs
-
-        # Target epoch is the end of the round (GLOBAL deadline for ALL validators)
-        target_epoch = round_start_epoch + self.round_size_epochs
-
-        # Convert to blocks
-        round_start_block = self.epoch_to_block(round_start_epoch)
-        target_block = self.epoch_to_block(target_epoch)
-
-        # Compact debug for sync calculation
         if log_debug:
             bt.logging.debug(
                 (
-                    "🌐 Sync | block={blk:,} epoch={cur:.4f} | start_epoch={start:.4f} (b{sb:,}) -> "
-                    "target_epoch={end:.4f} (b{tb:,}) | duration={dur:.2f} epochs ({blocks:,} blocks)"
+                    "🌐 Sync | block={blk:,} | start_epoch={start:.4f} (b{sb:,}) -> target_epoch={end:.4f} (b{tb:,}) | blocks={blocks:,}"
                 ).format(
                     blk=current_block,
-                    cur=current_epoch,
                     start=round_start_epoch,
                     sb=round_start_block,
                     end=target_epoch,
                     tb=target_block,
-                    dur=(target_epoch - round_start_epoch),
                     blocks=(target_block - round_start_block),
                 )
             )
@@ -171,7 +145,7 @@ class RoundManager:
             'round_start_epoch': round_start_epoch,
             'target_epoch': target_epoch,
             'round_start_block': round_start_block,
-            'target_block': target_block
+            'target_block': target_block,
         }
 
     def get_current_boundaries(self) -> Dict[str, Any]:

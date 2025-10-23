@@ -997,6 +997,21 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                         f"📦 Settlement {SETTLEMENT_FETCH_FRACTION:.2f}: fetching commitments + IPFS for aggregation",
                         ColoredLogger.CYAN,
                     )
+                    # Skip mid-fetch if our commit hasn't propagated enough blocks yet
+                    try:
+                        commit_block = getattr(self, "_consensus_commit_block", None)
+                        from autoppia_web_agents_subnet.validator.config import CONSENSUS_SPREAD_BLOCKS
+                        if commit_block is not None and current_block < int(commit_block) + int(CONSENSUS_SPREAD_BLOCKS):
+                            remaining = (int(commit_block) + int(CONSENSUS_SPREAD_BLOCKS)) - current_block
+                            ColoredLogger.info(
+                                f"⏳ Waiting for propagation: {remaining} blocks until aggregation window",
+                                ColoredLogger.BLUE,
+                            )
+                            raise RuntimeError("Propagation window not reached; skipping mid-fetch")
+                    except RuntimeError:
+                        raise
+                    except Exception:
+                        pass
                     st = await self._get_async_subtensor()
                     agg = await aggregate_scores_from_commitments(
                         validator=self,
@@ -1116,6 +1131,24 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 agg = self._agg_scores_cache or {}
                 if not agg:
                     bt.logging.debug("No cached aggregation; fetching now")
+                    # Ensure commitment propagation window elapsed
+                    try:
+                        from autoppia_web_agents_subnet.validator.config import CONSENSUS_SPREAD_BLOCKS
+                        commit_block = getattr(self, "_consensus_commit_block", None)
+                        if commit_block is not None:
+                            while True:
+                                current_block = self.subtensor.get_current_block()
+                                needed = (int(commit_block) + int(CONSENSUS_SPREAD_BLOCKS)) - current_block
+                                if needed <= 0:
+                                    break
+                                mins = (needed * self.round_manager.SECONDS_PER_BLOCK) / 60
+                                ColoredLogger.info(
+                                    f"⏳ Waiting {needed} blocks (~{mins:.1f}m) for commitment propagation",
+                                    ColoredLogger.BLUE,
+                                )
+                                await asyncio.sleep(self.round_manager.SECONDS_PER_BLOCK)
+                    except Exception:
+                        pass
                     st = await self._get_async_subtensor()
                     agg = await aggregate_scores_from_commitments(
                         validator=self,
