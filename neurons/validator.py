@@ -754,14 +754,14 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
         # ═══════════════════════════════════════════════════════
         # WAIT FOR TARGET EPOCH: Wait until the round ends
+        # Always wait (for IPFS propagation and consensus), even if all tasks done
         # ═══════════════════════════════════════════════════════
-        if tasks_completed < len(all_tasks):
-            # Ensure we persist the checkpoint right before the wait window
-            try:
-                self.state_manager.save_checkpoint()
-            except Exception:
-                pass
-            await self._wait_for_target_epoch()
+        # Ensure we persist the checkpoint right before the wait window
+        try:
+            self.state_manager.save_checkpoint()
+        except Exception:
+            pass
+        await self._wait_for_target_epoch()
 
         # ═══════════════════════════════════════════════════════
         # FINAL WEIGHTS: Calculate averages, apply WTA, set weights
@@ -1061,8 +1061,20 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             # Mid-round fetch at configured absolute fraction (single attempt)
             if ENABLE_DISTRIBUTED_CONSENSUS and (not self._consensus_mid_fetched) and progress_frac >= float(FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION):
                 try:
-                    ColoredLogger.info(
-                        f"📦 Fetch IPFS at {FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION:.1%} of round: aggregating scores from other validators",
+                    ColoredLogger.error(
+                        "\n" + "=" * 80,
+                        ColoredLogger.CYAN,
+                    )
+                    ColoredLogger.error(
+                        f"📥📥📥 FETCH IPFS THRESHOLD REACHED: {FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION:.0%} 📥📥📥",
+                        ColoredLogger.CYAN,
+                    )
+                    ColoredLogger.error(
+                        f"🔽 DOWNLOADING PAYLOADS FROM OTHER VALIDATORS 🔽",
+                        ColoredLogger.CYAN,
+                    )
+                    ColoredLogger.error(
+                        "=" * 80 + "\n",
                         ColoredLogger.CYAN,
                     )
                     st = await self._get_async_subtensor()
@@ -1075,11 +1087,22 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     if agg:
                         self._agg_scores_cache = agg
                         self._consensus_mid_fetched = True
-                        bt.logging.info(f"✅ Cached aggregated scores for {len(agg)} miners")
+                        ColoredLogger.success(
+                            "\n" + "=" * 80,
+                            ColoredLogger.GREEN,
+                        )
+                        ColoredLogger.success(
+                            f"✅✅✅ CONSENSUS SCORES CACHED: {len(agg)} miners ✅✅✅",
+                            ColoredLogger.GREEN,
+                        )
+                        ColoredLogger.success(
+                            "=" * 80 + "\n",
+                            ColoredLogger.GREEN,
+                        )
                     else:
-                        bt.logging.warning("No aggregated scores available at 50% of settlement")
+                        bt.logging.warning("No aggregated scores available at fetch threshold")
                 except Exception as e:
-                    bt.logging.warning(f"Settlement mid-fetch failed: {e}")
+                    bt.logging.warning(f"IPFS fetch at threshold failed: {e}")
 
             # Log progress every 30 seconds
             if time.time() - last_log_time >= 30:
