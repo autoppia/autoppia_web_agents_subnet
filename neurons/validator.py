@@ -610,23 +610,23 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             except Exception:
                 progress_frac = 0.0
             if ENABLE_DISTRIBUTED_CONSENSUS and not self._consensus_published and (progress_frac >= float(STOP_TASK_EVALUATION_AT_ROUND_FRACTION)):
-                ColoredLogger.critical(
+                ColoredLogger.error(
                     "\n" + "=" * 80,
                     ColoredLogger.RED,
                 )
-                ColoredLogger.critical(
+                ColoredLogger.error(
                     f"🛑🛑🛑 STOP FRACTION REACHED: {STOP_TASK_EVALUATION_AT_ROUND_FRACTION:.0%} 🛑🛑🛑",
                     ColoredLogger.RED,
                 )
-                ColoredLogger.critical(
+                ColoredLogger.error(
                     f"📤📤📤 PUBLISHING TO IPFS NOW WITH {tasks_completed} TASKS 📤📤📤",
                     ColoredLogger.RED,
                 )
-                ColoredLogger.critical(
+                ColoredLogger.error(
                     f"⏸️⏸️⏸️  HALTING ALL TASK EXECUTION ⏸️⏸️⏸️",
                     ColoredLogger.RED,
                 )
-                ColoredLogger.critical(
+                ColoredLogger.error(
                     "=" * 80 + "\n",
                     ColoredLogger.RED,
                 )
@@ -640,15 +640,15 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                         tasks_completed=tasks_completed,
                     )
                     self._consensus_published = True
-                    ColoredLogger.critical(
+                    ColoredLogger.success(
                         "\n" + "=" * 80,
                         ColoredLogger.GREEN,
                     )
-                    ColoredLogger.critical(
+                    ColoredLogger.success(
                         f"✅✅✅ IPFS PUBLISH COMPLETE - NOW WAITING ✅✅✅",
                         ColoredLogger.GREEN,
                     )
-                    ColoredLogger.critical(
+                    ColoredLogger.success(
                         "=" * 80 + "\n",
                         ColoredLogger.GREEN,
                     )
