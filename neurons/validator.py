@@ -706,6 +706,53 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 break
 
         # ═══════════════════════════════════════════════════════
+        # PUBLISH CONSENSUS IF NOT DONE YET
+        # (Handles case where all tasks completed before reaching 50%)
+        # ═══════════════════════════════════════════════════════
+        if ENABLE_DISTRIBUTED_CONSENSUS and not self._consensus_published:
+            ColoredLogger.error(
+                "\n" + "=" * 80,
+                ColoredLogger.RED,
+            )
+            ColoredLogger.error(
+                f"📤📤📤 ALL TASKS DONE - PUBLISHING TO IPFS NOW 📤📤📤",
+                ColoredLogger.RED,
+            )
+            ColoredLogger.error(
+                f"📦 Tasks completed: {tasks_completed}/{len(all_tasks)}",
+                ColoredLogger.RED,
+            )
+            ColoredLogger.error(
+                "=" * 80 + "\n",
+                ColoredLogger.RED,
+            )
+            try:
+                current_block = self.metagraph.block.item()
+                round_number = await self.round_manager.calculate_round(current_block)
+                st = await self._get_async_subtensor()
+                await publish_round_snapshot(
+                    validator=self,
+                    st=st,
+                    round_number=round_number,
+                    tasks_completed=tasks_completed,
+                )
+                self._consensus_published = True
+                ColoredLogger.success(
+                    "\n" + "=" * 80,
+                    ColoredLogger.GREEN,
+                )
+                ColoredLogger.success(
+                    f"✅✅✅ IPFS PUBLISH COMPLETE - NOW WAITING ✅✅✅",
+                    ColoredLogger.GREEN,
+                )
+                ColoredLogger.success(
+                    "=" * 80 + "\n",
+                    ColoredLogger.GREEN,
+                )
+            except Exception as e:
+                bt.logging.error(f"Consensus publish (post-loop) failed: {e}")
+
+        # ═══════════════════════════════════════════════════════
         # WAIT FOR TARGET EPOCH: Wait until the round ends
         # ═══════════════════════════════════════════════════════
         if tasks_completed < len(all_tasks):
