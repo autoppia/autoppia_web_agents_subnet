@@ -108,10 +108,10 @@ PRE_GENERATED_TASKS_PROD = 75             # Generate tasks upfront; loop truncat
 DZ_STARTING_BLOCK_PROD = 6_716_460
 
 # ── Testing defaults (quick dev cycles) ─
-ROUND_SIZE_EPOCHS_TEST = 1.0               # 1 epoch per round in testing
+ROUND_SIZE_EPOCHS_TEST = 0.2               # 0.2 epochs per round in testing (~14.4 min)
 SAFETY_BUFFER_EPOCHS_TEST = 0.02           # ~1.44 minutes buffer (kept minimal for tests)
 AVG_TASK_DURATION_SECONDS_TEST = 300
-PRE_GENERATED_TASKS_TEST = 4               # Only a few tasks for quick iteration
+PRE_GENERATED_TASKS_TEST = 5               # Only a few tasks for quick iteration
 DZ_STARTING_BLOCK_TEST = 6_717_750         # Fixed testing gate as requested
 
 # ── Final values selected by TESTING flag ─
@@ -203,5 +203,12 @@ IPFS_GATEWAYS = [
 
 # In TESTING, allow separate stop fraction via TEST_* env, falling back to prod fraction
 if TESTING:
-    STOP_TASKS_AT_FRACTION = float(os.getenv("TEST_STOP_TASKS_AT_FRACTION", str(STOP_TASKS_AT_FRACTION)))
+    # In testing, start the commitments window at 50% of the round by default
+    STOP_TASKS_AT_FRACTION = float(os.getenv("TEST_STOP_TASKS_AT_FRACTION", "0.5"))
     SETTLEMENT_FETCH_FRACTION = float(os.getenv("TEST_SETTLEMENT_FETCH_FRACTION", str(SETTLEMENT_FETCH_FRACTION)))
+    # Point IWAP/leaderboard API to the dev environment by default
+    IWAP_API_BASE_URL = os.getenv("IWAP_API_BASE_URL", "https://dev-api-leaderboard.autoppia.com")
+    # Allow overriding test endpoints explicitly; otherwise derive from IWAP base
+    _base = IWAP_API_BASE_URL.rstrip("/")
+    LEADERBOARD_TASKS_ENDPOINT = os.getenv("TEST_LEADERBOARD_TASKS_ENDPOINT", f"{_base}/tasks")
+    LEADERBOARD_VALIDATOR_RUNS_ENDPOINT = os.getenv("TEST_LEADERBOARD_VALIDATOR_RUNS_ENDPOINT", f"{_base}/validator-runs")
