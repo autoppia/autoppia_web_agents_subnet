@@ -177,7 +177,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             self.forward_count = int(getattr(self, "forward_count", 0)) + 1
         except Exception:
             self.forward_count = 1
-        bt.logging.info("🔄 Pre-generating tasks or resuming state")
+        # Pre-generation start; omit noisy log on every forward start
 
         pre_generation_start = time.time()
         all_tasks: list[TaskWithProject] = []
@@ -1036,36 +1036,38 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         This helper does not depend on round_manager.start_block, so it can be
         used before a round is initialized, e.g., when skipping a late fresh start.
         """
+        # Fix the boundary at entry time to avoid jumping to the next window
+        start_block_snapshot = self.subtensor.get_current_block()
+        initial_bounds = self.round_manager.get_round_boundaries(start_block_snapshot, log_debug=False)
+        fixed_start_block = int(initial_bounds['round_start_block'])
+        fixed_target_block = int(initial_bounds['target_block'])
+        fixed_target_epoch = float(initial_bounds['target_epoch'])
+
         last_log_time = time.time()
         while True:
             try:
                 current_block = self.subtensor.get_current_block()
-                bounds = self.round_manager.get_round_boundaries(current_block, log_debug=False)
-                target_epoch = bounds['target_epoch']
-                current_epoch = self.round_manager.block_to_epoch(current_block)
-
-                if current_epoch >= target_epoch:
+                if current_block >= fixed_target_block:
                     ColoredLogger.success(
-                        f"🎯 Next round boundary reached at epoch {target_epoch}",
+                        f"🎯 Next round boundary reached at epoch {fixed_target_epoch}",
                         ColoredLogger.GREEN,
                     )
                     break
 
-                # Progress within current window
-                rsb = bounds['round_start_block']
-                tb = bounds['target_block']
-                total = max(tb - rsb, 1)
-                done = max(current_block - rsb, 0)
+                # Progress within the FIXED window
+                total = max(fixed_target_block - fixed_start_block, 1)
+                done = max(current_block - fixed_start_block, 0)
                 progress = min(max((done / total) * 100.0, 0.0), 100.0)
 
-                blocks_remaining = max(tb - current_block, 0)
+                blocks_remaining = max(fixed_target_block - current_block, 0)
                 minutes_remaining = (
                     blocks_remaining * self.round_manager.SECONDS_PER_BLOCK
                 ) / 60
 
                 if time.time() - last_log_time >= 30:
+                    current_epoch = self.round_manager.block_to_epoch(current_block)
                     ColoredLogger.info(
-                        f"Waiting — next round boundary (global) — epoch {current_epoch:.3f}/{target_epoch:.3f} "
+                        f"Waiting — next round boundary (global) — epoch {current_epoch:.3f}/{fixed_target_epoch:.3f} "
                         f"({progress:.2f}%) | ~{minutes_remaining:.1f}m left",
                         ColoredLogger.BLUE,
                     )

@@ -65,20 +65,31 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--neuron.num_concurrent_forwards", type=int, default=1, help="Concurrent forwards.")
     parser.add_argument("--neuron.sample_size", type=int, default=50, help="Number of miners to query per step.")
 
-    # NOTE: Validators can opt-out of serving an Axon
-    parser.add_argument("--neuron.axon_off", "--axon_off", action="store_true", default=True, help="Set this flag to not attempt to serve an Axon (validators only).")
+    # NOTE: Validators can opt-out of serving an Axon; default is to serve.
+    parser.add_argument(
+        "--neuron.axon_off",
+        "--axon_off",
+        action="store_true",
+        default=False,
+        help="Set this flag to not attempt to serve an Axon (validators only).",
+    )
 
     parser.add_argument("--neuron.vpermit_tao_limit", type=int, default=4096, help="Max TAO allowed to query a validator with a vpermit.")
 
     # Validator-specific testing args
     parser.add_argument("--no_epoch", action="store_true", default=False, help="Enable mock mode (no real chain calls).")
-    parser.add_argument("--neuron.moving_average_alpha", type=float, default=1.0, help="Moving average alpha parameter for validator rewards blending.")
+    parser.add_argument(
+        "--neuron.moving_average_alpha",
+        type=float,
+        default=0.1,
+        help="Moving average alpha parameter for validator rewards blending.",
+    )
 
     parser.add_argument(
         "--neuron.disable_set_weights",
         action="store_true",
         help="Disables setting weights.",
-        default=True,
+        default=False,
     )
 
 
