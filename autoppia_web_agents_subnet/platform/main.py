@@ -120,7 +120,7 @@ class IWAPClient:
         validator_identity: models.ValidatorIdentityIWAP,
         validator_round: models.ValidatorRoundIWAP,
         validator_snapshot: models.ValidatorSnapshotIWAP,
-    ) -> None:
+    ) -> Dict[str, Any]:
         payload = {
             "validator_identity": validator_identity.to_payload(),
             "validator_round": validator_round.to_payload(),
@@ -129,20 +129,20 @@ class IWAPClient:
         bt.logging.debug(
             f"IWAP start_round prepared for validator_round_id={validator_round.validator_round_id} round_number={validator_round.round_number}"
         )
-        await self._post("/api/v1/validator-rounds/start", payload, context="start_round")
+        return await self._post("/api/v1/validator-rounds/start", payload, context="start_round")
 
     async def set_tasks(
         self,
         *,
         validator_round_id: str,
         tasks: Iterable[models.TaskIWAP],
-    ) -> None:
+    ) -> Dict[str, Any]:
         task_payloads = [task.to_payload() for task in tasks]
         payload = {"tasks": task_payloads}
         bt.logging.debug(
             f"IWAP set_tasks prepared for validator_round_id={validator_round_id} tasks={len(task_payloads)}"
         )
-        await self._post(f"/api/v1/validator-rounds/{validator_round_id}/tasks", payload, context="set_tasks")
+        return await self._post(f"/api/v1/validator-rounds/{validator_round_id}/tasks", payload, context="set_tasks")
 
     async def start_agent_run(
         self,
@@ -151,7 +151,7 @@ class IWAPClient:
         agent_run: models.AgentRunIWAP,
         miner_identity: models.MinerIdentityIWAP,
         miner_snapshot: models.MinerSnapshotIWAP,
-    ) -> None:
+    ) -> Dict[str, Any]:
         payload = {
             "agent_run": agent_run.to_payload(),
             "miner_identity": miner_identity.to_payload(),
@@ -160,7 +160,7 @@ class IWAPClient:
         bt.logging.debug(
             f"IWAP start_agent_run prepared for validator_round_id={validator_round_id} agent_run_id={agent_run.agent_run_id} miner_uid={miner_identity.uid}"
         )
-        await self._post(
+        return await self._post(
             f"/api/v1/validator-rounds/{validator_round_id}/agent-runs/start",
             payload,
             context="start_agent_run",
@@ -259,19 +259,19 @@ class IWAPClient:
         *,
         validator_round_id: str,
         finish_request: models.FinishRoundIWAP,
-    ) -> None:
+    ) -> Dict[str, Any]:
         bt.logging.debug(
             f"IWAP finish_round prepared for validator_round_id={validator_round_id} summary={finish_request.summary}"
         )
-        await self._post(
+        return await self._post(
             f"/api/v1/validator-rounds/{validator_round_id}/finish",
             finish_request.to_payload(),
             context="finish_round",
         )
 
-    async def auth_check(self) -> None:
+    async def auth_check(self) -> Dict[str, Any]:
         bt.logging.debug("IWAP auth_check prepared")
-        await self._post("/api/v1/validator-rounds/auth-check", {}, context="auth_check")
+        return await self._post("/api/v1/validator-rounds/auth-check", {}, context="auth_check")
 
     async def upload_evaluation_gif(self, evaluation_id: str, gif_bytes: bytes) -> Optional[str]:
         if not gif_bytes:
@@ -320,7 +320,7 @@ class IWAPClient:
             bt.logging.warning(f"⚠️  IWAP: GIF upload completed but no URL returned for evaluation_id={evaluation_id}")
         return gif_url
 
-    async def _post(self, path: str, payload: Dict[str, object], *, context: str) -> None:
+    async def _post(self, path: str, payload: Dict[str, object], *, context: str) -> Dict[str, Any]:
         sanitized_payload = _sanitize_json(payload)
         self._backup_payload(context, sanitized_payload)
         request = self._client.build_request("POST", path, json=sanitized_payload)
@@ -357,6 +357,10 @@ class IWAPClient:
         except Exception:
             bt.logging.error(f"IWAP {context} POST {target_url} failed unexpectedly", exc_info=True)
             raise
+        try:
+            return response.json()
+        except Exception:
+            return {}
 
     async def _post_multipart(self, path: str, data: Dict[str, Any], files: Dict[str, bytes], *, context: str) -> None:
         """

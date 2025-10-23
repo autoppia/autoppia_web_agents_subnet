@@ -75,11 +75,17 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
         # Re-send start_round idempotently; backend treats duplicates as OK.
         log_iwap_phase("Phase 1", "resume: verifying start_round on backend", level="warning")
         try:
-            await ctx.iwap_client.start_round(
+            resp = await ctx.iwap_client.start_round(
                 validator_identity=validator_identity,
                 validator_round=validator_round,
                 validator_snapshot=validator_snapshot,
             )
+            try:
+                vrid = (resp or {}).get("validator_round_id") or (resp.get("data", {}) if isinstance(resp, dict) else {}).get("validator_round_id")  # type: ignore[union-attr]
+                if vrid and vrid != ctx.current_round_id:
+                    ctx.current_round_id = vrid
+            except Exception:
+                pass
             ctx._phases["p1_done"] = True
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code if exc.response is not None else None
@@ -106,11 +112,17 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                 pass
     else:
         try:
-            await ctx.iwap_client.start_round(
+            resp = await ctx.iwap_client.start_round(
                 validator_identity=validator_identity,
                 validator_round=validator_round,
                 validator_snapshot=validator_snapshot,
             )
+            try:
+                vrid = (resp or {}).get("validator_round_id") or (resp.get("data", {}) if isinstance(resp, dict) else {}).get("validator_round_id")  # type: ignore[union-attr]
+                if vrid and vrid != ctx.current_round_id:
+                    ctx.current_round_id = vrid
+            except Exception:
+                pass
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code if exc.response is not None else None
             if status in (409, 500):
@@ -345,6 +357,17 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                     f"start_agent_run returned {status} for miner_uid={miner_uid} (already exists); continuing",
                     level="warning",
                 )
+                try:
+                    ctx.current_agent_runs[miner_uid] = agent_run
+                    ctx.current_miner_snapshots[miner_uid] = (
+                        ctx.current_miner_snapshots.get(miner_uid) or miner_snapshot
+                    )
+                    ctx.agent_run_accumulators.setdefault(
+                        miner_uid, {"reward": 0.0, "score": 0.0, "execution_time": 0.0, "tasks": 0}
+                    )
+                    ctx._save_round_state()
+                except Exception:
+                    pass
             else:
                 start_agent_run_error = (
                     f"start_agent_run failed for miner_uid={miner_uid}, agent_run_id={agent_run_id}"
@@ -367,6 +390,16 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                 f"start_agent_run completed for miner_uid={miner_uid}, agent_run_id={agent_run_id}"
             )
             log_iwap_phase("Phase 3", start_agent_run_success, level="success")
+            # Update local state for crash-resume and bookkeeping
+            try:
+                ctx.current_agent_runs[miner_uid] = agent_run
+                ctx.current_miner_snapshots[miner_uid] = miner_snapshot
+                ctx.agent_run_accumulators.setdefault(
+                    miner_uid, {"reward": 0.0, "score": 0.0, "execution_time": 0.0, "tasks": 0}
+                )
+                ctx._save_round_state()
+            except Exception:
+                pass
 
 
 async def finish_round_flow(
