@@ -27,7 +27,7 @@ from autoppia_web_agents_subnet.validator.config import (
     MAX_MINER_AGENT_NAME_LENGTH,
     ENABLE_DISTRIBUTED_CONSENSUS,
     STOP_TASK_EVALUATION_AT_ROUND_FRACTION,
-    FETCH_IPFS_VALIDATOR_PAYLOADS_AT_SETTLEMENT_FRACTION,
+    FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION,
     SKIP_ROUND_IF_STARTED_AFTER_FRACTION,
     BURN_UID,
 )
@@ -977,42 +977,19 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             round_start_block = boundaries['round_start_block']
             target_block = boundaries['target_block']
 
-            # Progress based on blocks within the round window
+            # Progress based on blocks within the round window (absolute %)
             blocks_total = max(target_block - round_start_block, 1)
             blocks_done = max(current_block - round_start_block, 0)
             progress = min(max((blocks_done / blocks_total) * 100.0, 0.0), 100.0)
+            progress_frac = progress / 100.0  # Convert to 0-1 range
 
-            # Settlement period: compute fraction from STOP_TASK_EVALUATION_AT_ROUND_FRACTION until end of round
-            try:
-                settlement_start_block = round_start_block + int((target_block - round_start_block) * float(STOP_TASK_EVALUATION_AT_ROUND_FRACTION))
-                settlement_total = max(target_block - settlement_start_block, 1)
-                settlement_done = max(current_block - settlement_start_block, 0)
-                settlement_frac = min(max(settlement_done / settlement_total, 0.0), 1.0)
-            except Exception:
-                settlement_frac = 0.0
-
-            # Mid-settlement fetch at configured fraction (single attempt)
-            if ENABLE_DISTRIBUTED_CONSENSUS and (not self._consensus_mid_fetched) and settlement_frac >= float(FETCH_IPFS_VALIDATOR_PAYLOADS_AT_SETTLEMENT_FRACTION):
+            # Mid-round fetch at configured absolute fraction (single attempt)
+            if ENABLE_DISTRIBUTED_CONSENSUS and (not self._consensus_mid_fetched) and progress_frac >= float(FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION):
                 try:
                     ColoredLogger.info(
-                        f"📦 Settlement {FETCH_IPFS_VALIDATOR_PAYLOADS_AT_SETTLEMENT_FRACTION:.2f}: fetching commitments + IPFS for aggregation",
+                        f"📦 Fetch IPFS at {FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION:.1%} of round: aggregating scores from other validators",
                         ColoredLogger.CYAN,
                     )
-                    # Skip mid-fetch if our commit hasn't propagated enough blocks yet
-                    try:
-                        commit_block = getattr(self, "_consensus_commit_block", None)
-                        from autoppia_web_agents_subnet.validator.config import IPFS_COMMIT_PROPAGATION_WAIT_BLOCKS
-                        if commit_block is not None and current_block < int(commit_block) + int(IPFS_COMMIT_PROPAGATION_WAIT_BLOCKS):
-                            remaining = (int(commit_block) + int(IPFS_COMMIT_PROPAGATION_WAIT_BLOCKS)) - current_block
-                            ColoredLogger.info(
-                                f"⏳ Waiting for propagation: {remaining} blocks until aggregation window",
-                                ColoredLogger.BLUE,
-                            )
-                            raise RuntimeError("Propagation window not reached; skipping mid-fetch")
-                    except RuntimeError:
-                        raise
-                    except Exception:
-                        pass
                     st = await self._get_async_subtensor()
                     agg = await aggregate_scores_from_commitments(
                         validator=self,
@@ -1132,24 +1109,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 agg = self._agg_scores_cache or {}
                 if not agg:
                     bt.logging.debug("No cached aggregation; fetching now")
-                    # Ensure commitment propagation window elapsed
-                    try:
-                        from autoppia_web_agents_subnet.validator.config import IPFS_COMMIT_PROPAGATION_WAIT_BLOCKS
-                        commit_block = getattr(self, "_consensus_commit_block", None)
-                        if commit_block is not None:
-                            while True:
-                                current_block = self.subtensor.get_current_block()
-                                needed = (int(commit_block) + int(IPFS_COMMIT_PROPAGATION_WAIT_BLOCKS)) - current_block
-                                if needed <= 0:
-                                    break
-                                mins = (needed * self.round_manager.SECONDS_PER_BLOCK) / 60
-                                ColoredLogger.info(
-                                    f"⏳ Waiting {needed} blocks (~{mins:.1f}m) for commitment propagation",
-                                    ColoredLogger.BLUE,
-                                )
-                                await asyncio.sleep(self.round_manager.SECONDS_PER_BLOCK)
-                    except Exception:
-                        pass
+                    # Natural gap between STOP and FETCH ensures propagation
                     st = await self._get_async_subtensor()
                     agg = await aggregate_scores_from_commitments(
                         validator=self,

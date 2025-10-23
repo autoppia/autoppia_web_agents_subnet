@@ -29,14 +29,11 @@ if TESTING:
     PRE_GENERATED_TASKS = 5                    # Fewer tasks for speed
     DZ_STARTING_BLOCK = 6_717_750              # Test mode starting block
 
-    # ── Task Execution Phase Timing ──────────────────────────────────────────
-    # Stop task evaluation at 50% of round (absolute) to allow 50% for consensus
+    # ── Round Phase Timing (all absolute % of total round) ──────────────────
+    # Stop task evaluation at 50% of round to allow time for consensus
     STOP_TASK_EVALUATION_AT_ROUND_FRACTION = 0.50
-
-    # ── Consensus Settlement Phase Timing ────────────────────────────────────
-    # After stopping tasks at 50%, fetch IPFS payloads at 50% of settlement window
-    # Effective time: 50% + (50% × 0.5) = 75% of total round
-    FETCH_IPFS_VALIDATOR_PAYLOADS_AT_SETTLEMENT_FRACTION = 0.50
+    # Fetch IPFS payloads at 75% of round (gives 25% gap for propagation)
+    FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION = 0.75
 
     # ── Late Start & Crash Recovery ──────────────────────────────────────────
     # Resume from checkpoint if validator crashes/restarts mid-round
@@ -59,14 +56,11 @@ else:
     PRE_GENERATED_TASKS = 75                   # More tasks for thorough evaluation
     DZ_STARTING_BLOCK = 6_720_066              # Production mode starting block
 
-    # ── Task Execution Phase Timing ──────────────────────────────────────────
-    # Stop task evaluation at 75% of round (absolute) to reserve 25% for consensus
+    # ── Round Phase Timing (all absolute % of total round) ──────────────────
+    # Stop task evaluation at 75% of round to reserve time for consensus
     STOP_TASK_EVALUATION_AT_ROUND_FRACTION = 0.75
-
-    # ── Consensus Settlement Phase Timing ────────────────────────────────────
-    # After stopping tasks at 75%, fetch IPFS payloads at 50% of settlement window
-    # Effective time: 75% + (25% × 0.5) = 87.5% of total round
-    FETCH_IPFS_VALIDATOR_PAYLOADS_AT_SETTLEMENT_FRACTION = 0.50
+    # Fetch IPFS payloads at 87.5% of round (gives 12.5% gap for propagation)
+    FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION = 0.875
 
     # ── Late Start & Crash Recovery ──────────────────────────────────────────
     # Resume from checkpoint if validator crashes/restarts mid-round
@@ -115,8 +109,6 @@ STATS_FILE = Path("coldkey_web_usecase_stats.json")
 
 # ── Distributed Consensus (IPFS + Blockchain) ────────────────────────────────
 ENABLE_DISTRIBUTED_CONSENSUS = _str_to_bool(os.getenv("ENABLE_DISTRIBUTED_CONSENSUS", "true"))
-# Wait N blocks after committing to IPFS before fetching (ensures blockchain propagation)
-IPFS_COMMIT_PROPAGATION_WAIT_BLOCKS = _env_int("IPFS_COMMIT_PROPAGATION_WAIT_BLOCKS", 10)
 
 # ── IPFS Storage ─────────────────────────────────────────────────────────────
 IPFS_API_URL = os.getenv("IPFS_API_URL", "http://ipfs.metahash73.com:5001/api/v0")
