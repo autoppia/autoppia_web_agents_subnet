@@ -33,7 +33,7 @@ if TESTING:
 
     # ── Round Phase Timing (all absolute % of total round) ──────────────────
     # Stop task evaluation at 50% of round to allow time for consensus
-    STOP_TASK_EVALUATION_AT_ROUND_FRACTION = 0.50
+    STOP_TASK_EVALUATION_AT_ROUND_FRACTION = 0.65
     # Fetch IPFS payloads at 75% of round (gives 25% gap for propagation)
     FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION = 0.75
 
