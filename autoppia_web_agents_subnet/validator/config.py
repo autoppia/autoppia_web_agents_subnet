@@ -37,9 +37,7 @@ if TESTING:
     # Fetch IPFS payloads at 75% of round (gives 25% gap for propagation)
     FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION = 0.75
 
-    # ── Checkpoint System & Late Start ───────────────────────────────────────
-    # Enable checkpoint system (save/load round state for crash recovery)
-    ENABLE_CHECKPOINT_SYSTEM = True
+    # ── Late Start Protection ────────────────────────────────────────────────
     # Skip round only if started when >95% complete (very permissive for testing)
     SKIP_ROUND_IF_STARTED_AFTER_FRACTION = 0.95
 
@@ -66,9 +64,7 @@ else:
     # Fetch IPFS payloads at 87.5% of round (gives 12.5% gap for propagation)
     FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION = 0.875
 
-    # ── Checkpoint System & Late Start ───────────────────────────────────────
-    # Enable checkpoint system (save/load round state for crash recovery)
-    ENABLE_CHECKPOINT_SYSTEM = True
+    # ── Late Start Protection ────────────────────────────────────────────────
     # Skip round if started when >30% complete (conservative for production)
     SKIP_ROUND_IF_STARTED_AFTER_FRACTION = 0.30
 
@@ -103,10 +99,13 @@ MAX_MINER_AGENT_NAME_LENGTH = _env_int("MAX_MINER_AGENT_NAME_LENGTH", 12)
 
 IWAP_VALIDATOR_AUTH_MESSAGE = _normalized(os.getenv("IWAP_VALIDATOR_AUTH_MESSAGE", "I am a honest validator"))
 
-# ── Burn Mechanism ───────────────────────────────────────────────────────────
-BURN_UID = _env_int("BURN_UID", 5)
+# ── Checkpoint System & Recovery ─────────────────────────────────────────────
+# Enable checkpoint system (save/load round state for crash recovery)
+# Enabled by default, can be disabled via .env (works in both testing and production)
+ENABLE_CHECKPOINT_SYSTEM = _str_to_bool(os.getenv("ENABLE_CHECKPOINT_SYSTEM", "true"))
 
 # ── Distributed Consensus (IPFS + Blockchain) ────────────────────────────────
+# Enabled by default, can be disabled via .env (works in both testing and production)
 ENABLE_DISTRIBUTED_CONSENSUS = _str_to_bool(os.getenv("ENABLE_DISTRIBUTED_CONSENSUS", "true"))
 
 # ── IPFS Storage ─────────────────────────────────────────────────────────────
@@ -116,3 +115,6 @@ IPFS_GATEWAYS = [
     (os.getenv("IPFS_GATEWAYS", "https://ipfs.io/ipfs,https://cloudflare-ipfs.com/ipfs,https://gateway.pinata.cloud/ipfs") or "")
     .split(",") if g.strip()
 ]
+
+# ── Burn Mechanism ───────────────────────────────────────────────────────────
+BURN_UID = _env_int("BURN_UID", 5)
