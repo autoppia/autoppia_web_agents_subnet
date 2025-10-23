@@ -610,9 +610,25 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             except Exception:
                 progress_frac = 0.0
             if ENABLE_DISTRIBUTED_CONSENSUS and not self._consensus_published and (progress_frac >= float(STOP_TASK_EVALUATION_AT_ROUND_FRACTION)):
-                ColoredLogger.warning(
-                    f"🛑 Reached stop fraction {STOP_TASK_EVALUATION_AT_ROUND_FRACTION:.2f}; halting task dispatch to publish commitments.",
-                    ColoredLogger.YELLOW,
+                ColoredLogger.critical(
+                    "\n" + "=" * 80,
+                    ColoredLogger.RED,
+                )
+                ColoredLogger.critical(
+                    f"🛑🛑🛑 STOP FRACTION REACHED: {STOP_TASK_EVALUATION_AT_ROUND_FRACTION:.0%} 🛑🛑🛑",
+                    ColoredLogger.RED,
+                )
+                ColoredLogger.critical(
+                    f"📤📤📤 PUBLISHING TO IPFS NOW WITH {tasks_completed} TASKS 📤📤📤",
+                    ColoredLogger.RED,
+                )
+                ColoredLogger.critical(
+                    f"⏸️⏸️⏸️  HALTING ALL TASK EXECUTION ⏸️⏸️⏸️",
+                    ColoredLogger.RED,
+                )
+                ColoredLogger.critical(
+                    "=" * 80 + "\n",
+                    ColoredLogger.RED,
                 )
                 try:
                     round_number = await self.round_manager.calculate_round(current_block)
@@ -624,6 +640,18 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                         tasks_completed=tasks_completed,
                     )
                     self._consensus_published = True
+                    ColoredLogger.critical(
+                        "\n" + "=" * 80,
+                        ColoredLogger.GREEN,
+                    )
+                    ColoredLogger.critical(
+                        f"✅✅✅ IPFS PUBLISH COMPLETE - NOW WAITING ✅✅✅",
+                        ColoredLogger.GREEN,
+                    )
+                    ColoredLogger.critical(
+                        "=" * 80 + "\n",
+                        ColoredLogger.GREEN,
+                    )
                 except Exception as e:
                     bt.logging.warning(f"Consensus publish (reserved-start) failed: {e}")
                 break

@@ -312,13 +312,12 @@ async def aggregate_scores_from_commitments(
             continue
 
         # Accumulate stake-weighted (or simple average if all stakes are 0)
+        # Include ALL miners, even those with score 0 (important for consensus convergence)
         for uid_s, sc in scores.items():
             try:
                 uid = int(uid_s)
                 val = float(sc)
             except Exception:
-                continue
-            if val <= 0:
                 continue
             # Use weight=1.0 if stake is 0, otherwise use actual stake
             # This allows consensus to work even with 0-stake validators (testing mode)
