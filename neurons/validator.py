@@ -98,6 +98,17 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         bt.logging.info("load_state()")
         self.load_state()
 
+    def should_set_weights(self) -> bool:
+        """
+        Skip automatic burns before any round has produced scores.
+        Allow the base logic to run only after we have non-zero weights.
+        """
+        scores = np.asarray(getattr(self, "scores", []), dtype=np.float32)
+        if scores.size == 0 or not np.any(scores):
+            bt.logging.debug("Skipping set_weights: no scored miners yet.")
+            return False
+        return super().should_set_weights()
+
     def _reset_consensus_state(self) -> None:
         """Clear cached consensus state so a fresh round can publish again."""
         self._consensus_published = False

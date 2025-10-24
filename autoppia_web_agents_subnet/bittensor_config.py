@@ -89,7 +89,7 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
         "--neuron.disable_set_weights",
         action="store_true",
         help="Disables setting weights.",
-        default=False,
+        default=True,
     )
 
 
