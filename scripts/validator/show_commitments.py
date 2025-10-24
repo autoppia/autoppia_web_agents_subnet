@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import os
 import math
+import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -96,10 +96,10 @@ def _compute_round_number(start_block: int) -> Optional[int]:
 
 
 def _format_minutes(block_delta: int) -> str:
-    if block_delta < 0:
+    if block_delta <= 0:
         return "0m"
     minutes = (block_delta * SECONDS_PER_BLOCK) / 60.0
-    if minutes >= 60:
+    if minutes >= 60.0:
         hours = minutes / 60.0
         return f"{hours:.1f}h"
     return f"{minutes:.1f}m"
@@ -166,19 +166,152 @@ def _score_summary(payload: Dict[str, Any]) -> Tuple[int, str]:
     parsed: List[Tuple[int, float]] = []
     for uid_str, score_val in scores.items():
         try:
-            uid = int(uid_str)
-            score = float(score_val)
+            parsed.append((int(uid_str), float(score_val)))
         except Exception:
             continue
-        parsed.append((uid, score))
 
     count = len(parsed)
-    if not parsed:
+    if count == 0:
         return 0, "scores empty"
 
     top = sorted(parsed, key=lambda item: item[1], reverse=True)[:3]
     top_str = ", ".join(f"{uid}:{score:.4f}" for uid, score in top)
     return count, f"top {top_str}"
+
+
+def _score_stats(
+    scores: Any,
+) -> Tuple[int, Optional[float], Optional[float], Optional[float]]:
+    if not isinstance(scores, dict):
+        return 0, None, None, None
+
+    values: List[float] = []
+    for value in scores.values():
+        try:
+            values.append(float(value))
+        except Exception:
+            continue
+
+    count = len(values)
+    if count == 0:
+        return 0, None, None, None
+
+    mean = sum(values) / count
+    variance = sum((val - mean) ** 2 for val in values) / count
+    stddev = math.sqrt(variance)
+    return count, mean, stddev, variance
+
+
+def _render_validator_table(
+    validators: List[ValidatorCommitment],
+    *,
+    total_weight: float,
+) -> Tuple[str, List[str]]:
+    headers = [
+        "validator",
+        "uid",
+        "round",
+        "stake_tau",
+        "weight_pct",
+        "scores",
+        "mean",
+        "std",
+        "var",
+        "tasks",
+        "agents",
+        "sha12",
+        "cid",
+    ]
+
+    rows: List[List[str]] = []
+    extra: List[str] = []
+
+    for item in validators:
+        weight_pct = (item.stake_tao / total_weight) * 100.0 if total_weight else 0.0
+        round_text = str(item.round_number) if item.round_number is not None else "-"
+        stake_text = f"{item.stake_tao:,.2f}"
+        weight_text = f"{weight_pct:5.2f}"
+
+        cid_text = "-"
+        if item.cid:
+            cid_text = item.cid[:18] + "…" if len(item.cid) > 18 else item.cid
+
+        sha_text = "-"
+        if item.payload_hash:
+            sha_text = (
+                item.payload_hash[:12] + "…"
+                if len(item.payload_hash) > 12
+                else item.payload_hash
+            )
+
+        scores_count = 0
+        mean = stddev = variance = None
+        tasks = "-"
+        agents = "-"
+        top_line: Optional[str] = None
+
+        if item.payload_error:
+            extra.append(
+                f"      {item.hotkey[:10]}… payload error: {item.payload_error}"
+            )
+        elif item.payload is None:
+            extra.append(f"      {item.hotkey[:10]}… payload missing")
+        else:
+            payload = item.payload
+            scores_count, top_line = _score_summary(payload)
+            count_stats, mean, stddev, variance = _score_stats(payload.get("scores"))
+            scores_count = count_stats
+            tasks_val = payload.get("tasks_completed") or payload.get("n")
+            if tasks_val is not None:
+                tasks = str(tasks_val)
+            agents_val = payload.get("agents")
+            if agents_val is not None:
+                agents = str(agents_val)
+            if top_line:
+                extra.append(f"      {item.hotkey[:10]}… {top_line}")
+
+        mean_text = f"{mean:.4f}" if mean is not None else "-"
+        std_text = f"{stddev:.4f}" if stddev is not None else "-"
+        var_text = f"{variance:.4f}" if variance is not None else "-"
+        scores_text = str(scores_count) if scores_count else "-"
+
+        rows.append(
+            [
+                f"{item.hotkey[:10]}…",
+                str(item.uid) if item.uid is not None else "?",
+                round_text,
+                stake_text,
+                weight_text,
+                scores_text,
+                mean_text,
+                std_text,
+                var_text,
+                tasks,
+                agents,
+                sha_text,
+                cid_text,
+            ]
+        )
+
+    if not rows:
+        return "", extra
+
+    col_widths = [len(header) for header in headers]
+    for row in rows:
+        for idx, cell in enumerate(row):
+            col_widths[idx] = max(col_widths[idx], len(cell))
+
+    def _fmt_row(row: List[str]) -> str:
+        cells = [cell.ljust(col_widths[idx]) for idx, cell in enumerate(row)]
+        return "    | " + " | ".join(cells) + " |"
+
+    divider = "    +" + "+".join("-" * (w + 2) for w in col_widths) + "+"
+    table_lines = [divider, _fmt_row(headers), divider]
+    for row in rows:
+        table_lines.append(_fmt_row(row))
+    table_lines.append(divider)
+
+    return "\n".join(table_lines), extra
 
 
 async def inspect_rounds(
@@ -231,10 +364,7 @@ async def inspect_rounds(
         metagraph = await st.metagraph(netuid)
 
         raw_hotkeys = getattr(metagraph, "hotkeys", None)
-        if raw_hotkeys is None:
-            hotkeys: List[str] = []
-        else:
-            hotkeys = list(raw_hotkeys)
+        hotkeys: List[str] = list(raw_hotkeys) if raw_hotkeys is not None else []
 
         raw_stakes = getattr(metagraph, "stake", None)
         if raw_stakes is None:
@@ -321,18 +451,10 @@ async def inspect_rounds(
             status: str
             if current_block < target_block:
                 remaining_blocks = target_block - current_block
-                status = (
-                    "active: "
-                    + _format_minutes(remaining_blocks)
-                    + " remaining"
-                )
+                status = "active: " + _format_minutes(remaining_blocks) + " remaining"
             else:
                 delta_blocks = current_block - target_block
-                status = (
-                    "settled: finished "
-                    + _format_minutes(delta_blocks)
-                    + " ago"
-                )
+                status = "settled: finished " + _format_minutes(delta_blocks) + " ago"
 
             print(f"\n[{idx}] {label}")
             print(
@@ -377,57 +499,20 @@ async def inspect_rounds(
             validators.sort(key=lambda v: v.stake_tao, reverse=True)
             total_weight = sum(filter(None, (v.stake_tao for v in validators)))
 
+            table_text, extra_lines = _render_validator_table(
+                validators,
+                total_weight=total_weight,
+            )
             print(
                 f"  • validators_considered={len(validators)} "
                 f"(stake ≥ {min_stake:.2f} τ)"
             )
             if total_weight > 0:
                 print(f"  • total_stake={total_weight:,.2f} τ")
-
-            for item in validators:
-                stake_pct = (
-                    (item.stake_tao / total_weight) * 100.0 if total_weight else 0.0
-                )
-                uid_repr = item.uid if item.uid is not None else "?"
-                if item.cid and len(item.cid) > 19:
-                    cid_repr = f"{item.cid[:18]}…"
-                else:
-                    cid_repr = item.cid or "—"
-                segments = [f"uid={uid_repr}"]
-                if item.round_number is not None:
-                    segments.append(f"round={item.round_number}")
-                segments.append(f"stake={item.stake_tao:,.2f} τ")
-                segments.append(f"weight={stake_pct:5.2f}%")
-                segments.append(f"cid={cid_repr}")
-                print(f"    - {item.hotkey[:10]}… (" + ", ".join(segments) + ")")
-
-                if item.payload_error:
-                    print(f"        · payload: error {item.payload_error}")
-                    continue
-                if not item.payload:
-                    print("        · payload: missing")
-                    continue
-
-                payload = item.payload
-                scores_count, scores_line = _score_summary(payload)
-                tasks_completed = payload.get("tasks_completed") or payload.get("n")
-                agents = payload.get("agents")
-                hash_repr = (
-                    item.payload_hash[:12] + "…" if item.payload_hash else None
-                )
-
-                details = [
-                    f"scores={scores_count}",
-                    scores_line,
-                ]
-                if tasks_completed is not None:
-                    details.append(f"tasks={tasks_completed}")
-                if agents is not None:
-                    details.append(f"agents={agents}")
-                if hash_repr:
-                    details.append(f"sha256={hash_repr}")
-
-                print(f"        · {' | '.join(details)}")
+            if table_text:
+                print(table_text)
+            for line in extra_lines:
+                print(line)
 
 
 def parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
