@@ -1142,12 +1142,33 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 # Concise status line
                 if round_no_ctx is not None:
                     ColoredLogger.info(
-                        f"Round {round_no_ctx} — Epoch {current_epoch:.3f}/{target_epoch:.3f} | Block {current_block}/{target_block} ({progress:.2f}%) | Remaining {wait_info['minutes_remaining']:.1f}m",
+                        (
+                            "Round {round} — Epoch {cur:.3f}/{target:.3f} | Block {blk}/{target_blk} ({pct:.2f}%) | "
+                            "Remaining {mins:.1f}m — waiting for target block {target_blk} to finalize scores & set weights"
+                        ).format(
+                            round=round_no_ctx,
+                            cur=current_epoch,
+                            target=target_epoch,
+                            blk=current_block,
+                            target_blk=target_block,
+                            pct=progress,
+                            mins=wait_info['minutes_remaining'],
+                        ),
                         ColoredLogger.BLUE,
                     )
                 else:
                     ColoredLogger.info(
-                        f"Epoch {current_epoch:.3f}/{target_epoch:.3f} | Block {current_block}/{target_block} ({progress:.2f}%) | Remaining {wait_info['minutes_remaining']:.1f}m",
+                        (
+                            "Epoch {cur:.3f}/{target:.3f} | Block {blk}/{target_blk} ({pct:.2f}%) | Remaining {mins:.1f}m — "
+                            "waiting for target block {target_blk} to finalize scores & set weights"
+                        ).format(
+                            cur=current_epoch,
+                            target=target_epoch,
+                            blk=current_block,
+                            target_blk=target_block,
+                            pct=progress,
+                            mins=wait_info['minutes_remaining'],
+                        ),
                         ColoredLogger.BLUE,
                     )
                 last_log_time = time.time()
@@ -1194,8 +1215,16 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 if time.time() - last_log_time >= 30:
                     current_epoch = self.round_manager.block_to_epoch(current_block)
                     ColoredLogger.info(
-                        f"Waiting — next round boundary (global) — epoch {current_epoch:.3f}/{fixed_target_epoch:.3f} "
-                        f"({progress:.2f}%) | ~{minutes_remaining:.1f}m left",
+                        (
+                            "Waiting — next round boundary (global) — epoch {cur:.3f}/{target:.3f} ({pct:.2f}%) | "
+                            "~{mins:.1f}m left — holding until block {target_blk} before carrying scores forward"
+                        ).format(
+                            cur=current_epoch,
+                            target=fixed_target_epoch,
+                            pct=progress,
+                            mins=minutes_remaining,
+                            target_blk=fixed_target_block,
+                        ),
                         ColoredLogger.BLUE,
                     )
                     last_log_time = time.time()
