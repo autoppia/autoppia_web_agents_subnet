@@ -30,19 +30,35 @@ def log_iwap_phase(
     exc_info: bool = False,
 ) -> None:
     """
-    Log IWAP events in the format: IWAP | [action/message]
+    Log IWAP events in the format: IWAP | [Phase X] [action] message
 
     Args:
-        phase: The phase name (will be included in brackets if not already in message)
+        phase: The phase/context name (e.g., "start_round", "Phase 1", etc.)
         message: The message to log
         level: Log level (info, success, warning, error, debug)
         exc_info: Whether to include exception traceback
     """
-    # Format as "IWAP | [message]" 
-    # If message already has context in [], use it. Otherwise, add phase.
-    if message.startswith("[") or phase in message:
-        prefix = f"IWAP | {message}"
+    # Map contexts to phases
+    phase_map = {
+        "start_round": "Phase 0",
+        "set_tasks": "Phase 2",
+        "start_agent_run": "Phase 3",
+        "add_evaluation": "Phase 4",
+        "finish_round": "Phase 5",
+    }
+
+    # Get the phase number if applicable
+    phase_label = phase_map.get(phase, phase)
+
+    # Format: IWAP | [Phase X] [context] message
+    # If phase is already like "Phase 1", just use it
+    if phase.startswith("Phase"):
+        prefix = f"IWAP | [{phase}] {message}"
+    elif phase in phase_map:
+        # For API calls: IWAP | [Phase X] [context] message
+        prefix = f"IWAP | [{phase_label}] [{phase}] {message}"
     else:
+        # For other cases
         prefix = f"IWAP | [{phase}] {message}"
 
     if level == "success":

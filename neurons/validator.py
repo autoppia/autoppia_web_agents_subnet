@@ -752,26 +752,10 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             except Exception:
                 progress_frac = 0.0
             if ENABLE_DISTRIBUTED_CONSENSUS and not self._consensus_published and (progress_frac >= float(STOP_TASK_EVALUATION_AT_ROUND_FRACTION)):
-                ColoredLogger.error(
-                    "\n" + "=" * 80,
-                    ColoredLogger.RED,
-                )
-                ColoredLogger.error(
-                    f"🛑🛑🛑 STOP FRACTION REACHED: {STOP_TASK_EVALUATION_AT_ROUND_FRACTION:.0%} 🛑🛑🛑",
-                    ColoredLogger.RED,
-                )
-                ColoredLogger.error(
-                    f"📤📤📤 PUBLISHING TO IPFS NOW WITH {tasks_completed} TASKS 📤📤📤",
-                    ColoredLogger.RED,
-                )
-                ColoredLogger.error(
-                    f"⏸️⏸️⏸️  HALTING ALL TASK EXECUTION ⏸️⏸️⏸️",
-                    ColoredLogger.RED,
-                )
-                ColoredLogger.error(
-                    "=" * 80 + "\n",
-                    ColoredLogger.RED,
-                )
+                # Log task completion first (EVALUATION context)
+                bt.logging.info(f"EVALUATION | [TASK COMPLETION] Completed {tasks_completed} tasks")
+                # Log stop fraction reached
+                bt.logging.warning(f"🛑 Stop fraction reached: {STOP_TASK_EVALUATION_AT_ROUND_FRACTION:.0%} - Halting task execution and publishing to IPFS")
                 try:
                     round_number = await self.round_manager.calculate_round(current_block)
                     st = await self._get_async_subtensor()
@@ -783,18 +767,6 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                             tasks_completed=tasks_completed,
                         )
                         self._consensus_published = True
-                        ColoredLogger.success(
-                            "\n" + "=" * 80,
-                            ColoredLogger.GREEN,
-                        )
-                        ColoredLogger.success(
-                            f"✅✅✅ IPFS PUBLISH COMPLETE - NOW WAITING ✅✅✅",
-                            ColoredLogger.GREEN,
-                        )
-                        ColoredLogger.success(
-                            "=" * 80 + "\n",
-                            ColoredLogger.GREEN,
-                        )
                     finally:
                         # Close AsyncSubtensor immediately after use
                         await self._close_async_subtensor()
