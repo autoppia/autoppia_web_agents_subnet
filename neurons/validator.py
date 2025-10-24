@@ -46,6 +46,9 @@ from autoppia_web_agents_subnet.validator.models import TaskWithProject
 from autoppia_web_agents_subnet.validator.round_manager import RoundManager
 from autoppia_web_agents_subnet.validator.visualization.round_table import render_round_summary_table
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+from rich.console import Console
+from rich.table import Table
+from rich import box
 from autoppia_web_agents_subnet.platform.validator_mixin import ValidatorPlatformMixin
 from autoppia_web_agents_subnet.platform.round_phases import RoundPhaseValidatorMixin
 from autoppia_web_agents_subnet.validator.consensus import (
@@ -439,11 +442,23 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
             # Filter successful responses - collect data without spamming logs
             successful_miners = []
+            miner_status_map = {}  # UID -> response data
+
             for i, response in enumerate(handshake_responses):
                 if i >= len(all_axons):
                     continue
 
                 mapped_uid = all_uids[i]
+
+                # Track all miners (successful or not)
+                miner_status_map[mapped_uid] = {
+                    'response': response,
+                    'success': False,
+                    'agent_name': None,
+                    'version': None,
+                    'hotkey': self.metagraph.hotkeys[mapped_uid][:12] + '...' if mapped_uid < len(self.metagraph.hotkeys) else 'N/A'
+                }
+
                 if not response:
                     continue
 
@@ -473,25 +488,93 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 self.round_handshake_payloads[mapped_uid] = response
                 self.active_miner_uids.append(mapped_uid)
 
-                # Collect for table display
+                # Update status map
+                miner_status_map[mapped_uid].update({
+                    'success': True,
+                    'agent_name': agent_name,
+                    'version': getattr(response, 'agent_version', 'N/A')
+                })
+
+                # Collect for backward compatibility
                 successful_miners.append({
                     'uid': mapped_uid,
                     'agent': agent_name,
                     'version': getattr(response, 'agent_version', 'N/A'),
                     'rl': 'Yes' if getattr(response, 'has_rl', False) else 'No',
-                    'hotkey': self.metagraph.hotkeys[mapped_uid][:10] + '...'
+                    'hotkey': miner_status_map[mapped_uid]['hotkey']
                 })
 
-            # Display results in a clean table format (only if we sent handshake)
-            if not has_prior_handshake and successful_miners:
-                bt.logging.info("=" * 100)
-                bt.logging.info("📋 MINERS WHO RESPONDED TO HANDSHAKE:")
-                bt.logging.info("=" * 100)
-                bt.logging.info(f"{'UID':<6} | {'Agent Name':<20} | {'Version':<10} | {'RL':<4} | {'Hotkey':<15}")
-                bt.logging.info("-" * 100)
-                for m in successful_miners:
-                    bt.logging.info(f"{m['uid']:<6} | {m['agent']:<20} | {m['version']:<10} | {m['rl']:<4} | {m['hotkey']:<15}")
-                bt.logging.info("=" * 100)
+            # Display results in a Rich table (only if we sent handshake)
+            if not has_prior_handshake:
+                try:
+                    console = Console()
+                    table = Table(
+                        title=f"[bold magenta]🤝 Handshake Results - {len(self.active_miner_uids)}/{len(all_axons)} Miners Responded[/bold magenta]",
+                        box=box.ROUNDED,
+                        show_header=True,
+                        header_style="bold cyan",
+                        title_style="bold magenta",
+                        expand=False,
+                    )
+
+                    table.add_column("Status", justify="center", style="bold", width=8)
+                    table.add_column("UID", justify="right", style="cyan", width=6)
+                    table.add_column("Agent Name", justify="left", style="white", width=25)
+                    table.add_column("Version", justify="center", style="yellow", width=12)
+                    table.add_column("Hotkey", justify="left", style="blue", width=18)
+
+                    # Sort by UID
+                    sorted_uids = sorted(miner_status_map.keys())
+
+                    # Add rows (limit to first 30 for readability)
+                    display_limit = 30
+                    for idx, uid in enumerate(sorted_uids):
+                        if idx >= display_limit:
+                            table.add_row(
+                                "...",
+                                "...",
+                                f"[dim]({len(sorted_uids) - display_limit} more miners not shown)[/dim]",
+                                "...",
+                                "..."
+                            )
+                            break
+
+                        miner = miner_status_map[uid]
+
+                        if miner['success']:
+                            status_icon = "[green]✓[/green]"
+                            agent_name = miner['agent_name'] or 'N/A'
+                            version = miner['version'] or 'N/A'
+                            style = None
+                        else:
+                            status_icon = "[red]✗[/red]"
+                            agent_name = "[dim]N/A[/dim]"
+                            version = "[dim]N/A[/dim]"
+                            style = "dim"
+
+                        table.add_row(
+                            status_icon,
+                            str(uid),
+                            agent_name,
+                            version,
+                            miner['hotkey'],
+                            style=style
+                        )
+
+                    console.print(table)
+                    console.print()
+                except Exception as e:
+                    bt.logging.warning(f"Failed to render handshake table: {e}")
+                    # Fallback to old format
+                    if successful_miners:
+                        bt.logging.info("=" * 100)
+                        bt.logging.info("📋 MINERS WHO RESPONDED TO HANDSHAKE:")
+                        bt.logging.info("=" * 100)
+                        bt.logging.info(f"{'UID':<6} | {'Agent Name':<20} | {'Version':<10} | {'Hotkey':<15}")
+                        bt.logging.info("-" * 100)
+                        for m in successful_miners:
+                            bt.logging.info(f"{m['uid']:<6} | {m['agent']:<20} | {m['version']:<10} | {m['hotkey']:<15}")
+                        bt.logging.info("=" * 100)
 
             # Log results only if we actually sent the handshake (not when using saved state)
             if not has_prior_handshake:
