@@ -1,0 +1,34 @@
+Provide a structured analysis with the following sections:
+
+### Overall Status
+- status: <OK | WARN | FAIL>
+- evidence:
+- next_steps:
+
+### IWAP Pipeline
+- status:
+- evidence:
+- next_steps:
+
+### Commitments & Weight Publishing
+- status:
+- evidence:
+- next_steps:
+
+### Settlement & IPFS
+- status:
+- evidence:
+- next_steps:
+
+### Round Management
+- status:
+- evidence:
+- next_steps:
+
+### Summary
+- bullet list of key takeaways
+
+### Recommended Actions
+1. Each action should be high-impact and clearly scoped.
+
+Use bullet points for evidence. Reference timestamps or identifiers when available. Highlight missing signals explicitly.
