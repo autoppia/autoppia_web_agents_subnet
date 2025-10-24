@@ -55,7 +55,10 @@ else:
     ROUND_SIZE_EPOCHS = _env_float("ROUND_SIZE_EPOCHS", 4.0)
     SAFETY_BUFFER_EPOCHS = _env_float("SAFETY_BUFFER_EPOCHS", 0.5)
     AVG_TASK_DURATION_SECONDS = _env_int("AVG_TASK_DURATION_SECONDS", 300)
-    PRE_GENERATED_TASKS = _env_int("PRE_GENERATED_TASKS", 75)
+    # Increased default tasks for production to extend execution closer to the
+    # reserved consensus window. Previous default was 75; 2.5x -> ~188.
+    # Environment variable PRE_GENERATED_TASKS still takes precedence.
+    PRE_GENERATED_TASKS = _env_int("PRE_GENERATED_TASKS", 188)
     DZ_STARTING_BLOCK = _env_int("DZ_STARTING_BLOCK", 6_726_960)
 
     # ── Round Phase Timing (all absolute % of total round) ──────────────────

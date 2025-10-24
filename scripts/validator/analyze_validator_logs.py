@@ -237,49 +237,40 @@ def extract_round_id(line: str) -> str | None:
     return None
 
 
-def group_lines_by_round(lines: Sequence[str]) -> list[tuple[str, list[str]]]:
-    groups: list[tuple[str, list[str]]] = []
-    current_round: str | None = None
-    current_bucket: list[str] = []
+def detect_round_id(segment: Sequence[str]) -> str | None:
+    for line in reversed(segment):
+        rid = extract_round_id(line)
+        if rid:
+            return rid
+    return None
 
-    for line in lines:
-        round_id = extract_round_id(line)
-        if round_id:
-            if current_round is None:
-                current_round = round_id
-            elif round_id != current_round:
-                if current_bucket:
-                    groups.append((current_round, current_bucket))
-                current_round = round_id
-                current_bucket = []
 
-        if current_round is not None:
-            current_bucket.append(line)
-
-            if "✅ Round complete" in line:
-                groups.append((current_round, current_bucket))
-                current_round = None
-                current_bucket = []
-
-    if current_round and current_bucket:
-        groups.append((current_round, current_bucket))
-
-    return groups
+def split_rounds_by_completion(lines: Sequence[str]) -> list[tuple[str | None, list[str]]]:
+    segments: list[tuple[str | None, list[str]]] = []
+    start_index = 0
+    for idx, line in enumerate(lines):
+        if "✅ Round complete" in line:
+            segment = list(lines[start_index : idx + 1])
+            if segment:
+                round_id = detect_round_id(segment)
+                segments.append((round_id, segment))
+            start_index = idx + 1
+    return segments
 
 
 def select_recent_rounds(lines: Sequence[str], rounds_to_keep: int) -> tuple[list[str], list[str]]:
     if rounds_to_keep <= 0:
         return list(lines), []
 
-    grouped = group_lines_by_round(lines)
-    if not grouped:
+    segments = split_rounds_by_completion(lines)
+    if not segments:
         return list(lines), []
 
-    selected = grouped[-rounds_to_keep:]
+    selected_segments = segments[-rounds_to_keep:]
     flattened: list[str] = []
     selected_ids: list[str] = []
-    for round_id, chunk in selected:
-        selected_ids.append(round_id)
+    for round_id, chunk in selected_segments:
+        selected_ids.append(round_id or "unknown")
         flattened.extend(chunk)
 
     return flattened, selected_ids

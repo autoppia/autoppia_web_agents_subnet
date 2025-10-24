@@ -1,34 +1,10 @@
-Provide a structured analysis with the following sections:
+If every subsystem in the provided logs appears healthy, output exactly:
 
-### Overall Status
-- status: <OK | WARN | FAIL>
-- evidence:
-- next_steps:
+All good
 
-### IWAP Pipeline
-- status:
-- evidence:
-- next_steps:
+Otherwise, respond in plain text (no Markdown) with:
+1) A short, human-readable title naming the issue.
+2) A single concise paragraph describing what went wrong and the concrete evidence (timestamps, validator_round ids, HTTP status, error text, etc.). Keep it under 4 sentences.
+3) One recommended action phrased as “Recommendation: …”, focused on the next best remediation step.
 
-### Commitments & Weight Publishing
-- status:
-- evidence:
-- next_steps:
-
-### Settlement & IPFS
-- status:
-- evidence:
-- next_steps:
-
-### Round Management
-- status:
-- evidence:
-- next_steps:
-
-### Summary
-- bullet list of key takeaways
-
-### Recommended Actions
-1. Each action should be high-impact and clearly scoped.
-
-Use bullet points for evidence. Reference timestamps or identifiers when available. Highlight missing signals explicitly.
+Do not include anything else. If multiple issues exist, pick the highest-impact one and report only that. Do not invent evidence—if you are uncertain, treat the system as healthy and reply “All good”.
