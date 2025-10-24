@@ -29,7 +29,22 @@ def log_iwap_phase(
     level: str = "info",
     exc_info: bool = False,
 ) -> None:
-    prefix = f"{IWAP_PHASE_ICON} IWAP {phase}: {message}"
+    """
+    Log IWAP events in the format: IWAP | [action/message]
+
+    Args:
+        phase: The phase name (will be included in brackets if not already in message)
+        message: The message to log
+        level: Log level (info, success, warning, error, debug)
+        exc_info: Whether to include exception traceback
+    """
+    # Format as "IWAP | [message]" 
+    # If message already has context in [], use it. Otherwise, add phase.
+    if message.startswith("[") or phase in message:
+        prefix = f"IWAP | {message}"
+    else:
+        prefix = f"IWAP | [{phase}] {message}"
+
     if level == "success":
         bt.logging.success(prefix)
     elif level == "warning":
@@ -281,4 +296,3 @@ def extract_gif_bytes(payload: Optional[object]) -> Optional[bytes]:
         "🛰️ IWAP GIF extraction failed: decoded payload missing GIF header"
     )
     return None
-
