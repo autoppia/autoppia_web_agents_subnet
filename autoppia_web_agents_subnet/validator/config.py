@@ -59,10 +59,10 @@ else:
     DZ_STARTING_BLOCK = _env_int("DZ_STARTING_BLOCK", 6_726_394)
 
     # ── Round Phase Timing (all absolute % of total round) ──────────────────
-    # Stop task evaluation at 75% of round to reserve time for consensus
-    STOP_TASK_EVALUATION_AT_ROUND_FRACTION = 0.75
-    # Fetch IPFS payloads at 87.5% of round (gives 12.5% gap for propagation)
-    FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION = 0.875
+    # Stop task evaluation at 90% of round to reserve time for consensus
+    STOP_TASK_EVALUATION_AT_ROUND_FRACTION = 0.90
+    # Fetch IPFS payloads at 95% of round (gives 5% gap for propagation)
+    FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION = 0.95
 
     # ── Late Start Protection ────────────────────────────────────────────────
     # Skip round if started when >30% complete (conservative for production)
