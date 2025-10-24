@@ -534,9 +534,16 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             from rich import box
 
             console = Console()
+            
+            def safe_print(*args, **kwargs):
+                """Helper to suppress pipe errors when printing Rich tables"""
+                try:
+                    console.print(*args, **kwargs)
+                except (BrokenPipeError, OSError):
+                    pass  # Silently ignore pipe errors
 
             # Connection Status Table
-            console.print("\n[blue]📋 MINER CONNECTION STATUS[/blue]")
+            safe_print("\n[blue]📋 MINER CONNECTION STATUS[/blue]")
             connection_table = Table(
                 show_header=True, 
                 header_style="blue",
@@ -601,11 +608,11 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     'responded': status == "✅ OK"
                 }
 
-            console.print(connection_table)
+            safe_print(connection_table)
 
             # Summary of successful miners
             successful_count = sum(1 for status in connection_status.values() if status['responded'])
-            console.print(f"\n[green]✅ {successful_count}/{len(all_axons)} miners responded successfully[/green]")
+            safe_print(f"\n[green]✅ {successful_count}/{len(all_axons)} miners responded successfully[/green]")
 
             # Log results only if we actually sent the handshake (not when using saved state)
             if not has_prior_handshake:
@@ -984,9 +991,16 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             from rich import box
 
             console = Console()
+            
+            def safe_print(*args, **kwargs):
+                """Helper to suppress pipe errors when printing Rich tables"""
+                try:
+                    console.print(*args, **kwargs)
+                except (BrokenPipeError, OSError):
+                    pass  # Silently ignore pipe errors
 
             for i, (uid, solution) in enumerate(zip(self.active_miner_uids, task_solutions)):
-                console.print(f"\n[cyan][Miner {uid}] Actions & Evaluation[/cyan]")
+                safe_print(f"\n[cyan][Miner {uid}] Actions & Evaluation[/cyan]")
 
                 # Actions Table (Rich)
                 if solution and solution.actions:
@@ -1021,9 +1035,9 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
                         actions_table.add_row(str(j), action_type, detail)
 
-                    console.print(actions_table)
+                    safe_print(actions_table)
                 else:
-                    console.print("[yellow]No actions received[/yellow]")
+                    safe_print("[yellow]No actions received[/yellow]")
 
                 # Evaluation Table (Rich)
                 score = eval_scores[i]
@@ -1059,12 +1073,12 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 else:
                     eval_table.add_row("Message", "❌ Tests failed", style="yellow")
 
-                console.print(eval_table)
+                safe_print(eval_table)
 
             # ═══════════════════════════════════════════════════════
             # [Evaluation] Summary table (Rich)
             # ═══════════════════════════════════════════════════════
-            console.print(f"\n[blue][Evaluation] Summary[/blue]")
+            safe_print(f"\n[blue][Evaluation] Summary[/blue]")
 
             summary_table = Table(
                 show_header=True, 
@@ -1101,7 +1115,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     style=row_style
                 )
 
-            console.print(summary_table)
+            safe_print(summary_table)
 
             # Calculate final scores (combining eval quality + execution speed)
             rewards = calculate_rewards_for_task(
