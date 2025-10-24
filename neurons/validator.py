@@ -573,7 +573,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                         version = "N/A"
                         rl = "N/A"
                     elif agent_name:
-                        status = "OK"
+                        status = "✅ OK"
                         status_style = "green"
                         version = getattr(response, 'agent_version', 'N/A')
                         rl = 'Yes' if getattr(response, 'has_rl', False) else 'No'
