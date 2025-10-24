@@ -84,7 +84,7 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
         default=1,
         help="Moving average alpha parameter for validator rewards blending.",
     )
-
+    
     parser.add_argument(
         "--neuron.disable_set_weights",
         action="store_true",
