@@ -528,16 +528,84 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     'hotkey': self.metagraph.hotkeys[mapped_uid][:10] + '...'
                 })
 
-            # Display results in a clean table format (only if we sent handshake)
-            if not has_prior_handshake and successful_miners:
-                bt.logging.info("=" * 100)
-                bt.logging.info("📋 MINERS WHO RESPONDED TO HANDSHAKE:")
-                bt.logging.info("=" * 100)
-                bt.logging.info(f"{'UID':<6} | {'Agent Name':<20} | {'Version':<10} | {'RL':<4} | {'Hotkey':<15}")
-                bt.logging.info("-" * 100)
-                for m in successful_miners:
-                    bt.logging.info(f"{m['uid']:<6} | {m['agent']:<20} | {m['version']:<10} | {m['rl']:<4} | {m['hotkey']:<15}")
-                bt.logging.info("=" * 100)
+            # Create connection status table for all miners
+            from rich.console import Console
+            from rich.table import Table
+            from rich import box
+
+            console = Console()
+
+            # Connection Status Table
+            console.print("\n[blue]📋 MINER CONNECTION STATUS[/blue]")
+            connection_table = Table(
+                show_header=True, 
+                header_style="blue",
+                box=box.ROUNDED,
+                expand=True,
+                show_lines=True
+            )
+            connection_table.add_column("UID", width=6, style="blue")
+            connection_table.add_column("Status", width=8, style="white")
+            connection_table.add_column("Agent Name", width=20, style="white")
+            connection_table.add_column("Version", width=10, style="white")
+            connection_table.add_column("RL", width=4, style="white")
+            connection_table.add_column("Hotkey", width=15, style="white")
+
+            # Track connection status for all miners
+            connection_status = {}
+            for i, response in enumerate(handshake_responses):
+                uid = i  # UID is the index
+                if response is not None:
+                    status_code = getattr(response.dendrite, 'status_code', None)
+                    agent_name = getattr(response, 'agent_name', None)
+
+                    if status_code == 422:
+                        status = "NO"
+                        status_style = "red"
+                        agent_name = "N/A"
+                        version = "N/A"
+                        rl = "N/A"
+                    elif agent_name:
+                        status = "OK"
+                        status_style = "green"
+                        version = getattr(response, 'agent_version', 'N/A')
+                        rl = 'Yes' if getattr(response, 'has_rl', False) else 'No'
+                    else:
+                        status = "NO"
+                        status_style = "yellow"
+                        agent_name = "N/A"
+                        version = "N/A"
+                        rl = "N/A"
+                else:
+                    status = "NO"
+                    status_style = "red"
+                    agent_name = "N/A"
+                    version = "N/A"
+                    rl = "N/A"
+
+                hotkey = self.metagraph.hotkeys[uid][:10] + '...' if uid < len(self.metagraph.hotkeys) else 'Unknown'
+
+                connection_table.add_row(
+                    str(uid), 
+                    status, 
+                    agent_name, 
+                    version, 
+                    rl, 
+                    hotkey,
+                    style=status_style
+                )
+
+                connection_status[uid] = {
+                    'status': status,
+                    'agent_name': agent_name,
+                    'responded': status == "✅ OK"
+                }
+
+            console.print(connection_table)
+
+            # Summary of successful miners
+            successful_count = sum(1 for status in connection_status.values() if status['responded'])
+            console.print(f"\n[green]✅ {successful_count}/{len(all_axons)} miners responded successfully[/green]")
 
             # Log results only if we actually sent the handshake (not when using saved state)
             if not has_prior_handshake:
