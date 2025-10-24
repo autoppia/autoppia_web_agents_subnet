@@ -148,11 +148,8 @@ async def publish_round_snapshot(
 
     try:
         bt.logging.info(
-            "📮 CONSENSUS COMMIT START | e=%s→pe=%s r=%s cid=%s",
-            commit_v4["e"],
-            commit_v4["pe"],
-            commit_v4.get("r"),
-            commit_v4["c"],
+            f"📮 CONSENSUS COMMIT START | e={commit_v4['e']}→pe={commit_v4['pe']} "
+            f"r={commit_v4.get('r')} cid={commit_v4['c']}"
         )
 
         ok = await write_plain_commitment_json(
@@ -175,16 +172,11 @@ async def publish_round_snapshot(
                     pass
 
             bt.logging.info(
-                "📬 CONSENSUS COMMIT | e=%s→pe=%s r=%s cid=%s bytes=%s sha256=%s",
-                commit_v4["e"],
-                commit_v4["pe"],
-                commit_v4.get("r"),
-                cid,
-                byte_len,
-                sha_hex,
+                f"📬 CONSENSUS COMMIT | e={commit_v4['e']}→pe={commit_v4['pe']} "
+                f"r={commit_v4.get('r')} cid={cid} bytes={byte_len} sha256={sha_hex}"
             )
             if commit_block is not None:
-                bt.logging.debug("Commit recorded at block %s (waiting for spread)", commit_block)
+                bt.logging.debug(f"Commit recorded at block {commit_block} (waiting for spread)")
             return str(cid)
         else:
             bt.logging.warning("📮 CONSENSUS COMMIT RESULT | status=failed reason=write_returned_false")
@@ -231,11 +223,8 @@ async def aggregate_scores_from_commitments(
             bt.logging.debug(f"📋 Found commitments from {len(commits)} validators:")
             for hk, entry in list(commits.items())[:5]:
                 bt.logging.debug(
-                    "  - %s…: e=%s pe=%s cid=%s…",
-                    hk[:10],
-                    entry.get("e"),
-                    entry.get("pe"),
-                    str(entry.get("c", "N/A"))[:20],
+                    f"  - {hk[:10]}…: e={entry.get('e')} pe={entry.get('pe')} "
+                    f"cid={str(entry.get('c', 'N/A'))[:20]}…"
                 )
     except Exception as e:
         bt.logging.error(f"❌ Failed to read commitments from blockchain: {e}")
@@ -267,12 +256,7 @@ async def aggregate_scores_from_commitments(
         if entry_e != e or entry_pe != pe:
             skipped_wrong_epoch += 1
             bt.logging.debug(
-                "⏭️ Skip %s…: wrong epoch (has e=%s pe=%s, need e=%s pe=%s)",
-                hk[:10],
-                entry_e,
-                entry_pe,
-                e,
-                pe,
+                f"⏭️ Skip {hk[:10]}…: wrong epoch (has e={entry_e} pe={entry_pe}, need e={e} pe={pe})"
             )
             continue
 
@@ -285,41 +269,33 @@ async def aggregate_scores_from_commitments(
         st_val = stake_for_hk(hk)
         validator_uid = hk_to_uid.get(hk, "?")
         bt.logging.debug(
-            "📊 Validator %s… (UID %s): stake=%.2fτ (min required: %.1fτ)",
-            hk[:10],
-            validator_uid,
-            st_val,
-            float(MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO),
+            f"📊 Validator {hk[:10]}… (UID {validator_uid}): stake={st_val:.2f}τ "
+            f"(min required: {float(MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO):.1f}τ)"
         )
         if st_val < float(MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO):
             skipped_low_stake += 1
             bt.logging.debug(
-                "⏭️ Skip %s…: low stake (%.1fτ < %.1fτ)",
-                hk[:10],
-                st_val,
-                float(MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO),
+                f"⏭️ Skip {hk[:10]}…: low stake ({st_val:.1f}τ < {float(MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO):.1f}τ)"
             )
             continue
 
-        bt.logging.info("🌐 IPFS DOWNLOAD START | validator=%s cid=%s", hk, cid)
+        bt.logging.info(f"🌐 IPFS DOWNLOAD START | validator={hk} cid={cid}")
         try:
             payload, _norm, _h = await aget_json(cid, api_url=IPFS_API_URL)
             import json
 
             payload_json = json.dumps(payload, indent=2, sort_keys=True)
-            bt.logging.info("✅ IPFS DOWNLOAD SUCCESS from validator %s…", hk[:20])
+            bt.logging.info(f"✅ IPFS DOWNLOAD SUCCESS from validator {hk[:20]}…")
             bt.logging.info("📦 ========== PAYLOAD DOWNLOADED FROM IPFS ==========")
             bt.logging.info(f"\n{payload_json}")
             bt.logging.info("📦 ====================================================")
             bt.logging.info(
-                "   Summary: Round %s | %s miners | Validator UID %s",
-                payload.get("r"),
-                len(payload.get("scores", {})),
-                payload.get("uid"),
+                f"   Summary: Round {payload.get('r')} | {len(payload.get('scores', {}))} miners "
+                f"| Validator UID {payload.get('uid')}"
             )
         except Exception as e:
             skipped_ipfs += 1
-            bt.logging.error("❌ IPFS DOWNLOAD FAILED | cid=%s error=%s: %s", str(cid)[:20], type(e).__name__, e)
+            bt.logging.error(f"❌ IPFS DOWNLOAD FAILED | cid={str(cid)[:20]} error={type(e).__name__}: {e}")
             continue
         if not isinstance(payload, dict):
             bt.logging.debug(f"⏭️ Skip {hk[:10]}…: payload is not dict")
@@ -353,36 +329,27 @@ async def aggregate_scores_from_commitments(
 
         hk_list = ", ".join([f"{hk[:10]}…:{cid[:12]}…({stake:.0f}τ)" for hk, cid, stake in fetched])
         bt.logging.info(
-            "🤝 CONSENSUS INCLUDED | validators=%s | miners=%s | mode=%s | %s",
-            included,
-            len(result),
-            consensus_mode,
-            hk_list,
+            f"🤝 CONSENSUS INCLUDED | validators={included} | miners={len(result)} | mode={consensus_mode} | {hk_list}"
         )
         bt.logging.info(
-            "📊 Skip summary — wrong_epoch=%s missing_cid=%s low_stake=%s ipfs_fail=%s",
-            skipped_wrong_epoch,
-            skipped_missing_cid,
-            skipped_low_stake,
-            skipped_ipfs,
+            f"📊 Skip summary — wrong_epoch={skipped_wrong_epoch} missing_cid={skipped_missing_cid} "
+            f"low_stake={skipped_low_stake} ipfs_fail={skipped_ipfs}"
         )
         if len(result) > 0:
-            bt.logging.info("🎯 CONSENSUS AGGREGATED SCORES (%s miners):", len(result))
+            bt.logging.info(f"🎯 CONSENSUS AGGREGATED SCORES ({len(result)} miners):")
             top_sample = list(sorted(result.items(), key=lambda x: x[1], reverse=True))[:10]
             for uid, score in top_sample:
-                bt.logging.info("   UID %s: %.4f", uid, score)
+                bt.logging.info(f"   UID {uid}: {score:.4f}")
         else:
             bt.logging.warning("   ⚠️ NO MINERS AGGREGATED (all scores were <= 0 or no common miners)")
         bt.logging.debug(f"Full consensus result: {result}")
     else:
         bt.logging.warning("🤝 CONSENSUS INCLUDED | validators=0 (no aggregated scores)")
         bt.logging.warning(
-            "📊 Why no validators? — wrong_epoch=%s missing_cid=%s low_stake=%s ipfs_fail=%s | total_commits_seen=%s",
-            skipped_wrong_epoch,
-            skipped_missing_cid,
-            skipped_low_stake,
-            skipped_ipfs,
-            len(commits or {}),
+            "📊 Why no validators? — "
+            f"wrong_epoch={skipped_wrong_epoch} missing_cid={skipped_missing_cid} "
+            f"low_stake={skipped_low_stake} ipfs_fail={skipped_ipfs} | "
+            f"total_commits_seen={len(commits or {})}"
         )
 
     return result
