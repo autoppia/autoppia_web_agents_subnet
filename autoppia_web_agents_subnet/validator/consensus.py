@@ -70,7 +70,7 @@ async def publish_round_snapshot(
     bt.logging.warning(f"   - ENABLE_DISTRIBUTED_CONSENSUS: {ENABLE_DISTRIBUTED_CONSENSUS}")
     bt.logging.warning(f"   - type(ENABLE_DISTRIBUTED_CONSENSUS): {type(ENABLE_DISTRIBUTED_CONSENSUS)}")
     bt.logging.warning("=" * 80)
-    
+
     if not ENABLE_DISTRIBUTED_CONSENSUS:
         bt.logging.warning("⚠️ IPFS PUBLISH SKIPPED: ENABLE_DISTRIBUTED_CONSENSUS is False/None")
         return None
@@ -88,7 +88,7 @@ async def publish_round_snapshot(
     except Exception as e:
         bt.logging.error(f"❌ ERROR getting boundaries: {type(e).__name__}: {e}")
         raise
-    
+
     try:
         bt.logging.warning("🔍 DEBUG: Getting average rewards...")
         avg_rewards = validator.round_manager.get_average_rewards()
@@ -97,7 +97,7 @@ async def publish_round_snapshot(
     except Exception as e:
         bt.logging.error(f"❌ ERROR getting avg_rewards: {type(e).__name__}: {e}")
         raise
-    
+
     # Agents that actually received/produced scores (participated)
     try:
         bt.logging.warning("🔍 DEBUG: Calculating participants...")
