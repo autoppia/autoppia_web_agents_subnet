@@ -351,6 +351,7 @@ def get_show_commitments_output(args) -> str | None:
     if args.commitments_netuid is not None:
         cmd.extend(["--netuid", str(args.commitments_netuid)])
     try:
+        print("[Analyzer] Loading commitments for context...", file=sys.stderr)
         completed = subprocess.run(cmd, capture_output=True, text=True, check=False)
     except Exception as exc:  # noqa: BLE001
         return f"[show_commitments.py failed to run: {exc}]"
@@ -488,9 +489,7 @@ def main() -> None:
     context_blob = build_context_blob(tail_excerpt, focus_blocks, commitments_text)
 
     if args.show_context:
-        print("===== CONTEXT START =====")
-        print(context_blob)
-        print("====== CONTEXT END ======")
+        print("[Analyzer] Context captured.", file=sys.stderr)
 
     try:
         llm = create_llm(args.model, args.temperature, args.max_tokens)

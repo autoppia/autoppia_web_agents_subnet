@@ -192,10 +192,18 @@ async def aggregate_scores_from_commitments(
     st: AsyncSubtensor,
     start_epoch: float,
     target_epoch: float,
-) -> Dict[int, float]:
+) -> tuple[Dict[int, float], Dict[str, Any]]:
     """
     Read all validators' commitments for this round window and compute stake-weighted
     average scores per miner UID.
+
+    Returns a tuple: (final_scores, details)
+      - final_scores: Dict[uid -> aggregated score]
+      - details:
+          {
+            "validators": [ {"hotkey": str, "uid": int|"?", "stake": float, "cid": str} ],
+            "scores_by_validator": { hotkey: { uid: score } }
+          }
     """
     if not ENABLE_DISTRIBUTED_CONSENSUS:
         return {}
@@ -245,6 +253,7 @@ async def aggregate_scores_from_commitments(
     skipped_ipfs = 0
 
     fetched: list[tuple[str, str, float]] = []
+    scores_by_validator: Dict[str, Dict[int, float]] = {}
 
     for hk, entry in (commits or {}).items():
         if not isinstance(entry, dict):
@@ -305,6 +314,8 @@ async def aggregate_scores_from_commitments(
         if not isinstance(scores, dict):
             continue
 
+        # Record per-validator scores (converted to int uid)
+        per_val_map: Dict[int, float] = {}
         for uid_s, sc in scores.items():
             try:
                 uid = int(uid_s)
@@ -314,8 +325,10 @@ async def aggregate_scores_from_commitments(
             effective_weight = st_val if st_val > 0.0 else 1.0
             weighted_sum[uid] = weighted_sum.get(uid, 0.0) + effective_weight * val
             weight_total[uid] = weight_total.get(uid, 0.0) + effective_weight
+            per_val_map[uid] = val
         included += 1
         fetched.append((hk, cid, st_val))
+        scores_by_validator[hk] = per_val_map
 
     result: Dict[int, float] = {}
     for uid, wsum in weighted_sum.items():
@@ -352,4 +365,14 @@ async def aggregate_scores_from_commitments(
             f"total_commits_seen={len(commits or {})}"
         )
 
-    return result
+    # Build details structure for reporting/visualization
+    validators_info = [
+        {"hotkey": hk, "uid": hk_to_uid.get(hk, "?"), "stake": stake, "cid": cid}
+        for hk, cid, stake in fetched
+    ]
+    details = {
+        "validators": validators_info,
+        "scores_by_validator": scores_by_validator,
+    }
+
+    return result, details
