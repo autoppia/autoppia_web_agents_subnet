@@ -534,7 +534,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             from rich import box
 
             console = Console()
-            
+
             def safe_print(*args, **kwargs):
                 """Helper to suppress pipe errors when printing Rich tables"""
                 try:
@@ -991,7 +991,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             from rich import box
 
             console = Console()
-            
+
             def safe_print(*args, **kwargs):
                 """Helper to suppress pipe errors when printing Rich tables"""
                 try:
