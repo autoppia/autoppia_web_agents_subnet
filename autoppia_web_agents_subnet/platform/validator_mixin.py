@@ -347,3 +347,27 @@ class ValidatorPlatformMixin:
         except Exception:
             pass
         return st
+
+    async def _close_async_subtensor(self):
+        """
+        Properly close the AsyncSubtensor WebSocket connection to avoid pending tasks.
+        """
+        try:
+            async_subtensor = getattr(self, "_async_subtensor", None) or getattr(self, "async_subtensor", None)
+            if async_subtensor is not None:
+                # Try to close the WebSocket connection properly
+                if hasattr(async_subtensor, 'close'):
+                    await async_subtensor.close()
+                elif hasattr(async_subtensor, 'disconnect'):
+                    await async_subtensor.disconnect()
+                elif hasattr(async_subtensor, '_websocket') and async_subtensor._websocket:
+                    await async_subtensor._websocket.close()
+                bt.logging.debug("AsyncSubtensor connection closed")
+        except Exception as e:
+            bt.logging.debug(f"Error closing AsyncSubtensor connection: {e}")
+        finally:
+            # Clear the reference
+            if hasattr(self, "_async_subtensor"):
+                self._async_subtensor = None
+            if hasattr(self, "async_subtensor"):
+                self.async_subtensor = None

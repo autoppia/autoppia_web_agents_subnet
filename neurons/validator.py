@@ -1381,6 +1381,12 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
         ColoredLogger.success("✅ Round complete", ColoredLogger.GREEN)
         ColoredLogger.info(f"Tasks completed: {tasks_completed}", ColoredLogger.GREEN)
+        
+        # Clean up WebSocket connections to avoid pending tasks
+        try:
+            await self._close_async_subtensor()
+        except Exception as e:
+            bt.logging.debug(f"Error closing async subtensor: {e}")
 
 
 if __name__ == "__main__":
