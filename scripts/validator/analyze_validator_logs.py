@@ -15,15 +15,27 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
+import subprocess
+import sys
 from collections import deque
 from pathlib import Path
-import subprocess
 from textwrap import dedent
 from typing import Iterable, Sequence
-import re
-import sys
 
-from autoppia_web_agents_subnet.autoppia_iwa_module.autoppia_iwa.src.llms.infrastructure.llm_service import LLMConfig, LLMFactory
+SCRIPT_PATH = Path(__file__).resolve()
+IWA_ROOT: Path | None = None
+for parent in SCRIPT_PATH.parents:
+    candidate = parent / "autoppia_iwa_module"
+    if candidate.is_dir():
+        IWA_ROOT = candidate
+        break
+if IWA_ROOT is None:
+    raise RuntimeError("Could not locate the 'autoppia_iwa_module' directory relative to this script.")
+if str(IWA_ROOT) not in sys.path:
+    sys.path.insert(0, str(IWA_ROOT))
+
+from autoppia_iwa.src.llms.infrastructure.llm_service import LLMConfig, LLMFactory
 
 
 DEFAULT_LINES = 250
