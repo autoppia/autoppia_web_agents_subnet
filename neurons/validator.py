@@ -804,7 +804,10 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 # Log stop fraction reached
                 bt.logging.warning(f"🛑 Stop fraction reached: {STOP_TASK_EVALUATION_AT_ROUND_FRACTION:.0%} - Halting task execution and publishing to IPFS")
                 ColoredLogger.info(
-                    "🌐 Consensus: preparing IPFS publish (stop fraction reached)",
+                    (
+                        "🌐 Consensus: preparing IPFS publish (stop fraction reached) "
+                        f"| tasks_completed={tasks_completed} | published={self._consensus_published}"
+                    ),
                     ColoredLogger.CYAN,
                 )
                 bt.logging.info(f"IPFS | [CONSENSUS] Starting IPFS publish for round...")
@@ -875,7 +878,10 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 if ENABLE_DISTRIBUTED_CONSENSUS and not self._consensus_published:
                     bt.logging.info(f"IPFS | [CONSENSUS] Starting IPFS publish at safety buffer...")
                     ColoredLogger.info(
-                        "🌐 Consensus: publishing IPFS snapshot at safety buffer",
+                        (
+                            "🌐 Consensus: publishing IPFS snapshot at safety buffer "
+                            f"| tasks_completed={tasks_completed} | published={self._consensus_published}"
+                        ),
                         ColoredLogger.CYAN,
                     )
                     try:
@@ -926,7 +932,10 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             bt.logging.info(f"EVALUATION | [TASK COMPLETION] Completed {tasks_completed}/{len(all_tasks)} tasks")
             bt.logging.info(f"IPFS | [CONSENSUS] Starting IPFS publish after all tasks...")
             ColoredLogger.info(
-                "🌐 Consensus: publishing IPFS snapshot after task loop",
+                (
+                    "🌐 Consensus: publishing IPFS snapshot after task loop "
+                    f"| tasks_completed={tasks_completed} | published={self._consensus_published}"
+                ),
                 ColoredLogger.CYAN,
             )
             try:
