@@ -55,8 +55,8 @@ else:
     ROUND_SIZE_EPOCHS = _env_float("ROUND_SIZE_EPOCHS", 4.0)
     SAFETY_BUFFER_EPOCHS = _env_float("SAFETY_BUFFER_EPOCHS", 0.5)
     AVG_TASK_DURATION_SECONDS = _env_int("AVG_TASK_DURATION_SECONDS", 300)
-    PRE_GENERATED_TASKS = _env_int("PRE_GENERATED_TASKS", 200)
-    DZ_STARTING_BLOCK = _env_int("DZ_STARTING_BLOCK",   )
+    PRE_GENERATED_TASKS = _env_int("PRE_GENERATED_TASKS", 75)
+    DZ_STARTING_BLOCK = _env_int("DZ_STARTING_BLOCK", 6_726_694)
 
     # ── Round Phase Timing (all absolute % of total round) ──────────────────
     # Stop task evaluation at 90% of round to reserve time for consensus
