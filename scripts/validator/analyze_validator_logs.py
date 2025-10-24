@@ -51,6 +51,7 @@ DEFAULT_TEMPERATURE = 0.1
 DEFAULT_MAX_TOKENS = 1200
 DEFAULT_PATTERN = "*.log"
 PROMPT_FILE = Path(__file__).with_name("analyzer_logs_prompt.txt")
+AGENTS_CONTEXT_FILE = Path(__file__).with_name("analyzer_agents_context.txt")
 
 GROUP_KEYWORDS: dict[str, Sequence[str]] = {
     "IWAP": ("iwa", "iwap", "phase", "add_evaluation", "gif"),
@@ -69,7 +70,7 @@ Classify each area as OK, WARN, or FAIL. If information is missing, state "Not o
 ROUND_ID_PATTERN = re.compile(r"(?:validator_round_id|round_id)=([A-Za-z0-9_\-]+)")
 ROUND_FALLBACK_PATTERN = re.compile(r"(validator_round_[A-Za-z0-9_\-]+)")
 
-INTERACTIVE_SYSTEM_PROMPT = """You are an Autoppia validator SRE assistant. Use only the provided context to answer questions, be concise, and clearly flag uncertainty."""
+INTERACTIVE_SYSTEM_PROMPT = """You are an Autoppia validator SRE assistant. Use only the provided context (logs + commitment snapshot when available) to answer questions, be concise, and clearly flag uncertainty. If the commitment snapshot section is present, use it when asked about commitments."""
 
 
 def resolve_log_path(target: str, pattern: str) -> Path:
@@ -122,7 +123,14 @@ def build_focus_blocks(lines: Sequence[str]) -> str:
     return "\n\n".join(sections)
 
 
-def build_prompt(raw_excerpt: str, focus_blocks: str, commitments_text: str | None = None) -> str:
+def load_agents_context() -> str:
+    try:
+        return AGENTS_CONTEXT_FILE.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return ""
+
+
+def build_prompt(raw_excerpt: str, focus_blocks: str, commitments_text: str | None = None, agents_context: str | None = None) -> str:
     guidance = load_prompt_template()
     prompt = (
         f"{guidance}\n\n"
@@ -131,6 +139,8 @@ def build_prompt(raw_excerpt: str, focus_blocks: str, commitments_text: str | No
     )
     if commitments_text:
         prompt += f"\n\nCommitment snapshot:\n```\n{commitments_text}\n```"
+    if agents_context:
+        prompt += f"\n\nAutoppia subnet quick reference:\n```\n{agents_context}\n```"
     return prompt
 
 
@@ -188,6 +198,9 @@ def prepare_log_highlights(lines: Sequence[str]) -> tuple[str, str]:
 
 def build_context_blob(tail_excerpt: str, focus_blocks: str, commitments_text: str | None) -> str:
     sections: list[str] = []
+    agents_context = load_agents_context()
+    if agents_context:
+        sections.append("Autoppia subnet quick reference:\n" + agents_context)
     if tail_excerpt:
         sections.append("Validator log excerpt (most recent last):\n" + tail_excerpt)
     if focus_blocks.strip():
@@ -278,7 +291,8 @@ def create_llm(model: str, temperature: float, max_tokens: int):
 
 
 def run_analysis_with_context(llm, tail_excerpt: str, focus_blocks: str, commitments_text: str | None) -> str:
-    prompt = build_prompt(tail_excerpt, focus_blocks, commitments_text)
+    agents_context = load_agents_context()
+    prompt = build_prompt(tail_excerpt, focus_blocks, commitments_text, agents_context)
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT.strip()},
         {"role": "user", "content": prompt},
@@ -422,6 +436,18 @@ def parse_args() -> argparse.Namespace:
         default="finney",
         help="Network passed to show_commitments.py (default: finney).",
     )
+    parser.add_argument(
+        "--show-context",
+        action="store_true",
+        default=True,
+        help="Print the full context blob (logs + commitments) before sending it to the LLM. Use --no-show-context to disable.",
+    )
+    parser.add_argument(
+        "--no-show-context",
+        dest="show_context",
+        action="store_false",
+        help="Disable printing the context blob.",
+    )
     return parser.parse_args()
 
 
@@ -453,8 +479,18 @@ def main() -> None:
     except Exception as exc:  # noqa: BLE001
         commitments_text = f"[Failed to gather commitments context: {exc}]"
 
+    if commitments_text:
+        print(f"[Analyzer] Commitments context length: {len(commitments_text)} characters.", file=sys.stderr)
+    else:
+        print("[Analyzer] No commitments context captured.", file=sys.stderr)
+
     tail_excerpt, focus_blocks = prepare_log_highlights(log_lines)
     context_blob = build_context_blob(tail_excerpt, focus_blocks, commitments_text)
+
+    if args.show_context:
+        print("===== CONTEXT START =====")
+        print(context_blob)
+        print("====== CONTEXT END ======")
 
     try:
         llm = create_llm(args.model, args.temperature, args.max_tokens)
