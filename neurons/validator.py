@@ -986,6 +986,8 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         # FINAL WEIGHTS: Calculate averages, apply WTA, set weights
         # ═══════════════════════════════════════════════════════
         await self._calculate_final_weights(tasks_completed)
+        
+        bt.logging.info("🎬 Forward method completed - returning to main loop")
 
     # ═══════════════════════════════════════════════════════════════════════════════
     # TASK EXECUTION HELPERS
@@ -1464,14 +1466,19 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             rewards=active_rewards,           # Array of rewards for active miners
             uids=self.active_miner_uids       # List of active miner UIDs (same length)
         )
+        
+        bt.logging.info("⏳ Setting weights on chain...")
         self.set_weights()
+        bt.logging.info("✅ Weights set successfully")
 
+        bt.logging.info("⏳ Finishing IWAP round...")
         try:
             await self._finish_iwap_round(
                 avg_rewards=avg_rewards,
                 final_weights=final_rewards_dict,
                 tasks_completed=tasks_completed,
             )
+            bt.logging.info("✅ IWAP round finished successfully")
         except Exception as e:
             bt.logging.warning(f"IWAP finish_round failed: {e}")
 
@@ -1479,8 +1486,10 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         bt.logging.info(f"EVALUATION | [ROUND SUMMARY] Tasks completed: {tasks_completed}")
 
         # Clean up WebSocket connections to avoid pending tasks
+        bt.logging.info("⏳ Cleaning up WebSocket connections...")
         try:
             await self._close_async_subtensor()
+            bt.logging.info("✅ WebSocket cleanup complete")
         except Exception as e:
             bt.logging.debug(f"Error closing async subtensor: {e}")
 
