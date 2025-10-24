@@ -170,11 +170,8 @@ class ValidatorPlatformMixin:
 
                 if checkpoint_round != current_round:
                     bt.logging.warning(
-                        "State checkpoint discarded: stored round %s (start_block=%s) != current round %s (block=%s)",
-                        checkpoint_round,
-                        ckpt.rm_start_block,
-                        current_round,
-                        current_block,
+                        f"State checkpoint discarded: stored round {checkpoint_round} (start_block={ckpt.rm_start_block}) "
+                        f"!= current round {current_round} (block={current_block})"
                     )
                     try:
                         self._reset_iwap_round_state()
