@@ -216,9 +216,49 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     all_tasks.extend(cached)
                 if all_tasks:
                     self.current_round_id = state["validator_round_id"]
+
+                    # ✅ Restore active miner UIDs from saved state
+                    self.active_miner_uids = state.get("active_miner_uids", [])
+
+                    # ✅ Restore handshake payloads (deserialize them)
+                    saved_handshakes = state.get("handshakes", {})
+                    self.round_handshake_payloads = {}
+                    for uid_str, payload_data in saved_handshakes.items():
+                        try:
+                            uid = int(uid_str)
+                            self.round_handshake_payloads[uid] = self._deserialize_handshake(payload_data)
+                        except Exception as e:
+                            bt.logging.debug(f"Failed to restore handshake for uid {uid_str}: {e}")
+
+                    # ✅ Restore agent runs
+                    saved_agent_runs = state.get("agent_runs", {})
+                    self.current_agent_runs = {}
+                    # Note: We only restore the mapping, not the full AgentRun objects
+                    # The actual AgentRun objects will be recreated if needed
+                    for uid_str, agent_run_id in saved_agent_runs.items():
+                        try:
+                            uid = int(uid_str)
+                            # Store the agent_run_id for reference
+                            # The full AgentRun object will be fetched from platform if needed
+                            bt.logging.debug(f"Noted agent_run_id {agent_run_id} for uid {uid}")
+                        except Exception as e:
+                            bt.logging.debug(f"Failed to restore agent_run for uid {uid_str}: {e}")
+
+                    # ✅ Restore completed task pairs
+                    saved_completed = state.get("completed", [])
+                    self._completed_pairs = set()
+                    for pair in saved_completed:
+                        if len(pair) == 2:
+                            self._completed_pairs.add((pair[0], pair[1]))
+
                     resumed = True
                     bt.logging.info(
                         f"♻️ Resumed {len(all_tasks)} tasks; validator_round_id={self.current_round_id}"
+                    )
+                    bt.logging.info(
+                        f"♻️ Restored state: {len(self.active_miner_uids)} active miners, "
+                        f"{len(self.round_handshake_payloads)} handshakes, "
+                        f"{len(self._completed_pairs)} completed pairs"
                     )
                 else:
                     bt.logging.warning(
@@ -341,6 +381,11 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 pass
 
         # Build IWAP tasks from TaskWithProject list
+        # Ensure current_round_id is set (should always be set by resume or fresh generation)
+        if not self.current_round_id:
+            bt.logging.warning("current_round_id was not set, generating new one")
+            self.current_round_id = self._generate_validator_round_id(current_block=current_block)
+
         self.current_round_tasks = self._build_iwap_tasks(
             validator_round_id=self.current_round_id,
             tasks=all_tasks,
@@ -360,6 +405,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         boundaries = self.round_manager.get_current_boundaries()
         # If not resuming, reset ephemeral structures; if resuming, keep loaded ones
         if not resumed:
+            self.active_miner_uids = []
             self.round_handshake_payloads = {}
             self.current_agent_runs = {}
             self.current_miner_snapshots = {}
@@ -895,51 +941,8 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 miner_uids=list(self.active_miner_uids),
             )
 
-            # 🔍 DEBUG: Log received actions from each miner
-            ColoredLogger.debug("\n" + "=" * 80, ColoredLogger.CYAN)
-            ColoredLogger.debug("🔍 ACTIONS RECEIVED FROM MINERS", ColoredLogger.CYAN)
-            ColoredLogger.debug("=" * 80, ColoredLogger.CYAN)
-            for i, (uid, solution) in enumerate(zip(self.active_miner_uids, task_solutions)):
-                if solution and solution.actions:
-                    ColoredLogger.debug(f"\n📊 Miner UID={uid}: {len(solution.actions)} actions", ColoredLogger.GREEN)
-                    for j, action in enumerate(solution.actions, 1):
-                        ColoredLogger.debug(f"  {j}. {action.type}: {vars(action)}", ColoredLogger.GRAY)
-
-                        # 🔍 DEBUG: Check for seed discrepancies in NavigateAction
-                        if hasattr(action, 'url') and action.url and action.type == 'NavigateAction':
-                            ColoredLogger.debug(f"     🔗 Navigation URL: {action.url}", ColoredLogger.MAGENTA)
-
-                            # Check seed presence and correctness
-                            if seed is not None:  # Only validate if task has assigned seed
-                                if 'seed=' in action.url:
-                                    action_seed = action.url.split('seed=')[1].split('&')[0].split('?')[0]
-                                    if action_seed != str(seed):
-                                        ColoredLogger.warning(
-                                            f"     ⚠️ Seed MISMATCH: expected seed={seed}, got seed={action_seed} (will score 0)",
-                                            ColoredLogger.YELLOW
-                                        )
-                                    else:
-                                        ColoredLogger.debug(f"     ✅ Seed matches: {action_seed}", ColoredLogger.GREEN)
-                                else:
-                                    # Seed is missing from NavigateAction URL
-                                    ColoredLogger.warning(
-                                        f"     ⚠️ Seed MISSING: expected seed={seed} in URL (will score 0)",
-                                        ColoredLogger.RED
-                                    )
-
-                            # Check URL path discrepancies
-                            expected_base = project.frontend_url.rstrip('/')
-                            if not action.url.startswith(expected_base):
-                                ColoredLogger.debug(f"     ⚠️ URL base mismatch: expected {expected_base}", ColoredLogger.GRAY)
-                                ColoredLogger.debug(f"     Got URL: {action.url}", ColoredLogger.GRAY)
-                            else:
-                                ColoredLogger.debug(f"     ✅ URL base matches: {expected_base}", ColoredLogger.GREEN)
-                else:
-                    ColoredLogger.warning(f"\n📊 Miner UID={uid}: NO ACTIONS", ColoredLogger.YELLOW)
-            ColoredLogger.debug("=" * 80 + "\n", ColoredLogger.CYAN)
-
-            # Evaluate task solutions
-            ColoredLogger.debug("🔍 STARTING EVALUATION...", ColoredLogger.CYAN)
+            # Evaluate task solutions first
+            ColoredLogger.info("[Evaluation] Starting...", ColoredLogger.CYAN)
             eval_scores, test_results_list, evaluation_results = await evaluate_task_solutions(
                 web_project=project,
                 task=task,
@@ -947,44 +950,106 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 execution_times=execution_times,
             )
 
-            # 🔍 DEBUG: Log evaluation results in detail
-            ColoredLogger.debug("\n" + "=" * 80, ColoredLogger.CYAN)
-            ColoredLogger.debug("🔍 EVALUATION RESULTS DETAILED", ColoredLogger.CYAN)
-            ColoredLogger.debug("=" * 80, ColoredLogger.CYAN)
-            for i, uid in enumerate(self.active_miner_uids):
-                ColoredLogger.debug(f"\n📊 Miner UID={uid}:", ColoredLogger.MAGENTA)
-                ColoredLogger.debug(f"  📈 Eval Score: {eval_scores[i]:.4f}", ColoredLogger.GREEN)
-                ColoredLogger.debug(f"  ⏱️  Execution Time: {execution_times[i]:.2f}s", ColoredLogger.BLUE)
+            # ═══════════════════════════════════════════════════════
+            # Show Actions + Evaluation PER MINER
+            # ═══════════════════════════════════════════════════════
+            for i, (uid, solution) in enumerate(zip(self.active_miner_uids, task_solutions)):
+                ColoredLogger.info("\n" + "═" * 100, ColoredLogger.BLUE)
+                ColoredLogger.info(f"[Miner {uid}] Actions & Evaluation", ColoredLogger.BLUE)
+                ColoredLogger.info("═" * 100, ColoredLogger.BLUE)
 
-                # Show evaluation_result but replace GIF content with just its length
-                eval_result_display = evaluation_results[i].copy()
-                if 'gif_recording' in eval_result_display and eval_result_display['gif_recording']:
-                    eval_result_display['gif_recording'] = f"<length: {len(eval_result_display['gif_recording'])}>"
+                # ─── Actions Table ───
+                if solution and solution.actions:
+                    ColoredLogger.info("\n┌─────┬──────────────────┬──────────────────────────────────────────────────────────────┐", ColoredLogger.GRAY)
+                    ColoredLogger.info("│  #  │ Type             │ Details                                                      │", ColoredLogger.GRAY)
+                    ColoredLogger.info("├─────┼──────────────────┼──────────────────────────────────────────────────────────────┤", ColoredLogger.GRAY)
 
-                ColoredLogger.debug(f"  📋 Evaluation Result: {eval_result_display}", ColoredLogger.YELLOW)
+                    seed_issues = []
+                    for j, action in enumerate(solution.actions, 1):
+                        action_type = action.type.replace("Action", "")[:16]
 
-                # Show error message if present (e.g. seed validation failures)
-                error_msg = evaluation_results[i].get("error_message", "")
-                if error_msg:
-                    ColoredLogger.warning(f"  ⚠️ Error: {error_msg}", ColoredLogger.RED)
+                        # Build detail string
+                        if action.type == 'NavigateAction' and hasattr(action, 'url'):
+                            detail = f"{action.url[:60]}"
+                            if seed is not None and 'seed=' not in action.url:
+                                seed_issues.append(f"Action #{j}: Seed MISSING (expected={seed})")
+                        elif action.type == 'TypeAction' and hasattr(action, 'text'):
+                            text_preview = (action.text[:50] + '...') if len(action.text) > 50 else action.text
+                            detail = f"'{text_preview}'"
+                        elif action.type == 'ClickAction' and hasattr(action, 'selector'):
+                            detail = str(action.selector.value[:50] if hasattr(action.selector, 'value') else action.selector)
+                        elif action.type == 'WaitAction' and hasattr(action, 'time_seconds'):
+                            detail = f"{action.time_seconds}s"
+                        else:
+                            detail = str(vars(action))[:60]
 
-                ColoredLogger.debug(f"  🧪 Test Results ({len(test_results_list[i])} tests):", ColoredLogger.CYAN)
-                if test_results_list[i]:
-                    for test_idx, test_result in enumerate(test_results_list[i], 1):
-                        success = test_result.get("success", False)
-                        status_emoji = "✅" if success else "❌"
-                        extra_data = test_result.get("extra_data", {})
+                        ColoredLogger.info(f"│ {j:3d} │ {action_type:16s} │ {detail:60s} │", ColoredLogger.GRAY)
 
-                        # Show test type and criteria from extra_data
-                        test_type = extra_data.get("type", "Unknown")
-                        event_name = extra_data.get("event_name", "N/A")
-
-                        ColoredLogger.debug(f"     Test {test_idx}: {status_emoji} {test_type} - Event: {event_name}", ColoredLogger.GRAY)
-                        if extra_data.get("event_criteria"):
-                            ColoredLogger.debug(f"        Criteria: {extra_data.get('event_criteria')}", ColoredLogger.GRAY)
+                    ColoredLogger.info("└─────┴──────────────────┴──────────────────────────────────────────────────────────────┘", ColoredLogger.GRAY)
                 else:
-                    ColoredLogger.warning(f"     ⚠️  NO TEST RESULTS", ColoredLogger.RED)
-            ColoredLogger.debug("=" * 80 + "\n", ColoredLogger.CYAN)
+                    ColoredLogger.warning("No actions received", ColoredLogger.YELLOW)
+
+                # ─── Evaluation Result ───
+                score = eval_scores[i]
+                exec_time = execution_times[i]
+                error_msg = evaluation_results[i].get("error_message", "")
+
+                ColoredLogger.info("\n┌────────────────┬─────────────────────────────────────────────────────────────────┐", ColoredLogger.GRAY)
+                ColoredLogger.info("│ Metric         │ Value                                                           │", ColoredLogger.GRAY)
+                ColoredLogger.info("├────────────────┼─────────────────────────────────────────────────────────────────┤", ColoredLogger.GRAY)
+
+                # Score row
+                if score > 0:
+                    ColoredLogger.info(f"│ Final Score    │ {score:.4f} ✅                                                  │", ColoredLogger.GREEN)
+                else:
+                    ColoredLogger.info(f"│ Final Score    │ {score:.4f} ❌                                                  │", ColoredLogger.YELLOW)
+
+                # Time row
+                ColoredLogger.info(f"│ Execution Time │ {exec_time:.2f}s                                                     │", ColoredLogger.GRAY)
+
+                # Message row
+                if error_msg:
+                    ColoredLogger.info(f"│ Message        │ ⚠️  {error_msg[:58]}│", ColoredLogger.YELLOW)
+                elif seed_issues:
+                    ColoredLogger.info(f"│ Message        │ ⚠️  {seed_issues[0][:58]}│", ColoredLogger.YELLOW)
+                elif score > 0:
+                    ColoredLogger.info(f"│ Message        │ ✅ All tests passed                                          │", ColoredLogger.GREEN)
+                else:
+                    ColoredLogger.info(f"│ Message        │ ❌ Tests failed                                              │", ColoredLogger.YELLOW)
+
+                ColoredLogger.info("└────────────────┴─────────────────────────────────────────────────────────────────┘", ColoredLogger.GRAY)
+                ColoredLogger.info("═" * 100, ColoredLogger.BLUE)
+
+            # ═══════════════════════════════════════════════════════
+            # [Evaluation] Summary table (all miners)
+            # ═══════════════════════════════════════════════════════
+            ColoredLogger.info("\n" + "─" * 100, ColoredLogger.BLUE)
+            ColoredLogger.info("[Evaluation] Summary", ColoredLogger.BLUE)
+            ColoredLogger.info("─" * 100, ColoredLogger.BLUE)
+
+            ColoredLogger.info("┌──────┬──────────┬──────────┬────────────────────────────────────────────────────────┐", ColoredLogger.GRAY)
+            ColoredLogger.info("│ UID  │  Score   │  Time(s) │ Message                                                │", ColoredLogger.GRAY)
+            ColoredLogger.info("├──────┼──────────┼──────────┼────────────────────────────────────────────────────────┤", ColoredLogger.GRAY)
+
+            for i, uid in enumerate(self.active_miner_uids):
+                score = eval_scores[i]
+                exec_time = execution_times[i]
+                error_msg = evaluation_results[i].get("error_message", "")
+
+                if score > 0:
+                    message = "✅ Passed"
+                    color = ColoredLogger.GREEN
+                elif error_msg:
+                    message = f"⚠️  {error_msg[:48]}"
+                    color = ColoredLogger.YELLOW
+                else:
+                    message = "❌ Failed"
+                    color = ColoredLogger.YELLOW
+
+                ColoredLogger.info(f"│ {uid:4d} │ {score:8.4f} │ {exec_time:8.2f} │ {message:54s} │", color)
+
+            ColoredLogger.info("└──────┴──────────┴──────────┴────────────────────────────────────────────────────────┘", ColoredLogger.GRAY)
+            ColoredLogger.info("─" * 100 + "\n", ColoredLogger.BLUE)
 
             # Calculate final scores (combining eval quality + execution speed)
             rewards = calculate_rewards_for_task(
