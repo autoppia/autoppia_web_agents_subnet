@@ -951,105 +951,67 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             )
 
             # ═══════════════════════════════════════════════════════
-            # Show Actions + Evaluation PER MINER
+            # Show Actions + Evaluation PER MINER (simple format)
             # ═══════════════════════════════════════════════════════
             for i, (uid, solution) in enumerate(zip(self.active_miner_uids, task_solutions)):
-                ColoredLogger.info("\n" + "═" * 100, ColoredLogger.BLUE)
-                ColoredLogger.info(f"[Miner {uid}] Actions & Evaluation", ColoredLogger.BLUE)
-                ColoredLogger.info("═" * 100, ColoredLogger.BLUE)
+                ColoredLogger.info(f"\n[Miner {uid}] ========================================", ColoredLogger.BLUE)
 
-                # ─── Actions Table ───
+                # Actions
+                ColoredLogger.info(f"[Actions] {len(solution.actions) if solution and solution.actions else 0} actions", ColoredLogger.CYAN)
+                seed_issues = []
+
                 if solution and solution.actions:
-                    ColoredLogger.info("\n┌─────┬──────────────────┬──────────────────────────────────────────────────────────────┐", ColoredLogger.GRAY)
-                    ColoredLogger.info("│  #  │ Type             │ Details                                                      │", ColoredLogger.GRAY)
-                    ColoredLogger.info("├─────┼──────────────────┼──────────────────────────────────────────────────────────────┤", ColoredLogger.GRAY)
-
-                    seed_issues = []
                     for j, action in enumerate(solution.actions, 1):
-                        action_type = action.type.replace("Action", "")[:16]
+                        action_type = action.type.replace("Action", "")
 
                         # Build detail string
                         if action.type == 'NavigateAction' and hasattr(action, 'url'):
-                            detail = f"{action.url[:60]}"
+                            ColoredLogger.info(f"  {j}. {action_type:10s} -> {action.url}", ColoredLogger.GRAY)
                             if seed is not None and 'seed=' not in action.url:
-                                seed_issues.append(f"Action #{j}: Seed MISSING (expected={seed})")
+                                seed_issues.append("Seed MISSING")
                         elif action.type == 'TypeAction' and hasattr(action, 'text'):
-                            text_preview = (action.text[:50] + '...') if len(action.text) > 50 else action.text
-                            detail = f"'{text_preview}'"
+                            text_preview = (action.text[:40] + '...') if len(action.text) > 40 else action.text
+                            ColoredLogger.info(f"  {j}. {action_type:10s} -> '{text_preview}'", ColoredLogger.GRAY)
                         elif action.type == 'ClickAction' and hasattr(action, 'selector'):
-                            detail = str(action.selector.value[:50] if hasattr(action.selector, 'value') else action.selector)
+                            selector = str(action.selector.value[:50] if hasattr(action.selector, 'value') else action.selector)
+                            ColoredLogger.info(f"  {j}. {action_type:10s} -> {selector}", ColoredLogger.GRAY)
                         elif action.type == 'WaitAction' and hasattr(action, 'time_seconds'):
-                            detail = f"{action.time_seconds}s"
+                            ColoredLogger.info(f"  {j}. {action_type:10s} -> {action.time_seconds}s", ColoredLogger.GRAY)
                         else:
-                            detail = str(vars(action))[:60]
+                            ColoredLogger.info(f"  {j}. {action_type:10s}", ColoredLogger.GRAY)
 
-                        ColoredLogger.info(f"│ {j:3d} │ {action_type:16s} │ {detail:60s} │", ColoredLogger.GRAY)
-
-                    ColoredLogger.info("└─────┴──────────────────┴──────────────────────────────────────────────────────────────┘", ColoredLogger.GRAY)
-                else:
-                    ColoredLogger.warning("No actions received", ColoredLogger.YELLOW)
-
-                # ─── Evaluation Result ───
+                # Evaluation
                 score = eval_scores[i]
                 exec_time = execution_times[i]
                 error_msg = evaluation_results[i].get("error_message", "")
 
-                ColoredLogger.info("\n┌────────────────┬─────────────────────────────────────────────────────────────────┐", ColoredLogger.GRAY)
-                ColoredLogger.info("│ Metric         │ Value                                                           │", ColoredLogger.GRAY)
-                ColoredLogger.info("├────────────────┼─────────────────────────────────────────────────────────────────┤", ColoredLogger.GRAY)
-
-                # Score row
+                ColoredLogger.info(f"\n[Evaluation]", ColoredLogger.CYAN)
                 if score > 0:
-                    ColoredLogger.info(f"│ Final Score    │ {score:.4f} ✅                                                  │", ColoredLogger.GREEN)
+                    ColoredLogger.info(f"  Score: {score:.4f} ✅ | Time: {exec_time:.2f}s", ColoredLogger.GREEN)
                 else:
-                    ColoredLogger.info(f"│ Final Score    │ {score:.4f} ❌                                                  │", ColoredLogger.YELLOW)
+                    ColoredLogger.info(f"  Score: {score:.4f} ❌ | Time: {exec_time:.2f}s", ColoredLogger.YELLOW)
 
-                # Time row
-                ColoredLogger.info(f"│ Execution Time │ {exec_time:.2f}s                                                     │", ColoredLogger.GRAY)
-
-                # Message row
                 if error_msg:
-                    ColoredLogger.info(f"│ Message        │ ⚠️  {error_msg[:58]}│", ColoredLogger.YELLOW)
+                    ColoredLogger.warning(f"  Message: {error_msg}", ColoredLogger.YELLOW)
                 elif seed_issues:
-                    ColoredLogger.info(f"│ Message        │ ⚠️  {seed_issues[0][:58]}│", ColoredLogger.YELLOW)
+                    ColoredLogger.warning(f"  Message: {', '.join(seed_issues)}", ColoredLogger.YELLOW)
                 elif score > 0:
-                    ColoredLogger.info(f"│ Message        │ ✅ All tests passed                                          │", ColoredLogger.GREEN)
+                    ColoredLogger.info(f"  Message: All tests passed", ColoredLogger.GREEN)
                 else:
-                    ColoredLogger.info(f"│ Message        │ ❌ Tests failed                                              │", ColoredLogger.YELLOW)
+                    ColoredLogger.warning(f"  Message: Tests failed", ColoredLogger.YELLOW)
 
-                ColoredLogger.info("└────────────────┴─────────────────────────────────────────────────────────────────┘", ColoredLogger.GRAY)
-                ColoredLogger.info("═" * 100, ColoredLogger.BLUE)
+                ColoredLogger.info("=" * 60, ColoredLogger.BLUE)
 
             # ═══════════════════════════════════════════════════════
-            # [Evaluation] Summary table (all miners)
+            # [Evaluation] Summary (compact)
             # ═══════════════════════════════════════════════════════
-            ColoredLogger.info("\n" + "─" * 100, ColoredLogger.BLUE)
-            ColoredLogger.info("[Evaluation] Summary", ColoredLogger.BLUE)
-            ColoredLogger.info("─" * 100, ColoredLogger.BLUE)
-
-            ColoredLogger.info("┌──────┬──────────┬──────────┬────────────────────────────────────────────────────────┐", ColoredLogger.GRAY)
-            ColoredLogger.info("│ UID  │  Score   │  Time(s) │ Message                                                │", ColoredLogger.GRAY)
-            ColoredLogger.info("├──────┼──────────┼──────────┼────────────────────────────────────────────────────────┤", ColoredLogger.GRAY)
-
+            ColoredLogger.info(f"\n[Evaluation] Summary", ColoredLogger.BLUE)
             for i, uid in enumerate(self.active_miner_uids):
                 score = eval_scores[i]
                 exec_time = execution_times[i]
-                error_msg = evaluation_results[i].get("error_message", "")
-
-                if score > 0:
-                    message = "✅ Passed"
-                    color = ColoredLogger.GREEN
-                elif error_msg:
-                    message = f"⚠️  {error_msg[:48]}"
-                    color = ColoredLogger.YELLOW
-                else:
-                    message = "❌ Failed"
-                    color = ColoredLogger.YELLOW
-
-                ColoredLogger.info(f"│ {uid:4d} │ {score:8.4f} │ {exec_time:8.2f} │ {message:54s} │", color)
-
-            ColoredLogger.info("└──────┴──────────┴──────────┴────────────────────────────────────────────────────────┘", ColoredLogger.GRAY)
-            ColoredLogger.info("─" * 100 + "\n", ColoredLogger.BLUE)
+                status = "✅" if score > 0 else "❌"
+                ColoredLogger.info(f"  UID {uid:3d}: {status} Score={score:.4f} | Time={exec_time:.2f}s", 
+                                   ColoredLogger.GREEN if score > 0 else ColoredLogger.YELLOW)
 
             # Calculate final scores (combining eval quality + execution speed)
             rewards = calculate_rewards_for_task(
