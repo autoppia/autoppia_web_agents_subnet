@@ -403,6 +403,11 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         # Initialize new round in RoundManager (logs sync math once)
         self.round_manager.start_new_round(current_block)
         boundaries = self.round_manager.get_current_boundaries()
+
+        # ALWAYS reset consensus state at the start of each round (even on resume)
+        self._reset_consensus_state()
+        bt.logging.debug("🔄 Consensus state reset for new round")
+
         # If not resuming, reset ephemeral structures; if resuming, keep loaded ones
         if not resumed:
             self.active_miner_uids = []
@@ -1331,6 +1336,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         """Calculate averages, apply WTA, set weights"""
         ColoredLogger.info("🏁 Phase: SetWeights — Calculating final weights", ColoredLogger.PURPLE)
         bt.logging.info(f"Distributed consensus active: {str(ENABLE_DISTRIBUTED_CONSENSUS).lower()}")
+        bt.logging.info(f"Active miners: {len(self.active_miner_uids)}, Tasks completed: {tasks_completed}")
 
         # Check if no miners responded to handshake - BURN ALL WEIGHTS
         if not self.active_miner_uids:
@@ -1354,7 +1360,11 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         avg_rewards = self.round_manager.get_average_rewards()
 
         # If sharing enabled, attempt to aggregate across validators via commitments/IPFS
+        bt.logging.info(f"🔍 ENABLE_DISTRIBUTED_CONSENSUS = {ENABLE_DISTRIBUTED_CONSENSUS}")
         if ENABLE_DISTRIBUTED_CONSENSUS:
+            ColoredLogger.info("=" * 80, ColoredLogger.CYAN)
+            ColoredLogger.info("🌐 CONSENSUS: Starting IPFS/Blockchain aggregation", ColoredLogger.CYAN)
+            ColoredLogger.info("=" * 80, ColoredLogger.CYAN)
             bt.logging.info("IPFS | [CONSENSUS] Fetching aggregated scores from other validators...")
             try:
                 boundaries = self.round_manager.get_current_boundaries()
