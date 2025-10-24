@@ -485,12 +485,14 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
             # Filter successful responses - collect data without spamming logs
             successful_miners = []
+            bt.logging.debug(f"🔍 Filtering {len(handshake_responses)} handshake responses...")
             for i, response in enumerate(handshake_responses):
                 if i >= len(all_axons):
                     continue
 
                 mapped_uid = all_uids[i]
                 if not response:
+                    bt.logging.debug(f"  UID {mapped_uid}: No response")
                     continue
 
                 status_code = getattr(getattr(response, "dendrite", None), "status_code", None)
@@ -501,11 +503,13 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     except (TypeError, ValueError):
                         status_numeric = None
                 if status_numeric is not None and status_numeric >= 400:
+                    bt.logging.debug(f"  UID {mapped_uid}: Bad status code {status_numeric}")
                     continue
 
                 agent_name_raw = getattr(response, "agent_name", None)
                 agent_name = _normalized_optional(agent_name_raw)
                 if not agent_name:
+                    bt.logging.debug(f"  UID {mapped_uid}: No agent_name (raw={agent_name_raw})")
                     continue
 
                 agent_name = _truncate_agent_name(agent_name)
@@ -518,6 +522,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
                 self.round_handshake_payloads[mapped_uid] = response
                 self.active_miner_uids.append(mapped_uid)
+                bt.logging.debug(f"  UID {mapped_uid}: ✅ ACCEPTED - agent={agent_name}")
 
                 # Collect for table display
                 successful_miners.append({
@@ -527,6 +532,12 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     'rl': 'Yes' if getattr(response, 'has_rl', False) else 'No',
                     'hotkey': self.metagraph.hotkeys[mapped_uid][:10] + '...'
                 })
+
+            bt.logging.info(f"🔍 Handshake filtering complete: {len(self.active_miner_uids)} active miners")
+            if self.active_miner_uids:
+                bt.logging.info(f"   Active miner UIDs: {self.active_miner_uids}")
+            else:
+                bt.logging.warning("   ⚠️ No active miners detected after filtering!")
 
             # Create connection status table for all miners
             from rich.console import Console
@@ -561,7 +572,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             # Track connection status for all miners
             connection_status = {}
             for i, response in enumerate(handshake_responses):
-                uid = i  # UID is the index
+                uid = all_uids[i] if i < len(all_uids) else i  # Use mapped UID
                 if response is not None:
                     status_code = getattr(response.dendrite, 'status_code', None)
                     agent_name = getattr(response, 'agent_name', None)
@@ -664,9 +675,33 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             )
         )
 
-        # If no miners are active, skip task loop and finish round gracefully
+        # If no miners are active, skip task loop but still publish to IPFS for consensus
         if not self.active_miner_uids:
-            ColoredLogger.warning("⚠️ No active miners after handshake; skipping tasks and finalizing round.", ColoredLogger.YELLOW)
+            ColoredLogger.warning("⚠️ No active miners after handshake; skipping tasks but maintaining consensus.", ColoredLogger.YELLOW)
+
+            # Still publish to IPFS for consensus tracking (with 0 tasks completed)
+            if ENABLE_DISTRIBUTED_CONSENSUS:
+                bt.logging.info("IPFS | [CONSENSUS] Publishing to IPFS despite no active miners (for consensus tracking)...")
+                try:
+                    current_block = self.metagraph.block.item()
+                    round_number = await self.round_manager.calculate_round(current_block)
+                    st = await self._get_async_subtensor()
+                    try:
+                        cid = await publish_round_snapshot(
+                            validator=self,
+                            st=st,
+                            round_number=round_number,
+                            tasks_completed=0,
+                        )
+                        if cid:
+                            bt.logging.success(f"IPFS | [CONSENSUS] Publish complete - CID={cid}")
+                        else:
+                            bt.logging.warning(f"IPFS | [CONSENSUS] Publish returned no CID")
+                    finally:
+                        await self._close_async_subtensor()
+                except Exception as e:
+                    bt.logging.error(f"IPFS | [CONSENSUS] Publish failed: {e}", exc_info=True)
+
             await self._calculate_final_weights(0)
             return
 
