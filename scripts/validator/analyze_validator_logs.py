@@ -69,6 +69,8 @@ Classify each area as OK, WARN, or FAIL. If information is missing, state "Not o
 ROUND_ID_PATTERN = re.compile(r"(?:validator_round_id|round_id)=([A-Za-z0-9_\-]+)")
 ROUND_FALLBACK_PATTERN = re.compile(r"(validator_round_[A-Za-z0-9_\-]+)")
 
+INTERACTIVE_SYSTEM_PROMPT = """You are an Autoppia validator SRE assistant. Use only the provided context to answer questions, be concise, and clearly flag uncertainty."""
+
 
 def resolve_log_path(target: str, pattern: str) -> Path:
     path = Path(target).expanduser()
@@ -120,13 +122,16 @@ def build_focus_blocks(lines: Sequence[str]) -> str:
     return "\n\n".join(sections)
 
 
-def build_prompt(raw_excerpt: str, focus_blocks: str) -> str:
+def build_prompt(raw_excerpt: str, focus_blocks: str, commitments_text: str | None = None) -> str:
     guidance = load_prompt_template()
-    return (
+    prompt = (
         f"{guidance}\n\n"
         f"Recent validator log excerpt (most recent last):\n```\n{raw_excerpt}\n```\n\n"
         f"Keyword-focused slices:\n```\n{focus_blocks}\n```"
     )
+    if commitments_text:
+        prompt += f"\n\nCommitment snapshot:\n```\n{commitments_text}\n```"
+    return prompt
 
 
 def load_prompt_template() -> str:
@@ -175,33 +180,21 @@ def load_prompt_template() -> str:
         return default_guidance
 
 
-def run_analysis_from_lines(
-    lines: Sequence[str],
-    *,
-    model: str,
-    temperature: float,
-    max_tokens: int,
-) -> str:
-    if not lines:
-        raise ValueError("No log lines available for analysis.")
-
+def prepare_log_highlights(lines: Sequence[str]) -> tuple[str, str]:
     tail_excerpt = clamp_text(lines, 16000)
     focus = build_focus_blocks(lines)
+    return tail_excerpt, focus
 
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise EnvironmentError("OPENAI_API_KEY must be set to query GPT-5 via OpenAI.")
 
-    config = LLMConfig(model=model, temperature=temperature, max_tokens=max_tokens)
-    llm = LLMFactory.create_llm("openai", config=config, api_key=api_key)
-
-    prompt = build_prompt(tail_excerpt, focus)
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT.strip()},
-        {"role": "user", "content": prompt},
-    ]
-
-    return llm.predict(messages)
+def build_context_blob(tail_excerpt: str, focus_blocks: str, commitments_text: str | None) -> str:
+    sections: list[str] = []
+    if tail_excerpt:
+        sections.append("Validator log excerpt (most recent last):\n" + tail_excerpt)
+    if focus_blocks.strip():
+        sections.append("Keyword-focused slices:\n" + focus_blocks)
+    if commitments_text:
+        sections.append("Commitment snapshot (show_commitments.py output):\n" + commitments_text)
+    return "\n\n".join(sections)
 
 
 def collect_lines_from_path(target: str | None, pattern: str, lines: int) -> list[str]:
@@ -276,6 +269,83 @@ def select_recent_rounds(lines: Sequence[str], rounds_to_keep: int) -> tuple[lis
     return flattened, selected_ids
 
 
+def create_llm(model: str, temperature: float, max_tokens: int):
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise EnvironmentError("OPENAI_API_KEY must be set to query GPT-5 via OpenAI.")
+    config = LLMConfig(model=model, temperature=temperature, max_tokens=max_tokens)
+    return LLMFactory.create_llm("openai", config=config, api_key=api_key)
+
+
+def run_analysis_with_context(llm, tail_excerpt: str, focus_blocks: str, commitments_text: str | None) -> str:
+    prompt = build_prompt(tail_excerpt, focus_blocks, commitments_text)
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT.strip()},
+        {"role": "user", "content": prompt},
+    ]
+    return llm.predict(messages)
+
+
+def run_interactive_session(llm, context_blob: str) -> None:
+    print("Interactive mode. Type 'exit' or 'quit' to leave.\n")
+    messages = [
+        {"role": "system", "content": INTERACTIVE_SYSTEM_PROMPT},
+        {"role": "user", "content": f"Context reference:\n```\n{context_blob}\n```"},
+    ]
+    while True:
+        try:
+            user_input = input("You> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\nExiting interactive mode.")
+            break
+        if not user_input:
+            continue
+        if user_input.lower() in {"exit", "quit"}:
+            print("Goodbye.")
+            break
+        messages.append({"role": "user", "content": user_input})
+        try:
+            response = llm.predict(messages)
+        except Exception as exc:  # noqa: BLE001
+            print(f"LLM> [error: {exc}]")
+            messages.pop()  # remove last user turn on failure
+            continue
+        print(f"LLM> {response.strip()}")
+        messages.append({"role": "assistant", "content": response})
+
+
+def get_show_commitments_output(args) -> str | None:
+    if args.no_commitments:
+        return None
+
+    candidate_paths = [
+        REPO_ROOT / "scripts" / "validator" / "show_commitments.py",
+        REPO_ROOT / "autoppia_web_agents_subnet" / "scripts" / "validator" / "show_commitments.py",
+    ]
+    script_path: Path | None = next((path for path in candidate_paths if path.exists()), None)
+    if script_path is None:
+        return "[show_commitments.py not found]"
+
+    cmd = [
+        sys.executable,
+        str(script_path),
+        "-N",
+        str(args.commitments_count),
+    ]
+    if args.commitments_network:
+        cmd.extend(["--network", args.commitments_network])
+    if args.commitments_netuid is not None:
+        cmd.extend(["--netuid", str(args.commitments_netuid)])
+    try:
+        completed = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    except Exception as exc:  # noqa: BLE001
+        return f"[show_commitments.py failed to run: {exc}]"
+    if completed.returncode != 0:
+        stderr = completed.stderr.strip()
+        return f"[show_commitments.py returned {completed.returncode}: {stderr}]"
+    return completed.stdout.strip()
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Inspect recent validator logs and ask an OpenAI model for a structured health assessment.",
@@ -324,6 +394,34 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_MAX_TOKENS,
         help=f"Maximum tokens in the LLM response (default: {DEFAULT_MAX_TOKENS}).",
     )
+    parser.add_argument(
+        "-i",
+        "--interactive",
+        action="store_true",
+        help="Open an interactive conversation with the LLM using the collected context.",
+    )
+    parser.add_argument(
+        "--no-commitments",
+        action="store_true",
+        help="Skip running show_commitments.py for additional context.",
+    )
+    parser.add_argument(
+        "--commitments-count",
+        type=int,
+        default=3,
+        help="How many rounds (-N) to fetch from show_commitments.py (default: 3).",
+    )
+    parser.add_argument(
+        "--commitments-netuid",
+        type=int,
+        default=36,
+        help="Netuid passed to show_commitments.py (default: 36).",
+    )
+    parser.add_argument(
+        "--commitments-network",
+        default="finney",
+        help="Network passed to show_commitments.py (default: finney).",
+    )
     return parser.parse_args()
 
 
@@ -351,12 +449,24 @@ def main() -> None:
             raise SystemExit(f"[Analyzer] Failed to slice by rounds: {exc}")
 
     try:
-        result = run_analysis_from_lines(
-            log_lines,
-            model=args.model,
-            temperature=args.temperature,
-            max_tokens=args.max_tokens,
-        )
+        commitments_text = get_show_commitments_output(args)
+    except Exception as exc:  # noqa: BLE001
+        commitments_text = f"[Failed to gather commitments context: {exc}]"
+
+    tail_excerpt, focus_blocks = prepare_log_highlights(log_lines)
+    context_blob = build_context_blob(tail_excerpt, focus_blocks, commitments_text)
+
+    try:
+        llm = create_llm(args.model, args.temperature, args.max_tokens)
+    except Exception as exc:  # noqa: BLE001
+        raise SystemExit(f"[Analyzer] Failed to initialize LLM: {exc}")
+
+    if args.interactive:
+        run_interactive_session(llm, context_blob)
+        return
+
+    try:
+        result = run_analysis_with_context(llm, tail_excerpt, focus_blocks, commitments_text)
     except Exception as exc:  # noqa: BLE001
         raise SystemExit(f"[Analyzer] Failed to produce analysis: {exc}")
 
