@@ -986,7 +986,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         # FINAL WEIGHTS: Calculate averages, apply WTA, set weights
         # ═══════════════════════════════════════════════════════
         await self._calculate_final_weights(tasks_completed)
-        
+
         bt.logging.info("🎬 Forward method completed - returning to main loop")
 
     # ═══════════════════════════════════════════════════════════════════════════════
@@ -1466,7 +1466,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             rewards=active_rewards,           # Array of rewards for active miners
             uids=self.active_miner_uids       # List of active miner UIDs (same length)
         )
-        
+
         bt.logging.info("⏳ Setting weights on chain...")
         self.set_weights()
         bt.logging.info("✅ Weights set successfully")
