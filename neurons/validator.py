@@ -546,8 +546,6 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         # If no miners are active, skip task loop and finish round gracefully
         if not self.active_miner_uids:
             ColoredLogger.warning("⚠️ No active miners after handshake; skipping tasks and finalizing round.", ColoredLogger.YELLOW)
-            # Minimal wait loop print and direct finalize
-            await self._wait_for_target_epoch()
             await self._calculate_final_weights(0)
             return
 
@@ -792,7 +790,6 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             self.state_manager.save_checkpoint()
         except Exception:
             pass
-        await self._wait_for_target_epoch()
 
         # ═══════════════════════════════════════════════════════
         # FINAL WEIGHTS: Calculate averages, apply WTA, set weights
@@ -1042,139 +1039,6 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         except Exception as e:
             bt.logging.error(f"Task execution failed: {e}")
             return False
-
-    async def _wait_for_target_epoch(self):
-        """Wait for the end-of-round target epoch (round boundary) to set weights."""
-        # Get boundaries ONCE from round_manager.start_block (the round we just completed)
-        # Don't recalculate or it jumps to next round
-        boundaries = self.round_manager.get_current_boundaries()
-        target_epoch = boundaries['target_epoch']
-        target_block = boundaries['target_block']
-        round_start_block = boundaries['round_start_block']
-
-        current_block_ctx = self.subtensor.get_current_block()
-        try:
-            round_no_ctx = await self.round_manager.calculate_round(current_block_ctx)
-        except Exception:
-            round_no_ctx = None
-        if round_no_ctx is not None:
-            ColoredLogger.info(
-                f"⏳ Waiting for end-of-round target epoch | round={round_no_ctx} | target_epoch={target_epoch:.3f} | target_block={target_block}",
-                ColoredLogger.BLUE,
-            )
-        else:
-            ColoredLogger.info(
-                f"⏳ Waiting for end-of-round target epoch | target_epoch={target_epoch:.3f} | target_block={target_block}",
-                ColoredLogger.BLUE,
-            )
-        last_log_time = time.time()
-
-        while True:
-            # Fetch latest block from network to keep time in sync
-            current_block = self.subtensor.get_current_block()
-            current_epoch = self.round_manager.block_to_epoch(current_block)
-            wait_info = self.round_manager.get_wait_info(current_block)
-
-            if wait_info["reached_target"]:
-                ColoredLogger.success(f"🎯 Target epoch {target_epoch} REACHED!", ColoredLogger.GREEN)
-                ColoredLogger.info(f"   Current epoch: {current_epoch:.2f}", ColoredLogger.GREEN)
-                break
-
-            # Use FIXED boundaries from round start (locked at entry to this function)
-            # Don't recalculate or progress jumps to next round
-            # Progress based on blocks within the round window (absolute %)
-            blocks_total = max(target_block - round_start_block, 1)
-            blocks_done = max(current_block - round_start_block, 0)
-            progress = min(max((blocks_done / blocks_total) * 100.0, 0.0), 100.0)
-            progress_frac = progress / 100.0  # Convert to 0-1 range
-
-            # Note: Publish now happens immediately after tasks (before wait loop)
-            # This block is kept as a safety fallback only
-
-            # Mid-round fetch at configured absolute fraction (single attempt)
-            if ENABLE_DISTRIBUTED_CONSENSUS and (not self._consensus_mid_fetched) and progress_frac >= float(FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION):
-                try:
-                    ColoredLogger.error(
-                        "\n" + "=" * 80,
-                        ColoredLogger.CYAN,
-                    )
-                    ColoredLogger.error(
-                        f"📥📥📥 FETCH IPFS THRESHOLD REACHED: {FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION:.0%} 📥📥📥",
-                        ColoredLogger.CYAN,
-                    )
-                    ColoredLogger.error(
-                        f"🔽 DOWNLOADING PAYLOADS FROM OTHER VALIDATORS 🔽",
-                        ColoredLogger.CYAN,
-                    )
-                    ColoredLogger.error(
-                        "=" * 80 + "\n",
-                        ColoredLogger.CYAN,
-                    )
-                    st = await self._get_async_subtensor()
-                    agg = await aggregate_scores_from_commitments(
-                        validator=self,
-                        st=st,
-                        start_epoch=boundaries['round_start_epoch'],
-                        target_epoch=boundaries['target_epoch'],
-                    )
-                    if agg:
-                        self._agg_scores_cache = agg
-                        self._consensus_mid_fetched = True
-                        ColoredLogger.success(
-                            "\n" + "=" * 80,
-                            ColoredLogger.GREEN,
-                        )
-                        ColoredLogger.success(
-                            f"✅✅✅ CONSENSUS SCORES CACHED: {len(agg)} miners ✅✅✅",
-                            ColoredLogger.GREEN,
-                        )
-                        ColoredLogger.success(
-                            "=" * 80 + "\n",
-                            ColoredLogger.GREEN,
-                        )
-                    else:
-                        bt.logging.warning("No aggregated scores available at fetch threshold")
-                except Exception as e:
-                    bt.logging.warning(f"IPFS fetch at threshold failed: {e}")
-
-            # Log progress every 30 seconds
-            if time.time() - last_log_time >= 30:
-                # Concise status line
-                if round_no_ctx is not None:
-                    ColoredLogger.info(
-                        (
-                            "Round {round} — Epoch {cur:.3f}/{target:.3f} | Block {blk}/{target_blk} ({pct:.2f}%) | "
-                            "Remaining {mins:.1f}m — waiting for target block {target_blk} to finalize scores & set weights"
-                        ).format(
-                            round=round_no_ctx,
-                            cur=current_epoch,
-                            target=target_epoch,
-                            blk=current_block,
-                            target_blk=target_block,
-                            pct=progress,
-                            mins=wait_info['minutes_remaining'],
-                        ),
-                        ColoredLogger.BLUE,
-                    )
-                else:
-                    ColoredLogger.info(
-                        (
-                            "Epoch {cur:.3f}/{target:.3f} | Block {blk}/{target_blk} ({pct:.2f}%) | Remaining {mins:.1f}m — "
-                            "waiting for target block {target_blk} to finalize scores & set weights"
-                        ).format(
-                            cur=current_epoch,
-                            target=target_epoch,
-                            blk=current_block,
-                            target_blk=target_block,
-                            pct=progress,
-                            mins=wait_info['minutes_remaining'],
-                        ),
-                        ColoredLogger.BLUE,
-                    )
-                last_log_time = time.time()
-
-            # Wait for next block
-            await asyncio.sleep(12)  # Wait for next block
 
         # reached target: minimal separator not needed
 

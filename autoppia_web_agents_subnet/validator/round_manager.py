@@ -82,9 +82,9 @@ class RoundManager:
         """
         if not self.can_start_round(current_block):
             blocks_remaining = self.blocks_until_allowed(current_block)
-            next_block = (self.minimum_start_block + 1) if self.minimum_start_block is not None else None
+            next_block = self.minimum_start_block if self.minimum_start_block is not None else None
             message = (
-                f"Round start blocked. Current block {current_block} is not past minimum "
+                f"Round start blocked. Current block {current_block} has not reached minimum "
                 f"{self.minimum_start_block}."
             )
             if next_block is not None:
@@ -119,9 +119,23 @@ class RoundManager:
         """Calculate round boundaries using integer block math to avoid float precision issues."""
         import bittensor as bt
 
-        rbl = int(self.ROUND_BLOCK_LENGTH) if self.ROUND_BLOCK_LENGTH else int(self.BLOCKS_PER_EPOCH * max(self.round_size_epochs, 0.01))
-        window_index = current_block // rbl
-        round_start_block = int(window_index * rbl)
+        rbl = int(self.ROUND_BLOCK_LENGTH) if self.ROUND_BLOCK_LENGTH else int(
+            self.BLOCKS_PER_EPOCH * max(self.round_size_epochs, 0.01)
+        )
+
+        base_block = int(self.minimum_start_block) if self.minimum_start_block is not None else 0
+
+        # Clamp to base_block so we never anchor a window before the validator launch gate.
+        effective_block = max(current_block, base_block)
+
+        if self.minimum_start_block is not None:
+            blocks_since_base = effective_block - base_block
+            window_index = blocks_since_base // rbl
+            round_start_block = int(base_block + window_index * rbl)
+        else:
+            window_index = effective_block // rbl
+            round_start_block = int(window_index * rbl)
+
         target_block = int(round_start_block + rbl)
         round_start_epoch = round_start_block / self.BLOCKS_PER_EPOCH
         target_epoch = target_block / self.BLOCKS_PER_EPOCH
@@ -261,20 +275,19 @@ class RoundManager:
             return True
         if self.minimum_start_block is None:
             return True
-        return current_block > self.minimum_start_block
+        return current_block >= self.minimum_start_block
 
     def blocks_until_allowed(self, current_block: int) -> int:
         """Return how many blocks remain before a new round may begin."""
         if self.minimum_start_block is None:
             return 0
-        next_allowed_block = self.minimum_start_block + 1
-        return max(next_allowed_block - current_block, 0)
+        return max(self.minimum_start_block - current_block, 0)
 
     async def calculate_round(self, current_block: int) -> int:
         """Return the human-visible round number based on days elapsed since launch block."""
 
         base_block = self.minimum_start_block or 0
-        if current_block <= base_block:
+        if current_block < base_block:
             return 0
 
         blocks_since_start = current_block - base_block
