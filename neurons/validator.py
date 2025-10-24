@@ -216,49 +216,9 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     all_tasks.extend(cached)
                 if all_tasks:
                     self.current_round_id = state["validator_round_id"]
-
-                    # ✅ Restore active miner UIDs from saved state
-                    self.active_miner_uids = state.get("active_miner_uids", [])
-
-                    # ✅ Restore handshake payloads (deserialize them)
-                    saved_handshakes = state.get("handshakes", {})
-                    self.round_handshake_payloads = {}
-                    for uid_str, payload_data in saved_handshakes.items():
-                        try:
-                            uid = int(uid_str)
-                            self.round_handshake_payloads[uid] = self._deserialize_handshake(payload_data)
-                        except Exception as e:
-                            bt.logging.debug(f"Failed to restore handshake for uid {uid_str}: {e}")
-
-                    # ✅ Restore agent runs
-                    saved_agent_runs = state.get("agent_runs", {})
-                    self.current_agent_runs = {}
-                    # Note: We only restore the mapping, not the full AgentRun objects
-                    # The actual AgentRun objects will be recreated if needed
-                    for uid_str, agent_run_id in saved_agent_runs.items():
-                        try:
-                            uid = int(uid_str)
-                            # Store the agent_run_id for reference
-                            # The full AgentRun object will be fetched from platform if needed
-                            bt.logging.debug(f"Noted agent_run_id {agent_run_id} for uid {uid}")
-                        except Exception as e:
-                            bt.logging.debug(f"Failed to restore agent_run for uid {uid_str}: {e}")
-
-                    # ✅ Restore completed task pairs
-                    saved_completed = state.get("completed", [])
-                    self._completed_pairs = set()
-                    for pair in saved_completed:
-                        if len(pair) == 2:
-                            self._completed_pairs.add((pair[0], pair[1]))
-
                     resumed = True
                     bt.logging.info(
                         f"♻️ Resumed {len(all_tasks)} tasks; validator_round_id={self.current_round_id}"
-                    )
-                    bt.logging.info(
-                        f"♻️ Restored state: {len(self.active_miner_uids)} active miners, "
-                        f"{len(self.round_handshake_payloads)} handshakes, "
-                        f"{len(self._completed_pairs)} completed pairs"
                     )
                 else:
                     bt.logging.warning(
@@ -381,11 +341,6 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 pass
 
         # Build IWAP tasks from TaskWithProject list
-        # Ensure current_round_id is set (should always be set by resume or fresh generation)
-        if not self.current_round_id:
-            bt.logging.warning("current_round_id was not set, generating new one")
-            self.current_round_id = self._generate_validator_round_id(current_block=current_block)
-
         self.current_round_tasks = self._build_iwap_tasks(
             validator_round_id=self.current_round_id,
             tasks=all_tasks,
@@ -403,14 +358,8 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         # Initialize new round in RoundManager (logs sync math once)
         self.round_manager.start_new_round(current_block)
         boundaries = self.round_manager.get_current_boundaries()
-
-        # ALWAYS reset consensus state at the start of each round (even on resume)
-        self._reset_consensus_state()
-        bt.logging.debug("🔄 Consensus state reset for new round")
-
         # If not resuming, reset ephemeral structures; if resuming, keep loaded ones
         if not resumed:
-            self.active_miner_uids = []
             self.round_handshake_payloads = {}
             self.current_agent_runs = {}
             self.current_miner_snapshots = {}
@@ -420,10 +369,6 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
         # Send StartRoundSynapse to all miners ONCE at the beginning
         try:
-            # Build parallel lists of UIDs and axons BEFORE anything else (needed for error handling)
-            all_uids = list(range(len(self.metagraph.uids)))
-            all_axons = [self.metagraph.axons[uid] for uid in all_uids]
-
             # Check if we already sent handshake in this round (via checkpoint)
             # Use phase flag to track if handshake was sent, not the presence of responses
             has_prior_handshake = resumed and self._phases.get("handshake_sent", False)
@@ -441,6 +386,10 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             else:
                 # First time sending handshake in this round - BUILD AND SEND
                 ColoredLogger.info(f"🤝 Handshake: sending to {len(self.metagraph.uids)} miners...", ColoredLogger.CYAN)
+
+                # Build parallel lists of UIDs and axons to preserve mapping
+                all_uids = list(range(len(self.metagraph.uids)))
+                all_axons = [self.metagraph.axons[uid] for uid in all_uids]
                 start_synapse = StartRoundSynapse(
                     version=self.version,
                     round_id=self.current_round_id or f"round_{boundaries['round_start_epoch']}",
@@ -490,14 +439,12 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
             # Filter successful responses - collect data without spamming logs
             successful_miners = []
-            bt.logging.debug(f"🔍 Filtering {len(handshake_responses)} handshake responses...")
             for i, response in enumerate(handshake_responses):
                 if i >= len(all_axons):
                     continue
 
                 mapped_uid = all_uids[i]
                 if not response:
-                    bt.logging.debug(f"  UID {mapped_uid}: No response")
                     continue
 
                 status_code = getattr(getattr(response, "dendrite", None), "status_code", None)
@@ -508,13 +455,11 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     except (TypeError, ValueError):
                         status_numeric = None
                 if status_numeric is not None and status_numeric >= 400:
-                    bt.logging.debug(f"  UID {mapped_uid}: Bad status code {status_numeric}")
                     continue
 
                 agent_name_raw = getattr(response, "agent_name", None)
                 agent_name = _normalized_optional(agent_name_raw)
                 if not agent_name:
-                    bt.logging.debug(f"  UID {mapped_uid}: No agent_name (raw={agent_name_raw})")
                     continue
 
                 agent_name = _truncate_agent_name(agent_name)
@@ -527,7 +472,6 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
                 self.round_handshake_payloads[mapped_uid] = response
                 self.active_miner_uids.append(mapped_uid)
-                bt.logging.debug(f"  UID {mapped_uid}: ✅ ACCEPTED - agent={agent_name}")
 
                 # Collect for table display
                 successful_miners.append({
@@ -538,97 +482,16 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     'hotkey': self.metagraph.hotkeys[mapped_uid][:10] + '...'
                 })
 
-            bt.logging.info(f"🔍 Handshake filtering complete: {len(self.active_miner_uids)} active miners")
-            if self.active_miner_uids:
-                bt.logging.info(f"   Active miner UIDs: {self.active_miner_uids}")
-            else:
-                bt.logging.warning("   ⚠️ No active miners detected after filtering!")
-
-            # Create connection status table for all miners
-            from rich.console import Console
-            from rich.table import Table
-            from rich import box
-
-            console = Console()
-
-            def safe_print(*args, **kwargs):
-                """Helper to suppress pipe errors when printing Rich tables"""
-                try:
-                    console.print(*args, **kwargs)
-                except (BrokenPipeError, OSError):
-                    pass  # Silently ignore pipe errors
-
-            # Connection Status Table
-            safe_print("\n[blue]📋 MINER CONNECTION STATUS[/blue]")
-            connection_table = Table(
-                show_header=True, 
-                header_style="blue",
-                box=box.ROUNDED,
-                expand=True,
-                show_lines=True
-            )
-            connection_table.add_column("UID", width=6, style="blue")
-            connection_table.add_column("Status", width=8, style="white")
-            connection_table.add_column("Agent Name", width=20, style="white")
-            connection_table.add_column("Version", width=10, style="white")
-            connection_table.add_column("RL", width=4, style="white")
-            connection_table.add_column("Hotkey", width=15, style="white")
-
-            # Track connection status for all miners
-            connection_status = {}
-            for i, response in enumerate(handshake_responses):
-                uid = all_uids[i] if i < len(all_uids) else i  # Use mapped UID
-                if response is not None:
-                    status_code = getattr(response.dendrite, 'status_code', None)
-                    agent_name = getattr(response, 'agent_name', None)
-
-                    if status_code == 422:
-                        status = "NO"
-                        status_style = "red"
-                        agent_name = "N/A"
-                        version = "N/A"
-                        rl = "N/A"
-                    elif agent_name:
-                        status = "✅ OK"
-                        status_style = "green"
-                        version = getattr(response, 'agent_version', 'N/A')
-                        rl = 'Yes' if getattr(response, 'has_rl', False) else 'No'
-                    else:
-                        status = "NO"
-                        status_style = "yellow"
-                        agent_name = "N/A"
-                        version = "N/A"
-                        rl = "N/A"
-                else:
-                    status = "NO"
-                    status_style = "red"
-                    agent_name = "N/A"
-                    version = "N/A"
-                    rl = "N/A"
-
-                hotkey = self.metagraph.hotkeys[uid][:10] + '...' if uid < len(self.metagraph.hotkeys) else 'Unknown'
-
-                connection_table.add_row(
-                    str(uid), 
-                    status, 
-                    agent_name, 
-                    version, 
-                    rl, 
-                    hotkey,
-                    style=status_style
-                )
-
-                connection_status[uid] = {
-                    'status': status,
-                    'agent_name': agent_name,
-                    'responded': status == "✅ OK"
-                }
-
-            safe_print(connection_table)
-
-            # Summary of successful miners
-            successful_count = sum(1 for status in connection_status.values() if status['responded'])
-            safe_print(f"\n[green]✅ {successful_count}/{len(all_axons)} miners responded successfully[/green]")
+            # Display results in a clean table format (only if we sent handshake)
+            if not has_prior_handshake and successful_miners:
+                bt.logging.info("=" * 100)
+                bt.logging.info("📋 MINERS WHO RESPONDED TO HANDSHAKE:")
+                bt.logging.info("=" * 100)
+                bt.logging.info(f"{'UID':<6} | {'Agent Name':<20} | {'Version':<10} | {'RL':<4} | {'Hotkey':<15}")
+                bt.logging.info("-" * 100)
+                for m in successful_miners:
+                    bt.logging.info(f"{m['uid']:<6} | {m['agent']:<20} | {m['version']:<10} | {m['rl']:<4} | {m['hotkey']:<15}")
+                bt.logging.info("=" * 100)
 
             # Log results only if we actually sent the handshake (not when using saved state)
             if not has_prior_handshake:
@@ -680,33 +543,9 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             )
         )
 
-        # If no miners are active, skip task loop but still publish to IPFS for consensus
+        # If no miners are active, skip task loop and finish round gracefully
         if not self.active_miner_uids:
-            ColoredLogger.warning("⚠️ No active miners after handshake; skipping tasks but maintaining consensus.", ColoredLogger.YELLOW)
-
-            # Still publish to IPFS for consensus tracking (with 0 tasks completed)
-            if ENABLE_DISTRIBUTED_CONSENSUS:
-                bt.logging.info("IPFS | [CONSENSUS] Publishing to IPFS despite no active miners (for consensus tracking)...")
-                try:
-                    current_block = self.metagraph.block.item()
-                    round_number = await self.round_manager.calculate_round(current_block)
-                    st = await self._get_async_subtensor()
-                    try:
-                        cid = await publish_round_snapshot(
-                            validator=self,
-                            st=st,
-                            round_number=round_number,
-                            tasks_completed=0,
-                        )
-                        if cid:
-                            bt.logging.success(f"IPFS | [CONSENSUS] Publish complete - CID={cid}")
-                        else:
-                            bt.logging.warning(f"IPFS | [CONSENSUS] Publish returned no CID")
-                    finally:
-                        await self._close_async_subtensor()
-                except Exception as e:
-                    bt.logging.error(f"IPFS | [CONSENSUS] Publish failed: {e}", exc_info=True)
-
+            ColoredLogger.warning("⚠️ No active miners after handshake; skipping tasks and finalizing round.", ColoredLogger.YELLOW)
             await self._calculate_final_weights(0)
             return
 
@@ -799,50 +638,50 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             except Exception:
                 progress_frac = 0.0
             if ENABLE_DISTRIBUTED_CONSENSUS and not self._consensus_published and (progress_frac >= float(STOP_TASK_EVALUATION_AT_ROUND_FRACTION)):
-                # Log task completion first (EVALUATION context)
-                bt.logging.info(f"EVALUATION | [TASK COMPLETION] Completed {tasks_completed} tasks")
-                # Log stop fraction reached
-                bt.logging.warning(f"🛑 Stop fraction reached: {STOP_TASK_EVALUATION_AT_ROUND_FRACTION:.0%} - Halting task execution and publishing to IPFS")
-                ColoredLogger.info(
-                    (
-                        "🌐 Consensus: preparing IPFS publish (stop fraction reached) "
-                        f"| tasks_completed={tasks_completed} | published={self._consensus_published}"
-                    ),
-                    ColoredLogger.CYAN,
+                ColoredLogger.error(
+                    "\n" + "=" * 80,
+                    ColoredLogger.RED,
                 )
-                bt.logging.info(f"IPFS | [CONSENSUS] Starting IPFS publish for round...")
+                ColoredLogger.error(
+                    f"🛑🛑🛑 STOP FRACTION REACHED: {STOP_TASK_EVALUATION_AT_ROUND_FRACTION:.0%} 🛑🛑🛑",
+                    ColoredLogger.RED,
+                )
+                ColoredLogger.error(
+                    f"📤📤📤 PUBLISHING TO IPFS NOW WITH {tasks_completed} TASKS 📤📤📤",
+                    ColoredLogger.RED,
+                )
+                ColoredLogger.error(
+                    f"⏸️⏸️⏸️  HALTING ALL TASK EXECUTION ⏸️⏸️⏸️",
+                    ColoredLogger.RED,
+                )
+                ColoredLogger.error(
+                    "=" * 80 + "\n",
+                    ColoredLogger.RED,
+                )
                 try:
                     round_number = await self.round_manager.calculate_round(current_block)
                     st = await self._get_async_subtensor()
-                    try:
-                        cid = await publish_round_snapshot(
-                            validator=self,
-                            st=st,
-                            round_number=round_number,
-                            tasks_completed=tasks_completed,
-                        )
-                        if cid:
-                            bt.logging.success(f"IPFS | [CONSENSUS] Publish complete - CID={cid}")
-                            self._consensus_published = True
-                            ColoredLogger.success(
-                                f"🌐 Consensus: IPFS publish complete (CID={cid})",
-                                ColoredLogger.GREEN,
-                            )
-                        else:
-                            bt.logging.warning(f"IPFS | [CONSENSUS] Publish returned no CID")
-                            ColoredLogger.warning(
-                                "🌐 Consensus: IPFS publish returned no CID",
-                                ColoredLogger.YELLOW,
-                            )
-                    finally:
-                        # Close AsyncSubtensor immediately after use
-                        await self._close_async_subtensor()
-                except Exception as e:
-                    bt.logging.error(f"IPFS | [CONSENSUS] Publish failed: {e}", exc_info=True)
-                    ColoredLogger.error(
-                        f"🌐 Consensus: IPFS publish failed — {e}",
-                        ColoredLogger.RED,
+                    await publish_round_snapshot(
+                        validator=self,
+                        st=st,
+                        round_number=round_number,
+                        tasks_completed=tasks_completed,
                     )
+                    self._consensus_published = True
+                    ColoredLogger.success(
+                        "\n" + "=" * 80,
+                        ColoredLogger.GREEN,
+                    )
+                    ColoredLogger.success(
+                        f"✅✅✅ IPFS PUBLISH COMPLETE - NOW WAITING ✅✅✅",
+                        ColoredLogger.GREEN,
+                    )
+                    ColoredLogger.success(
+                        "=" * 80 + "\n",
+                        ColoredLogger.GREEN,
+                    )
+                except Exception as e:
+                    bt.logging.warning(f"Consensus publish (reserved-start) failed: {e}")
                 break
             if not self.round_manager.should_send_next_task(current_block):
                 ColoredLogger.warning(
@@ -876,50 +715,22 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     pass
                 # Try to publish commitments if sharing and not yet published.
                 if ENABLE_DISTRIBUTED_CONSENSUS and not self._consensus_published:
-                    bt.logging.info(f"IPFS | [CONSENSUS] Starting IPFS publish at safety buffer...")
-                    ColoredLogger.info(
-                        (
-                            "🌐 Consensus: publishing IPFS snapshot at safety buffer "
-                            f"| tasks_completed={tasks_completed} | published={self._consensus_published}"
-                        ),
-                        ColoredLogger.CYAN,
-                    )
                     try:
                         round_number = await self.round_manager.calculate_round(current_block)
                         st = await self._get_async_subtensor()
-                        try:
-                            cid = await publish_round_snapshot(
-                                validator=self,
-                                st=st,
-                                round_number=round_number,
-                                tasks_completed=tasks_completed,
-                            )
-                            if cid:
-                                bt.logging.success(f"IPFS | [CONSENSUS] Publish complete - CID={cid}")
-                                self._consensus_published = True
-                                ColoredLogger.success(
-                                    f"🌐 Consensus: IPFS publish complete (CID={cid})",
-                                    ColoredLogger.GREEN,
-                                )
-                            else:
-                                bt.logging.warning(f"IPFS | [CONSENSUS] Publish returned no CID")
-                                ColoredLogger.warning(
-                                    "🌐 Consensus: IPFS publish returned no CID",
-                                    ColoredLogger.YELLOW,
-                                )
-                            try:
-                                self.state_manager.save_checkpoint()
-                            except Exception:
-                                pass
-                        finally:
-                            # Close AsyncSubtensor immediately after use
-                            await self._close_async_subtensor()
-                    except Exception as e:
-                        bt.logging.error(f"IPFS | [CONSENSUS] Publish failed: {e}", exc_info=True)
-                        ColoredLogger.error(
-                            f"🌐 Consensus: IPFS publish failed — {e}",
-                            ColoredLogger.RED,
+                        await publish_round_snapshot(
+                            validator=self,
+                            st=st,
+                            round_number=round_number,
+                            tasks_completed=tasks_completed,
                         )
+                        self._consensus_published = True
+                        try:
+                            self.state_manager.save_checkpoint()
+                        except Exception:
+                            pass
+                    except Exception as e:
+                        bt.logging.warning(f"Consensus publish (buffer) failed: {e}")
                 break
 
         # ═══════════════════════════════════════════════════════
@@ -928,49 +739,47 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         # This ensures round_number and validator_round_id match
         # ═══════════════════════════════════════════════════════
         if ENABLE_DISTRIBUTED_CONSENSUS and not self._consensus_published:
-            # Log task completion with EVALUATION context
-            bt.logging.info(f"EVALUATION | [TASK COMPLETION] Completed {tasks_completed}/{len(all_tasks)} tasks")
-            bt.logging.info(f"IPFS | [CONSENSUS] Starting IPFS publish after all tasks...")
-            ColoredLogger.info(
-                (
-                    "🌐 Consensus: publishing IPFS snapshot after task loop "
-                    f"| tasks_completed={tasks_completed} | published={self._consensus_published}"
-                ),
-                ColoredLogger.CYAN,
+            ColoredLogger.error(
+                "\n" + "=" * 80,
+                ColoredLogger.RED,
+            )
+            ColoredLogger.error(
+                f"📤📤📤 ALL TASKS DONE - PUBLISHING TO IPFS NOW 📤📤📤",
+                ColoredLogger.RED,
+            )
+            ColoredLogger.error(
+                f"📦 Tasks completed: {tasks_completed}/{len(all_tasks)}",
+                ColoredLogger.RED,
+            )
+            ColoredLogger.error(
+                "=" * 80 + "\n",
+                ColoredLogger.RED,
             )
             try:
                 current_block = self.metagraph.block.item()
                 round_number = await self.round_manager.calculate_round(current_block)
                 st = await self._get_async_subtensor()
-                try:
-                    cid = await publish_round_snapshot(
-                        validator=self,
-                        st=st,
-                        round_number=round_number,
-                        tasks_completed=tasks_completed,
-                    )
-                    if cid:
-                        bt.logging.success(f"IPFS | [CONSENSUS] Publish complete - CID={cid}")
-                        self._consensus_published = True
-                        ColoredLogger.success(
-                            f"🌐 Consensus: IPFS publish complete (CID={cid})",
-                            ColoredLogger.GREEN,
-                        )
-                    else:
-                        bt.logging.warning(f"IPFS | [CONSENSUS] Publish returned no CID")
-                        ColoredLogger.warning(
-                            "🌐 Consensus: IPFS publish returned no CID",
-                            ColoredLogger.YELLOW,
-                        )
-                finally:
-                    # Close AsyncSubtensor immediately after use
-                    await self._close_async_subtensor()
-            except Exception as e:
-                bt.logging.error(f"IPFS | [CONSENSUS] Publish failed: {e}", exc_info=True)
-                ColoredLogger.error(
-                    f"🌐 Consensus: IPFS publish failed — {e}",
-                    ColoredLogger.RED,
+                await publish_round_snapshot(
+                    validator=self,
+                    st=st,
+                    round_number=round_number,
+                    tasks_completed=tasks_completed,
                 )
+                self._consensus_published = True
+                ColoredLogger.success(
+                    "\n" + "=" * 80,
+                    ColoredLogger.GREEN,
+                )
+                ColoredLogger.success(
+                    f"✅✅✅ IPFS PUBLISH COMPLETE ✅✅✅",
+                    ColoredLogger.GREEN,
+                )
+                ColoredLogger.success(
+                    "=" * 80 + "\n",
+                    ColoredLogger.GREEN,
+                )
+            except Exception as e:
+                bt.logging.error(f"Consensus publish (post-tasks) failed: {e}")
 
         # ═══════════════════════════════════════════════════════
         # WAIT FOR TARGET EPOCH: Wait until the round ends
@@ -986,8 +795,6 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         # FINAL WEIGHTS: Calculate averages, apply WTA, set weights
         # ═══════════════════════════════════════════════════════
         await self._calculate_final_weights(tasks_completed)
-
-        bt.logging.info("🎬 Forward method completed - returning to main loop")
 
     # ═══════════════════════════════════════════════════════════════════════════════
     # TASK EXECUTION HELPERS
@@ -1088,8 +895,51 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 miner_uids=list(self.active_miner_uids),
             )
 
-            # Evaluate task solutions first
-            ColoredLogger.info("[Evaluation] Starting...", ColoredLogger.CYAN)
+            # 🔍 DEBUG: Log received actions from each miner
+            ColoredLogger.debug("\n" + "=" * 80, ColoredLogger.CYAN)
+            ColoredLogger.debug("🔍 ACTIONS RECEIVED FROM MINERS", ColoredLogger.CYAN)
+            ColoredLogger.debug("=" * 80, ColoredLogger.CYAN)
+            for i, (uid, solution) in enumerate(zip(self.active_miner_uids, task_solutions)):
+                if solution and solution.actions:
+                    ColoredLogger.debug(f"\n📊 Miner UID={uid}: {len(solution.actions)} actions", ColoredLogger.GREEN)
+                    for j, action in enumerate(solution.actions, 1):
+                        ColoredLogger.debug(f"  {j}. {action.type}: {vars(action)}", ColoredLogger.GRAY)
+
+                        # 🔍 DEBUG: Check for seed discrepancies in NavigateAction
+                        if hasattr(action, 'url') and action.url and action.type == 'NavigateAction':
+                            ColoredLogger.debug(f"     🔗 Navigation URL: {action.url}", ColoredLogger.MAGENTA)
+
+                            # Check seed presence and correctness
+                            if seed is not None:  # Only validate if task has assigned seed
+                                if 'seed=' in action.url:
+                                    action_seed = action.url.split('seed=')[1].split('&')[0].split('?')[0]
+                                    if action_seed != str(seed):
+                                        ColoredLogger.warning(
+                                            f"     ⚠️ Seed MISMATCH: expected seed={seed}, got seed={action_seed} (will score 0)",
+                                            ColoredLogger.YELLOW
+                                        )
+                                    else:
+                                        ColoredLogger.debug(f"     ✅ Seed matches: {action_seed}", ColoredLogger.GREEN)
+                                else:
+                                    # Seed is missing from NavigateAction URL
+                                    ColoredLogger.warning(
+                                        f"     ⚠️ Seed MISSING: expected seed={seed} in URL (will score 0)",
+                                        ColoredLogger.RED
+                                    )
+
+                            # Check URL path discrepancies
+                            expected_base = project.frontend_url.rstrip('/')
+                            if not action.url.startswith(expected_base):
+                                ColoredLogger.debug(f"     ⚠️ URL base mismatch: expected {expected_base}", ColoredLogger.GRAY)
+                                ColoredLogger.debug(f"     Got URL: {action.url}", ColoredLogger.GRAY)
+                            else:
+                                ColoredLogger.debug(f"     ✅ URL base matches: {expected_base}", ColoredLogger.GREEN)
+                else:
+                    ColoredLogger.warning(f"\n📊 Miner UID={uid}: NO ACTIONS", ColoredLogger.YELLOW)
+            ColoredLogger.debug("=" * 80 + "\n", ColoredLogger.CYAN)
+
+            # Evaluate task solutions
+            ColoredLogger.debug("🔍 STARTING EVALUATION...", ColoredLogger.CYAN)
             eval_scores, test_results_list, evaluation_results = await evaluate_task_solutions(
                 web_project=project,
                 task=task,
@@ -1097,139 +947,44 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 execution_times=execution_times,
             )
 
-            # ═══════════════════════════════════════════════════════
-            # Show Actions + Evaluation PER MINER (Rich tables)
-            # ═══════════════════════════════════════════════════════
-            from rich.console import Console
-            from rich.table import Table
-            from rich import box
-
-            console = Console()
-
-            def safe_print(*args, **kwargs):
-                """Helper to suppress pipe errors when printing Rich tables"""
-                try:
-                    console.print(*args, **kwargs)
-                except (BrokenPipeError, OSError):
-                    pass  # Silently ignore pipe errors
-
-            for i, (uid, solution) in enumerate(zip(self.active_miner_uids, task_solutions)):
-                safe_print(f"\n[cyan][Miner {uid}] Actions & Evaluation[/cyan]")
-
-                # Actions Table (Rich)
-                if solution and solution.actions:
-                    actions_table = Table(
-                        show_header=True, 
-                        header_style="cyan",
-                        box=box.ROUNDED,
-                        expand=True,
-                        show_lines=True
-                    )
-                    actions_table.add_column("#", width=4, style="cyan")
-                    actions_table.add_column("Type", width=16, style="cyan")
-                    actions_table.add_column("Details", width=None, style="white", no_wrap=False)
-
-                    seed_issues = []
-                    for j, action in enumerate(solution.actions, 1):
-                        action_type = action.type.replace("Action", "")
-
-                        # Build detail string
-                        if action.type == 'NavigateAction' and hasattr(action, 'url'):
-                            detail = f"{action.url}"
-                            if seed is not None and 'seed=' not in action.url:
-                                seed_issues.append(f"Action #{j}: Seed MISSING (expected={seed})")
-                        elif action.type == 'TypeAction' and hasattr(action, 'text'):
-                            detail = f"'{action.text}'"
-                        elif action.type == 'ClickAction' and hasattr(action, 'selector'):
-                            detail = str(action.selector.value if hasattr(action.selector, 'value') else action.selector)
-                        elif action.type == 'WaitAction' and hasattr(action, 'time_seconds'):
-                            detail = f"{action.time_seconds}s"
-                        else:
-                            detail = str(vars(action))
-
-                        actions_table.add_row(str(j), action_type, detail)
-
-                    safe_print(actions_table)
-                else:
-                    safe_print("[yellow]No actions received[/yellow]")
-
-                # Evaluation Table (Rich)
-                score = eval_scores[i]
-                exec_time = execution_times[i]
-                error_msg = evaluation_results[i].get("error_message", "")
-
-                eval_table = Table(
-                    show_header=True, 
-                    header_style="cyan",
-                    box=box.ROUNDED,
-                    expand=True,
-                    show_lines=True
-                )
-                eval_table.add_column("Metric", width=16, style="cyan")
-                eval_table.add_column("Value", width=None, style="white", no_wrap=False)
-
-                # Score row
-                if score > 0:
-                    eval_table.add_row("Final Score", f"{score:.4f} ✅ PASSED", style="green")
-                else:
-                    eval_table.add_row("Final Score", f"{score:.4f} ❌ FAILED", style="yellow")
-
-                # Time row
-                eval_table.add_row("Execution Time", f"{exec_time:.2f}s", style="cyan")
-
-                # Message row
-                if error_msg:
-                    eval_table.add_row("Message", error_msg, style="yellow")
-                elif seed_issues:
-                    eval_table.add_row("Message", seed_issues[0], style="yellow")
-                elif score > 0:
-                    eval_table.add_row("Message", "✅ All tests passed", style="green")
-                else:
-                    eval_table.add_row("Message", "❌ Tests failed", style="yellow")
-
-                safe_print(eval_table)
-
-            # ═══════════════════════════════════════════════════════
-            # [Evaluation] Summary table (Rich)
-            # ═══════════════════════════════════════════════════════
-            safe_print(f"\n[blue][Evaluation] Summary[/blue]")
-
-            summary_table = Table(
-                show_header=True, 
-                header_style="blue",
-                box=box.ROUNDED,
-                expand=True,
-                show_lines=True
-            )
-            summary_table.add_column("UID", width=6, style="blue")
-            summary_table.add_column("Score", width=10, style="white")
-            summary_table.add_column("Time(s)", width=10, style="white")
-            summary_table.add_column("Message", width=None, style="white", no_wrap=False)
-
+            # 🔍 DEBUG: Log evaluation results in detail
+            ColoredLogger.debug("\n" + "=" * 80, ColoredLogger.CYAN)
+            ColoredLogger.debug("🔍 EVALUATION RESULTS DETAILED", ColoredLogger.CYAN)
+            ColoredLogger.debug("=" * 80, ColoredLogger.CYAN)
             for i, uid in enumerate(self.active_miner_uids):
-                score = eval_scores[i]
-                exec_time = execution_times[i]
+                ColoredLogger.debug(f"\n📊 Miner UID={uid}:", ColoredLogger.MAGENTA)
+                ColoredLogger.debug(f"  📈 Eval Score: {eval_scores[i]:.4f}", ColoredLogger.GREEN)
+                ColoredLogger.debug(f"  ⏱️  Execution Time: {execution_times[i]:.2f}s", ColoredLogger.BLUE)
+
+                # Show evaluation_result but replace GIF content with just its length
+                eval_result_display = evaluation_results[i].copy()
+                if 'gif_recording' in eval_result_display and eval_result_display['gif_recording']:
+                    eval_result_display['gif_recording'] = f"<length: {len(eval_result_display['gif_recording'])}>"
+
+                ColoredLogger.debug(f"  📋 Evaluation Result: {eval_result_display}", ColoredLogger.YELLOW)
+
+                # Show error message if present (e.g. seed validation failures)
                 error_msg = evaluation_results[i].get("error_message", "")
+                if error_msg:
+                    ColoredLogger.warning(f"  ⚠️ Error: {error_msg}", ColoredLogger.RED)
 
-                if score > 0:
-                    message = "✅ PASSED"
-                    row_style = "green"
-                elif error_msg:
-                    message = f"❌ {error_msg}"
-                    row_style = "yellow"
+                ColoredLogger.debug(f"  🧪 Test Results ({len(test_results_list[i])} tests):", ColoredLogger.CYAN)
+                if test_results_list[i]:
+                    for test_idx, test_result in enumerate(test_results_list[i], 1):
+                        success = test_result.get("success", False)
+                        status_emoji = "✅" if success else "❌"
+                        extra_data = test_result.get("extra_data", {})
+
+                        # Show test type and criteria from extra_data
+                        test_type = extra_data.get("type", "Unknown")
+                        event_name = extra_data.get("event_name", "N/A")
+
+                        ColoredLogger.debug(f"     Test {test_idx}: {status_emoji} {test_type} - Event: {event_name}", ColoredLogger.GRAY)
+                        if extra_data.get("event_criteria"):
+                            ColoredLogger.debug(f"        Criteria: {extra_data.get('event_criteria')}", ColoredLogger.GRAY)
                 else:
-                    message = "❌ FAILED"
-                    row_style = "yellow"
-
-                summary_table.add_row(
-                    str(uid), 
-                    f"{score:.4f}", 
-                    f"{exec_time:.2f}", 
-                    message, 
-                    style=row_style
-                )
-
-            safe_print(summary_table)
+                    ColoredLogger.warning(f"     ⚠️  NO TEST RESULTS", ColoredLogger.RED)
+            ColoredLogger.debug("=" * 80 + "\n", ColoredLogger.CYAN)
 
             # Calculate final scores (combining eval quality + execution speed)
             rewards = calculate_rewards_for_task(
@@ -1347,7 +1102,6 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         """Calculate averages, apply WTA, set weights"""
         ColoredLogger.info("🏁 Phase: SetWeights — Calculating final weights", ColoredLogger.PURPLE)
         bt.logging.info(f"Distributed consensus active: {str(ENABLE_DISTRIBUTED_CONSENSUS).lower()}")
-        bt.logging.info(f"Active miners: {len(self.active_miner_uids)}, Tasks completed: {tasks_completed}")
 
         # Check if no miners responded to handshake - BURN ALL WEIGHTS
         if not self.active_miner_uids:
@@ -1371,12 +1125,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         avg_rewards = self.round_manager.get_average_rewards()
 
         # If sharing enabled, attempt to aggregate across validators via commitments/IPFS
-        bt.logging.info(f"🔍 ENABLE_DISTRIBUTED_CONSENSUS = {ENABLE_DISTRIBUTED_CONSENSUS}")
         if ENABLE_DISTRIBUTED_CONSENSUS:
-            ColoredLogger.info("=" * 80, ColoredLogger.CYAN)
-            ColoredLogger.info("🌐 CONSENSUS: Starting IPFS/Blockchain aggregation", ColoredLogger.CYAN)
-            ColoredLogger.info("=" * 80, ColoredLogger.CYAN)
-            bt.logging.info("IPFS | [CONSENSUS] Fetching aggregated scores from other validators...")
             try:
                 boundaries = self.round_manager.get_current_boundaries()
                 bt.logging.info("🤝 Consensus aggregation — preparing final scores")
@@ -1386,28 +1135,22 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     bt.logging.debug("No cached aggregation; fetching now")
                     # Natural gap between STOP and FETCH ensures propagation
                     st = await self._get_async_subtensor()
-                    try:
-                        agg = await aggregate_scores_from_commitments(
-                            validator=self,
-                            st=st,
-                            start_epoch=boundaries['round_start_epoch'],
-                            target_epoch=boundaries['target_epoch'],
-                        )
-                    finally:
-                        # Close AsyncSubtensor immediately after use
-                        await self._close_async_subtensor()
+                    agg = await aggregate_scores_from_commitments(
+                        validator=self,
+                        st=st,
+                        start_epoch=boundaries['round_start_epoch'],
+                        target_epoch=boundaries['target_epoch'],
+                    )
                 if agg:
-                    bt.logging.success(f"IPFS | [CONSENSUS] Aggregated scores from {len(agg)} miners via consensus")
                     ColoredLogger.info(
                         f"🤝 Using aggregated scores from commitments ({len(agg)} miners)",
                         ColoredLogger.CYAN,
                     )
                     avg_rewards = agg
                 else:
-                    bt.logging.warning("IPFS | [CONSENSUS] No aggregated scores found; using local averages")
                     ColoredLogger.warning("No aggregated scores available; using local averages.", ColoredLogger.YELLOW)
             except Exception as e:
-                bt.logging.error(f"IPFS | [CONSENSUS] Aggregation failed; using local averages: {e}", exc_info=True)
+                bt.logging.warning(f"Aggregation failed; using local averages: {e}")
 
         # If all miners have non-positive average scores, burn all weights and exit
         try:
@@ -1466,32 +1209,19 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             rewards=active_rewards,           # Array of rewards for active miners
             uids=self.active_miner_uids       # List of active miner UIDs (same length)
         )
-
-        bt.logging.info("⏳ Setting weights on chain...")
         self.set_weights()
-        bt.logging.info("✅ Weights set successfully")
 
-        bt.logging.info("⏳ Finishing IWAP round...")
         try:
             await self._finish_iwap_round(
                 avg_rewards=avg_rewards,
                 final_weights=final_rewards_dict,
                 tasks_completed=tasks_completed,
             )
-            bt.logging.info("✅ IWAP round finished successfully")
         except Exception as e:
             bt.logging.warning(f"IWAP finish_round failed: {e}")
 
         ColoredLogger.success("✅ Round complete", ColoredLogger.GREEN)
-        bt.logging.info(f"EVALUATION | [ROUND SUMMARY] Tasks completed: {tasks_completed}")
-
-        # Clean up WebSocket connections to avoid pending tasks
-        bt.logging.info("⏳ Cleaning up WebSocket connections...")
-        try:
-            await self._close_async_subtensor()
-            bt.logging.info("✅ WebSocket cleanup complete")
-        except Exception as e:
-            bt.logging.debug(f"Error closing async subtensor: {e}")
+        ColoredLogger.info(f"Tasks completed: {tasks_completed}", ColoredLogger.GREEN)
 
 
 if __name__ == "__main__":
