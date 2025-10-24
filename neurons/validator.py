@@ -951,20 +951,33 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             )
 
             # ═══════════════════════════════════════════════════════
-            # Show Actions + Evaluation PER MINER (ASCII tables)
+            # Show Actions + Evaluation PER MINER (Rich tables)
             # ═══════════════════════════════════════════════════════
-            for i, (uid, solution) in enumerate(zip(self.active_miner_uids, task_solutions)):
-                ColoredLogger.info(f"\n[Miner {uid}] Actions & Evaluation", ColoredLogger.CYAN)
+            from rich.console import Console
+            from rich.table import Table
+            from rich import box
 
-                # Actions Table (ASCII)
+            console = Console()
+
+            for i, (uid, solution) in enumerate(zip(self.active_miner_uids, task_solutions)):
+                console.print(f"\n[cyan][Miner {uid}] Actions & Evaluation[/cyan]")
+
+                # Actions Table (Rich)
                 if solution and solution.actions:
-                    ColoredLogger.info("+-----+------------------+--------------------------------------------------------+", ColoredLogger.CYAN)
-                    ColoredLogger.info("|  #  | Type             | Details                                                  |", ColoredLogger.CYAN)
-                    ColoredLogger.info("+-----+------------------+--------------------------------------------------------+", ColoredLogger.CYAN)
+                    actions_table = Table(
+                        show_header=True, 
+                        header_style="cyan",
+                        box=box.ROUNDED,
+                        expand=True,
+                        show_lines=True
+                    )
+                    actions_table.add_column("#", width=4, style="cyan")
+                    actions_table.add_column("Type", width=16, style="cyan")
+                    actions_table.add_column("Details", width=None, style="white", no_wrap=False)
 
                     seed_issues = []
                     for j, action in enumerate(solution.actions, 1):
-                        action_type = action.type.replace("Action", "")[:16]
+                        action_type = action.type.replace("Action", "")
 
                         # Build detail string
                         if action.type == 'NavigateAction' and hasattr(action, 'url'):
@@ -980,53 +993,64 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                         else:
                             detail = str(vars(action))
 
-                        # Truncate detail if too long but keep it readable
-                        if len(detail) > 56:
-                            detail = detail[:53] + "..."
+                        actions_table.add_row(str(j), action_type, detail)
 
-                        ColoredLogger.info(f"| {j:3d} | {action_type:16s} | {detail:56s} |", ColoredLogger.CYAN)
-
-                    ColoredLogger.info("+-----+------------------+--------------------------------------------------------+", ColoredLogger.CYAN)
+                    console.print(actions_table)
                 else:
-                    ColoredLogger.warning("No actions received", ColoredLogger.YELLOW)
+                    console.print("[yellow]No actions received[/yellow]")
 
-                # Evaluation Table (ASCII)
+                # Evaluation Table (Rich)
                 score = eval_scores[i]
                 exec_time = execution_times[i]
                 error_msg = evaluation_results[i].get("error_message", "")
 
-                ColoredLogger.info("+----------------+---------------------------------------------------------------+", ColoredLogger.CYAN)
-                ColoredLogger.info("| Metric         | Value                                                         |", ColoredLogger.CYAN)
-                ColoredLogger.info("+----------------+---------------------------------------------------------------+", ColoredLogger.CYAN)
+                eval_table = Table(
+                    show_header=True, 
+                    header_style="cyan",
+                    box=box.ROUNDED,
+                    expand=True,
+                    show_lines=True
+                )
+                eval_table.add_column("Metric", width=16, style="cyan")
+                eval_table.add_column("Value", width=None, style="white", no_wrap=False)
 
                 # Score row
                 if score > 0:
-                    ColoredLogger.info(f"| Final Score    | {score:.4f} ✅ PASSED                                          |", ColoredLogger.GREEN)
+                    eval_table.add_row("Final Score", f"{score:.4f} ✅ PASSED", style="green")
                 else:
-                    ColoredLogger.info(f"| Final Score    | {score:.4f} ❌ FAILED                                          |", ColoredLogger.YELLOW)
+                    eval_table.add_row("Final Score", f"{score:.4f} ❌ FAILED", style="yellow")
 
                 # Time row
-                ColoredLogger.info(f"| Execution Time | {exec_time:.2f}s                                                    |", ColoredLogger.CYAN)
+                eval_table.add_row("Execution Time", f"{exec_time:.2f}s", style="cyan")
 
                 # Message row
                 if error_msg:
-                    ColoredLogger.info(f"| Message        | {error_msg} |", ColoredLogger.YELLOW)
+                    eval_table.add_row("Message", error_msg, style="yellow")
                 elif seed_issues:
-                    ColoredLogger.info(f"| Message        | {seed_issues[0]} |", ColoredLogger.YELLOW)
+                    eval_table.add_row("Message", seed_issues[0], style="yellow")
                 elif score > 0:
-                    ColoredLogger.info(f"| Message        | ✅ All tests passed                                        |", ColoredLogger.GREEN)
+                    eval_table.add_row("Message", "✅ All tests passed", style="green")
                 else:
-                    ColoredLogger.info(f"| Message        | ❌ Tests failed                                            |", ColoredLogger.YELLOW)
+                    eval_table.add_row("Message", "❌ Tests failed", style="yellow")
 
-                ColoredLogger.info("+----------------+---------------------------------------------------------------+", ColoredLogger.CYAN)
+                console.print(eval_table)
 
             # ═══════════════════════════════════════════════════════
-            # [Evaluation] Summary table (all miners)
+            # [Evaluation] Summary table (Rich)
             # ═══════════════════════════════════════════════════════
-            ColoredLogger.info(f"\n[Evaluation] Summary", ColoredLogger.BLUE)
-            ColoredLogger.info("+------+----------+----------+----------------------------------------------------------+", ColoredLogger.BLUE)
-            ColoredLogger.info("| UID  |  Score   |  Time(s) | Message                                                  |", ColoredLogger.BLUE)
-            ColoredLogger.info("+------+----------+----------+----------------------------------------------------------+", ColoredLogger.BLUE)
+            console.print(f"\n[blue][Evaluation] Summary[/blue]")
+
+            summary_table = Table(
+                show_header=True, 
+                header_style="blue",
+                box=box.ROUNDED,
+                expand=True,
+                show_lines=True
+            )
+            summary_table.add_column("UID", width=6, style="blue")
+            summary_table.add_column("Score", width=10, style="white")
+            summary_table.add_column("Time(s)", width=10, style="white")
+            summary_table.add_column("Message", width=None, style="white", no_wrap=False)
 
             for i, uid in enumerate(self.active_miner_uids):
                 score = eval_scores[i]
@@ -1035,21 +1059,23 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
                 if score > 0:
                     message = "✅ PASSED"
-                    color = ColoredLogger.GREEN
+                    row_style = "green"
                 elif error_msg:
                     message = f"❌ {error_msg}"
-                    color = ColoredLogger.YELLOW
+                    row_style = "yellow"
                 else:
                     message = "❌ FAILED"
-                    color = ColoredLogger.YELLOW
+                    row_style = "yellow"
 
-                # Truncate message if too long
-                if len(message) > 56:
-                    message = message[:53] + "..."
+                summary_table.add_row(
+                    str(uid), 
+                    f"{score:.4f}", 
+                    f"{exec_time:.2f}", 
+                    message, 
+                    style=row_style
+                )
 
-                ColoredLogger.info(f"| {uid:4d} | {score:8.4f} | {exec_time:8.2f} | {message:56s} |", color)
-
-            ColoredLogger.info("+------+----------+----------+----------------------------------------------------------+", ColoredLogger.BLUE)
+            console.print(summary_table)
 
             # Calculate final scores (combining eval quality + execution speed)
             rewards = calculate_rewards_for_task(
