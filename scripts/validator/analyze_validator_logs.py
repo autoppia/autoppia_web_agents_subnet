@@ -44,7 +44,9 @@ from autoppia_iwa.src.llms.infrastructure.llm_service import LLMConfig, LLMFacto
 
 
 DEFAULT_LINES = 250
-DEFAULT_MODEL = "gpt-5.0"
+# Prefer explicit env overrides, then fall back to a sane default model name.
+# You can also override at runtime with --model.
+DEFAULT_MODEL = os.getenv("LOG_ANALYZER_OPENAI_MODEL") or os.getenv("OPENAI_MODEL") or "gpt-5-mini"
 DEFAULT_TEMPERATURE = 0.1
 DEFAULT_MAX_TOKENS = 1200
 DEFAULT_PATTERN = "*.log"
@@ -285,7 +287,7 @@ def select_recent_rounds(lines: Sequence[str], rounds_to_keep: int) -> tuple[lis
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Inspect recent validator logs and ask GPT-5 for a structured health assessment.",
+        description="Inspect recent validator logs and ask an OpenAI model for a structured health assessment.",
     )
     parser.add_argument(
         "path",
