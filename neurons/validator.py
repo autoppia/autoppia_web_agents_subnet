@@ -662,10 +662,10 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     ColoredLogger.info("🔍 DEBUG: STOP_FRACTION publish - getting round_number...", ColoredLogger.CYAN)
                     round_number = await self.round_manager.calculate_round(current_block)
                     ColoredLogger.info(f"   - round_number: {round_number}", ColoredLogger.CYAN)
-                    
+
                     st = await self._get_async_subtensor()
                     ColoredLogger.info(f"🔍 DEBUG: STOP_FRACTION publish - calling publish_round_snapshot()...", ColoredLogger.CYAN)
-                    
+
                     cid = await publish_round_snapshot(
                         validator=self,
                         st=st,
@@ -736,10 +736,10 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                         ColoredLogger.info("🔍 DEBUG: BUFFER publish - getting round_number...", ColoredLogger.CYAN)
                         round_number = await self.round_manager.calculate_round(current_block)
                         ColoredLogger.info(f"   - round_number: {round_number}", ColoredLogger.CYAN)
-                        
+
                         st = await self._get_async_subtensor()
                         ColoredLogger.info(f"🔍 DEBUG: BUFFER publish - calling publish_round_snapshot()...", ColoredLogger.CYAN)
-                        
+
                         cid = await publish_round_snapshot(
                             validator=self,
                             st=st,
@@ -747,7 +747,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                             tasks_completed=tasks_completed,
                         )
                         ColoredLogger.info(f"🔍 DEBUG: BUFFER publish - returned CID: {cid}", ColoredLogger.CYAN)
-                        
+
                         self._consensus_published = True
                         try:
                             self.state_manager.save_checkpoint()
@@ -788,13 +788,13 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 ColoredLogger.info("🔍 DEBUG: About to call publish_round_snapshot()...", ColoredLogger.CYAN)
                 current_block = self.metagraph.block.item()
                 ColoredLogger.info(f"   - current_block: {current_block}", ColoredLogger.CYAN)
-                
+
                 round_number = await self.round_manager.calculate_round(current_block)
                 ColoredLogger.info(f"   - round_number: {round_number}", ColoredLogger.CYAN)
-                
+
                 st = await self._get_async_subtensor()
                 ColoredLogger.info(f"   - st type: {type(st).__name__}", ColoredLogger.CYAN)
-                
+
                 ColoredLogger.info(f"🔍 DEBUG: Calling publish_round_snapshot with tasks_completed={tasks_completed}...", ColoredLogger.CYAN)
                 cid = await publish_round_snapshot(
                     validator=self,
