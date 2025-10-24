@@ -1237,6 +1237,4 @@ if __name__ == "__main__":
         raise e
 
     with Validator(config=config(role="validator")) as validator:
-        while True:
-            bt.logging.info(f"Heartbeat — validator running... {time.time()}")
-            time.sleep(30)
+        validator.run()
