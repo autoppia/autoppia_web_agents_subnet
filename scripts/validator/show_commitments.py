@@ -314,6 +314,141 @@ def _render_validator_table(
     return "\n".join(table_lines), extra
 
 
+def _decode_weight_payload(raw: Any) -> Dict[int, int]:
+    mapping: Dict[int, int] = {}
+    if raw is None:
+        return mapping
+
+    if isinstance(raw, dict):
+        if "uids" in raw and "weights" in raw:
+            uids = raw.get("uids") or []
+            weights = raw.get("weights") or []
+            for uid, weight in zip(uids, weights):
+                try:
+                    mapping[int(uid)] = int(weight)
+                except Exception:
+                    continue
+        elif "destinations" in raw and "values" in raw:
+            uids = raw.get("destinations") or []
+            weights = raw.get("values") or []
+            for uid, weight in zip(uids, weights):
+                try:
+                    mapping[int(uid)] = int(weight)
+                except Exception:
+                    continue
+        else:
+            for key, value in raw.items():
+                try:
+                    mapping[int(key)] = int(value)
+                except Exception:
+                    continue
+        return mapping
+
+    if isinstance(raw, (list, tuple)):
+        for entry in raw:
+            if isinstance(entry, dict):
+                uid = entry.get("uid") if "uid" in entry else entry.get("key")
+                weight = entry.get("weight")
+                if weight is None:
+                    weight = entry.get("value")
+                try:
+                    mapping[int(uid)] = int(weight)
+                except Exception:
+                    continue
+            elif isinstance(entry, (list, tuple)) and len(entry) >= 2:
+                uid, weight = entry[0], entry[1]
+                try:
+                    mapping[int(uid)] = int(weight)
+                except Exception:
+                    continue
+    return mapping
+
+
+def _normalize_weights(raw_weights: Dict[int, int]) -> Dict[int, float]:
+    if not raw_weights:
+        return {}
+    filtered = {uid: max(int(weight), 0) for uid, weight in raw_weights.items()}
+    total = sum(filtered.values())
+    if total <= 0:
+        return {uid: 0.0 for uid in filtered}
+    return {uid: weight / total for uid, weight in filtered.items()}
+
+
+async def _load_weight_snapshot(
+    st: AsyncSubtensor,
+    *,
+    netuid: int,
+    block_candidates: Sequence[int],
+) -> Tuple[Dict[int, Dict[int, float]], Optional[int], Optional[str]]:
+    last_error: Optional[str] = None
+    fallback_snapshot: Dict[int, Dict[int, float]] = {}
+    fallback_block: Optional[int] = None
+
+    for block in block_candidates:
+        if block is None or block <= 0:
+            continue
+        try:
+            entries = await st.weights(netuid=netuid, block=block)
+        except Exception as exc:  # noqa: BLE001
+            last_error = str(exc)
+            continue
+
+        snapshot: Dict[int, Dict[int, float]] = {}
+        for validator_uid, raw in entries:
+            try:
+                v_uid = int(validator_uid)
+            except Exception:
+                continue
+            raw_map = _decode_weight_payload(raw)
+            snapshot[v_uid] = _normalize_weights(raw_map)
+
+        if snapshot:
+            return snapshot, block, None
+
+        if fallback_block is None:
+            fallback_snapshot = snapshot
+            fallback_block = block
+        last_error = "no weights recorded"
+
+    if fallback_block is not None:
+        return fallback_snapshot, fallback_block, last_error
+
+    return {}, None, last_error
+
+
+def _format_weight_lines(
+    *,
+    validator_uid: int,
+    normalized: Dict[int, float],
+    block: int,
+    limit: int = 5,
+) -> List[str]:
+    if not normalized:
+        return [
+            f"  • weights uid {validator_uid} @block {block}: no weights recorded",
+        ]
+
+    sorted_weights = sorted(
+        normalized.items(),
+        key=lambda item: item[1],
+        reverse=True,
+    )
+    shown = min(limit, len(sorted_weights))
+    header = (
+        f"  • weights uid {validator_uid} @block {block} "
+        f"(top {shown}/{len(sorted_weights)})"
+    )
+    lines = [header]
+    for dest_uid, value in sorted_weights[:shown]:
+        lines.append(
+            f"      - dest {dest_uid}: {value:.4f} ({value * 100:.2f}%)"
+        )
+    remaining = len(sorted_weights) - shown
+    if remaining > 0:
+        lines.append(f"      … {remaining} additional destinations")
+    return lines
+
+
 async def inspect_rounds(
     *,
     rounds: int,
@@ -448,13 +583,18 @@ async def inspect_rounds(
             label_round = reported_rounds[0] if reported_rounds else derived_round
             label = _round_label(label_round, target_epoch)
 
-            status: str
             if current_block < target_block:
-                remaining_blocks = target_block - current_block
-                status = "active: " + _format_minutes(remaining_blocks) + " remaining"
+                status = (
+                    "active: "
+                    + _format_minutes(target_block - current_block)
+                    + " remaining"
+                )
             else:
-                delta_blocks = current_block - target_block
-                status = "settled: finished " + _format_minutes(delta_blocks) + " ago"
+                status = (
+                    "settled: finished "
+                    + _format_minutes(current_block - target_block)
+                    + " ago"
+                )
 
             print(f"\n[{idx}] {label}")
             print(
@@ -513,6 +653,55 @@ async def inspect_rounds(
                 print(table_text)
             for line in extra_lines:
                 print(line)
+
+            if target_block > current_block:
+                print("  • weights unavailable (round still active)")
+                continue
+
+            candidates = [target_block]
+            for offset in (12, 60, 120):
+                candidate = target_block + offset
+                if candidate <= current_block:
+                    candidates.append(candidate)
+            candidates.append(current_block)
+
+            seen = set()
+            block_candidates: List[int] = []
+            for blk in candidates:
+                if blk not in seen:
+                    seen.add(blk)
+                    block_candidates.append(blk)
+
+            weights_map, weight_block, weight_error = await _load_weight_snapshot(
+                st,
+                netuid=netuid,
+                block_candidates=block_candidates,
+            )
+
+            if weight_block is None:
+                reason = weight_error or "unavailable"
+                print(f"  • weights unavailable ({reason})")
+                continue
+
+            validator_uids = sorted(
+                {v.uid for v in validators if v.uid is not None}
+            )
+            if not validator_uids:
+                print(f"  • weights @block {weight_block}: no validator UIDs")
+                continue
+
+            for v_uid in validator_uids:
+                normalized = weights_map.get(v_uid, {})
+                lines = _format_weight_lines(
+                    validator_uid=v_uid,
+                    normalized=normalized,
+                    block=weight_block,
+                    limit=5,
+                )
+                for line in lines:
+                    print(line)
+            if weight_error and weights_map:
+                print(f"  • weights note: {weight_error}")
 
 
 def parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:

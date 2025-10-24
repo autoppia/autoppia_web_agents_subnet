@@ -23,6 +23,8 @@ from pathlib import Path
 from textwrap import dedent
 from typing import Iterable, Sequence
 
+from dotenv import load_dotenv
+
 SCRIPT_PATH = Path(__file__).resolve()
 IWA_ROOT: Path | None = None
 for parent in SCRIPT_PATH.parents:
@@ -34,6 +36,9 @@ if IWA_ROOT is None:
     raise RuntimeError("Could not locate the 'autoppia_iwa_module' directory relative to this script.")
 if str(IWA_ROOT) not in sys.path:
     sys.path.insert(0, str(IWA_ROOT))
+
+REPO_ROOT = IWA_ROOT.parent
+load_dotenv(REPO_ROOT / ".env")
 
 from autoppia_iwa.src.llms.infrastructure.llm_service import LLMConfig, LLMFactory
 
@@ -237,14 +242,22 @@ def group_lines_by_round(lines: Sequence[str]) -> list[tuple[str, list[str]]]:
 
     for line in lines:
         round_id = extract_round_id(line)
-        if round_id and round_id != current_round:
-            if current_round and current_bucket:
-                groups.append((current_round, current_bucket))
-            current_round = round_id
-            current_bucket = []
+        if round_id:
+            if current_round is None:
+                current_round = round_id
+            elif round_id != current_round:
+                if current_bucket:
+                    groups.append((current_round, current_bucket))
+                current_round = round_id
+                current_bucket = []
 
         if current_round is not None:
             current_bucket.append(line)
+
+            if "✅ Round complete" in line:
+                groups.append((current_round, current_bucket))
+                current_round = None
+                current_bucket = []
 
     if current_round and current_bucket:
         groups.append((current_round, current_bucket))
