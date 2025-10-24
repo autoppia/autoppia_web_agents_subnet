@@ -659,12 +659,12 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     ColoredLogger.RED,
                 )
                 try:
-                    ColoredLogger.info("🔍 DEBUG: STOP_FRACTION publish - getting round_number...", ColoredLogger.CYAN)
+                    ColoredLogger.warning("🔍 DEBUG: STOP_FRACTION publish - getting round_number...", ColoredLogger.CYAN)
                     round_number = await self.round_manager.calculate_round(current_block)
-                    ColoredLogger.info(f"   - round_number: {round_number}", ColoredLogger.CYAN)
+                    ColoredLogger.warning(f"   - round_number: {round_number}", ColoredLogger.CYAN)
 
                     st = await self._get_async_subtensor()
-                    ColoredLogger.info(f"🔍 DEBUG: STOP_FRACTION publish - calling publish_round_snapshot()...", ColoredLogger.CYAN)
+                    ColoredLogger.warning(f"🔍 DEBUG: STOP_FRACTION publish - calling publish_round_snapshot()...", ColoredLogger.CYAN)
 
                     cid = await publish_round_snapshot(
                         validator=self,
@@ -672,7 +672,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                         round_number=round_number,
                         tasks_completed=tasks_completed,
                     )
-                    ColoredLogger.info(f"🔍 DEBUG: STOP_FRACTION publish - returned CID: {cid}", ColoredLogger.CYAN)
+                    ColoredLogger.warning(f"🔍 DEBUG: STOP_FRACTION publish - returned CID: {cid}", ColoredLogger.CYAN)
 
                     self._consensus_published = True
                     ColoredLogger.success(
@@ -733,12 +733,12 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 # Try to publish commitments if sharing and not yet published.
                 if ENABLE_DISTRIBUTED_CONSENSUS and not self._consensus_published:
                     try:
-                        ColoredLogger.info("🔍 DEBUG: BUFFER publish - getting round_number...", ColoredLogger.CYAN)
+                        ColoredLogger.warning("🔍 DEBUG: BUFFER publish - getting round_number...", ColoredLogger.CYAN)
                         round_number = await self.round_manager.calculate_round(current_block)
-                        ColoredLogger.info(f"   - round_number: {round_number}", ColoredLogger.CYAN)
+                        ColoredLogger.warning(f"   - round_number: {round_number}", ColoredLogger.CYAN)
 
                         st = await self._get_async_subtensor()
-                        ColoredLogger.info(f"🔍 DEBUG: BUFFER publish - calling publish_round_snapshot()...", ColoredLogger.CYAN)
+                        ColoredLogger.warning(f"🔍 DEBUG: BUFFER publish - calling publish_round_snapshot()...", ColoredLogger.CYAN)
 
                         cid = await publish_round_snapshot(
                             validator=self,
@@ -746,7 +746,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                             round_number=round_number,
                             tasks_completed=tasks_completed,
                         )
-                        ColoredLogger.info(f"🔍 DEBUG: BUFFER publish - returned CID: {cid}", ColoredLogger.CYAN)
+                        ColoredLogger.warning(f"🔍 DEBUG: BUFFER publish - returned CID: {cid}", ColoredLogger.CYAN)
 
                         self._consensus_published = True
                         try:
@@ -785,24 +785,24 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 ColoredLogger.RED,
             )
             try:
-                ColoredLogger.info("🔍 DEBUG: About to call publish_round_snapshot()...", ColoredLogger.CYAN)
+                ColoredLogger.warning("🔍 DEBUG: About to call publish_round_snapshot()...", ColoredLogger.CYAN)
                 current_block = self.metagraph.block.item()
-                ColoredLogger.info(f"   - current_block: {current_block}", ColoredLogger.CYAN)
+                ColoredLogger.warning(f"   - current_block: {current_block}", ColoredLogger.CYAN)
 
                 round_number = await self.round_manager.calculate_round(current_block)
-                ColoredLogger.info(f"   - round_number: {round_number}", ColoredLogger.CYAN)
+                ColoredLogger.warning(f"   - round_number: {round_number}", ColoredLogger.CYAN)
 
                 st = await self._get_async_subtensor()
-                ColoredLogger.info(f"   - st type: {type(st).__name__}", ColoredLogger.CYAN)
+                ColoredLogger.warning(f"   - st type: {type(st).__name__}", ColoredLogger.CYAN)
 
-                ColoredLogger.info(f"🔍 DEBUG: Calling publish_round_snapshot with tasks_completed={tasks_completed}...", ColoredLogger.CYAN)
+                ColoredLogger.warning(f"🔍 DEBUG: Calling publish_round_snapshot with tasks_completed={tasks_completed}...", ColoredLogger.CYAN)
                 cid = await publish_round_snapshot(
                     validator=self,
                     st=st,
                     round_number=round_number,
                     tasks_completed=tasks_completed,
                 )
-                ColoredLogger.info(f"🔍 DEBUG: publish_round_snapshot() returned: {cid}", ColoredLogger.CYAN)
+                ColoredLogger.warning(f"🔍 DEBUG: publish_round_snapshot() returned: {cid}", ColoredLogger.CYAN)
 
                 self._consensus_published = True
                 ColoredLogger.success(
