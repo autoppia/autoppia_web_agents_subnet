@@ -98,6 +98,19 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         bt.logging.info("load_state()")
         self.load_state()
 
+    def _reset_consensus_state(self) -> None:
+        """Clear cached consensus state so a fresh round can publish again."""
+        self._consensus_published = False
+        self._consensus_mid_fetched = False
+        self._agg_scores_cache = None
+        # Clear any cached commit metadata
+        for attr in ("_consensus_commit_block", "_consensus_commit_cid"):
+            if hasattr(self, attr):
+                try:
+                    setattr(self, attr, None)
+                except Exception:
+                    pass
+
     # ═══════════════════════════════════════════════════════════════════════════════
     # MAIN FORWARD LOOP - Round-based system
     # ═══════════════════════════════════════════════════════════════════════════════
@@ -213,6 +226,12 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 bt.logging.info(f"Resume decision: fresh start ({info})")
         except Exception:
             pass
+
+        if not resumed:
+            try:
+                self._reset_iwap_round_state()
+            except Exception:
+                self._reset_consensus_state()
 
         # Early round header with identifiers for clear traceability
         try:

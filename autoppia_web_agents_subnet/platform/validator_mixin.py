@@ -170,12 +170,22 @@ class ValidatorPlatformMixin:
 
                 if checkpoint_round != current_round:
                     bt.logging.warning(
-                        "Discarding stale checkpoint: stored round %s (start_block=%s) != current round %s (block=%s)",
+                        "State checkpoint discarded: stored round %s (start_block=%s) != current round %s (block=%s)",
                         checkpoint_round,
                         ckpt.rm_start_block,
                         current_round,
                         current_block,
                     )
+                    try:
+                        self._reset_iwap_round_state()
+                    except Exception:
+                        pass
+                    reset_consensus = getattr(self, "_reset_consensus_state", None)
+                    if callable(reset_consensus):
+                        try:
+                            reset_consensus()
+                        except Exception:
+                            pass
                     try:
                         self.state_manager.cleanup()
                     except Exception:
@@ -281,6 +291,13 @@ class ValidatorPlatformMixin:
         self.round_start_timestamp = 0.0
         self.agent_run_accumulators = {}
         self._completed_pairs = set()
+        self._phases = {"p1_done": False, "p2_done": False}
+        reset_consensus = getattr(self, "_reset_consensus_state", None)
+        if callable(reset_consensus):
+            try:
+                reset_consensus()
+            except Exception:
+                pass
 
     # ──────────────────────────────────────────────────────────────────────────
     # Async subtensor provider for consensus (single instance per validator)
