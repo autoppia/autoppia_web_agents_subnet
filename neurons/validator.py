@@ -763,6 +763,10 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 bt.logging.info(f"EVALUATION | [TASK COMPLETION] Completed {tasks_completed} tasks")
                 # Log stop fraction reached
                 bt.logging.warning(f"🛑 Stop fraction reached: {STOP_TASK_EVALUATION_AT_ROUND_FRACTION:.0%} - Halting task execution and publishing to IPFS")
+                ColoredLogger.info(
+                    "🌐 Consensus: preparing IPFS publish (stop fraction reached)",
+                    ColoredLogger.CYAN,
+                )
                 bt.logging.info(f"IPFS | [CONSENSUS] Starting IPFS publish for round...")
                 try:
                     round_number = await self.round_manager.calculate_round(current_block)
@@ -777,13 +781,25 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                         if cid:
                             bt.logging.success(f"IPFS | [CONSENSUS] Publish complete - CID={cid}")
                             self._consensus_published = True
+                            ColoredLogger.success(
+                                f"🌐 Consensus: IPFS publish complete (CID={cid})",
+                                ColoredLogger.GREEN,
+                            )
                         else:
                             bt.logging.warning(f"IPFS | [CONSENSUS] Publish returned no CID")
+                            ColoredLogger.warning(
+                                "🌐 Consensus: IPFS publish returned no CID",
+                                ColoredLogger.YELLOW,
+                            )
                     finally:
                         # Close AsyncSubtensor immediately after use
                         await self._close_async_subtensor()
                 except Exception as e:
                     bt.logging.error(f"IPFS | [CONSENSUS] Publish failed: {e}", exc_info=True)
+                    ColoredLogger.error(
+                        f"🌐 Consensus: IPFS publish failed — {e}",
+                        ColoredLogger.RED,
+                    )
                 break
             if not self.round_manager.should_send_next_task(current_block):
                 ColoredLogger.warning(
@@ -818,6 +834,10 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 # Try to publish commitments if sharing and not yet published.
                 if ENABLE_DISTRIBUTED_CONSENSUS and not self._consensus_published:
                     bt.logging.info(f"IPFS | [CONSENSUS] Starting IPFS publish at safety buffer...")
+                    ColoredLogger.info(
+                        "🌐 Consensus: publishing IPFS snapshot at safety buffer",
+                        ColoredLogger.CYAN,
+                    )
                     try:
                         round_number = await self.round_manager.calculate_round(current_block)
                         st = await self._get_async_subtensor()
@@ -831,8 +851,16 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                             if cid:
                                 bt.logging.success(f"IPFS | [CONSENSUS] Publish complete - CID={cid}")
                                 self._consensus_published = True
+                                ColoredLogger.success(
+                                    f"🌐 Consensus: IPFS publish complete (CID={cid})",
+                                    ColoredLogger.GREEN,
+                                )
                             else:
                                 bt.logging.warning(f"IPFS | [CONSENSUS] Publish returned no CID")
+                                ColoredLogger.warning(
+                                    "🌐 Consensus: IPFS publish returned no CID",
+                                    ColoredLogger.YELLOW,
+                                )
                             try:
                                 self.state_manager.save_checkpoint()
                             except Exception:
@@ -842,6 +870,10 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                             await self._close_async_subtensor()
                     except Exception as e:
                         bt.logging.error(f"IPFS | [CONSENSUS] Publish failed: {e}", exc_info=True)
+                        ColoredLogger.error(
+                            f"🌐 Consensus: IPFS publish failed — {e}",
+                            ColoredLogger.RED,
+                        )
                 break
 
         # ═══════════════════════════════════════════════════════
@@ -853,6 +885,10 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             # Log task completion with EVALUATION context
             bt.logging.info(f"EVALUATION | [TASK COMPLETION] Completed {tasks_completed}/{len(all_tasks)} tasks")
             bt.logging.info(f"IPFS | [CONSENSUS] Starting IPFS publish after all tasks...")
+            ColoredLogger.info(
+                "🌐 Consensus: publishing IPFS snapshot after task loop",
+                ColoredLogger.CYAN,
+            )
             try:
                 current_block = self.metagraph.block.item()
                 round_number = await self.round_manager.calculate_round(current_block)
@@ -867,13 +903,25 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     if cid:
                         bt.logging.success(f"IPFS | [CONSENSUS] Publish complete - CID={cid}")
                         self._consensus_published = True
+                        ColoredLogger.success(
+                            f"🌐 Consensus: IPFS publish complete (CID={cid})",
+                            ColoredLogger.GREEN,
+                        )
                     else:
                         bt.logging.warning(f"IPFS | [CONSENSUS] Publish returned no CID")
+                        ColoredLogger.warning(
+                            "🌐 Consensus: IPFS publish returned no CID",
+                            ColoredLogger.YELLOW,
+                        )
                 finally:
                     # Close AsyncSubtensor immediately after use
                     await self._close_async_subtensor()
             except Exception as e:
                 bt.logging.error(f"IPFS | [CONSENSUS] Publish failed: {e}", exc_info=True)
+                ColoredLogger.error(
+                    f"🌐 Consensus: IPFS publish failed — {e}",
+                    ColoredLogger.RED,
+                )
 
         # ═══════════════════════════════════════════════════════
         # WAIT FOR TARGET EPOCH: Wait until the round ends
