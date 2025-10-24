@@ -32,6 +32,7 @@ def render_round_summary_table(round_manager, final_rewards: Dict[int, float], m
     uids = set(list(round_manager.round_rewards.keys()) + list(final_rewards.keys()))
     for uid in sorted(uids):
         hotkey = metagraph.hotkeys[uid] if uid < len(metagraph.hotkeys) else "<unknown>"
+        coldkey = metagraph.coldkeys[uid] if uid < len(metagraph.coldkeys) else "<unknown>"
         avg_eval = _mean_safe(round_manager.round_eval_scores.get(uid, []))
         avg_time = _mean_safe(round_manager.round_times.get(uid, []))
         avg_reward = _mean_safe(round_manager.round_rewards.get(uid, []))  # Pre-WTA reward (0.85*score + 0.15*time)
@@ -40,6 +41,8 @@ def render_round_summary_table(round_manager, final_rewards: Dict[int, float], m
             "uid": int(uid),
             "hotkey": hotkey,
             "hotkey_prefix": hotkey[:10],
+            "coldkey": coldkey,
+            "coldkey_prefix": coldkey[:10],
             "avg_eval": avg_eval,
             "avg_time": avg_time,
             "avg_reward": avg_reward,
@@ -66,7 +69,8 @@ def render_round_summary_table(round_manager, final_rewards: Dict[int, float], m
         )
         tbl.add_column("#", justify="right", width=3)
         tbl.add_column("UID", justify="right", width=5)
-        tbl.add_column("Hotkey", style="cyan", overflow="ellipsis")
+        tbl.add_column("Hotkey", style="cyan", overflow="ellipsis", width=12)
+        tbl.add_column("Coldkey", style="yellow", overflow="ellipsis", width=12)
         tbl.add_column("AvgScore", justify="right", width=10)
         tbl.add_column("AvgTime(s)", justify="right", width=10)
         tbl.add_column("AvgReward", justify="right", width=10)
@@ -77,6 +81,7 @@ def render_round_summary_table(round_manager, final_rewards: Dict[int, float], m
                 str(i),
                 str(r["uid"]),
                 r["hotkey_prefix"],
+                r["coldkey_prefix"],
                 f'{r["avg_eval"]:.4f}',
                 f'{r["avg_time"]:.3f}',
                 f'{r["avg_reward"]:.4f}',
@@ -90,11 +95,11 @@ def render_round_summary_table(round_manager, final_rewards: Dict[int, float], m
     # Fallback plain text table
     lines = [
         "Round Summary — Miners",
-        f'{"#":>3} {"UID":>5} {"HOTKEY":<12} {"AvgScore":>10} {"AvgTime(s)":>10} {"AvgReward":>10} {"WTA_Reward":>10}',
+        f'{"#":>3} {"UID":>5} {"HOTKEY":<12} {"COLDKEY":<12} {"AvgScore":>10} {"AvgTime(s)":>10} {"AvgReward":>10} {"WTA_Reward":>10}',
     ]
     for i, r in enumerate(rows, start=1):
         lines.append(
-            f'{i:>3} {r["uid"]:>5} {r["hotkey_prefix"]:<12.12} '
+            f'{i:>3} {r["uid"]:>5} {r["hotkey_prefix"]:<12.12} {r["coldkey_prefix"]:<12.12} '
             f'{r["avg_eval"]:>10.4f} {r["avg_time"]:>10.3f} {r["avg_reward"]:>10.4f} {r["wta_reward"]:>10.4f}'
         )
     text = "\n".join(lines)
