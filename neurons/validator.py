@@ -184,7 +184,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
         # Try to resume from previous round state
         resumed = False
-        state = self._load_round_state()
+        state = self._load_round_state(current_block=current_block)
         if state and state.get("validator_round_id"):
             try:
                 cached = list(getattr(self, "_all_tasks_cache", []) or [])

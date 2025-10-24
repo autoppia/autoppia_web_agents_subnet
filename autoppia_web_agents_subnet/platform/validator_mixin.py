@@ -136,7 +136,7 @@ class ValidatorPlatformMixin:
         except Exception as exc:
             bt.logging.warning(f"Failed to persist checkpoint: {exc}")
 
-    def _load_round_state(self) -> Optional[Dict[str, Any]]:
+    def _load_round_state(self, *, current_block: Optional[int] = None) -> Optional[Dict[str, Any]]:
         # Wrapper to new checkpoint manager; returns a JSON-like shim for call sites
         if not ENABLE_CHECKPOINT_SYSTEM:
             # Checkpoint system disabled - always start fresh rounds
@@ -147,6 +147,49 @@ class ValidatorPlatformMixin:
         if ckpt is None:
             self._last_resume_info = {"status": "skipped", "reason": "checkpoint not found"}
             return None
+
+        # If the stored round is no longer the active round on-chain, discard it.
+        rm = getattr(self, "round_manager", None)
+        try:
+            if (
+                current_block is not None
+                and rm is not None
+                and getattr(rm, "ROUND_BLOCK_LENGTH", 0)
+                and getattr(ckpt, "rm_start_block", None) is not None
+            ):
+                round_length = int(getattr(rm, "ROUND_BLOCK_LENGTH", 0)) or 0
+                base_block = int(getattr(rm, "minimum_start_block", 0) or 0)
+
+                def _round_for_block(block: int) -> int:
+                    if block <= base_block:
+                        return 0
+                    return int(((block - base_block) // round_length) + 1)
+
+                checkpoint_round = _round_for_block(int(ckpt.rm_start_block))
+                current_round = _round_for_block(int(current_block))
+
+                if checkpoint_round != current_round:
+                    bt.logging.warning(
+                        "Discarding stale checkpoint: stored round %s (start_block=%s) != current round %s (block=%s)",
+                        checkpoint_round,
+                        ckpt.rm_start_block,
+                        current_round,
+                        current_block,
+                    )
+                    try:
+                        self.state_manager.cleanup()
+                    except Exception:
+                        pass
+                    self._last_resume_info = {
+                        "status": "discarded",
+                        "reason": "stale_round",
+                        "checkpoint_round": checkpoint_round,
+                        "current_round": current_round,
+                    }
+                    return None
+        except Exception as exc:  # pragma: no cover - defensive logging
+            bt.logging.warning(f"Checkpoint round validation failed: {exc}")
+
         self._last_resume_info = {
             "status": "loaded",
             "reason": "checkpoint loaded",
