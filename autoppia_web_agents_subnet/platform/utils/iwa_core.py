@@ -57,6 +57,40 @@ def log_iwap_phase(
         bt.logging.info(prefix)
 
 
+def log_ipfs_event(
+    action: str,
+    message: str,
+    *,
+    level: str = "info",
+    exc_info: bool = False,
+) -> None:
+    """
+    Log IPFS events in the format: IPFS | [action] message
+
+    Args:
+        action: The action being performed (e.g., "UPLOAD", "DOWNLOAD", "PUBLISH")
+        message: The message to log
+        level: Log level (info, success, warning, error, debug)
+        exc_info: Whether to include exception traceback
+    """
+    # Format as "IPFS | [ACTION] message"
+    if message.startswith("["):
+        prefix = f"IPFS | {message}"
+    else:
+        prefix = f"IPFS | [{action}] {message}"
+
+    if level == "success":
+        bt.logging.success(prefix)
+    elif level == "warning":
+        bt.logging.warning(prefix)
+    elif level == "error":
+        bt.logging.error(prefix, exc_info=exc_info)
+    elif level == "debug":
+        bt.logging.debug(prefix)
+    else:
+        bt.logging.info(prefix)
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Auth
 # ──────────────────────────────────────────────────────────────────────────────

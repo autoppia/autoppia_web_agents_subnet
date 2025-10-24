@@ -861,22 +861,8 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         # This ensures round_number and validator_round_id match
         # ═══════════════════════════════════════════════════════
         if ENABLE_DISTRIBUTED_CONSENSUS and not self._consensus_published:
-            ColoredLogger.error(
-                "\n" + "=" * 80,
-                ColoredLogger.RED,
-            )
-            ColoredLogger.error(
-                f"📤📤📤 ALL TASKS DONE - PUBLISHING TO IPFS NOW 📤📤📤",
-                ColoredLogger.RED,
-            )
-            ColoredLogger.error(
-                f"📦 Tasks completed: {tasks_completed}/{len(all_tasks)}",
-                ColoredLogger.RED,
-            )
-            ColoredLogger.error(
-                "=" * 80 + "\n",
-                ColoredLogger.RED,
-            )
+            # Log task completion with EVALUATION context
+            bt.logging.info(f"EVALUATION | [TASK COMPLETION] Completed {tasks_completed}/{len(all_tasks)} tasks")
             try:
                 current_block = self.metagraph.block.item()
                 round_number = await self.round_manager.calculate_round(current_block)
@@ -889,18 +875,6 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                         tasks_completed=tasks_completed,
                     )
                     self._consensus_published = True
-                    ColoredLogger.success(
-                        "\n" + "=" * 80,
-                        ColoredLogger.GREEN,
-                    )
-                    ColoredLogger.success(
-                        f"✅✅✅ IPFS PUBLISH COMPLETE ✅✅✅",
-                        ColoredLogger.GREEN,
-                    )
-                    ColoredLogger.success(
-                        "=" * 80 + "\n",
-                        ColoredLogger.GREEN,
-                    )
                 finally:
                     # Close AsyncSubtensor immediately after use
                     await self._close_async_subtensor()
@@ -1396,7 +1370,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             bt.logging.warning(f"IWAP finish_round failed: {e}")
 
         ColoredLogger.success("✅ Round complete", ColoredLogger.GREEN)
-        ColoredLogger.info(f"Tasks completed: {tasks_completed}", ColoredLogger.GREEN)
+        bt.logging.info(f"EVALUATION | [ROUND SUMMARY] Tasks completed: {tasks_completed}")
 
         # Clean up WebSocket connections to avoid pending tasks
         try:

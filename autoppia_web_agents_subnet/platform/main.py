@@ -15,6 +15,7 @@ import httpx
 import bittensor as bt
 
 from autoppia_web_agents_subnet.validator.config import MAX_MINER_AGENT_NAME_LENGTH
+from autoppia_web_agents_subnet.platform.utils.iwa_core import log_iwap_phase
 
 from . import models
 
@@ -342,20 +343,20 @@ class IWAPClient:
             bt.logging.debug("   Payload: <unprintable>")
 
         try:
-            bt.logging.info(f"IWAP {context} POST {target_url} started")
+            log_iwap_phase(context, f"POST {target_url} started")
             response = await self._client.send(request)
             response.raise_for_status()
-            bt.logging.info(f"IWAP {context} POST {target_url} succeeded with status {response.status_code}")
+            log_iwap_phase(context, f"POST {target_url} succeeded with status {response.status_code}", level="success")
             bt.logging.debug(f"   Response status: {response.status_code}")
             bt.logging.debug(f"   Response headers: {dict(response.headers)}")
             if response.text:
                 bt.logging.debug(f"   Response body (first 500 chars): {response.text[:500]}")
         except httpx.HTTPStatusError as exc:
             body = exc.response.text
-            bt.logging.error(f"IWAP {context} POST {target_url} failed ({exc.response.status_code}): {body}")
+            log_iwap_phase(context, f"POST {target_url} failed ({exc.response.status_code}): {body}", level="error")
             raise
         except Exception:
-            bt.logging.error(f"IWAP {context} POST {target_url} failed unexpectedly", exc_info=True)
+            log_iwap_phase(context, f"POST {target_url} failed unexpectedly", level="error", exc_info=True)
             raise
         try:
             return response.json()
@@ -423,20 +424,20 @@ class IWAPClient:
             bt.logging.debug(f"   File {key}: {len(file_data)} bytes")
 
         try:
-            bt.logging.info(f"IWAP {context} POST {target_url} started (multipart)")
+            log_iwap_phase(context, f"POST {target_url} started (multipart)")
             response = await self._client.send(request)
             response.raise_for_status()
-            bt.logging.info(f"IWAP {context} POST {target_url} succeeded with status {response.status_code}")
+            log_iwap_phase(context, f"POST {target_url} succeeded with status {response.status_code}", level="success")
             bt.logging.debug(f"   Response status: {response.status_code}")
             bt.logging.debug(f"   Response headers: {dict(response.headers)}")
             if response.text:
                 bt.logging.debug(f"   Response body (first 500 chars): {response.text[:500]}")
         except httpx.HTTPStatusError as exc:
             body = exc.response.text
-            bt.logging.error(f"IWAP {context} POST {target_url} failed ({exc.response.status_code}): {body}")
+            log_iwap_phase(context, f"POST {target_url} failed ({exc.response.status_code}): {body}", level="error")
             raise
         except Exception:
-            bt.logging.error(f"IWAP {context} POST {target_url} failed unexpectedly", exc_info=True)
+            log_iwap_phase(context, f"POST {target_url} failed unexpectedly", level="error", exc_info=True)
             raise
 
     def _backup_payload(self, context: str, payload: Dict[str, object]) -> None:

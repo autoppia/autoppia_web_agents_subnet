@@ -15,6 +15,7 @@ from autoppia_web_agents_subnet.utils.commitments import (
     write_plain_commitment_json,
 )
 from autoppia_web_agents_subnet.utils.ipfs_client import aadd_json, aget_json
+from autoppia_web_agents_subnet.platform.utils.iwa_core import log_ipfs_event
 
 
 def _stake_to_float(stake_val: Any) -> float:
@@ -100,23 +101,16 @@ async def publish_round_snapshot(
     }
 
     try:
-        bt.logging.info(
-            f"📤 CONSENSUS PUBLISH | round={payload['r']} es={payload['es']} et={payload['et']} "
-            f"tasks={payload['n']} agents={payload['agents']} active={str(ENABLE_DISTRIBUTED_CONSENSUS).lower()}"
-        )
-
-        # 🔍 LOG: Show FULL payload being uploaded
+        # Show FULL payload being uploaded
         import json
 
         payload_json = json.dumps(payload, indent=2, sort_keys=True)
-        bt.logging.info("🌐 IPFS UPLOAD START")
-        bt.logging.info(f"📍 ENDPOINT: {IPFS_API_URL}")
-        bt.logging.info("📦 ========== PAYLOAD BEING UPLOADED TO IPFS ==========")
-        bt.logging.info(f"\n{payload_json}")
-        bt.logging.info("📦 ======================================================")
-        bt.logging.info(
-            f"   Summary: Round {payload['r']} | {len(payload.get('scores', {}))} miners | Validator UID {payload['uid']}"
+
+        log_ipfs_event(
+            "UPLOAD START",
+            f"round={payload['r']} epoch={payload['es']}->{payload['et']} tasks={payload['n']} miners={len(payload.get('scores', {}))} endpoint={IPFS_API_URL}"
         )
+        log_ipfs_event("PAYLOAD", f"\n{payload_json}")
 
         cid, sha_hex, byte_len = await aadd_json(
             payload,
@@ -126,15 +120,18 @@ async def publish_round_snapshot(
             sort_keys=True,
         )
 
-        # 🔍 LOG: IPFS upload success
-        bt.logging.info("✅ IPFS UPLOAD SUCCESS")
-        bt.logging.info(f"   CID: {cid}")
-        bt.logging.info(f"   Size: {byte_len} bytes | SHA256: {sha_hex}")
-        bt.logging.info(f"   📍 DOWNLOAD URL: http://ipfs.metahash73.com:5001/api/v0/cat?arg={cid}")
-        bt.logging.info(f"   📍 GATEWAY URL: https://ipfs.io/ipfs/{cid}")
+        log_ipfs_event(
+            "UPLOAD SUCCESS",
+            f"CID={cid} | Size={byte_len} bytes | SHA256={sha_hex}",
+            level="success"
+        )
+        log_ipfs_event(
+            "DOWNLOAD URLs",
+            f"Gateway: https://ipfs.io/ipfs/{cid} | API: http://ipfs.metahash73.com:5001/api/v0/cat?arg={cid}",
+            level="debug"
+        )
     except Exception as e:
-        bt.logging.error(f"❌ IPFS UPLOAD FAILED | error={type(e).__name__}: {e}")
-        bt.logging.debug(f"IPFS API URL: {IPFS_API_URL}")
+        log_ipfs_event("UPLOAD FAILED", f"error={type(e).__name__}: {e} | API={IPFS_API_URL}", level="error")
         return None
 
     # On-chain commitment: v4 (CID-only), bind to epoch window
@@ -147,9 +144,9 @@ async def publish_round_snapshot(
     }
 
     try:
-        bt.logging.info(
-            f"📮 CONSENSUS COMMIT START | e={commit_v4['e']}→pe={commit_v4['pe']} "
-            f"r={commit_v4.get('r')} cid={commit_v4['c']}"
+        log_ipfs_event(
+            "COMMIT START",
+            f"epoch={commit_v4['e']}->{commit_v4['pe']} round={commit_v4.get('r')} CID={commit_v4['c']}"
         )
 
         ok = await write_plain_commitment_json(
@@ -171,18 +168,19 @@ async def publish_round_snapshot(
                 except Exception:
                     pass
 
-            bt.logging.info(
-                f"📬 CONSENSUS COMMIT | e={commit_v4['e']}→pe={commit_v4['pe']} "
-                f"r={commit_v4.get('r')} cid={cid} bytes={byte_len} sha256={sha_hex}"
+            log_ipfs_event(
+                "COMMIT SUCCESS",
+                f"epoch={commit_v4['e']}->{commit_v4['pe']} round={commit_v4.get('r')} CID={cid} size={byte_len}bytes",
+                level="success"
             )
             if commit_block is not None:
                 bt.logging.debug(f"Commit recorded at block {commit_block} (waiting for spread)")
             return str(cid)
         else:
-            bt.logging.warning("📮 CONSENSUS COMMIT RESULT | status=failed reason=write_returned_false")
+            log_ipfs_event("COMMIT FAILED", "write_returned_false", level="warning")
             return None
     except Exception as e:
-        bt.logging.warning(f"📮 CONSENSUS COMMIT RESULT | status=failed error={e}")
+        log_ipfs_event("COMMIT FAILED", f"error={e}", level="warning")
         return None
 
 
