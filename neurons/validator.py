@@ -418,7 +418,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             # Build parallel lists of UIDs and axons BEFORE anything else (needed for error handling)
             all_uids = list(range(len(self.metagraph.uids)))
             all_axons = [self.metagraph.axons[uid] for uid in all_uids]
-            
+
             # Check if we already sent handshake in this round (via checkpoint)
             # Use phase flag to track if handshake was sent, not the presence of responses
             has_prior_handshake = resumed and self._phases.get("handshake_sent", False)
