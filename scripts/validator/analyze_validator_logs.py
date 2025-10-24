@@ -258,7 +258,7 @@ def select_recent_rounds(lines: Sequence[str], rounds_to_keep: int) -> tuple[lis
 
     grouped = group_lines_by_round(lines)
     if not grouped:
-        raise ValueError("Failed to detect round identifiers in the provided logs.")
+        return list(lines), []
 
     selected = grouped[-rounds_to_keep:]
     flattened: list[str] = []
@@ -339,6 +339,8 @@ def main() -> None:
             log_lines, selected_rounds = select_recent_rounds(log_lines, args.rounds)
             if selected_rounds:
                 print(f"[Analyzer] Selected rounds: {', '.join(selected_rounds)}", file=sys.stderr)
+            else:
+                print("[Analyzer] No round markers detected; analyzing the full log window.", file=sys.stderr)
         except Exception as exc:  # noqa: BLE001
             raise SystemExit(f"[Analyzer] Failed to slice by rounds: {exc}")
 
