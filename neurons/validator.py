@@ -659,14 +659,21 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     ColoredLogger.RED,
                 )
                 try:
+                    bt.logging.info("🔍 DEBUG: STOP_FRACTION publish - getting round_number...")
                     round_number = await self.round_manager.calculate_round(current_block)
+                    bt.logging.info(f"   - round_number: {round_number}")
+
                     st = await self._get_async_subtensor()
-                    await publish_round_snapshot(
+                    bt.logging.info(f"🔍 DEBUG: STOP_FRACTION publish - calling publish_round_snapshot()...")
+
+                    cid = await publish_round_snapshot(
                         validator=self,
                         st=st,
                         round_number=round_number,
                         tasks_completed=tasks_completed,
                     )
+                    bt.logging.info(f"🔍 DEBUG: STOP_FRACTION publish - returned CID: {cid}")
+
                     self._consensus_published = True
                     ColoredLogger.success(
                         "\n" + "=" * 80,
@@ -676,12 +683,22 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                         f"✅✅✅ IPFS PUBLISH COMPLETE - NOW WAITING ✅✅✅",
                         ColoredLogger.GREEN,
                     )
+                    if cid:
+                        ColoredLogger.success(
+                            f"📦 CID: {cid}",
+                            ColoredLogger.GREEN,
+                        )
                     ColoredLogger.success(
                         "=" * 80 + "\n",
                         ColoredLogger.GREEN,
                     )
                 except Exception as e:
-                    bt.logging.warning(f"Consensus publish (reserved-start) failed: {e}")
+                    bt.logging.error("=" * 80)
+                    bt.logging.error(f"❌ Consensus publish (reserved-start) failed: {type(e).__name__}: {e}")
+                    import traceback
+                    bt.logging.error("Full traceback:")
+                    bt.logging.error(f"{traceback.format_exc()}")
+                    bt.logging.error("=" * 80)
                 break
             if not self.round_manager.should_send_next_task(current_block):
                 ColoredLogger.warning(
@@ -716,21 +733,33 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 # Try to publish commitments if sharing and not yet published.
                 if ENABLE_DISTRIBUTED_CONSENSUS and not self._consensus_published:
                     try:
+                        bt.logging.info("🔍 DEBUG: BUFFER publish - getting round_number...")
                         round_number = await self.round_manager.calculate_round(current_block)
+                        bt.logging.info(f"   - round_number: {round_number}")
+
                         st = await self._get_async_subtensor()
-                        await publish_round_snapshot(
+                        bt.logging.info(f"🔍 DEBUG: BUFFER publish - calling publish_round_snapshot()...")
+
+                        cid = await publish_round_snapshot(
                             validator=self,
                             st=st,
                             round_number=round_number,
                             tasks_completed=tasks_completed,
                         )
+                        bt.logging.info(f"🔍 DEBUG: BUFFER publish - returned CID: {cid}")
+
                         self._consensus_published = True
                         try:
                             self.state_manager.save_checkpoint()
                         except Exception:
                             pass
                     except Exception as e:
-                        bt.logging.warning(f"Consensus publish (buffer) failed: {e}")
+                        bt.logging.error("=" * 80)
+                        bt.logging.error(f"❌ Consensus publish (buffer) failed: {type(e).__name__}: {e}")
+                        import traceback
+                        bt.logging.error("Full traceback:")
+                        bt.logging.error(f"{traceback.format_exc()}")
+                        bt.logging.error("=" * 80)
                 break
 
         # ═══════════════════════════════════════════════════════
@@ -756,15 +785,25 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 ColoredLogger.RED,
             )
             try:
+                bt.logging.info("🔍 DEBUG: About to call publish_round_snapshot()...")
                 current_block = self.metagraph.block.item()
+                bt.logging.info(f"   - current_block: {current_block}")
+
                 round_number = await self.round_manager.calculate_round(current_block)
+                bt.logging.info(f"   - round_number: {round_number}")
+
                 st = await self._get_async_subtensor()
-                await publish_round_snapshot(
+                bt.logging.info(f"   - st: {st}")
+
+                bt.logging.info(f"🔍 DEBUG: Calling publish_round_snapshot with tasks_completed={tasks_completed}...")
+                cid = await publish_round_snapshot(
                     validator=self,
                     st=st,
                     round_number=round_number,
                     tasks_completed=tasks_completed,
                 )
+                bt.logging.info(f"🔍 DEBUG: publish_round_snapshot() returned: {cid}")
+
                 self._consensus_published = True
                 ColoredLogger.success(
                     "\n" + "=" * 80,
@@ -774,12 +813,22 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     f"✅✅✅ IPFS PUBLISH COMPLETE ✅✅✅",
                     ColoredLogger.GREEN,
                 )
+                if cid:
+                    ColoredLogger.success(
+                        f"📦 CID: {cid}",
+                        ColoredLogger.GREEN,
+                    )
                 ColoredLogger.success(
                     "=" * 80 + "\n",
                     ColoredLogger.GREEN,
                 )
             except Exception as e:
-                bt.logging.error(f"Consensus publish (post-tasks) failed: {e}")
+                bt.logging.error("=" * 80)
+                bt.logging.error(f"❌ Consensus publish (post-tasks) failed: {type(e).__name__}: {e}")
+                import traceback
+                bt.logging.error("Full traceback:")
+                bt.logging.error(f"{traceback.format_exc()}")
+                bt.logging.error("=" * 80)
 
         # ═══════════════════════════════════════════════════════
         # WAIT FOR TARGET EPOCH: Wait until the round ends
