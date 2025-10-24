@@ -775,25 +775,29 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 try:
                     round_number = await self.round_manager.calculate_round(current_block)
                     st = await self._get_async_subtensor()
-                    await publish_round_snapshot(
-                        validator=self,
-                        st=st,
-                        round_number=round_number,
-                        tasks_completed=tasks_completed,
-                    )
-                    self._consensus_published = True
-                    ColoredLogger.success(
-                        "\n" + "=" * 80,
-                        ColoredLogger.GREEN,
-                    )
-                    ColoredLogger.success(
-                        f"✅✅✅ IPFS PUBLISH COMPLETE - NOW WAITING ✅✅✅",
-                        ColoredLogger.GREEN,
-                    )
-                    ColoredLogger.success(
-                        "=" * 80 + "\n",
-                        ColoredLogger.GREEN,
-                    )
+                    try:
+                        await publish_round_snapshot(
+                            validator=self,
+                            st=st,
+                            round_number=round_number,
+                            tasks_completed=tasks_completed,
+                        )
+                        self._consensus_published = True
+                        ColoredLogger.success(
+                            "\n" + "=" * 80,
+                            ColoredLogger.GREEN,
+                        )
+                        ColoredLogger.success(
+                            f"✅✅✅ IPFS PUBLISH COMPLETE - NOW WAITING ✅✅✅",
+                            ColoredLogger.GREEN,
+                        )
+                        ColoredLogger.success(
+                            "=" * 80 + "\n",
+                            ColoredLogger.GREEN,
+                        )
+                    finally:
+                        # Close AsyncSubtensor immediately after use
+                        await self._close_async_subtensor()
                 except Exception as e:
                     bt.logging.warning(f"Consensus publish (reserved-start) failed: {e}")
                 break
@@ -832,17 +836,21 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     try:
                         round_number = await self.round_manager.calculate_round(current_block)
                         st = await self._get_async_subtensor()
-                        await publish_round_snapshot(
-                            validator=self,
-                            st=st,
-                            round_number=round_number,
-                            tasks_completed=tasks_completed,
-                        )
-                        self._consensus_published = True
                         try:
-                            self.state_manager.save_checkpoint()
-                        except Exception:
-                            pass
+                            await publish_round_snapshot(
+                                validator=self,
+                                st=st,
+                                round_number=round_number,
+                                tasks_completed=tasks_completed,
+                            )
+                            self._consensus_published = True
+                            try:
+                                self.state_manager.save_checkpoint()
+                            except Exception:
+                                pass
+                        finally:
+                            # Close AsyncSubtensor immediately after use
+                            await self._close_async_subtensor()
                     except Exception as e:
                         bt.logging.warning(f"Consensus publish (buffer) failed: {e}")
                 break
@@ -873,25 +881,29 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 current_block = self.metagraph.block.item()
                 round_number = await self.round_manager.calculate_round(current_block)
                 st = await self._get_async_subtensor()
-                await publish_round_snapshot(
-                    validator=self,
-                    st=st,
-                    round_number=round_number,
-                    tasks_completed=tasks_completed,
-                )
-                self._consensus_published = True
-                ColoredLogger.success(
-                    "\n" + "=" * 80,
-                    ColoredLogger.GREEN,
-                )
-                ColoredLogger.success(
-                    f"✅✅✅ IPFS PUBLISH COMPLETE ✅✅✅",
-                    ColoredLogger.GREEN,
-                )
-                ColoredLogger.success(
-                    "=" * 80 + "\n",
-                    ColoredLogger.GREEN,
-                )
+                try:
+                    await publish_round_snapshot(
+                        validator=self,
+                        st=st,
+                        round_number=round_number,
+                        tasks_completed=tasks_completed,
+                    )
+                    self._consensus_published = True
+                    ColoredLogger.success(
+                        "\n" + "=" * 80,
+                        ColoredLogger.GREEN,
+                    )
+                    ColoredLogger.success(
+                        f"✅✅✅ IPFS PUBLISH COMPLETE ✅✅✅",
+                        ColoredLogger.GREEN,
+                    )
+                    ColoredLogger.success(
+                        "=" * 80 + "\n",
+                        ColoredLogger.GREEN,
+                    )
+                finally:
+                    # Close AsyncSubtensor immediately after use
+                    await self._close_async_subtensor()
             except Exception as e:
                 bt.logging.error(f"Consensus publish (post-tasks) failed: {e}")
 
@@ -1294,12 +1306,16 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     bt.logging.debug("No cached aggregation; fetching now")
                     # Natural gap between STOP and FETCH ensures propagation
                     st = await self._get_async_subtensor()
-                    agg = await aggregate_scores_from_commitments(
-                        validator=self,
-                        st=st,
-                        start_epoch=boundaries['round_start_epoch'],
-                        target_epoch=boundaries['target_epoch'],
-                    )
+                    try:
+                        agg = await aggregate_scores_from_commitments(
+                            validator=self,
+                            st=st,
+                            start_epoch=boundaries['round_start_epoch'],
+                            target_epoch=boundaries['target_epoch'],
+                        )
+                    finally:
+                        # Close AsyncSubtensor immediately after use
+                        await self._close_async_subtensor()
                 if agg:
                     ColoredLogger.info(
                         f"🤝 Using aggregated scores from commitments ({len(agg)} miners)",
