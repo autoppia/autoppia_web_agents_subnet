@@ -531,12 +531,12 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                         miner = miner_status_map[uid]
 
                         if miner['success']:
-                            status_icon = "[green]✓[/green]"
+                            status_icon = "[bold green]✅[/bold green]"
                             agent_name = miner['agent_name'] or 'N/A'
                             version = miner['version'] or 'N/A'
                             style = None
                         else:
-                            status_icon = "[red]✗[/red]"
+                            status_icon = "[bold red]❌[/bold red]"
                             agent_name = "[dim]N/A[/dim]"
                             version = "[dim]N/A[/dim]"
                             style = "dim"
@@ -949,14 +949,25 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 # Prompt
                 task_table.add_row("📝 Prompt", f"[white]{task.prompt}[/white]")
 
-                # Tests
+                # Tests - Show full details including criteria
                 tests_count = len(task.tests) if task.tests else 0
                 tests_info = []
                 if task.tests:
                     for test_idx, test in enumerate(task.tests, 1):
-                        test_desc = f"{test_idx}. {test.type}: {test.description}"
-                        tests_info.append(test_desc)
-                    tests_str = "\n".join(tests_info)
+                        test_lines = [f"[yellow]{test_idx}. {test.type}[/yellow]: {test.description}"]
+
+                        # Add event name if available
+                        if hasattr(test, 'event_name'):
+                            test_lines.append(f"   Event: [cyan]{test.event_name}[/cyan]")
+
+                        # Add criteria details
+                        if hasattr(test, 'event_criteria') and test.event_criteria:
+                            import json
+                            criteria_str = json.dumps(test.event_criteria, indent=2)
+                            test_lines.append(f"   Criteria: [dim]{criteria_str}[/dim]")
+
+                        tests_info.append("\n".join(test_lines))
+                    tests_str = "\n\n".join(tests_info)
                 else:
                     tests_str = "[dim]No tests[/dim]"
                 task_table.add_row(f"🧪 Tests ({tests_count})", tests_str)
@@ -1057,11 +1068,11 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                         actions_table.add_column("#", justify="right", style="cyan", width=4)
                         actions_table.add_column("Action Type", justify="left", style="magenta", width=25)
                         actions_table.add_column("Details (Full)", justify="left", style="white", no_wrap=False)
-                        actions_table.add_column("✓/✗", justify="center", style="bold", width=5)
+                        actions_table.add_column("Status", justify="center", style="bold", width=6)
 
                         for j, action in enumerate(solution.actions, 1):
                             action_type = action.type
-                            status = "[green]✓[/green]"
+                            status = "[bold green]✅[/bold green]"
 
                             # Show COMPLETE action details in readable format
                             action_dict = vars(action)
@@ -1079,11 +1090,11 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                             if action_type == 'NavigateAction' and seed is not None:
                                 url = getattr(action, 'url', '')
                                 if 'seed=' not in url:
-                                    status = "[red]✗[/red]"
+                                    status = "[bold red]❌[/bold red]"
                                 else:
                                     action_seed = url.split('seed=')[1].split('&')[0].split('?')[0]
                                     if action_seed != str(seed):
-                                        status = "[red]✗[/red]"
+                                        status = "[bold red]❌[/bold red]"
 
                             actions_table.add_row(str(j), action_type, details, status)
 
@@ -1102,38 +1113,38 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
                     result_table.add_column("Metric", justify="left", style="cyan", width=15)
                     result_table.add_column("Value", justify="left", style="white", width=70)
-                    result_table.add_column("✓/✗", justify="center", style="bold", width=5)
+                    result_table.add_column("Status", justify="center", style="bold", width=6)
 
                     # Score row
                     if score >= 0.8:
-                        score_str = f"[green]{score:.4f}[/green]"
-                        result_icon = "[green]✓[/green]"
+                        score_str = f"[bold green]{score:.4f}[/bold green]"
+                        result_icon = "[bold green]✅[/bold green]"
                     elif score >= 0.5:
-                        score_str = f"[yellow]{score:.4f}[/yellow]"
-                        result_icon = "[yellow]⚠[/yellow]"
+                        score_str = f"[bold yellow]{score:.4f}[/bold yellow]"
+                        result_icon = "[bold yellow]⚠️[/bold yellow]"
                     else:
-                        score_str = f"[red]{score:.4f}[/red]"
-                        result_icon = "[red]✗[/red]"
+                        score_str = f"[bold red]{score:.4f}[/bold red]"
+                        result_icon = "[bold red]❌[/bold red]"
 
                     result_table.add_row("Score", score_str, result_icon)
 
                     # Time row
                     time_str = f"[blue]{exec_time:.2f} seconds[/blue]"
-                    result_table.add_row("Time", time_str, "[blue]⏱[/blue]")
+                    result_table.add_row("Time", time_str, "[blue]⏱️[/blue]")
 
                     # Status row with full error message if any
                     if error_msg:
                         status_msg = f"[red]Error: {error_msg}[/red]"
-                        status_icon = "[red]✗[/red]"
+                        status_icon = "[bold red]❌[/bold red]"
                     elif score >= 0.8:
                         status_msg = "[green]All tests passed successfully[/green]"
-                        status_icon = "[green]✓[/green]"
+                        status_icon = "[bold green]✅[/bold green]"
                     elif score > 0:
                         status_msg = "[yellow]Partial success - some tests failed[/yellow]"
-                        status_icon = "[yellow]⚠[/yellow]"
+                        status_icon = "[bold yellow]⚠️[/bold yellow]"
                     else:
                         status_msg = "[red]All tests failed[/red]"
-                        status_icon = "[red]✗[/red]"
+                        status_icon = "[bold red]❌[/bold red]"
 
                     result_table.add_row("Status", status_msg, status_icon)
 
@@ -1142,14 +1153,14 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     total_tests = len(test_results_list[i])
                     tests_str = f"{tests_passed}/{total_tests} tests passed"
                     if tests_passed == total_tests and total_tests > 0:
-                        tests_str = f"[green]{tests_str}[/green]"
-                        tests_icon = "[green]✓[/green]"
+                        tests_str = f"[bold green]{tests_str}[/bold green]"
+                        tests_icon = "[bold green]✅[/bold green]"
                     elif tests_passed > 0:
-                        tests_str = f"[yellow]{tests_str}[/yellow]"
-                        tests_icon = "[yellow]⚠[/yellow]"
+                        tests_str = f"[bold yellow]{tests_str}[/bold yellow]"
+                        tests_icon = "[bold yellow]⚠️[/bold yellow]"
                     else:
-                        tests_str = f"[red]{tests_str}[/red]"
-                        tests_icon = "[red]✗[/red]"
+                        tests_str = f"[bold red]{tests_str}[/bold red]"
+                        tests_icon = "[bold red]❌[/bold red]"
 
                     result_table.add_row("Result", tests_str, tests_icon)
 

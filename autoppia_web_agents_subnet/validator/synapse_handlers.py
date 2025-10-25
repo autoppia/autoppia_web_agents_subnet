@@ -189,28 +189,8 @@ async def send_feedback_synapse_to_miners(
             )
         )
 
-    # DEBUG: Log detailed TaskFeedbackSynapse content being sent
-    ColoredLogger.debug(f"🔍 Sending TaskFeedbackSynapse content of the first miner:", ColoredLogger.YELLOW)
-    if feedback_list:
-        fb = feedback_list[0]  # Log first feedback as example
-        ColoredLogger.debug(f"  - task_id: {fb.task_id}", ColoredLogger.CYAN)
-        ColoredLogger.debug(f"  - tests: {fb.tests}", ColoredLogger.CYAN)
-        ColoredLogger.debug(f"  - score: {fb.score}", ColoredLogger.CYAN)
-        ColoredLogger.debug(f"  - execution_time: {fb.execution_time}", ColoredLogger.CYAN)
-
-        # Show evaluation_result but replace GIF content with just its length
-        eval_result_display = None
-        if fb.evaluation_result:
-            eval_result_display = fb.evaluation_result.copy() if isinstance(fb.evaluation_result, dict) else fb.evaluation_result
-            if isinstance(eval_result_display, dict) and 'gif_recording' in eval_result_display and eval_result_display['gif_recording']:
-                eval_result_display['gif_recording'] = f"<length: {len(eval_result_display['gif_recording'])}>"
-
-        ColoredLogger.debug(f"  - evaluation_result: {eval_result_display}", ColoredLogger.CYAN)
-        ColoredLogger.debug(f"  - actions: {len(fb.actions) if fb.actions else 0} actions", ColoredLogger.CYAN)
-    ColoredLogger.info(
-        f"Sending TaskFeedbackSynapse to {len(miner_axons)} miners in parallel",
-        ColoredLogger.BLUE,
-    )
+    # Send feedback to miners
+    bt.logging.info(f"Sending feedback to {len(miner_axons)} miners...")
 
     tasks = [
         asyncio.create_task(
