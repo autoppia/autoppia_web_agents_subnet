@@ -966,15 +966,27 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
             # Group miners by identical solutions (same actions)
             import hashlib
-            import json
 
             solution_groups = {}  # hash -> {'uids': [list], 'solution': solution, 'results': [list]}
 
             for i, (uid, solution) in enumerate(zip(self.active_miner_uids, task_solutions)):
                 # Create hash of actions to group identical solutions
                 if solution and solution.actions:
-                    # Hash based on action types and parameters
-                    actions_str = json.dumps([vars(a) for a in solution.actions], sort_keys=True)
+                    # Create a simple string representation for hashing (avoid JSON serialization issues)
+                    actions_repr = []
+                    for a in solution.actions:
+                        # Use action type and basic attributes for grouping
+                        action_str = f"{a.type}"
+                        if hasattr(a, 'url'):
+                            action_str += f"|{a.url}"
+                        if hasattr(a, 'text'):
+                            action_str += f"|{a.text}"
+                        if hasattr(a, 'selector') and a.selector:
+                            selector_str = f"{getattr(a.selector, 'type', '')}:{getattr(a.selector, 'value', '')}"
+                            action_str += f"|{selector_str}"
+                        actions_repr.append(action_str)
+
+                    actions_str = "||".join(actions_repr)
                     solution_hash = hashlib.md5(actions_str.encode()).hexdigest()[:8]
                 else:
                     solution_hash = "no_actions"

@@ -170,8 +170,9 @@ def normalized_stake_tao(metagraph, uid: int) -> Optional[float]:
         rao_per_tao = 1_000_000_000
 
     normalized = raw_stake / rao_per_tao
+    from autoppia_web_agents_subnet.utils.log_colors import iwap_tag
     bt.logging.debug(
-        f"[IWAP] Validator stake normalised for uid={uid}: raw={raw_stake} (RAO) -> {normalized} (TAO)"
+        iwap_tag("stake", f"Validator stake normalised for uid={uid}: raw={raw_stake} (RAO) -> {normalized} (TAO)")
     )
     return normalized
 
@@ -186,12 +187,14 @@ def validator_vtrust(metagraph, uid: int) -> Optional[float]:
     for attribute in attribute_order:
         value = metagraph_numeric(metagraph, attribute, uid)
         if value is not None:
+            from autoppia_web_agents_subnet.utils.log_colors import iwap_tag
             bt.logging.debug(
-                f"[IWAP] Validator vtrust for uid={uid} resolved via '{attribute}' -> {value}"
+                iwap_tag("vtrust", f"Validator vtrust for uid={uid} resolved via '{attribute}' -> {value}")
             )
             return value
+    from autoppia_web_agents_subnet.utils.log_colors import iwap_tag
     bt.logging.warning(
-        f"[IWAP] Validator vtrust metric not found in metagraph for uid={uid} (checked: {', '.join(attribute_order)})"
+        iwap_tag("vtrust", f"Validator vtrust metric not found in metagraph for uid={uid} (checked: {', '.join(attribute_order)})")
     )
     return None
 
