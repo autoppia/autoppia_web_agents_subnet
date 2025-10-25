@@ -2,6 +2,7 @@ pydantic
 rich
 pytest
 numpy
+gymnasium
 setuptools
 loguru
 xmldiff
