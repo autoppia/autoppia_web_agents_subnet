@@ -922,30 +922,53 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
             web_project_name = getattr(project, "name", None)
 
-            # 🔍 DEBUG: Log task details before sending
-            ColoredLogger.debug("\n" + "=" * 80, ColoredLogger.CYAN)
-            ColoredLogger.debug(f"🔍 TASK DETAILS - Task {task_index + 1}/{len(self.current_round_tasks)}", ColoredLogger.CYAN)
-            ColoredLogger.debug("=" * 80, ColoredLogger.CYAN)
-            ColoredLogger.debug(f"  📝 Prompt: {task.prompt}", ColoredLogger.BLUE)
-            ColoredLogger.debug(f"  🌐 URL: {project.frontend_url}", ColoredLogger.BLUE)
-            ColoredLogger.debug(f"  🎲 Seed: {seed}", ColoredLogger.BLUE)
-            ColoredLogger.debug(f"  📦 Project: {web_project_name}", ColoredLogger.BLUE)
-            ColoredLogger.debug(f"  🧪 Tests ({len(task.tests) if task.tests else 0}):", ColoredLogger.YELLOW)
-            if task.tests:
-                for test_idx, test in enumerate(task.tests, 1):
-                    ColoredLogger.debug(f"     {test_idx}. {test.type}: {test.description}", ColoredLogger.GRAY)
-                    ColoredLogger.debug(f"        Criteria: {getattr(test, 'event_criteria', 'N/A')}", ColoredLogger.GRAY)
-            else:
-                ColoredLogger.debug(f"     No tests for this task", ColoredLogger.GRAY)
+            # 🔍 Show task details in Rich table
+            try:
+                console = Console()
+                task_table = Table(
+                    title=f"[bold cyan]📋 Task {task_index + 1}/{len(self.current_round_tasks)}[/bold cyan]",
+                    box=box.DOUBLE,
+                    show_header=True,
+                    header_style="bold yellow",
+                    expand=False,
+                )
 
-            # 🔍 DEBUG: Log URL construction details
-            ColoredLogger.debug(f"  🔗 URL Construction Details:", ColoredLogger.MAGENTA)
-            ColoredLogger.debug(f"     - Base URL: {project.frontend_url}", ColoredLogger.MAGENTA)
-            ColoredLogger.debug(f"     - Task URL: {getattr(task, 'url', 'N/A')}", ColoredLogger.MAGENTA)
-            ColoredLogger.debug(f"     - Task assign_seed: {getattr(task, 'assign_seed', 'N/A')}", ColoredLogger.MAGENTA)
-            ColoredLogger.debug(f"     - Final seed to use: {seed}", ColoredLogger.MAGENTA)
+                task_table.add_column("Field", justify="left", style="cyan", width=12)
+                task_table.add_column("Value", justify="left", style="white", no_wrap=False)
 
-            ColoredLogger.debug("=" * 80 + "\n", ColoredLogger.CYAN)
+                # Project
+                task_table.add_row("📦 Project", f"[magenta]{web_project_name}[/magenta]")
+
+                # URL
+                task_url_display = project.frontend_url
+                if seed is not None:
+                    separator = "&" if "?" in task_url_display else "?"
+                    task_url_display = f"{task_url_display}{separator}seed={seed}"
+                task_table.add_row("🌐 URL", f"[blue]{task_url_display}[/blue]")
+
+                # Prompt
+                task_table.add_row("📝 Prompt", f"[white]{task.prompt}[/white]")
+
+                # Tests
+                tests_count = len(task.tests) if task.tests else 0
+                tests_info = []
+                if task.tests:
+                    for test_idx, test in enumerate(task.tests, 1):
+                        test_desc = f"{test_idx}. {test.type}: {test.description}"
+                        tests_info.append(test_desc)
+                    tests_str = "\n".join(tests_info)
+                else:
+                    tests_str = "[dim]No tests[/dim]"
+                task_table.add_row(f"🧪 Tests ({tests_count})", tests_str)
+
+                console.print()
+                console.print(task_table)
+                console.print()
+
+            except Exception as e:
+                bt.logging.warning(f"Failed to render task table: {e}")
+                # Fallback to simple log
+                ColoredLogger.debug(f"Task {task_index + 1}: {task.prompt[:100]}...", ColoredLogger.CYAN)
 
             # Create TaskSynapse with the actual task
             # 🔧 FIX: Include seed in URL if available
@@ -962,19 +985,6 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 seed=seed,  # Also send seed separately for debugging
                 web_project_name=web_project_name,
             )
-
-            # 🔍 DEBUG: Log TaskSynapse details
-            ColoredLogger.debug(f"  📤 TaskSynapse created:", ColoredLogger.MAGENTA)
-            ColoredLogger.debug(f"     - Base URL: {project.frontend_url}", ColoredLogger.MAGENTA)
-            ColoredLogger.debug(f"     - Final URL: {task_synapse.url}", ColoredLogger.MAGENTA)
-            ColoredLogger.debug(f"     - Seed: {task_synapse.seed}", ColoredLogger.MAGENTA)
-            ColoredLogger.debug(f"     - Prompt: {task_synapse.prompt[:100]}...", ColoredLogger.MAGENTA)
-
-            # 🔍 DEBUG: Verify URL construction
-            if seed is not None and f"seed={seed}" in task_synapse.url:
-                ColoredLogger.debug(f"     ✅ URL includes seed correctly", ColoredLogger.GREEN)
-            elif seed is not None:
-                ColoredLogger.debug(f"     URL missing seed (expected seed={seed})", ColoredLogger.GRAY)
 
             # Send task to miners
             responses = await send_task_synapse_to_miners(
