@@ -330,33 +330,34 @@ class IWAPClient:
             request.headers.update(auth_headers)
         target_url = str(request.url)
 
-        # HTTP request details at DEBUG
-        bt.logging.debug("🌐 HTTP REQUEST DETAILS:")
-        bt.logging.debug(f"   Method: POST")
-        bt.logging.debug(f"   URL: {target_url}")
-        bt.logging.debug(f"   Context: {context}")
-        bt.logging.debug(f"   Headers: {dict(request.headers)}")
-        try:
-            bt.logging.debug(f"   Payload keys: {list(sanitized_payload.keys())}")
-            bt.logging.debug(f"   Payload size: {len(str(sanitized_payload))} chars")
-        except Exception:
-            bt.logging.debug("   Payload: <unprintable>")
+        # Show important calls at INFO level
+        import json
+        payload_json = json.dumps(sanitized_payload, indent=2, sort_keys=True)
+
+        bt.logging.info(f"[IWAP] [{context}] POST {target_url}")
+        bt.logging.info(f"[IWAP] [{context}] Payload:\n{payload_json}")
 
         try:
-            log_iwap_phase(context, f"POST {target_url} started")
             response = await self._client.send(request)
             response.raise_for_status()
-            log_iwap_phase(context, f"POST {target_url} succeeded with status {response.status_code}", level="success")
-            bt.logging.debug(f"   Response status: {response.status_code}")
-            bt.logging.debug(f"   Response headers: {dict(response.headers)}")
-            if response.text:
-                bt.logging.debug(f"   Response body (first 500 chars): {response.text[:500]}")
+
+            response_data = {}
+            try:
+                response_data = response.json()
+            except Exception:
+                pass
+
+            bt.logging.success(f"[IWAP] [{context}] ✅ SUCCESS - Status {response.status_code}")
+            if response.text and len(response.text) < 500:
+                bt.logging.info(f"[IWAP] [{context}] Response: {response.text}")
+
         except httpx.HTTPStatusError as exc:
             body = exc.response.text
-            log_iwap_phase(context, f"POST {target_url} failed ({exc.response.status_code}): {body}", level="error")
+            bt.logging.error(f"[IWAP] [{context}] ❌ FAILED - Status {exc.response.status_code}")
+            bt.logging.error(f"[IWAP] [{context}] Error: {body}")
             raise
-        except Exception:
-            log_iwap_phase(context, f"POST {target_url} failed unexpectedly", level="error", exc_info=True)
+        except Exception as exc:
+            bt.logging.error(f"[IWAP] [{context}] ❌ FAILED - {type(exc).__name__}: {exc}")
             raise
         try:
             return response.json()

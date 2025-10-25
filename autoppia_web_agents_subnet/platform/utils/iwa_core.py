@@ -171,7 +171,7 @@ def normalized_stake_tao(metagraph, uid: int) -> Optional[float]:
 
     normalized = raw_stake / rao_per_tao
     bt.logging.debug(
-        f"Validator stake normalised for uid={uid}: raw={raw_stake} (RAO) -> {normalized} (TAO)"
+        f"[IWAP] Validator stake normalised for uid={uid}: raw={raw_stake} (RAO) -> {normalized} (TAO)"
     )
     return normalized
 
@@ -187,11 +187,11 @@ def validator_vtrust(metagraph, uid: int) -> Optional[float]:
         value = metagraph_numeric(metagraph, attribute, uid)
         if value is not None:
             bt.logging.debug(
-                f"Validator vtrust for uid={uid} resolved via '{attribute}' -> {value}"
+                f"[IWAP] Validator vtrust for uid={uid} resolved via '{attribute}' -> {value}"
             )
             return value
     bt.logging.warning(
-        f"Validator vtrust metric not found in metagraph for uid={uid} (checked: {', '.join(attribute_order)})"
+        f"[IWAP] Validator vtrust metric not found in metagraph for uid={uid} (checked: {', '.join(attribute_order)})"
     )
     return None
 

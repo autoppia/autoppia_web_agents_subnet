@@ -526,19 +526,8 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     # Sort by UID
                     sorted_uids = sorted(miner_status_map.keys())
 
-                    # Add rows (limit to first 30 for readability)
-                    display_limit = 30
+                    # Add ALL miners (no limit)
                     for idx, uid in enumerate(sorted_uids):
-                        if idx >= display_limit:
-                            table.add_row(
-                                "...",
-                                "...",
-                                f"[dim]({len(sorted_uids) - display_limit} more miners not shown)[/dim]",
-                                "...",
-                                "..."
-                            )
-                            break
-
                         miner = miner_status_map[uid]
 
                         if miner['success']:
