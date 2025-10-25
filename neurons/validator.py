@@ -504,8 +504,8 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     'hotkey': miner_status_map[mapped_uid]['hotkey']
                 })
 
-            # Display results in a Rich table (only if we sent handshake)
-            if not has_prior_handshake:
+            # Display results in a Rich table (always show if we have miner data)
+            if miner_status_map:
                 try:
                     console = Console()
                     table = Table(
