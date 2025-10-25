@@ -134,8 +134,10 @@ class RoundStateManager:
                 rid = ckpt.validator_round_id or getattr(self._validator, "current_round_id", None) or "<unknown>"
             except Exception:
                 rid = "<unknown>"
+
+            from autoppia_web_agents_subnet.utils.log_colors import checkpoint_tag
             bt.logging.success(
-                f"[CHECKPOINT] ✅ Saved at {path} | Round {rid} | Tasks {len(ckpt.all_tasks)} | Miners {len(ckpt.active_miner_uids)} | Size {len(data)} bytes"
+                checkpoint_tag(f"✅ Saved at {path} | Round {rid} | Tasks {len(ckpt.all_tasks)} | Miners {len(ckpt.active_miner_uids)} | Size {len(data)} bytes")
             )
 
     def load_checkpoint(self) -> Optional[RoundCheckpoint]:
@@ -159,7 +161,8 @@ class RoundStateManager:
         try:
             ckpt: RoundCheckpoint = pickle.loads(blob)
         except Exception as exc:
-            bt.logging.error(f"[CHECKPOINT] ❌ Load failed at {chosen} | Error: {exc}")
+            from autoppia_web_agents_subnet.utils.log_colors import checkpoint_tag
+            bt.logging.error(checkpoint_tag(f"❌ Load failed at {chosen} | Error: {exc}"))
             return None
 
         self._apply_checkpoint(ckpt)
@@ -167,8 +170,10 @@ class RoundStateManager:
             rid = ckpt.validator_round_id or getattr(self._validator, "current_round_id", None) or "<unknown>"
         except Exception:
             rid = "<unknown>"
+
+        from autoppia_web_agents_subnet.utils.log_colors import checkpoint_tag
         bt.logging.success(
-            f"[CHECKPOINT] ✅ Loaded from {chosen} | Round {rid} | Tasks {len(ckpt.all_tasks)} | Runs {len(ckpt.current_agent_runs)} | Completed {len(ckpt.completed_pairs)}"
+            checkpoint_tag(f"✅ Loaded from {chosen} | Round {rid} | Tasks {len(ckpt.all_tasks)} | Runs {len(ckpt.current_agent_runs)} | Completed {len(ckpt.completed_pairs)}")
         )
         return ckpt
 

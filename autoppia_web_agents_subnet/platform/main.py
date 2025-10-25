@@ -332,10 +332,12 @@ class IWAPClient:
 
         # Show important calls at INFO level
         import json
+        from autoppia_web_agents_subnet.utils.log_colors import iwap_tag
+
         payload_json = json.dumps(sanitized_payload, indent=2, sort_keys=True)
 
-        bt.logging.info(f"[IWAP] [{context}] POST {target_url}")
-        bt.logging.info(f"[IWAP] [{context}] Payload:\n{payload_json}")
+        bt.logging.info(iwap_tag(context, f"POST {target_url}"))
+        bt.logging.info(iwap_tag(context, f"Payload:\n{payload_json}"))
 
         try:
             response = await self._client.send(request)
@@ -347,17 +349,17 @@ class IWAPClient:
             except Exception:
                 pass
 
-            bt.logging.success(f"[IWAP] [{context}] ✅ SUCCESS - Status {response.status_code}")
+            bt.logging.success(iwap_tag(context, f"✅ SUCCESS - Status {response.status_code}"))
             if response.text and len(response.text) < 500:
-                bt.logging.info(f"[IWAP] [{context}] Response: {response.text}")
+                bt.logging.info(iwap_tag(context, f"Response: {response.text}"))
 
         except httpx.HTTPStatusError as exc:
             body = exc.response.text
-            bt.logging.error(f"[IWAP] [{context}] ❌ FAILED - Status {exc.response.status_code}")
-            bt.logging.error(f"[IWAP] [{context}] Error: {body}")
+            bt.logging.error(iwap_tag(context, f"❌ FAILED - Status {exc.response.status_code}"))
+            bt.logging.error(iwap_tag(context, f"Error: {body}"))
             raise
         except Exception as exc:
-            bt.logging.error(f"[IWAP] [{context}] ❌ FAILED - {type(exc).__name__}: {exc}")
+            bt.logging.error(iwap_tag(context, f"❌ FAILED - {type(exc).__name__}: {exc}"))
             raise
         try:
             return response.json()
