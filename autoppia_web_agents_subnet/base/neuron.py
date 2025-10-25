@@ -72,11 +72,6 @@ class BaseNeuron(ABC):
         # Set up logging with the provided configuration.
         bt.logging.set_config(config=self.config.logging)
 
-        # Filter out noisy dendrite connection errors, but keep general bittensor logs at INFO
-        # so that our bt.logging.info messages (e.g., IPFS publish/aggregate details) are visible.
-        import logging
-        logging.getLogger("bittensor.dendrite").setLevel(logging.WARNING)  # Solo errores críticos de dendrite
-
         # If a gpu is required, set the device to cuda:N (e.g. cuda:0)
         self.device = self.config.neuron.device
 

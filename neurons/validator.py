@@ -954,14 +954,30 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 miner_uids=list(self.active_miner_uids),
             )
 
-            # Store actions data for later display with results
-            actions_display_data = []
+            # Group miners by identical solutions (same actions)
+            import hashlib
+            import json
+
+            solution_groups = {}  # hash -> {'uids': [list], 'solution': solution, 'results': [list]}
+
             for i, (uid, solution) in enumerate(zip(self.active_miner_uids, task_solutions)):
-                actions_display_data.append({
-                    'uid': uid,
-                    'solution': solution,
-                    'has_actions': solution and solution.actions
-                })
+                # Create hash of actions to group identical solutions
+                if solution and solution.actions:
+                    # Hash based on action types and parameters
+                    actions_str = json.dumps([vars(a) for a in solution.actions], sort_keys=True)
+                    solution_hash = hashlib.md5(actions_str.encode()).hexdigest()[:8]
+                else:
+                    solution_hash = "no_actions"
+
+                if solution_hash not in solution_groups:
+                    solution_groups[solution_hash] = {
+                        'uids': [],
+                        'solution': solution,
+                        'indices': []
+                    }
+
+                solution_groups[solution_hash]['uids'].append(uid)
+                solution_groups[solution_hash]['indices'].append(i)
 
             # Evaluate task solutions
             ColoredLogger.debug("🔍 STARTING EVALUATION...", ColoredLogger.CYAN)
@@ -972,20 +988,23 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 execution_times=execution_times,
             )
 
-            # 🔍 DEBUG: Show actions + results together for each miner
+            # 🔍 DEBUG: Show actions + results together for each GROUP
             try:
                 console = Console()
                 expected_base = project.frontend_url.rstrip('/')
 
-                # Display actions AND results for each miner
-                for i, uid in enumerate(self.active_miner_uids):
-                    action_data = actions_display_data[i]
-                    solution = action_data['solution']
-                    score = eval_scores[i]
-                    exec_time = execution_times[i]
-                    error_msg = evaluation_results[i].get("error_message", "")
+                # Display actions AND results for each GROUP of miners with identical solutions
+                for group_idx, (solution_hash, group_data) in enumerate(solution_groups.items(), 1):
+                    group_uids = group_data['uids']
+                    group_indices = group_data['indices']
+                    solution = group_data['solution']
 
-                    # 1️⃣ Actions Table
+                    # Get results for all miners in this group
+                    group_scores = [eval_scores[i] for i in group_indices]
+                    group_times = [execution_times[i] for i in group_indices]
+                    group_errors = [evaluation_results[i].get("error_message", "") for i in group_indices]
+
+                    # 1️⃣ Actions Table (for group)
                     if solution and solution.actions:
                         # Count seed issues
                         seed_issues = 0
@@ -999,8 +1018,9 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                                         seed_issues += 1
 
                         status_emoji = "✅" if seed_issues == 0 else "⚠️"
+                        uids_str = ", ".join([str(u) for u in group_uids])
                         actions_table = Table(
-                            title=f"[bold cyan]{status_emoji} Miner UID={uid} - Actions Submitted[/bold cyan]",
+                            title=f"[bold cyan]{status_emoji} Group {group_idx} | UIDs: [{uids_str}] - Actions Submitted[/bold cyan]",
                             box=box.ROUNDED,
                             show_header=True,
                             header_style="bold yellow",
@@ -1042,69 +1062,58 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
                         console.print(actions_table)
                     else:
-                        console.print(f"[yellow]📊 Miner UID={uid}: NO ACTIONS SUBMITTED[/yellow]")
+                        uids_str = ", ".join([str(u) for u in group_uids])
+                        console.print(f"[yellow]📊 Group {group_idx} | UIDs: [{uids_str}] - NO ACTIONS SUBMITTED[/yellow]")
 
-                    # 2️⃣ Result Table for this miner
+                    # 2️⃣ Results Table for this group (show all UIDs)
+                    uids_str = ", ".join([str(u) for u in group_uids])
                     result_table = Table(
-                        title=f"[bold magenta]📊 Miner UID={uid} - Evaluation Result[/bold magenta]",
+                        title=f"[bold magenta]📊 Group {group_idx} | UIDs: [{uids_str}] - Evaluation Results[/bold magenta]",
                         box=box.SIMPLE,
                         show_header=True,
                         header_style="bold cyan",
                         expand=False,
                     )
 
-                    result_table.add_column("Metric", justify="left", style="cyan", width=15)
-                    result_table.add_column("Value", justify="left", style="white", width=70)
-                    result_table.add_column("Status", justify="center", style="bold", width=6)
+                    result_table.add_column("UID", justify="right", style="cyan", width=8)
+                    result_table.add_column("Score", justify="center", style="bold", width=10)
+                    result_table.add_column("Time", justify="center", style="blue", width=12)
+                    result_table.add_column("Status", justify="left", style="white", width=50)
+                    result_table.add_column("Result", justify="center", style="bold", width=8)
 
-                    # Score row
-                    if score >= 0.8:
-                        score_str = f"[bold green]{score:.4f}[/bold green]"
-                        result_icon = "[bold green]✅[/bold green]"
-                    elif score >= 0.5:
-                        score_str = f"[bold yellow]{score:.4f}[/bold yellow]"
-                        result_icon = "[bold yellow]⚠️[/bold yellow]"
-                    else:
-                        score_str = f"[bold red]{score:.4f}[/bold red]"
-                        result_icon = "[bold red]❌[/bold red]"
+                    # Add a row for each UID in the group
+                    for idx, (uid, score, exec_time, error_msg) in enumerate(zip(group_uids, group_scores, group_times, group_errors)):
+                        # Format score with color
+                        if score >= 0.8:
+                            score_str = f"[bold green]{score:.4f}[/bold green]"
+                            result_icon = "[bold green]✅[/bold green]"
+                        elif score >= 0.5:
+                            score_str = f"[bold yellow]{score:.4f}[/bold yellow]"
+                            result_icon = "[bold yellow]⚠️[/bold yellow]"
+                        else:
+                            score_str = f"[bold red]{score:.4f}[/bold red]"
+                            result_icon = "[bold red]❌[/bold red]"
 
-                    result_table.add_row("Score", score_str, result_icon)
+                        # Time
+                        time_str = f"[blue]{exec_time:.2f}s[/blue]"
 
-                    # Time row
-                    time_str = f"[blue]{exec_time:.2f} seconds[/blue]"
-                    result_table.add_row("Time", time_str, "[blue]⏱️[/blue]")
+                        # Status message
+                        if error_msg:
+                            status_msg = f"[red]{error_msg[:47]}...[/red]" if len(error_msg) > 50 else f"[red]{error_msg}[/red]"
+                        elif score >= 0.8:
+                            status_msg = "[green]All tests passed[/green]"
+                        elif score > 0:
+                            status_msg = "[yellow]Some tests failed[/yellow]"
+                        else:
+                            status_msg = "[red]All tests failed[/red]"
 
-                    # Status row with full error message if any
-                    if error_msg:
-                        status_msg = f"[red]Error: {error_msg}[/red]"
-                        status_icon = "[bold red]❌[/bold red]"
-                    elif score >= 0.8:
-                        status_msg = "[green]All tests passed successfully[/green]"
-                        status_icon = "[bold green]✅[/bold green]"
-                    elif score > 0:
-                        status_msg = "[yellow]Partial success - some tests failed[/yellow]"
-                        status_icon = "[bold yellow]⚠️[/bold yellow]"
-                    else:
-                        status_msg = "[red]All tests failed[/red]"
-                        status_icon = "[bold red]❌[/bold red]"
-
-                    result_table.add_row("Status", status_msg, status_icon)
-
-                    # Tests passed row
-                    tests_passed = sum(1 for tr in test_results_list[i] if tr.get("success", False))
-                    total_tests = len(test_results_list[i])
-                    tests_str = f"{tests_passed}/{total_tests} tests passed"
-                    if tests_passed == total_tests and total_tests > 0:
-                        tests_str = f"[bold green]{tests_str}[/bold green]"
-                        tests_icon = "[bold green]✅[/bold green]"
-                    elif tests_passed > 0:
-                        tests_str = f"[bold yellow]{tests_str}[/bold yellow]"
-                        tests_icon = "[bold yellow]⚠️[/bold yellow]"
-                    else:
-                        tests_str = f"[bold red]{tests_str}[/bold red]"
-                        tests_icon = "[bold red]❌[/bold red]"
-
-                    result_table.add_row("Result", tests_str, tests_icon)
+                        result_table.add_row(
+                            str(uid),
+                            score_str,
+                            time_str,
+                            status_msg,
+                            result_icon
+                        )
 
                     console.print(result_table)
                     console.print()
