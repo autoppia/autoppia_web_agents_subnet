@@ -46,3 +46,8 @@ def checkpoint_tag(msg: str) -> str:
 def evaluation_tag(context: str, msg: str) -> str:
     """Add colored EVALUATION tag to message"""
     return f"{GREEN}[EVALUATION] [{context}]{RESET} {msg}"
+
+
+def round_details_tag(msg: str) -> str:
+    """Add colored ROUND DETAILS tag to message"""
+    return f"{BLUE}[ROUND DETAILS]{RESET} {msg}"

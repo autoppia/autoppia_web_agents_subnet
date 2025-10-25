@@ -589,21 +589,25 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         round_number = await self.round_manager.calculate_round(current_block)
         start_epoch = boundaries['round_start_epoch']
         target_epoch = boundaries['target_epoch']
+        total_blocks = boundaries['target_block'] - boundaries['round_start_block']
         blocks_remaining = boundaries['target_block'] - current_block
         minutes_remaining = (blocks_remaining * self.round_manager.SECONDS_PER_BLOCK) / 60
-        bt.logging.info(
-            (
-                "Round init: validator_round_id={rid}, round={round}, "
-                "start_block={blk}, start_epoch={start:.2f} -> target_epoch={target:.2f} (~{mins:.1f}m)"
-            ).format(
-                rid=self.current_round_id,
-                round=round_number,
-                blk=current_block,
-                start=start_epoch,
-                target=target_epoch,
-                mins=max(minutes_remaining, 0.0),
-            )
-        )
+
+        from autoppia_web_agents_subnet.utils.log_colors import round_details_tag
+
+        bt.logging.info("=" * 100)
+        bt.logging.info(round_details_tag(f"🚀 ROUND START"))
+        bt.logging.info(round_details_tag(f"Round Number: {round_number}"))
+        bt.logging.info(round_details_tag(f"Validator Round ID: {self.current_round_id}"))
+        bt.logging.info(round_details_tag(f"Start Block: {current_block:,}"))
+        bt.logging.info(round_details_tag(f"Start Epoch: {start_epoch:.2f}"))
+        bt.logging.info(round_details_tag(f"Target Epoch: {target_epoch:.2f}"))
+        bt.logging.info(round_details_tag(f"Duration: ~{minutes_remaining:.1f} minutes"))
+        bt.logging.info(round_details_tag(f"Total Blocks: {total_blocks}"))
+        bt.logging.info(round_details_tag(f"Tasks to Execute: {len(all_tasks)}"))
+        bt.logging.info(round_details_tag(f"Stop Evaluation at: {STOP_TASK_EVALUATION_AT_ROUND_FRACTION:.0%}"))
+        bt.logging.info(round_details_tag(f"Fetch Commits at: {FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION:.0%}"))
+        bt.logging.info("=" * 100)
 
         # If no miners are active, skip task loop and finish round gracefully
         if not self.active_miner_uids:
@@ -700,9 +704,15 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             except Exception:
                 progress_frac = 0.0
             if ENABLE_DISTRIBUTED_CONSENSUS and not self._consensus_published and (progress_frac >= float(STOP_TASK_EVALUATION_AT_ROUND_FRACTION)):
+                from autoppia_web_agents_subnet.utils.log_colors import consensus_tag
+
                 bt.logging.info("=" * 80)
-                bt.logging.info(f"[CONSENSUS] Stop fraction reached ({STOP_TASK_EVALUATION_AT_ROUND_FRACTION:.0%}) - Halting task execution")
-                bt.logging.info(f"[CONSENSUS] Publishing to IPFS now with {tasks_completed} tasks completed")
+                bt.logging.info(consensus_tag(f"🛑 STOP EVAL @ {STOP_TASK_EVALUATION_AT_ROUND_FRACTION:.0%}"))
+                bt.logging.info(consensus_tag(f"Progress: {progress_frac:.2f}"))
+                bt.logging.info(consensus_tag(f"Current Block: {current_block:,}"))
+                bt.logging.info(consensus_tag(f"Blocks Done/Total: {bt_done}/{bt_total}"))
+                bt.logging.info(consensus_tag(f"Tasks Completed: {tasks_completed}"))
+                bt.logging.info(consensus_tag(f"Publishing to IPFS now..."))
                 bt.logging.info("=" * 80)
                 try:
                     round_number = await self.round_manager.calculate_round(current_block)
@@ -1065,7 +1075,43 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                         uids_str = ", ".join([str(u) for u in group_uids])
                         console.print(f"[yellow]📊 Group {group_idx} | UIDs: [{uids_str}] - NO ACTIONS SUBMITTED[/yellow]")
 
-                    # 2️⃣ Results Table for this group (show all UIDs)
+                    # 2️⃣ Backend tests summary for this GROUP (compact, sourced from test_results_list)
+                    try:
+                        group_tests: list[list[dict]] = [
+                            test_results_list[i] if i < len(test_results_list) else []
+                            for i in group_indices
+                        ]
+                        tests_table = Table(
+                            title=f"[bold green]🧪 Group {group_idx} | UIDs: [{uids_str}] - Backend Tests[/bold green]",
+                            box=box.SIMPLE,
+                            show_header=True,
+                            header_style="bold green",
+                            expand=False,
+                        )
+                        tests_table.add_column("UID", justify="right", style="cyan", width=8)
+                        tests_table.add_column("Tests", justify="center", style="white", width=8)
+                        tests_table.add_column("Passed", justify="center", style="white", width=8)
+                        tests_table.add_column("Example Event", justify="left", style="white")
+
+                        for uid, tests in zip(group_uids, group_tests):
+                            total = len(tests or [])
+                            passed = sum(1 for t in (tests or []) if bool(t.get("success", False)))
+                            # Try to extract a representative event name from extra_data
+                            example = ""
+                            try:
+                                if tests:
+                                    ed = (tests[0] or {}).get("extra_data", {}) or {}
+                                    example = str(ed.get("event_name") or ed.get("type") or "")
+                            except Exception:
+                                example = ""
+                            tests_table.add_row(str(uid), str(total), str(passed), example)
+
+                        console.print(tests_table)
+                    except Exception:
+                        # Non-fatal: if the structure is different, skip this summary quietly
+                        pass
+
+                    # 3️⃣ Results Table for this group (show all UIDs)
                     uids_str = ", ".join([str(u) for u in group_uids])
                     result_table = Table(
                         title=f"[bold magenta]📊 Group {group_idx} | UIDs: [{uids_str}] - Evaluation Results[/bold magenta]",
@@ -1276,7 +1322,25 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 # Prefer cached mid-settlement aggregation if available
                 agg = self._agg_scores_cache or {}
                 if not agg:
-                    bt.logging.info(f"[CONSENSUS] No cached aggregation - fetching from IPFS now")
+                    # Calculate current progress
+                    try:
+                        current_block_now = self.metagraph.block.item()
+                        bounds_now = self.round_manager.get_round_boundaries(current_block_now, log_debug=False)
+                        rsb = bounds_now['round_start_block']
+                        tb = bounds_now['target_block']
+                        progress_now = min(max((current_block_now - rsb) / max(tb - rsb, 1), 0.0), 1.0)
+                    except Exception:
+                        progress_now = 0.0
+                        current_block_now = 0
+
+                    from autoppia_web_agents_subnet.utils.log_colors import consensus_tag
+                    bt.logging.info("=" * 80)
+                    bt.logging.info(consensus_tag(f"📥 FETCH COMMITS @ {FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION:.0%}"))
+                    bt.logging.info(consensus_tag(f"Progress: {progress_now:.2f}"))
+                    bt.logging.info(consensus_tag(f"Current Block: {current_block_now:,}"))
+                    bt.logging.info(consensus_tag(f"Fetching commitments from IPFS to aggregate scores"))
+                    bt.logging.info("=" * 80)
+
                     # Natural gap between STOP and FETCH ensures propagation
                     st = await self._get_async_subtensor()
                     agg = await aggregate_scores_from_commitments(
