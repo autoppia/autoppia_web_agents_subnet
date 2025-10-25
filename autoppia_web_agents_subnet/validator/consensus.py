@@ -15,6 +15,7 @@ from autoppia_web_agents_subnet.utils.commitments import (
     write_plain_commitment_json,
 )
 from autoppia_web_agents_subnet.utils.ipfs_client import aadd_json, aget_json
+from autoppia_web_agents_subnet.utils.log_colors import ipfs_tag, consensus_tag
 
 
 def _stake_to_float(stake_val: Any) -> float:
@@ -64,7 +65,7 @@ async def publish_round_snapshot(
     Returns the CID if successful, else None.
     """
     if not ENABLE_DISTRIBUTED_CONSENSUS:
-        bt.logging.warning("[IPFS] Consensus disabled - skipping publish")
+        bt.logging.warning(consensus_tag("Disabled - skipping publish"))
         return None
 
     # Build payload: per-miner averages so far
@@ -107,8 +108,8 @@ async def publish_round_snapshot(
         payload_json = json.dumps(payload, indent=2, sort_keys=True)
 
         bt.logging.info("=" * 80)
-        bt.logging.info(f"[IPFS] [UPLOAD] Round {payload['r']} | {len(payload.get('scores', {}))} miners | Validator UID {payload['uid']}")
-        bt.logging.info(f"[IPFS] [UPLOAD] Payload:\n{payload_json}")
+        bt.logging.info(ipfs_tag("UPLOAD", f"Round {payload['r']} | {len(payload.get('scores', {}))} miners | Validator UID {payload['uid']}"))
+        bt.logging.info(ipfs_tag("UPLOAD", f"Payload:\n{payload_json}"))
 
         cid, sha_hex, byte_len = await aadd_json(
             payload,
@@ -119,16 +120,16 @@ async def publish_round_snapshot(
         )
 
         # 🔍 LOG: IPFS upload success
-        bt.logging.success(f"[IPFS] [UPLOAD] ✅ SUCCESS - CID: {cid}")
-        bt.logging.info(f"[IPFS] [UPLOAD] Size: {byte_len} bytes | SHA256: {sha_hex[:16]}...")
-        bt.logging.info(f"[IPFS] [UPLOAD] Download: http://ipfs.metahash73.com:5001/api/v0/cat?arg={cid}")
+        bt.logging.success(ipfs_tag("UPLOAD", f"✅ SUCCESS - CID: {cid}"))
+        bt.logging.info(ipfs_tag("UPLOAD", f"Size: {byte_len} bytes | SHA256: {sha_hex[:16]}..."))
+        bt.logging.info(ipfs_tag("UPLOAD", f"Download: http://ipfs.metahash73.com:5001/api/v0/cat?arg={cid}"))
         bt.logging.info("=" * 80)
     except Exception as e:
         bt.logging.error("=" * 80)
-        bt.logging.error(f"[IPFS] [UPLOAD] ❌ FAILED | Error: {type(e).__name__}: {e}")
-        bt.logging.error(f"[IPFS] [UPLOAD] API URL: {IPFS_API_URL}")
+        bt.logging.error(ipfs_tag("UPLOAD", f"❌ FAILED | Error: {type(e).__name__}: {e}"))
+        bt.logging.error(ipfs_tag("UPLOAD", f"API URL: {IPFS_API_URL}"))
         import traceback
-        bt.logging.error(f"[IPFS] [UPLOAD] Traceback:\n{traceback.format_exc()}")
+        bt.logging.error(ipfs_tag("UPLOAD", f"Traceback:\n{traceback.format_exc()}"))
         bt.logging.error("=" * 80)
         return None
 
@@ -142,7 +143,7 @@ async def publish_round_snapshot(
     }
 
     try:
-        bt.logging.info(f"[IPFS] [BLOCKCHAIN] Committing CID to chain | Round {commit_v4.get('r')} | Epochs {commit_v4['e']}→{commit_v4['pe']}")
+        bt.logging.info(ipfs_tag("BLOCKCHAIN", f"Committing CID to chain | Round {commit_v4.get('r')} | Epochs {commit_v4['e']}→{commit_v4['pe']}"))
 
         ok = await write_plain_commitment_json(
             st,
@@ -164,16 +165,16 @@ async def publish_round_snapshot(
                 except Exception:
                     pass
 
-            bt.logging.success(f"[IPFS] [BLOCKCHAIN] ✅ Commitment successful | CID: {cid}")
+            bt.logging.success(ipfs_tag("BLOCKCHAIN", f"✅ Commitment successful | CID: {cid}"))
             return str(cid)
         else:
-            bt.logging.warning("[IPFS] [BLOCKCHAIN] ⚠️ Commitment failed - write returned false")
+            bt.logging.warning(ipfs_tag("BLOCKCHAIN", f"⚠️ Commitment failed - write returned false"))
             return None
     except Exception as e:
         bt.logging.error("=" * 80)
-        bt.logging.error(f"[IPFS] [BLOCKCHAIN] ❌ Commitment failed | Error: {type(e).__name__}: {e}")
+        bt.logging.error(ipfs_tag("BLOCKCHAIN", f"❌ Commitment failed | Error: {type(e).__name__}: {e}"))
         import traceback
-        bt.logging.error(f"[IPFS] [BLOCKCHAIN] Traceback:\n{traceback.format_exc()}")
+        bt.logging.error(ipfs_tag("BLOCKCHAIN", f"Traceback:\n{traceback.format_exc()}"))
         bt.logging.error("=" * 80)
         return None
 
@@ -209,13 +210,13 @@ async def aggregate_scores_from_commitments(
     try:
         commits = await read_all_plain_commitments(st, netuid=validator.config.netuid, block=None)
         bt.logging.info(
-            f"[CONSENSUS] Aggregate | Expected epochs {int(target_epoch)-1}→{int(target_epoch)} | Commitments found: {len(commits or {})}"
+            consensus_tag(f"Aggregate | Expected epochs {int(target_epoch)-1}→{int(target_epoch)} | Commitments found: {len(commits or {})}")
         )
         if commits:
-            bt.logging.info(f"[CONSENSUS] Found {len(commits)} validator commitments:")
+            bt.logging.info(consensus_tag(f"Found {len(commits)} validator commitments:"))
             for hk, entry in list(commits.items())[:5]:
                 bt.logging.info(
-                    f"[CONSENSUS]   - {hk[:12]}... | Epochs {entry.get('e')}→{entry.get('pe')} | CID {str(entry.get('c', 'N/A'))[:24]}..."
+                    consensus_tag(f"  - {hk[:12]}... | Epochs {entry.get('e')}→{entry.get('pe')} | CID {str(entry.get('c', 'N/A'))[:24]}...")
                 )
     except Exception as e:
         bt.logging.error(f"❌ Failed to read commitments from blockchain: {e}")
