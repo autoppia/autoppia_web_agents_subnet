@@ -700,28 +700,11 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             except Exception:
                 progress_frac = 0.0
             if ENABLE_DISTRIBUTED_CONSENSUS and not self._consensus_published and (progress_frac >= float(STOP_TASK_EVALUATION_AT_ROUND_FRACTION)):
-                ColoredLogger.error(
-                    "\n" + "=" * 80,
-                    ColoredLogger.RED,
-                )
-                ColoredLogger.error(
-                    f"🛑🛑🛑 STOP FRACTION REACHED: {STOP_TASK_EVALUATION_AT_ROUND_FRACTION:.0%} 🛑🛑🛑",
-                    ColoredLogger.RED,
-                )
-                ColoredLogger.error(
-                    f"📤📤📤 PUBLISHING TO IPFS NOW WITH {tasks_completed} TASKS 📤📤📤",
-                    ColoredLogger.RED,
-                )
-                ColoredLogger.error(
-                    f"⏸️⏸️⏸️  HALTING ALL TASK EXECUTION ⏸️⏸️⏸️",
-                    ColoredLogger.RED,
-                )
-                ColoredLogger.error(
-                    "=" * 80 + "\n",
-                    ColoredLogger.RED,
-                )
+                bt.logging.info("=" * 80)
+                bt.logging.info(f"[CONSENSUS] Stop fraction reached ({STOP_TASK_EVALUATION_AT_ROUND_FRACTION:.0%}) - Halting task execution")
+                bt.logging.info(f"[CONSENSUS] Publishing to IPFS now with {tasks_completed} tasks completed")
+                bt.logging.info("=" * 80)
                 try:
-                    ColoredLogger.info("🔍 Stop fraction reached - preparing IPFS publish...", ColoredLogger.CYAN)
                     round_number = await self.round_manager.calculate_round(current_block)
                     st = await self._get_async_subtensor()
 
@@ -733,30 +716,16 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     )
 
                     self._consensus_published = True
-                    ColoredLogger.success(
-                        "\n" + "=" * 80,
-                        ColoredLogger.GREEN,
-                    )
-                    ColoredLogger.success(
-                        f"✅✅✅ IPFS PUBLISH COMPLETE - NOW WAITING ✅✅✅",
-                        ColoredLogger.GREEN,
-                    )
                     if cid:
-                        ColoredLogger.success(
-                            f"📦 CID: {cid}",
-                            ColoredLogger.GREEN,
-                        )
-                    ColoredLogger.success(
-                        "=" * 80 + "\n",
-                        ColoredLogger.GREEN,
-                    )
+                        bt.logging.success(f"[CONSENSUS] ✅ IPFS publish complete - CID: {cid}")
+                    else:
+                        bt.logging.warning(f"[CONSENSUS] ⚠️ IPFS publish returned no CID")
                 except Exception as e:
-                    ColoredLogger.error("=" * 80, ColoredLogger.RED)
-                    ColoredLogger.error(f"❌ Consensus publish (reserved-start) failed: {type(e).__name__}: {e}", ColoredLogger.RED)
+                    bt.logging.error("=" * 80)
+                    bt.logging.error(f"[CONSENSUS] ❌ IPFS publish failed | Error: {type(e).__name__}: {e}")
                     import traceback
-                    ColoredLogger.error("Full traceback:", ColoredLogger.RED)
-                    ColoredLogger.error(f"{traceback.format_exc()}", ColoredLogger.RED)
-                    ColoredLogger.error("=" * 80, ColoredLogger.RED)
+                    bt.logging.error(f"[CONSENSUS] Traceback:\n{traceback.format_exc()}")
+                    bt.logging.error("=" * 80)
                 break
             if not self.round_manager.should_send_next_task(current_block):
                 ColoredLogger.warning(
@@ -791,7 +760,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 # Try to publish commitments if sharing and not yet published.
                 if ENABLE_DISTRIBUTED_CONSENSUS and not self._consensus_published:
                     try:
-                        ColoredLogger.info("🔍 Safety buffer reached - preparing IPFS publish...", ColoredLogger.CYAN)
+                        bt.logging.info(f"[CONSENSUS] Safety buffer reached - publishing to IPFS with {tasks_completed} tasks")
                         round_number = await self.round_manager.calculate_round(current_block)
                         st = await self._get_async_subtensor()
 
@@ -803,17 +772,18 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                         )
 
                         self._consensus_published = True
+                        if cid:
+                            bt.logging.success(f"[CONSENSUS] ✅ IPFS publish complete - CID: {cid}")
                         try:
                             self.state_manager.save_checkpoint()
                         except Exception:
                             pass
                     except Exception as e:
-                        ColoredLogger.error("=" * 80, ColoredLogger.RED)
-                        ColoredLogger.error(f"❌ Consensus publish (buffer) failed: {type(e).__name__}: {e}", ColoredLogger.RED)
+                        bt.logging.error("=" * 80)
+                        bt.logging.error(f"[CONSENSUS] ❌ IPFS publish failed | Error: {type(e).__name__}: {e}")
                         import traceback
-                        ColoredLogger.error("Full traceback:", ColoredLogger.RED)
-                        ColoredLogger.error(f"{traceback.format_exc()}", ColoredLogger.RED)
-                        ColoredLogger.error("=" * 80, ColoredLogger.RED)
+                        bt.logging.error(f"[CONSENSUS] Traceback:\n{traceback.format_exc()}")
+                        bt.logging.error("=" * 80)
                 break
 
         # ═══════════════════════════════════════════════════════
@@ -822,24 +792,10 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         # This ensures round_number and validator_round_id match
         # ═══════════════════════════════════════════════════════
         if ENABLE_DISTRIBUTED_CONSENSUS and not self._consensus_published:
-            ColoredLogger.error(
-                "\n" + "=" * 80,
-                ColoredLogger.RED,
-            )
-            ColoredLogger.error(
-                f"📤📤📤 ALL TASKS DONE - PUBLISHING TO IPFS NOW 📤📤📤",
-                ColoredLogger.RED,
-            )
-            ColoredLogger.error(
-                f"📦 Tasks completed: {tasks_completed}/{len(all_tasks)}",
-                ColoredLogger.RED,
-            )
-            ColoredLogger.error(
-                "=" * 80 + "\n",
-                ColoredLogger.RED,
-            )
+            bt.logging.info("=" * 80)
+            bt.logging.info(f"[CONSENSUS] All tasks done ({tasks_completed}/{len(all_tasks)}) - Publishing to IPFS now...")
+            bt.logging.info("=" * 80)
             try:
-                ColoredLogger.info("🔍 Preparing IPFS publish...", ColoredLogger.CYAN)
                 current_block = self.metagraph.block.item()
                 round_number = await self.round_manager.calculate_round(current_block)
                 st = await self._get_async_subtensor()
@@ -852,30 +808,16 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 )
 
                 self._consensus_published = True
-                ColoredLogger.success(
-                    "\n" + "=" * 80,
-                    ColoredLogger.GREEN,
-                )
-                ColoredLogger.success(
-                    f"✅✅✅ IPFS PUBLISH COMPLETE ✅✅✅",
-                    ColoredLogger.GREEN,
-                )
                 if cid:
-                    ColoredLogger.success(
-                        f"📦 CID: {cid}",
-                        ColoredLogger.GREEN,
-                    )
-                ColoredLogger.success(
-                    "=" * 80 + "\n",
-                    ColoredLogger.GREEN,
-                )
+                    bt.logging.success(f"[CONSENSUS] ✅ IPFS publish complete - CID: {cid}")
+                else:
+                    bt.logging.warning(f"[CONSENSUS] ⚠️ IPFS publish returned no CID")
             except Exception as e:
-                ColoredLogger.error("=" * 80, ColoredLogger.RED)
-                ColoredLogger.error(f"❌ Consensus publish (post-tasks) failed: {type(e).__name__}: {e}", ColoredLogger.RED)
+                bt.logging.error("=" * 80)
+                bt.logging.error(f"[CONSENSUS] ❌ IPFS publish failed | Error: {type(e).__name__}: {e}")
                 import traceback
-                ColoredLogger.error("Full traceback:", ColoredLogger.RED)
-                ColoredLogger.error(f"{traceback.format_exc()}", ColoredLogger.RED)
-                ColoredLogger.error("=" * 80, ColoredLogger.RED)
+                bt.logging.error(f"[CONSENSUS] Traceback:\n{traceback.format_exc()}")
+                bt.logging.error("=" * 80)
 
         # ═══════════════════════════════════════════════════════
         # WAIT FOR TARGET EPOCH: Wait until the round ends
@@ -1291,8 +1233,10 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
     async def _calculate_final_weights(self, tasks_completed: int):
         """Calculate averages, apply WTA, set weights"""
-        ColoredLogger.info("🏁 Phase: SetWeights — Calculating final weights", ColoredLogger.PURPLE)
-        bt.logging.info(f"Distributed consensus active: {str(ENABLE_DISTRIBUTED_CONSENSUS).lower()}")
+        bt.logging.info("=" * 80)
+        bt.logging.info(f"[CONSENSUS] Phase: SetWeights - Calculating final weights")
+        bt.logging.info(f"[CONSENSUS] Distributed consensus: {str(ENABLE_DISTRIBUTED_CONSENSUS).lower()}")
+        bt.logging.info("=" * 80)
 
         # Check if no miners responded to handshake - BURN ALL WEIGHTS
         if not self.active_miner_uids:
@@ -1319,11 +1263,11 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         if ENABLE_DISTRIBUTED_CONSENSUS:
             try:
                 boundaries = self.round_manager.get_current_boundaries()
-                bt.logging.info("🤝 Consensus aggregation — preparing final scores")
+                bt.logging.info(f"[CONSENSUS] Aggregating scores from other validators...")
                 # Prefer cached mid-settlement aggregation if available
                 agg = self._agg_scores_cache or {}
                 if not agg:
-                    bt.logging.debug("No cached aggregation; fetching now")
+                    bt.logging.info(f"[CONSENSUS] No cached aggregation - fetching from IPFS now")
                     # Natural gap between STOP and FETCH ensures propagation
                     st = await self._get_async_subtensor()
                     agg = await aggregate_scores_from_commitments(

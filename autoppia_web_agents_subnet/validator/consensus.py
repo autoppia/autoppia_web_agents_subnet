@@ -209,14 +209,13 @@ async def aggregate_scores_from_commitments(
     try:
         commits = await read_all_plain_commitments(st, netuid=validator.config.netuid, block=None)
         bt.logging.info(
-            f"🔎 CONSENSUS AGGREGATE | expected e={int(target_epoch)-1} pe={int(target_epoch)} | commits_seen={len(commits or {})}"
+            f"[CONSENSUS] Aggregate | Expected epochs {int(target_epoch)-1}→{int(target_epoch)} | Commitments found: {len(commits or {})}"
         )
         if commits:
-            bt.logging.debug(f"📋 Found commitments from {len(commits)} validators:")
+            bt.logging.info(f"[CONSENSUS] Found {len(commits)} validator commitments:")
             for hk, entry in list(commits.items())[:5]:
-                bt.logging.debug(
-                    f"  - {hk[:10]}…: e={entry.get('e')} pe={entry.get('pe')} "
-                    f"cid={str(entry.get('c', 'N/A'))[:20]}…"
+                bt.logging.info(
+                    f"[CONSENSUS]   - {hk[:12]}... | Epochs {entry.get('e')}→{entry.get('pe')} | CID {str(entry.get('c', 'N/A'))[:24]}..."
                 )
     except Exception as e:
         bt.logging.error(f"❌ Failed to read commitments from blockchain: {e}")
@@ -225,7 +224,7 @@ async def aggregate_scores_from_commitments(
     e = int(target_epoch) - 1
     pe = int(target_epoch)
 
-    bt.logging.debug(f"🎯 Filtering for: e={e} pe={pe}")
+    bt.logging.info(f"[CONSENSUS] Filtering commitments for current epoch window: {e}→{pe}")
 
     weighted_sum: Dict[int, float] = {}
     weight_total: Dict[int, float] = {}
@@ -240,34 +239,31 @@ async def aggregate_scores_from_commitments(
 
     for hk, entry in (commits or {}).items():
         if not isinstance(entry, dict):
-            bt.logging.debug(f"⏭️ Skip {hk[:10]}…: entry is not dict")
+            bt.logging.info(f"[CONSENSUS] Skip {hk[:12]}... | Reason: entry is not dict")
             continue
 
         entry_e = int(entry.get("e", -1))
         entry_pe = int(entry.get("pe", -1))
         if entry_e != e or entry_pe != pe:
             skipped_wrong_epoch += 1
-            bt.logging.debug(
-                f"⏭️ Skip {hk[:10]}…: wrong epoch (has e={entry_e} pe={entry_pe}, need e={e} pe={pe})"
+            bt.logging.info(
+                f"[CONSENSUS] Skip {hk[:12]}... | Reason: wrong epoch (has {entry_e}→{entry_pe}, need {e}→{pe})"
             )
             continue
 
         cid = entry.get("c")
         if not isinstance(cid, str) or not cid:
             skipped_missing_cid += 1
-            bt.logging.debug(f"⏭️ Skip {hk[:10]}…: missing or invalid CID")
+            bt.logging.info(f"[CONSENSUS] Skip {hk[:12]}... | Reason: missing or invalid CID")
             continue
 
         st_val = stake_for_hk(hk)
         validator_uid = hk_to_uid.get(hk, "?")
-        bt.logging.debug(
-            f"📊 Validator {hk[:10]}… (UID {validator_uid}): stake={st_val:.2f}τ "
-            f"(min required: {float(MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO):.1f}τ)"
-        )
+
         if st_val < float(MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO):
             skipped_low_stake += 1
-            bt.logging.debug(
-                f"⏭️ Skip {hk[:10]}…: low stake ({st_val:.1f}τ < {float(MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO):.1f}τ)"
+            bt.logging.info(
+                f"[CONSENSUS] Skip {hk[:12]}... (UID {validator_uid}) | Reason: low stake ({st_val:.1f}τ < {float(MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO):.1f}τ)"
             )
             continue
 
@@ -288,7 +284,7 @@ async def aggregate_scores_from_commitments(
             bt.logging.error(f"[IPFS] [DOWNLOAD] ❌ FAILED | Validator {hk[:12]}... | CID: {str(cid)[:20]} | Error: {type(e).__name__}: {e}")
             continue
         if not isinstance(payload, dict):
-            bt.logging.debug(f"⏭️ Skip {hk[:10]}…: payload is not dict")
+            bt.logging.info(f"[CONSENSUS] Skip {hk[:12]}... | Reason: payload is not dict")
             continue
 
         scores = payload.get("scores")
@@ -317,29 +313,23 @@ async def aggregate_scores_from_commitments(
         all_stakes_zero = all(stake == 0.0 for _, _, stake in fetched)
         consensus_mode = "simple average (all 0τ)" if all_stakes_zero else "stake-weighted"
 
-        hk_list = ", ".join([f"{hk[:10]}…:{cid[:12]}…({stake:.0f}τ)" for hk, cid, stake in fetched])
-        bt.logging.info(
-            f"🤝 CONSENSUS INCLUDED | validators={included} | miners={len(result)} | mode={consensus_mode} | {hk_list}"
+        bt.logging.success(
+            f"[CONSENSUS] ✅ Aggregation complete | Validators: {included} | Miners: {len(result)} | Mode: {consensus_mode}"
         )
         bt.logging.info(
-            f"📊 Skip summary — wrong_epoch={skipped_wrong_epoch} missing_cid={skipped_missing_cid} "
-            f"low_stake={skipped_low_stake} ipfs_fail={skipped_ipfs}"
+            f"[CONSENSUS] Skipped | Wrong epoch: {skipped_wrong_epoch} | Missing CID: {skipped_missing_cid} | Low stake: {skipped_low_stake} | IPFS fail: {skipped_ipfs}"
         )
         if len(result) > 0:
-            bt.logging.info(f"🎯 CONSENSUS AGGREGATED SCORES ({len(result)} miners):")
+            bt.logging.info(f"[CONSENSUS] Aggregated scores ({len(result)} miners):")
             top_sample = list(sorted(result.items(), key=lambda x: x[1], reverse=True))[:10]
             for uid, score in top_sample:
-                bt.logging.info(f"   UID {uid}: {score:.4f}")
+                bt.logging.info(f"[CONSENSUS]   UID {uid}: {score:.4f}")
         else:
-            bt.logging.warning("   ⚠️ NO MINERS AGGREGATED (all scores were <= 0 or no common miners)")
-        bt.logging.debug(f"Full consensus result: {result}")
+            bt.logging.warning(f"[CONSENSUS] ⚠️ No miners aggregated (all scores were <= 0 or no common miners)")
     else:
-        bt.logging.warning("🤝 CONSENSUS INCLUDED | validators=0 (no aggregated scores)")
-        bt.logging.warning(
-            "📊 Why no validators? — "
-            f"wrong_epoch={skipped_wrong_epoch} missing_cid={skipped_missing_cid} "
-            f"low_stake={skipped_low_stake} ipfs_fail={skipped_ipfs} | "
-            f"total_commits_seen={len(commits or {})}"
+        bt.logging.warning(f"[CONSENSUS] ⚠️ No validators included in aggregation")
+        bt.logging.info(
+            f"[CONSENSUS] Reasons | Wrong epoch: {skipped_wrong_epoch} | Missing CID: {skipped_missing_cid} | Low stake: {skipped_low_stake} | IPFS fail: {skipped_ipfs} | Total commits: {len(commits or {})}"
         )
 
     return result
