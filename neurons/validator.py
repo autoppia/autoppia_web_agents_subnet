@@ -565,16 +565,6 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     console.print()
                 except Exception as e:
                     bt.logging.warning(f"Failed to render handshake table: {e}")
-                    # Fallback to old format
-                    if successful_miners:
-                        bt.logging.info("=" * 100)
-                        bt.logging.info("📋 MINERS WHO RESPONDED TO HANDSHAKE:")
-                        bt.logging.info("=" * 100)
-                        bt.logging.info(f"{'UID':<6} | {'Agent Name':<20} | {'Version':<10} | {'Hotkey':<15}")
-                        bt.logging.info("-" * 100)
-                        for m in successful_miners:
-                            bt.logging.info(f"{m['uid']:<6} | {m['agent']:<20} | {m['version']:<10} | {m['hotkey']:<15}")
-                        bt.logging.info("=" * 100)
 
             # Log results only if we actually sent the handshake (not when using saved state)
             if not has_prior_handshake:
@@ -1027,48 +1017,14 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 miner_uids=list(self.active_miner_uids),
             )
 
-            # 🔍 DEBUG: Log received actions from each miner
-            ColoredLogger.debug("\n" + "=" * 80, ColoredLogger.CYAN)
-            ColoredLogger.debug("🔍 ACTIONS RECEIVED FROM MINERS", ColoredLogger.CYAN)
-            ColoredLogger.debug("=" * 80, ColoredLogger.CYAN)
+            # Store actions data for later display with results
+            actions_display_data = []
             for i, (uid, solution) in enumerate(zip(self.active_miner_uids, task_solutions)):
-                if solution and solution.actions:
-                    ColoredLogger.debug(f"\n📊 Miner UID={uid}: {len(solution.actions)} actions", ColoredLogger.GREEN)
-                    for j, action in enumerate(solution.actions, 1):
-                        ColoredLogger.debug(f"  {j}. {action.type}: {vars(action)}", ColoredLogger.GRAY)
-
-                        # 🔍 DEBUG: Check for seed discrepancies in NavigateAction
-                        if hasattr(action, 'url') and action.url and action.type == 'NavigateAction':
-                            ColoredLogger.debug(f"     🔗 Navigation URL: {action.url}", ColoredLogger.MAGENTA)
-
-                            # Check seed presence and correctness
-                            if seed is not None:  # Only validate if task has assigned seed
-                                if 'seed=' in action.url:
-                                    action_seed = action.url.split('seed=')[1].split('&')[0].split('?')[0]
-                                    if action_seed != str(seed):
-                                        ColoredLogger.warning(
-                                            f"     ⚠️ Seed MISMATCH: expected seed={seed}, got seed={action_seed} (will score 0)",
-                                            ColoredLogger.YELLOW
-                                        )
-                                    else:
-                                        ColoredLogger.debug(f"     ✅ Seed matches: {action_seed}", ColoredLogger.GREEN)
-                                else:
-                                    # Seed is missing from NavigateAction URL
-                                    ColoredLogger.warning(
-                                        f"     ⚠️ Seed MISSING: expected seed={seed} in URL (will score 0)",
-                                        ColoredLogger.RED
-                                    )
-
-                            # Check URL path discrepancies
-                            expected_base = project.frontend_url.rstrip('/')
-                            if not action.url.startswith(expected_base):
-                                ColoredLogger.debug(f"     ⚠️ URL base mismatch: expected {expected_base}", ColoredLogger.GRAY)
-                                ColoredLogger.debug(f"     Got URL: {action.url}", ColoredLogger.GRAY)
-                            else:
-                                ColoredLogger.debug(f"     ✅ URL base matches: {expected_base}", ColoredLogger.GREEN)
-                else:
-                    ColoredLogger.warning(f"\n📊 Miner UID={uid}: NO ACTIONS", ColoredLogger.YELLOW)
-            ColoredLogger.debug("=" * 80 + "\n", ColoredLogger.CYAN)
+                actions_display_data.append({
+                    'uid': uid,
+                    'solution': solution,
+                    'has_actions': solution and solution.actions
+                })
 
             # Evaluate task solutions
             ColoredLogger.debug("🔍 STARTING EVALUATION...", ColoredLogger.CYAN)
@@ -1079,44 +1035,152 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 execution_times=execution_times,
             )
 
-            # 🔍 DEBUG: Log evaluation results in detail
-            ColoredLogger.debug("\n" + "=" * 80, ColoredLogger.CYAN)
-            ColoredLogger.debug("🔍 EVALUATION RESULTS DETAILED", ColoredLogger.CYAN)
-            ColoredLogger.debug("=" * 80, ColoredLogger.CYAN)
-            for i, uid in enumerate(self.active_miner_uids):
-                ColoredLogger.debug(f"\n📊 Miner UID={uid}:", ColoredLogger.MAGENTA)
-                ColoredLogger.debug(f"  📈 Eval Score: {eval_scores[i]:.4f}", ColoredLogger.GREEN)
-                ColoredLogger.debug(f"  ⏱️  Execution Time: {execution_times[i]:.2f}s", ColoredLogger.BLUE)
+            # 🔍 DEBUG: Show actions + results together for each miner
+            try:
+                console = Console()
+                expected_base = project.frontend_url.rstrip('/')
 
-                # Show evaluation_result but replace GIF content with just its length
-                eval_result_display = evaluation_results[i].copy()
-                if 'gif_recording' in eval_result_display and eval_result_display['gif_recording']:
-                    eval_result_display['gif_recording'] = f"<length: {len(eval_result_display['gif_recording'])}>"
+                # Display actions AND results for each miner
+                for i, uid in enumerate(self.active_miner_uids):
+                    action_data = actions_display_data[i]
+                    solution = action_data['solution']
+                    score = eval_scores[i]
+                    exec_time = execution_times[i]
+                    error_msg = evaluation_results[i].get("error_message", "")
 
-                ColoredLogger.debug(f"  📋 Evaluation Result: {eval_result_display}", ColoredLogger.YELLOW)
+                    # 1️⃣ Actions Table
+                    if solution and solution.actions:
+                        # Count seed issues
+                        seed_issues = 0
+                        for action in solution.actions:
+                            if hasattr(action, 'url') and action.url and action.type == 'NavigateAction' and seed is not None:
+                                if 'seed=' not in action.url:
+                                    seed_issues += 1
+                                else:
+                                    action_seed = action.url.split('seed=')[1].split('&')[0].split('?')[0]
+                                    if action_seed != str(seed):
+                                        seed_issues += 1
 
-                # Show error message if present (e.g. seed validation failures)
-                error_msg = evaluation_results[i].get("error_message", "")
-                if error_msg:
-                    ColoredLogger.warning(f"  ⚠️ Error: {error_msg}", ColoredLogger.RED)
+                        status_emoji = "✅" if seed_issues == 0 else "⚠️"
+                        actions_table = Table(
+                            title=f"[bold cyan]{status_emoji} Miner UID={uid} - Actions Submitted[/bold cyan]",
+                            box=box.ROUNDED,
+                            show_header=True,
+                            header_style="bold yellow",
+                            expand=False,
+                        )
 
-                ColoredLogger.debug(f"  🧪 Test Results ({len(test_results_list[i])} tests):", ColoredLogger.CYAN)
-                if test_results_list[i]:
-                    for test_idx, test_result in enumerate(test_results_list[i], 1):
-                        success = test_result.get("success", False)
-                        status_emoji = "✅" if success else "❌"
-                        extra_data = test_result.get("extra_data", {})
+                        actions_table.add_column("#", justify="right", style="cyan", width=4)
+                        actions_table.add_column("Action Type", justify="left", style="magenta", width=25)
+                        actions_table.add_column("Details (Full)", justify="left", style="white", no_wrap=False)
+                        actions_table.add_column("✓/✗", justify="center", style="bold", width=5)
 
-                        # Show test type and criteria from extra_data
-                        test_type = extra_data.get("type", "Unknown")
-                        event_name = extra_data.get("event_name", "N/A")
+                        for j, action in enumerate(solution.actions, 1):
+                            action_type = action.type
+                            status = "[green]✓[/green]"
 
-                        ColoredLogger.debug(f"     Test {test_idx}: {status_emoji} {test_type} - Event: {event_name}", ColoredLogger.GRAY)
-                        if extra_data.get("event_criteria"):
-                            ColoredLogger.debug(f"        Criteria: {extra_data.get('event_criteria')}", ColoredLogger.GRAY)
-                else:
-                    ColoredLogger.warning(f"     ⚠️  NO TEST RESULTS", ColoredLogger.RED)
-            ColoredLogger.debug("=" * 80 + "\n", ColoredLogger.CYAN)
+                            # Show COMPLETE action details in readable format
+                            action_dict = vars(action)
+                            details_lines = []
+                            for key, value in action_dict.items():
+                                if key == 'type':
+                                    continue  # Skip type as it's in another column
+                                # Format selector objects nicely
+                                if hasattr(value, '__dict__'):
+                                    value = vars(value)
+                                details_lines.append(f"{key}: {value}")
+                            details = "\n".join(details_lines)
+
+                            # For NavigateAction, check seed
+                            if action_type == 'NavigateAction' and seed is not None:
+                                url = getattr(action, 'url', '')
+                                if 'seed=' not in url:
+                                    status = "[red]✗[/red]"
+                                else:
+                                    action_seed = url.split('seed=')[1].split('&')[0].split('?')[0]
+                                    if action_seed != str(seed):
+                                        status = "[red]✗[/red]"
+
+                            actions_table.add_row(str(j), action_type, details, status)
+
+                        console.print(actions_table)
+                    else:
+                        console.print(f"[yellow]📊 Miner UID={uid}: NO ACTIONS SUBMITTED[/yellow]")
+
+                    # 2️⃣ Result Table for this miner
+                    result_table = Table(
+                        title=f"[bold magenta]📊 Miner UID={uid} - Evaluation Result[/bold magenta]",
+                        box=box.SIMPLE,
+                        show_header=True,
+                        header_style="bold cyan",
+                        expand=False,
+                    )
+
+                    result_table.add_column("Metric", justify="left", style="cyan", width=15)
+                    result_table.add_column("Value", justify="left", style="white", width=70)
+                    result_table.add_column("✓/✗", justify="center", style="bold", width=5)
+
+                    # Score row
+                    if score >= 0.8:
+                        score_str = f"[green]{score:.4f}[/green]"
+                        result_icon = "[green]✓[/green]"
+                    elif score >= 0.5:
+                        score_str = f"[yellow]{score:.4f}[/yellow]"
+                        result_icon = "[yellow]⚠[/yellow]"
+                    else:
+                        score_str = f"[red]{score:.4f}[/red]"
+                        result_icon = "[red]✗[/red]"
+
+                    result_table.add_row("Score", score_str, result_icon)
+
+                    # Time row
+                    time_str = f"[blue]{exec_time:.2f} seconds[/blue]"
+                    result_table.add_row("Time", time_str, "[blue]⏱[/blue]")
+
+                    # Status row with full error message if any
+                    if error_msg:
+                        status_msg = f"[red]Error: {error_msg}[/red]"
+                        status_icon = "[red]✗[/red]"
+                    elif score >= 0.8:
+                        status_msg = "[green]All tests passed successfully[/green]"
+                        status_icon = "[green]✓[/green]"
+                    elif score > 0:
+                        status_msg = "[yellow]Partial success - some tests failed[/yellow]"
+                        status_icon = "[yellow]⚠[/yellow]"
+                    else:
+                        status_msg = "[red]All tests failed[/red]"
+                        status_icon = "[red]✗[/red]"
+
+                    result_table.add_row("Status", status_msg, status_icon)
+
+                    # Tests passed row
+                    tests_passed = sum(1 for tr in test_results_list[i] if tr.get("success", False))
+                    total_tests = len(test_results_list[i])
+                    tests_str = f"{tests_passed}/{total_tests} tests passed"
+                    if tests_passed == total_tests and total_tests > 0:
+                        tests_str = f"[green]{tests_str}[/green]"
+                        tests_icon = "[green]✓[/green]"
+                    elif tests_passed > 0:
+                        tests_str = f"[yellow]{tests_str}[/yellow]"
+                        tests_icon = "[yellow]⚠[/yellow]"
+                    else:
+                        tests_str = f"[red]{tests_str}[/red]"
+                        tests_icon = "[red]✗[/red]"
+
+                    result_table.add_row("Result", tests_str, tests_icon)
+
+                    console.print(result_table)
+                    console.print()
+                    console.print("[dim]" + "─" * 100 + "[/dim]")
+                    console.print()
+
+            except Exception as e:
+                bt.logging.warning(f"Failed to render miner tables: {e}")
+                import traceback
+                bt.logging.warning(f"Traceback: {traceback.format_exc()}")
+                # Fallback to simple logging
+                for i, uid in enumerate(self.active_miner_uids):
+                    ColoredLogger.debug(f"UID={uid}: Score={eval_scores[i]:.4f}, Time={execution_times[i]:.2f}s", ColoredLogger.GREEN)
 
             # Calculate final scores (combining eval quality + execution speed)
             rewards = calculate_rewards_for_task(
