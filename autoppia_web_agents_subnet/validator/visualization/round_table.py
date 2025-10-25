@@ -77,8 +77,8 @@ def render_round_summary_table(
             "per_val_scores": per_val_scores,
         })
 
-    # Sort by WTA reward desc, then by avg_reward desc for tie-break
-    rows.sort(key=lambda r: (r["wta_reward"], r["avg_reward"]), reverse=True)
+    # Sort by WTA reward desc, then by avg_eval desc for tie-break
+    rows.sort(key=lambda r: (r["wta_reward"], r["avg_eval"]), reverse=True)
 
     if not rows:
         text = "[no miners / no tasks this round]"

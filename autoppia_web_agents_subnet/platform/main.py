@@ -282,12 +282,10 @@ class IWAPClient:
         path = f"/api/v1/evaluations/{evaluation_id}/gif"
         filename = f"{evaluation_id}.gif"
         payload_bytes = len(gif_bytes)
+        # Use explicit formatting to avoid placeholder/args mismatch with external log handlers
         bt.logging.info(
-            "🎬 IWAP: Uploading GIF to API - evaluation_id=%s filename=%s "
-            "payload_bytes=%s",
-            evaluation_id,
-            filename,
-            payload_bytes,
+            f"🎬 IWAP: Uploading GIF to API - evaluation_id={evaluation_id} "
+            f"filename={filename} payload_bytes={payload_bytes}"
         )
 
         async def attempt(attempt_index: int) -> httpx.Response:

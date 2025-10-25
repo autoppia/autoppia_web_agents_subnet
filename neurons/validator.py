@@ -718,13 +718,16 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     try:
                         round_number = await self.round_manager.calculate_round(current_block)
                         st = await self._get_async_subtensor()
-                        await publish_round_snapshot(
+                        cid = await publish_round_snapshot(
                             validator=self,
                             st=st,
                             round_number=round_number,
                             tasks_completed=tasks_completed,
                         )
-                        self._consensus_published = True
+                        if cid:
+                            self._consensus_published = True
+                        else:
+                            bt.logging.warning("Consensus publish returned no CID; will retry later if window allows.")
                         try:
                             self.state_manager.save_checkpoint()
                         except Exception:
@@ -759,13 +762,16 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 current_block = self.metagraph.block.item()
                 round_number = await self.round_manager.calculate_round(current_block)
                 st = await self._get_async_subtensor()
-                await publish_round_snapshot(
+                cid = await publish_round_snapshot(
                     validator=self,
                     st=st,
                     round_number=round_number,
                     tasks_completed=tasks_completed,
                 )
-                self._consensus_published = True
+                if cid:
+                    self._consensus_published = True
+                else:
+                    bt.logging.warning("Consensus publish returned no CID; will retry later if window allows.")
                 ColoredLogger.success(
                     "\n" + "=" * 80,
                     ColoredLogger.GREEN,
