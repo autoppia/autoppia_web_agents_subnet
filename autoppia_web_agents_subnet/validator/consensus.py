@@ -63,108 +63,52 @@ async def publish_round_snapshot(
 
     Returns the CID if successful, else None.
     """
-    bt.logging.warning("=" * 80)
-    bt.logging.warning("🔍 DEBUG: publish_round_snapshot() CALLED")
-    bt.logging.warning(f"   - round_number: {round_number}")
-    bt.logging.warning(f"   - tasks_completed: {tasks_completed}")
-    bt.logging.warning(f"   - ENABLE_DISTRIBUTED_CONSENSUS: {ENABLE_DISTRIBUTED_CONSENSUS}")
-    bt.logging.warning(f"   - type(ENABLE_DISTRIBUTED_CONSENSUS): {type(ENABLE_DISTRIBUTED_CONSENSUS)}")
-    bt.logging.warning("=" * 80)
-
     if not ENABLE_DISTRIBUTED_CONSENSUS:
-        bt.logging.warning("⚠️ IPFS PUBLISH SKIPPED: ENABLE_DISTRIBUTED_CONSENSUS is False/None")
+        bt.logging.warning("[IPFS] Consensus disabled - skipping publish")
         return None
 
-    bt.logging.warning("✅ Consensus enabled, proceeding with IPFS publish...")
-
     # Build payload: per-miner averages so far
-    try:
-        bt.logging.warning("🔍 DEBUG: Getting round boundaries...")
-        boundaries = validator.round_manager.get_current_boundaries()
-        start_epoch = boundaries["round_start_epoch"]
-        target_epoch = boundaries["target_epoch"]
-        bt.logging.warning(f"   - start_epoch: {start_epoch}")
-        bt.logging.warning(f"   - target_epoch: {target_epoch}")
-    except Exception as e:
-        bt.logging.error(f"❌ ERROR getting boundaries: {type(e).__name__}: {e}")
-        raise
-
-    try:
-        bt.logging.warning("🔍 DEBUG: Getting average rewards...")
-        avg_rewards = validator.round_manager.get_average_rewards()
-        bt.logging.warning(f"   - avg_rewards type: {type(avg_rewards)}")
-        bt.logging.warning(f"   - avg_rewards: {avg_rewards}")
-    except Exception as e:
-        bt.logging.error(f"❌ ERROR getting avg_rewards: {type(e).__name__}: {e}")
-        raise
+    boundaries = validator.round_manager.get_current_boundaries()
+    start_epoch = boundaries["round_start_epoch"]
+    target_epoch = boundaries["target_epoch"]
+    avg_rewards = validator.round_manager.get_average_rewards()
 
     # Agents that actually received/produced scores (participated)
     try:
-        bt.logging.warning("🔍 DEBUG: Calculating participants...")
         participants = len([u for u, arr in (validator.round_manager.round_rewards or {}).items() if arr])
-        bt.logging.warning(f"   - participants (from round_rewards): {participants}")
-    except Exception as e:
-        bt.logging.warning(f"⚠️ WARNING calculating participants from round_rewards: {e}")
+    except Exception:
         participants = len(getattr(validator, "active_miner_uids", []) or [])
-        bt.logging.warning(f"   - participants (from active_miner_uids): {participants}")
 
-    bt.logging.warning("🔍 DEBUG: Building payload dictionary...")
+    payload = {
+        "v": 1,
+        # Round/window
+        "r": int(round_number) if round_number is not None else None,
+        "round_number": int(round_number) if round_number is not None else None,
+        "es": float(start_epoch),
+        "et": float(target_epoch),
+        # Validator identity fields
+        "hk": validator.wallet.hotkey.ss58_address,
+        "validator_hotkey": validator.wallet.hotkey.ss58_address,
+        "uid": int(validator.uid),  # compact legacy
+        "validator_uid": int(validator.uid),
+        "validator_id": str(validator.uid),
+        "validator_round_id": getattr(validator, "current_round_id", None),
+        "validator_version": getattr(validator, "version", None),
+        # Stats snapshot
+        "n": int(tasks_completed),  # tasks completed so far
+        "tasks_completed": int(tasks_completed),
+        "agents": int(participants),
+        "scores": {str(int(uid)): float(score) for uid, score in (avg_rewards or {}).items()},
+    }
+
     try:
-        payload = {
-            "v": 1,
-            # Round/window
-            "r": int(round_number) if round_number is not None else None,
-            "round_number": int(round_number) if round_number is not None else None,
-            "es": float(start_epoch),
-            "et": float(target_epoch),
-            # Validator identity fields
-            "hk": validator.wallet.hotkey.ss58_address,
-            "validator_hotkey": validator.wallet.hotkey.ss58_address,
-            "uid": int(validator.uid),  # compact legacy
-            "validator_uid": int(validator.uid),
-            "validator_id": str(validator.uid),
-            "validator_round_id": getattr(validator, "current_round_id", None),
-            "validator_version": getattr(validator, "version", None),
-            # Stats snapshot
-            "n": int(tasks_completed),  # tasks completed so far
-            "tasks_completed": int(tasks_completed),
-            "agents": int(participants),
-            "scores": {str(int(uid)): float(score) for uid, score in (avg_rewards or {}).items()},
-        }
-        bt.logging.warning(f"✅ Payload built successfully")
-        bt.logging.warning(f"   - Payload keys: {list(payload.keys())}")
-        bt.logging.warning(f"   - Number of scores: {len(payload.get('scores', {}))}")
-    except Exception as e:
-        bt.logging.error(f"❌ ERROR building payload: {type(e).__name__}: {e}")
-        import traceback
-        bt.logging.error(f"Traceback: {traceback.format_exc()}")
-        raise
-
-    bt.logging.warning("🔍 DEBUG: Entering IPFS upload try block...")
-    try:
-        bt.logging.warning(
-            f"📤 CONSENSUS PUBLISH | round={payload['r']} es={payload['es']} et={payload['et']} "
-            f"tasks={payload['n']} agents={payload['agents']} active={str(ENABLE_DISTRIBUTED_CONSENSUS).lower()}"
-        )
-
         # 🔍 LOG: Show FULL payload being uploaded
         import json
-
-        bt.logging.warning("🔍 DEBUG: Converting payload to JSON...")
         payload_json = json.dumps(payload, indent=2, sort_keys=True)
-        bt.logging.warning("🌐 IPFS UPLOAD START")
-        bt.logging.warning(f"📍 ENDPOINT: {IPFS_API_URL}")
-        bt.logging.warning("📦 ========== PAYLOAD BEING UPLOADED TO IPFS ==========")
-        bt.logging.warning(f"\n{payload_json}")
-        bt.logging.warning("📦 ======================================================")
-        bt.logging.warning(
-            f"   Summary: Round {payload['r']} | {len(payload.get('scores', {}))} miners | Validator UID {payload['uid']}"
-        )
 
-        bt.logging.warning("🔍 DEBUG: Calling aadd_json() to upload to IPFS...")
-        bt.logging.warning(f"   - filename: autoppia_commit_r{payload['r'] or 'X'}.json")
-        bt.logging.warning(f"   - api_url: {IPFS_API_URL}")
-        bt.logging.warning(f"   - pin: True")
+        bt.logging.info("=" * 80)
+        bt.logging.info(f"[IPFS] [UPLOAD] Round {payload['r']} | {len(payload.get('scores', {}))} miners | Validator UID {payload['uid']}")
+        bt.logging.info(f"[IPFS] [UPLOAD] Payload:\n{payload_json}")
 
         cid, sha_hex, byte_len = await aadd_json(
             payload,
@@ -174,25 +118,21 @@ async def publish_round_snapshot(
             sort_keys=True,
         )
 
-        bt.logging.warning("🔍 DEBUG: aadd_json() completed successfully")
         # 🔍 LOG: IPFS upload success
-        bt.logging.warning("✅ IPFS UPLOAD SUCCESS")
-        bt.logging.warning(f"   CID: {cid}")
-        bt.logging.warning(f"   Size: {byte_len} bytes | SHA256: {sha_hex}")
-        bt.logging.warning(f"   📍 DOWNLOAD URL: http://ipfs.metahash73.com:5001/api/v0/cat?arg={cid}")
-        bt.logging.warning(f"   📍 GATEWAY URL: https://ipfs.io/ipfs/{cid}")
+        bt.logging.success(f"[IPFS] [UPLOAD] ✅ SUCCESS - CID: {cid}")
+        bt.logging.info(f"[IPFS] [UPLOAD] Size: {byte_len} bytes | SHA256: {sha_hex[:16]}...")
+        bt.logging.info(f"[IPFS] [UPLOAD] Download: http://ipfs.metahash73.com:5001/api/v0/cat?arg={cid}")
+        bt.logging.info("=" * 80)
     except Exception as e:
         bt.logging.error("=" * 80)
-        bt.logging.error(f"❌ IPFS UPLOAD FAILED | error={type(e).__name__}: {e}")
-        bt.logging.error(f"IPFS API URL: {IPFS_API_URL}")
+        bt.logging.error(f"[IPFS] [UPLOAD] ❌ FAILED | Error: {type(e).__name__}: {e}")
+        bt.logging.error(f"[IPFS] [UPLOAD] API URL: {IPFS_API_URL}")
         import traceback
-        bt.logging.error("Full traceback:")
-        bt.logging.error(f"{traceback.format_exc()}")
+        bt.logging.error(f"[IPFS] [UPLOAD] Traceback:\n{traceback.format_exc()}")
         bt.logging.error("=" * 80)
         return None
 
     # On-chain commitment: v4 (CID-only), bind to epoch window
-    bt.logging.warning("🔍 DEBUG: Preparing on-chain commitment...")
     commit_v4 = {
         "v": 4,
         "e": int(target_epoch) - 1,
@@ -200,22 +140,16 @@ async def publish_round_snapshot(
         "c": str(cid),
         "r": int(round_number) if round_number is not None else None,
     }
-    bt.logging.warning(f"   - commit_v4: {commit_v4}")
 
     try:
-        bt.logging.warning(
-            f"📮 CONSENSUS COMMIT START | e={commit_v4['e']}→pe={commit_v4['pe']} "
-            f"r={commit_v4.get('r')} cid={commit_v4['c']}"
-        )
+        bt.logging.info(f"[IPFS] [BLOCKCHAIN] Committing CID to chain | Round {commit_v4.get('r')} | Epochs {commit_v4['e']}→{commit_v4['pe']}")
 
-        bt.logging.warning("🔍 DEBUG: Calling write_plain_commitment_json()...")
         ok = await write_plain_commitment_json(
             st,
             wallet=validator.wallet,
             data=commit_v4,
             netuid=validator.config.netuid,
         )
-        bt.logging.warning(f"🔍 DEBUG: write_plain_commitment_json() returned: {ok}")
 
         if ok:
             # Record commit context on validator for later aggregation spread checks
@@ -230,26 +164,17 @@ async def publish_round_snapshot(
                 except Exception:
                     pass
 
-            bt.logging.warning(
-                f"📬 CONSENSUS COMMIT | e={commit_v4['e']}→pe={commit_v4['pe']} "
-                f"r={commit_v4.get('r')} cid={cid} bytes={byte_len} sha256={sha_hex}"
-            )
-            if commit_block is not None:
-                bt.logging.debug(f"Commit recorded at block {commit_block} (waiting for spread)")
-            bt.logging.warning(f"✅ publish_round_snapshot() returning CID: {cid}")
+            bt.logging.success(f"[IPFS] [BLOCKCHAIN] ✅ Commitment successful | CID: {cid}")
             return str(cid)
         else:
-            bt.logging.warning("📮 CONSENSUS COMMIT RESULT | status=failed reason=write_returned_false")
-            bt.logging.warning("⚠️ publish_round_snapshot() returning None (commit failed)")
+            bt.logging.warning("[IPFS] [BLOCKCHAIN] ⚠️ Commitment failed - write returned false")
             return None
     except Exception as e:
         bt.logging.error("=" * 80)
-        bt.logging.error(f"📮 CONSENSUS COMMIT RESULT | status=failed error={type(e).__name__}: {e}")
+        bt.logging.error(f"[IPFS] [BLOCKCHAIN] ❌ Commitment failed | Error: {type(e).__name__}: {e}")
         import traceback
-        bt.logging.error("Full traceback:")
-        bt.logging.error(f"{traceback.format_exc()}")
+        bt.logging.error(f"[IPFS] [BLOCKCHAIN] Traceback:\n{traceback.format_exc()}")
         bt.logging.error("=" * 80)
-        bt.logging.error("⚠️ publish_round_snapshot() returning None (exception during commit)")
         return None
 
 
@@ -346,23 +271,21 @@ async def aggregate_scores_from_commitments(
             )
             continue
 
-        bt.logging.info(f"🌐 IPFS DOWNLOAD START | validator={hk} cid={cid}")
         try:
             payload, _norm, _h = await aget_json(cid, api_url=IPFS_API_URL)
             import json
 
             payload_json = json.dumps(payload, indent=2, sort_keys=True)
-            bt.logging.info(f"✅ IPFS DOWNLOAD SUCCESS from validator {hk[:20]}…")
-            bt.logging.info("📦 ========== PAYLOAD DOWNLOADED FROM IPFS ==========")
-            bt.logging.info(f"\n{payload_json}")
-            bt.logging.info("📦 ====================================================")
-            bt.logging.info(
-                f"   Summary: Round {payload.get('r')} | {len(payload.get('scores', {}))} miners "
-                f"| Validator UID {payload.get('uid')}"
-            )
+
+            bt.logging.info("=" * 80)
+            bt.logging.info(f"[IPFS] [DOWNLOAD] Validator {hk[:12]}... (UID {validator_uid}) | CID: {cid}")
+            bt.logging.info(f"[IPFS] [DOWNLOAD] URL: http://ipfs.metahash73.com:5001/api/v0/cat?arg={cid}")
+            bt.logging.info(f"[IPFS] [DOWNLOAD] Payload:\n{payload_json}")
+            bt.logging.success(f"[IPFS] [DOWNLOAD] ✅ SUCCESS - Round {payload.get('r')} | {len(payload.get('scores', {}))} miners | Stake: {st_val:.2f}τ")
+            bt.logging.info("=" * 80)
         except Exception as e:
             skipped_ipfs += 1
-            bt.logging.error(f"❌ IPFS DOWNLOAD FAILED | cid={str(cid)[:20]} error={type(e).__name__}: {e}")
+            bt.logging.error(f"[IPFS] [DOWNLOAD] ❌ FAILED | Validator {hk[:12]}... | CID: {str(cid)[:20]} | Error: {type(e).__name__}: {e}")
             continue
         if not isinstance(payload, dict):
             bt.logging.debug(f"⏭️ Skip {hk[:10]}…: payload is not dict")
