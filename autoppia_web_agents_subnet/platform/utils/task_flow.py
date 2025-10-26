@@ -8,6 +8,7 @@ from autoppia_web_agents_subnet.platform import models as iwa_models
 from autoppia_web_agents_subnet.platform import main as iwa_main
 from .iwa_core import (
     log_iwap_phase,
+    log_gif_event,
     extract_gif_bytes,
 )
 
@@ -150,17 +151,14 @@ async def submit_task_results(
             )
             continue
 
-        add_evaluation_message = (
-            f"Calling add_evaluation for miner_uid={miner_uid}, task_id={task_id}, agent_run_id={agent_run.agent_run_id}"
-        )
+        add_evaluation_message = f"Calling add_evaluation for miner_uid={miner_uid}, task_id={task_id}, agent_run_id={agent_run.agent_run_id}"
         log_iwap_phase("Phase 4", add_evaluation_message)
 
         gif_to_upload: Optional[bytes] | Optional[str] = None
         if gif_payload:
             payload_size = len(gif_payload) if isinstance(gif_payload, (bytes, str)) else 0
-            log_iwap_phase(
-                "Phase 4",
-                f"🎬 GIF detected: {payload_size} bytes - will upload after creating evaluation",
+            log_gif_event(
+                f"GIF detected: {payload_size} bytes - will upload after creating evaluation",
                 level="debug",
             )
             gif_to_upload = gif_payload
@@ -193,20 +191,14 @@ async def submit_task_results(
                     pass
                 continue
             else:
-                add_evaluation_error = (
-                    f"add_evaluation failed for miner_uid={miner_uid}, task_id={task_id}"
-                )
+                add_evaluation_error = f"add_evaluation failed for miner_uid={miner_uid}, task_id={task_id}"
                 log_iwap_phase("Phase 4", add_evaluation_error, level="error", exc_info=True)
                 continue
         except Exception:
-            add_evaluation_error = (
-                f"add_evaluation failed for miner_uid={miner_uid}, task_id={task_id}"
-            )
+            add_evaluation_error = f"add_evaluation failed for miner_uid={miner_uid}, task_id={task_id}"
             log_iwap_phase("Phase 4", add_evaluation_error, level="error", exc_info=True)
         else:
-            add_evaluation_success = (
-                f"add_evaluation completed for miner_uid={miner_uid}, task_id={task_id}"
-            )
+            add_evaluation_success = f"add_evaluation completed for miner_uid={miner_uid}, task_id={task_id}"
             log_iwap_phase("Phase 4", add_evaluation_success, level="success")
             try:
                 ctx._eval_records.append(
@@ -229,43 +221,32 @@ async def submit_task_results(
             if gif_to_upload:
                 gif_bytes = extract_gif_bytes(gif_to_upload)
                 if gif_bytes:
-                    log_iwap_phase(
-                        "Phase 4",
-                        f"🎬 Uploading GIF to AWS for evaluation_id={evaluation_id} bytes={len(gif_bytes)}",
-                    )
+                    log_gif_event(f"Starting upload for evaluation_id={evaluation_id} bytes={len(gif_bytes)}")
                     try:
-                        uploaded_url = await ctx.iwap_client.upload_evaluation_gif(
-                            evaluation_id, gif_bytes
-                        )
+                        uploaded_url = await ctx.iwap_client.upload_evaluation_gif(evaluation_id, gif_bytes)
                         if uploaded_url:
-                            log_iwap_phase(
-                                "Phase 4",
-                                f"✅ GIF uploaded successfully to AWS: {uploaded_url}",
+                            log_gif_event(
+                                f"Uploaded successfully to AWS: {uploaded_url}",
                                 level="success",
                             )
                         else:
-                            log_iwap_phase(
-                                "Phase 4",
-                                f"⚠️  GIF upload completed without URL for evaluation_id={evaluation_id}",
+                            log_gif_event(
+                                f"Upload completed without URL for evaluation_id={evaluation_id}",
                                 level="warning",
                             )
                     except Exception as e:  # noqa: BLE001
-                        log_iwap_phase(
-                            "Phase 4",
-                            f"❌ Failed to upload GIF for evaluation_id={evaluation_id}: {str(e)}",
+                        log_gif_event(
+                            f"Failed to upload for evaluation_id={evaluation_id}: {str(e)}",
                             level="error",
                             exc_info=True,
                         )
                 else:
-                    log_iwap_phase(
-                        "Phase 4",
-                        "⚠️  Skipped GIF upload: invalid payload (failed to extract bytes)",
+                    log_gif_event(
+                        "Skipped upload: invalid payload (failed to extract bytes)",
                         level="warning",
                     )
 
-        accumulators = ctx.agent_run_accumulators.setdefault(
-            miner_uid, {"reward": 0.0, "score": 0.0, "execution_time": 0.0, "tasks": 0}
-        )
+        accumulators = ctx.agent_run_accumulators.setdefault(miner_uid, {"reward": 0.0, "score": 0.0, "execution_time": 0.0, "tasks": 0})
         accumulators["reward"] += float(reward_value)
         accumulators["score"] += float(final_score)
         accumulators["execution_time"] += exec_time
@@ -274,13 +255,6 @@ async def submit_task_results(
         agent_run.total_tasks = accumulators["tasks"]
         agent_run.completed_tasks = accumulators["tasks"]
         agent_run.total_reward = accumulators["reward"]
-        agent_run.average_reward = (
-            accumulators["reward"] / accumulators["tasks"] if accumulators["tasks"] else None
-        )
-        agent_run.average_score = (
-            accumulators["score"] / accumulators["tasks"] if accumulators["tasks"] else None
-        )
-        agent_run.average_execution_time = (
-            accumulators["execution_time"] / accumulators["tasks"] if accumulators["tasks"] else None
-        )
-
+        agent_run.average_reward = accumulators["reward"] / accumulators["tasks"] if accumulators["tasks"] else None
+        agent_run.average_score = accumulators["score"] / accumulators["tasks"] if accumulators["tasks"] else None
+        agent_run.average_execution_time = accumulators["execution_time"] / accumulators["tasks"] if accumulators["tasks"] else None
