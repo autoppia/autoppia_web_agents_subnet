@@ -9,7 +9,7 @@ from dataclasses import asdict, is_dataclass
 from datetime import date, datetime, time as dtime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional
+from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, TypeVar
 
 import httpx
 import bittensor as bt
@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 
 VALIDATOR_HOTKEY_HEADER = "x-validator-hotkey"
 VALIDATOR_SIGNATURE_HEADER = "x-validator-signature"
+
+T = TypeVar("T")
 
 
 def _uuid_suffix(length: int = 12) -> str:
@@ -279,26 +281,53 @@ class IWAPClient:
 
         path = f"/api/v1/evaluations/{evaluation_id}/gif"
         filename = f"{evaluation_id}.gif"
+        payload_bytes = len(gif_bytes)
+        # Use explicit formatting to avoid placeholder/args mismatch with external log handlers
         bt.logging.info(
-            f"🎬 IWAP: Uploading GIF to API - evaluation_id={evaluation_id} filename={filename} payload_bytes={len(gif_bytes)}"
+            f"🎬 IWAP: Uploading GIF to API - evaluation_id={evaluation_id} "
+            f"filename={filename} payload_bytes={payload_bytes}"
         )
 
-        try:
-            response = await self._client.post(
+        async def attempt(attempt_index: int) -> httpx.Response:
+            attempt_number = attempt_index + 1
+            attempt_suffix = f" (attempt {attempt_number})" if attempt_number > 1 else ""
+            bt.logging.info(
+                "🎬 IWAP: GIF upload POST %s started%s",
                 path,
-                files={"gif": (filename, gif_bytes, "image/gif")},
+                attempt_suffix,
             )
-            response.raise_for_status()
-            bt.logging.debug(f"🎬 IWAP: GIF upload request successful - status_code={response.status_code}")
-        except httpx.HTTPStatusError as exc:
-            body = exc.response.text
-            bt.logging.error(
-                f"❌ IWAP: GIF upload failed - POST {path} returned {exc.response.status_code}: {body}"
-            )
-            raise
-        except Exception as e:
-            bt.logging.error(f"❌ IWAP: GIF upload failed unexpectedly - POST {path}: {str(e)}", exc_info=True)
-            raise
+            try:
+                response = await self._client.post(
+                    path,
+                    files={"gif": (filename, gif_bytes, "image/gif")},
+                )
+                response.raise_for_status()
+                bt.logging.debug(
+                    "🎬 IWAP: GIF upload request successful - status_code=%s",
+                    response.status_code,
+                )
+                return response
+            except httpx.HTTPStatusError as exc:
+                body = exc.response.text
+                bt.logging.error(
+                    "❌ IWAP: GIF upload failed - POST %s%s returned %s: %s",
+                    path,
+                    attempt_suffix,
+                    exc.response.status_code,
+                    body,
+                )
+                raise
+            except Exception as exc:  # noqa: BLE001
+                bt.logging.error(
+                    "❌ IWAP: GIF upload failed unexpectedly - POST %s%s: %s",
+                    path,
+                    attempt_suffix,
+                    str(exc),
+                    exc_info=True,
+                )
+                raise
+
+        response = await self._with_retry(attempt, context="upload_evaluation_gif")
 
         try:
             payload = response.json()
@@ -320,60 +349,136 @@ class IWAPClient:
             bt.logging.warning(f"⚠️  IWAP: GIF upload completed but no URL returned for evaluation_id={evaluation_id}")
         return gif_url
 
+    async def _with_retry(
+        self,
+        operation: Callable[[int], Awaitable[T]],
+        *,
+        context: str,
+    ) -> T:
+        """
+        Retry an async IWAP operation up to three additional times with backoff.
+
+        Retries occur after 0.5s, 1s, and 3s delays. HTTP 4xx responses are not retried
+        because they indicate client-side issues that a retry cannot resolve.
+        """
+        delays = (0.5, 1.0, 3.0)
+        last_exc: Optional[BaseException] = None
+
+        for attempt in range(len(delays) + 1):
+            try:
+                return await operation(attempt)
+            except httpx.HTTPStatusError as exc:
+                status_code = exc.response.status_code if exc.response is not None else None
+                if status_code is not None and 400 <= status_code < 500:
+                    raise
+                last_exc = exc
+            except Exception as exc:  # noqa: BLE001
+                last_exc = exc
+
+            if attempt == len(delays):
+                bt.logging.error(
+                    f"IWAP {context} exhausted retries after {attempt + 1} attempts"
+                )
+                if last_exc is not None:
+                    raise last_exc
+                raise RuntimeError("IWAP retry failed without exception context")
+
+            delay = delays[attempt]
+            bt.logging.warning(
+                f"IWAP {context} attempt {attempt + 1} failed "
+                f"({type(last_exc).__name__}: {last_exc}); retrying in {delay}s"
+            )
+            await asyncio.sleep(delay)
+
+        if last_exc is not None:
+            raise last_exc
+        raise RuntimeError("IWAP retry reached unexpected state")
+
     async def _post(self, path: str, payload: Dict[str, object], *, context: str) -> Dict[str, Any]:
         sanitized_payload = _sanitize_json(payload)
         self._backup_payload(context, sanitized_payload)
-        request = self._client.build_request("POST", path, json=sanitized_payload)
         auth_headers = self._resolve_auth_headers()
-        if auth_headers:
-            request.headers.update(auth_headers)
-        target_url = str(request.url)
 
-        # HTTP request details at DEBUG
-        bt.logging.debug("🌐 HTTP REQUEST DETAILS:")
-        bt.logging.debug(f"   Method: POST")
-        bt.logging.debug(f"   URL: {target_url}")
-        bt.logging.debug(f"   Context: {context}")
-        bt.logging.debug(f"   Headers: {dict(request.headers)}")
+        if isinstance(sanitized_payload, dict):
+            payload_keys = list(sanitized_payload.keys())
+        else:
+            payload_keys = []
         try:
-            bt.logging.debug(f"   Payload keys: {list(sanitized_payload.keys())}")
-            bt.logging.debug(f"   Payload size: {len(str(sanitized_payload))} chars")
+            payload_len = len(str(sanitized_payload))
         except Exception:
-            bt.logging.debug("   Payload: <unprintable>")
+            payload_len = -1
 
-        try:
-            bt.logging.info(f"IWAP {context} POST {target_url} started")
-            response = await self._client.send(request)
-            response.raise_for_status()
-            bt.logging.info(f"IWAP {context} POST {target_url} succeeded with status {response.status_code}")
-            bt.logging.debug(f"   Response status: {response.status_code}")
-            bt.logging.debug(f"   Response headers: {dict(response.headers)}")
-            if response.text:
-                bt.logging.debug(f"   Response body (first 500 chars): {response.text[:500]}")
-        except httpx.HTTPStatusError as exc:
-            body = exc.response.text
-            bt.logging.error(f"IWAP {context} POST {target_url} failed ({exc.response.status_code}): {body}")
-            raise
-        except Exception:
-            bt.logging.error(f"IWAP {context} POST {target_url} failed unexpectedly", exc_info=True)
-            raise
+        async def attempt(attempt_index: int) -> httpx.Response:
+            request = self._client.build_request("POST", path, json=sanitized_payload)
+            if auth_headers:
+                request.headers.update(auth_headers)
+            target_url = str(request.url)
+            attempt_number = attempt_index + 1
+            attempt_suffix = f" (attempt {attempt_number})" if attempt_number > 1 else ""
+
+            bt.logging.debug("🌐 HTTP REQUEST DETAILS:")
+            bt.logging.debug("   Method: POST")
+            bt.logging.debug(f"   URL: {target_url}")
+            bt.logging.debug(f"   Context: {context}")
+            bt.logging.debug(f"   Headers: {dict(request.headers)}")
+            if payload_keys:
+                bt.logging.debug(f"   Payload keys: {payload_keys}")
+            if payload_len >= 0:
+                bt.logging.debug(f"   Payload size: {payload_len} chars")
+
+            try:
+                bt.logging.info(
+                    f"IWAP {context} POST {target_url} started{attempt_suffix}"
+                )
+                response = await self._client.send(request)
+                response.raise_for_status()
+                bt.logging.info(
+                    f"IWAP {context} POST {target_url} succeeded with status "
+                    f"{response.status_code}"
+                )
+                bt.logging.debug(f"   Response status: {response.status_code}")
+                bt.logging.debug(f"   Response headers: {dict(response.headers)}")
+                if response.text:
+                    bt.logging.debug(
+                        "   Response body (first 500 chars): "
+                        f"{response.text[:500]}"
+                    )
+                return response
+            except httpx.HTTPStatusError as exc:
+                body = exc.response.text
+                bt.logging.error(
+                    f"IWAP {context} POST {target_url} failed "
+                    f"({exc.response.status_code}): {body}"
+                )
+                raise
+            except Exception:
+                bt.logging.error(
+                    f"IWAP {context} POST {target_url} failed unexpectedly",
+                    exc_info=True,
+                )
+                raise
+
+        response = await self._with_retry(attempt, context=context)
         try:
             return response.json()
         except Exception:
             return {}
 
-    async def _post_multipart(self, path: str, data: Dict[str, Any], files: Dict[str, bytes], *, context: str) -> None:
+    async def _post_multipart(
+        self,
+        path: str,
+        data: Dict[str, Any],
+        files: Dict[str, bytes],
+        *,
+        context: str,
+    ) -> None:
         """
         Send multipart/form-data request with JSON data and binary files.
         """
-        import io
-
-        # Create multipart form data
         boundary = "----formdata-autoppia-iwap"
-        body_parts = []
-
-        # Add JSON data fields
         sanitized_data = _sanitize_json(data)
+        body_parts: List[object] = []
+
         for key, value in sanitized_data.items():
             body_parts.append(f"--{boundary}")
             body_parts.append(f"Content-Disposition: form-data; name=\"{key}\"")
@@ -382,62 +487,86 @@ class IWAPClient:
             body_parts.append(json.dumps(value))
             body_parts.append("")
 
-        # Add binary files
         for key, file_data in files.items():
             body_parts.append(f"--{boundary}")
-            body_parts.append(f"Content-Disposition: form-data; name=\"{key}\"; filename=\"{key}.gif\"")
+            body_parts.append(
+                f"Content-Disposition: form-data; name=\"{key}\"; filename=\"{key}.gif\""
+            )
             body_parts.append("Content-Type: image/gif")
             body_parts.append("")
-            # Add binary data
             body_parts.append(file_data)
             body_parts.append("")
 
-        # Close boundary
         body_parts.append(f"--{boundary}--")
-
-        # Join all parts
-        body = b"\r\n".join([
-            part.encode('utf-8') if isinstance(part, str) else part 
+        body = b"\r\n".join(
+            part.encode("utf-8") if isinstance(part, str) else part
             for part in body_parts
-        ])
-
-        # Build request
-        request = self._client.build_request("POST", path, content=body)
-        request.headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
+        )
 
         auth_headers = self._resolve_auth_headers()
-        if auth_headers:
-            request.headers.update(auth_headers)
+        data_fields = list(sanitized_data.keys())
+        file_fields = list(files.keys())
+        total_body_size = len(body)
 
-        target_url = str(request.url)
+        async def attempt(attempt_index: int) -> httpx.Response:
+            request = self._client.build_request("POST", path, content=body)
+            request.headers["Content-Type"] = (
+                f"multipart/form-data; boundary={boundary}"
+            )
+            if auth_headers:
+                request.headers.update(auth_headers)
 
-        bt.logging.debug("🌐 MULTIPART REQUEST DETAILS:")
-        bt.logging.debug(f"   Method: POST")
-        bt.logging.debug(f"   URL: {target_url}")
-        bt.logging.debug(f"   Context: {context}")
-        bt.logging.debug(f"   Content-Type: multipart/form-data; boundary={boundary}")
-        bt.logging.debug(f"   Data fields: {list(sanitized_data.keys())}")
-        bt.logging.debug(f"   File fields: {list(files.keys())}")
-        bt.logging.debug(f"   Total body size: {len(body)} bytes")
-        for key, file_data in files.items():
-            bt.logging.debug(f"   File {key}: {len(file_data)} bytes")
+            target_url = str(request.url)
+            attempt_number = attempt_index + 1
+            attempt_suffix = f" (attempt {attempt_number})" if attempt_number > 1 else ""
 
-        try:
-            bt.logging.info(f"IWAP {context} POST {target_url} started (multipart)")
-            response = await self._client.send(request)
-            response.raise_for_status()
-            bt.logging.info(f"IWAP {context} POST {target_url} succeeded with status {response.status_code}")
-            bt.logging.debug(f"   Response status: {response.status_code}")
-            bt.logging.debug(f"   Response headers: {dict(response.headers)}")
-            if response.text:
-                bt.logging.debug(f"   Response body (first 500 chars): {response.text[:500]}")
-        except httpx.HTTPStatusError as exc:
-            body = exc.response.text
-            bt.logging.error(f"IWAP {context} POST {target_url} failed ({exc.response.status_code}): {body}")
-            raise
-        except Exception:
-            bt.logging.error(f"IWAP {context} POST {target_url} failed unexpectedly", exc_info=True)
-            raise
+            bt.logging.debug("🌐 MULTIPART REQUEST DETAILS:")
+            bt.logging.debug("   Method: POST")
+            bt.logging.debug(f"   URL: {target_url}")
+            bt.logging.debug(f"   Context: {context}")
+            bt.logging.debug(
+                f"   Content-Type: multipart/form-data; boundary={boundary}"
+            )
+            bt.logging.debug(f"   Data fields: {data_fields}")
+            bt.logging.debug(f"   File fields: {file_fields}")
+            bt.logging.debug(f"   Total body size: {total_body_size} bytes")
+            for key, file_data in files.items():
+                bt.logging.debug(f"   File {key}: {len(file_data)} bytes")
+
+            try:
+                bt.logging.info(
+                    f"IWAP {context} POST {target_url} started (multipart)"
+                    f"{attempt_suffix}"
+                )
+                response = await self._client.send(request)
+                response.raise_for_status()
+                bt.logging.info(
+                    f"IWAP {context} POST {target_url} succeeded with status "
+                    f"{response.status_code}"
+                )
+                bt.logging.debug(f"   Response status: {response.status_code}")
+                bt.logging.debug(f"   Response headers: {dict(response.headers)}")
+                if response.text:
+                    bt.logging.debug(
+                        "   Response body (first 500 chars): "
+                        f"{response.text[:500]}"
+                    )
+                return response
+            except httpx.HTTPStatusError as exc:
+                body_text = exc.response.text
+                bt.logging.error(
+                    f"IWAP {context} POST {target_url} failed "
+                    f"({exc.response.status_code}): {body_text}"
+                )
+                raise
+            except Exception:
+                bt.logging.error(
+                    f"IWAP {context} POST {target_url} failed unexpectedly",
+                    exc_info=True,
+                )
+                raise
+
+        await self._with_retry(attempt, context=context)
 
     def _backup_payload(self, context: str, payload: Dict[str, object]) -> None:
         if not self._backup_dir:

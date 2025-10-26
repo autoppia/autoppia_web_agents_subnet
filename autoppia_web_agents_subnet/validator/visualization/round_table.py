@@ -1,7 +1,7 @@
 # autoppia_web_agents_subnet/validator/visualization/round_table.py
 from __future__ import annotations
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional, List, Set
 
 import numpy as np
 
@@ -20,7 +20,16 @@ def _mean_safe(values: list[float]) -> float:
     return float(np.mean(np.asarray(values, dtype=np.float32)))
 
 
-def render_round_summary_table(round_manager, final_rewards: Dict[int, float], metagraph: Any, *, to_console: bool = True) -> str:
+def render_round_summary_table(
+    round_manager,
+    final_rewards: Dict[int, float],  # WTA rewards mapping (1.0 to winner)
+    metagraph: Any,
+    *,
+    to_console: bool = True,
+    agg_scores: Optional[Dict[int, float]] = None,  # aggregated final scores per UID
+    consensus_meta: Optional[Dict[str, Any]] = None,  # {validators: [...], scores_by_validator: {hk:{uid:score}}}
+    active_uids: Optional[Set[int]] = None,
+) -> str:
     """
     Render a concise per-miner summary at end of round:
     Columns: UID, Hotkey(10), AvgScore, AvgTime(s), Reward (final)
@@ -28,26 +37,48 @@ def render_round_summary_table(round_manager, final_rewards: Dict[int, float], m
     """
     rows: list[dict[str, Any]] = []
 
-    # Build rows for all miners that participated this round (or appear in final rewards)
-    uids = set(list(round_manager.round_rewards.keys()) + list(final_rewards.keys()))
-    for uid in sorted(uids):
+    # Decide which UIDs to show: if agg_scores provided, show only UIDs with final score > 0
+    if agg_scores:
+        uids_to_show = {int(uid) for uid, sc in agg_scores.items() if float(sc) > 0.0}
+    else:
+        uids_to_show = set(list(round_manager.round_rewards.keys()) + list(final_rewards.keys()))
+
+    validators_info: List[Dict[str, Any]] = []
+    scores_by_validator: Dict[str, Dict[int, float]] = {}
+    if consensus_meta:
+        validators_info = list(consensus_meta.get("validators") or [])
+        scores_by_validator = dict(consensus_meta.get("scores_by_validator") or {})
+
+    validators_hk_order: List[str] = [v.get("hotkey") for v in validators_info if isinstance(v, dict) and v.get("hotkey")]
+
+    for uid in sorted(uids_to_show):
         hotkey = metagraph.hotkeys[uid] if uid < len(metagraph.hotkeys) else "<unknown>"
         avg_eval = _mean_safe(round_manager.round_eval_scores.get(uid, []))
         avg_time = _mean_safe(round_manager.round_times.get(uid, []))
-        avg_reward = _mean_safe(round_manager.round_rewards.get(uid, []))  # Pre-WTA reward (0.85*score + 0.15*time)
-        wta_reward = float(final_rewards.get(uid, 0.0))  # Post-WTA reward (1.0 for winner)
+        local_participated = bool(round_manager.round_rewards.get(uid)) or bool(round_manager.round_eval_scores.get(uid))
+        final_score = float((agg_scores or {}).get(uid, 0.0))
+        wta_reward = float(final_rewards.get(uid, 0.0))  # 1.0 for winner else 0.0
+
+        # Per-validator scores for this UID, ordered by validators_hk_order
+        per_val_scores = []
+        if validators_hk_order:
+            for hk in validators_hk_order:
+                per_val_scores.append(float(scores_by_validator.get(hk, {}).get(uid, 0.0)))
+
         rows.append({
             "uid": int(uid),
             "hotkey": hotkey,
             "hotkey_prefix": hotkey[:10],
+            "local": local_participated,
             "avg_eval": avg_eval,
             "avg_time": avg_time,
-            "avg_reward": avg_reward,
+            "final_score": final_score,
             "wta_reward": wta_reward,
+            "per_val_scores": per_val_scores,
         })
 
-    # Sort by WTA reward desc, then by avg_reward desc for tie-break
-    rows.sort(key=lambda r: (r["wta_reward"], r["avg_reward"]), reverse=True)
+    # Sort by WTA reward desc, then by avg_eval desc for tie-break
+    rows.sort(key=lambda r: (r["wta_reward"], r["avg_eval"]), reverse=True)
 
     if not rows:
         text = "[no miners / no tasks this round]"
@@ -64,39 +95,79 @@ def render_round_summary_table(round_manager, final_rewards: Dict[int, float], m
             show_lines=False,
             padding=(0, 1),
         )
+        # Header note with validators and stakes (weights used)
+        if validators_info:
+            try:
+                from rich.console import Console as _C
+                hdr = ", ".join(
+                    [
+                        f"{v.get('hotkey', '')[:10]}…({float(v.get('stake') or 0.0):.0f}τ)"
+                        for v in validators_info
+                    ]
+                )
+                _C().print(f"[bold]Aggregators:[/bold] {hdr}")
+            except Exception:
+                pass
+
         tbl.add_column("#", justify="right", width=3)
         tbl.add_column("UID", justify="right", width=5)
         tbl.add_column("Hotkey", style="cyan", overflow="ellipsis")
-        tbl.add_column("AvgScore", justify="right", width=10)
-        tbl.add_column("AvgTime(s)", justify="right", width=10)
-        tbl.add_column("AvgReward", justify="right", width=10)
-        tbl.add_column("WTA_Reward", justify="right", width=10)
+        tbl.add_column("Active", justify="center", width=6)
+        tbl.add_column("LocalScore", justify="right", width=10)
+        # Per-validator dynamic columns
+        if validators_hk_order:
+            for idx, v in enumerate(validators_info, start=1):
+                hk = v.get("hotkey", "")
+                stake = float(v.get("stake") or 0.0)
+                header = f"V{idx}:{hk[:6]}…({stake:.0f}τ)"
+                tbl.add_column(header, justify="right", width=12)
+        tbl.add_column("FinalScore", justify="right", width=11)
+        tbl.add_column("WTA", justify="right", width=6)
 
         for i, r in enumerate(rows, start=1):
-            tbl.add_row(
+            base_cols = [
                 str(i),
                 str(r["uid"]),
                 r["hotkey_prefix"],
+                ("yes" if (active_uids and r["uid"] in active_uids) else ("yes" if r["local"] else "no")),
                 f'{r["avg_eval"]:.4f}',
-                f'{r["avg_time"]:.3f}',
-                f'{r["avg_reward"]:.4f}',
+            ]
+            pv_cols = []
+            if validators_hk_order and r.get("per_val_scores"):
+                pv_cols = [f"{val:.4f}" for val in r["per_val_scores"]]
+            tail_cols = [
+                f'{r["final_score"]:.4f}',
                 f'{r["wta_reward"]:.4f}',
-            )
+            ]
+            tbl.add_row(*(base_cols + pv_cols + tail_cols))
 
         console = Console()
         console.print(tbl)
         return f"Round Summary — Miners (n={len(rows)})."
 
     # Fallback plain text table
+    # Plain text fallback
+    header = [
+        "#", "UID", "HOTKEY", "Active", "LocalScore",
+    ]
+    if validators_info:
+        header.extend([f"V{idx}:{v.get('hotkey','')[:6]}…({float(v.get('stake') or 0.0):.0f}τ)" for idx, v in enumerate(validators_info, start=1)])
+    header.extend(["FinalScore", "WTA"])
+
     lines = [
         "Round Summary — Miners",
-        f'{"#":>3} {"UID":>5} {"HOTKEY":<12} {"AvgScore":>10} {"AvgTime(s)":>10} {"AvgReward":>10} {"WTA_Reward":>10}',
+        " ".join([f"{h:>12}" for h in header]),
     ]
     for i, r in enumerate(rows, start=1):
-        lines.append(
-            f'{i:>3} {r["uid"]:>5} {r["hotkey_prefix"]:<12.12} '
-            f'{r["avg_eval"]:>10.4f} {r["avg_time"]:>10.3f} {r["avg_reward"]:>10.4f} {r["wta_reward"]:>10.4f}'
-        )
+        fields = [
+            f"{i:>3}", f"{r['uid']:>5}", f"{r['hotkey_prefix']:<12.12}",
+            ("yes" if (active_uids and r["uid"] in active_uids) else ("yes" if r["local"] else "no")),
+            f"{r['avg_eval']:.4f}",
+        ]
+        if validators_hk_order and r.get("per_val_scores"):
+            fields.extend([f"{val:.4f}" for val in r["per_val_scores"]])
+        fields.extend([f"{r['final_score']:.4f}", f"{r['wta_reward']:.4f}"])
+        lines.append(" ".join([f"{x:>12}" for x in fields]))
     text = "\n".join(lines)
     if to_console:
         print(text)

@@ -1,0 +1,50 @@
+Autoppia Subnet Quick Reference
+================================
+
+Core Projects
+-------------
+- `autoppia_web_agents_subnet/`: Bittensor validator neuron (“validator”) that orchestrates rounds, generates tasks, evaluates miner agents, and handles consensus + IPFS commitments.
+- `autoppia_bittensor_dashboard_backend/`: FastAPI ingestion layer (“IWAP”) that validators call. Persists validator rounds, agent runs, evaluations, and GIF links to Postgres.
+- `autoppia_bittensor_dashboard_frontend/`: Next.js dashboard that reads the backend UI API and renders validator / miner analytics.
+
+Validator Round Snapshot
+------------------------
+1. **Bootstrap** – `ValidatorPlatformMixin`, `RoundManager`, and IWA `AppBootstrap` initialise logging, checkpointing, and round boundaries.
+2. **Handshake** – `send_start_round_synapse_to_miners` collects active miner UIDs + agent metadata. Results checkpointed under `data/validator_state/round_state/`.
+3. **start_round (IWAP)** – Validator posts `/validator-rounds/start` with round metadata (hotkey, stake, name, image, start block). IWAP verifies signatures and timing.
+4. **Task provisioning** – `set_tasks` sends the per-round task list generated via IWA pipelines (deterministic seeds per project).
+5. **Agent runs** – `start_agent_run` registers each miner’s agent run (UID + hotkey + agent snapshot) in IWAP.
+6. **Task loop** – For each task: send prompt → gather TaskSolution → `evaluate_task_solutions` (IWA evaluators) → compute scores + rewards → `add_evaluation` + optional GIF upload.
+7. **Consensus** – After finishing tasks, validator publishes a commitment snapshot (scores, events, etc.) to IPFS + on-chain (`publish_round_snapshot`, `set_weights`) if `ENABLE_DISTRIBUTED_CONSENSUS`.
+8. **finish_round** – Calls `/validator-rounds/{id}/finish` with winners, raw scores, weights, and round summary. IWAP finalises round and front-end can display results.
+
+IWAP Backend Essentials
+-----------------------
+- Auth requires signed headers: `x-validator-hotkey` + `x-validator-signature`. Configured challenge string is `IWAP_VALIDATOR_AUTH_MESSAGE`.
+- Persists everything to Postgres (`DATABASE_URL`/`POSTGRES_*`). No SQLite.
+- Endpoints mirror validator flow: start_round → set_tasks → start_agent_run → add_evaluation (+ GIF stream endpoint) → finish_round.
+- UI API endpoints (`/api/v1/rounds`, `/api/v1/miners`, `/api/v1/agents`, `/api/v1/overview`, etc.) are read-only analytics consumed by the dashboard.
++
+Consensus & Weights
+-------------------
+- Validators publish commitments to IPFS (e.g., `CID` values) and record a hash on-chain. A minimum stake (`MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO`) can filter low-stake validators in reports.
+- `show_commitments.py` reads the latest commitments, prints score statistics (mean, variance, std), tasks processed, and CID. It can also fetch the on-chain weight snapshot for the target epoch/round.
+- Weight commitments may not be available if the round is still active or no validator meets the stake threshold. Scripts should report when data is missing instead of assuming errors.
+
+Operational Notes
+-----------------
+- Round length defaults to 4 epochs (~4.8h); environment flags can shorten it for testing.
+- GIF capture toggled via `SHOULD_RECORD_GIF`; backend streams to S3.
+- Checkpoints allow resuming after crashes; remove `data/validator_state/round_state/<hotkey>.pkl` if a corrupt file blocks a new round.
+- Ensure `OPENAI_API_KEY` and `LOG_ANALYZER_OPENAI_MODEL` (or `OPENAI_MODEL`) are set when using the log analyzer.
+
+Common Troubleshooting Clues
+----------------------------
+- **Missing weights** – Round still active or stake below threshold. Wait for `✅ Round complete` logs before expecting on-chain weights.
+- **IWAP 4xx/5xx** – Inspect validator logs (URL, payload keys, headers) and backend logs (`uvicorn.log`). Signature mismatches or stale round windows are common.
+- **Consensus failures** – Look for `CONSENSUS PUBLISH` / `CONSENSUS AGGREGATE` in logs; IPFS errors or mismatched epochs are usual suspects.
+
+Frontend Reminder
+-----------------
+- Dashboard only reflects stored data (no synthetic averages). Run `pnpm dev` in `autoppia_bittensor_dashboard_frontend/` with `NEXT_PUBLIC_API_BASE_URL` pointing to the backend ingress.
+- API services normalise snake_case/camelCase to keep compatibility across backend versions.
