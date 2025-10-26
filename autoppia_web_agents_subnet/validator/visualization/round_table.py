@@ -53,6 +53,7 @@ def render_round_summary_table(
 
     for uid in sorted(uids_to_show):
         hotkey = metagraph.hotkeys[uid] if uid < len(metagraph.hotkeys) else "<unknown>"
+        coldkey = metagraph.coldkeys[uid] if uid < len(metagraph.coldkeys) else "<unknown>"
         avg_eval = _mean_safe(round_manager.round_eval_scores.get(uid, []))
         avg_time = _mean_safe(round_manager.round_times.get(uid, []))
         local_participated = bool(round_manager.round_rewards.get(uid)) or bool(round_manager.round_eval_scores.get(uid))

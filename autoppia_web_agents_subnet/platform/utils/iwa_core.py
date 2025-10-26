@@ -29,7 +29,72 @@ def log_iwap_phase(
     level: str = "info",
     exc_info: bool = False,
 ) -> None:
-    prefix = f"{IWAP_PHASE_ICON} IWAP {phase}: {message}"
+    """
+    Log IWAP events in the format: IWAP | [Phase X] [action] message
+
+    Args:
+        phase: The phase/context name (e.g., "start_round", "Phase 1", etc.)
+        message: The message to log
+        level: Log level (info, success, warning, error, debug)
+        exc_info: Whether to include exception traceback
+    """
+    # Map contexts to phases
+    phase_map = {
+        "start_round": "Phase 0",
+        "set_tasks": "Phase 2",
+        "start_agent_run": "Phase 3",
+        "add_evaluation": "Phase 4",
+        "finish_round": "Phase 5",
+    }
+
+    # Get the phase number if applicable
+    phase_label = phase_map.get(phase, phase)
+
+    # Format: IWAP | [Phase X] [context] message
+    # If phase is already like "Phase 1", just use it
+    if phase.startswith("Phase"):
+        prefix = f"IWAP | [{phase}] {message}"
+    elif phase in phase_map:
+        # For API calls: IWAP | [Phase X] [context] message
+        prefix = f"IWAP | [{phase_label}] [{phase}] {message}"
+    else:
+        # For other cases
+        prefix = f"IWAP | [{phase}] {message}"
+
+    if level == "success":
+        bt.logging.success(prefix)
+    elif level == "warning":
+        bt.logging.warning(prefix)
+    elif level == "error":
+        bt.logging.error(prefix, exc_info=exc_info)
+    elif level == "debug":
+        bt.logging.debug(prefix)
+    else:
+        bt.logging.info(prefix)
+
+
+def log_ipfs_event(
+    action: str,
+    message: str,
+    *,
+    level: str = "info",
+    exc_info: bool = False,
+) -> None:
+    """
+    Log IPFS events in the format: IPFS | [action] message
+
+    Args:
+        action: The action being performed (e.g., "UPLOAD", "DOWNLOAD", "PUBLISH")
+        message: The message to log
+        level: Log level (info, success, warning, error, debug)
+        exc_info: Whether to include exception traceback
+    """
+    # Format as "IPFS | [ACTION] message"
+    if message.startswith("["):
+        prefix = f"IPFS | {message}"
+    else:
+        prefix = f"IPFS | [{action}] {message}"
+
     if level == "success":
         bt.logging.success(prefix)
     elif level == "warning":
@@ -105,8 +170,9 @@ def normalized_stake_tao(metagraph, uid: int) -> Optional[float]:
         rao_per_tao = 1_000_000_000
 
     normalized = raw_stake / rao_per_tao
+    from autoppia_web_agents_subnet.utils.log_colors import iwap_tag
     bt.logging.debug(
-        f"Validator stake normalised for uid={uid}: raw={raw_stake} (RAO) -> {normalized} (TAO)"
+        iwap_tag("stake", f"Validator stake normalised for uid={uid}: raw={raw_stake} (RAO) -> {normalized} (TAO)")
     )
     return normalized
 
@@ -121,12 +187,14 @@ def validator_vtrust(metagraph, uid: int) -> Optional[float]:
     for attribute in attribute_order:
         value = metagraph_numeric(metagraph, attribute, uid)
         if value is not None:
+            from autoppia_web_agents_subnet.utils.log_colors import iwap_tag
             bt.logging.debug(
-                f"Validator vtrust for uid={uid} resolved via '{attribute}' -> {value}"
+                iwap_tag("vtrust", f"Validator vtrust for uid={uid} resolved via '{attribute}' -> {value}")
             )
             return value
+    from autoppia_web_agents_subnet.utils.log_colors import iwap_tag
     bt.logging.warning(
-        f"Validator vtrust metric not found in metagraph for uid={uid} (checked: {', '.join(attribute_order)})"
+        iwap_tag("vtrust", f"Validator vtrust metric not found in metagraph for uid={uid} (checked: {', '.join(attribute_order)})")
     )
     return None
 
@@ -281,4 +349,3 @@ def extract_gif_bytes(payload: Optional[object]) -> Optional[bytes]:
         "🛰️ IWAP GIF extraction failed: decoded payload missing GIF header"
     )
     return None
-

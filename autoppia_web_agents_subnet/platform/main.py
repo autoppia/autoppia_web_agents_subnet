@@ -15,6 +15,7 @@ import httpx
 import bittensor as bt
 
 from autoppia_web_agents_subnet.validator.config import MAX_MINER_AGENT_NAME_LENGTH
+from autoppia_web_agents_subnet.platform.utils.iwa_core import log_iwap_phase
 
 from . import models
 

@@ -91,9 +91,8 @@ async def evaluate_task_solutions(
         # Extract GIF recording
         gif_recording = getattr(res, "gif_recording", None)
         if gif_recording:
-            # Log GIF info (first 100 chars of base64)
-            gif_preview = str(gif_recording)[:100] if gif_recording else "None"
-            bt.logging.debug(f"🎬 GIF captured: {len(str(gif_recording)) if gif_recording else 0} bytes (base64), preview: {gif_preview}...")
+            # Log GIF info without preview (too long)
+            bt.logging.debug(f"🎬 GIF captured: {len(str(gif_recording))} bytes (base64)")
         else:
             bt.logging.debug("No GIF recording in evaluation result")
 

@@ -107,6 +107,17 @@ def add_args(cls, parser):
         default=False,
     )
 
+    # Logging related quality-of-life flags (module-scoped)
+    parser.add_argument(
+        "--logging.suppress_dendrite_noise",
+        action=argparse.BooleanOptionalAction,
+        help=(
+            "Suppress very noisy dendrite connection DEBUG logs (e.g. ClientConnectorError/TimeoutError) "
+            "without raising global log level."
+        ),
+        default=True,
+    )
+
     parser.add_argument(
         "--wandb.off",
         action="store_true",

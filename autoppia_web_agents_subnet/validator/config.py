@@ -28,7 +28,7 @@ if TESTING:
     ROUND_SIZE_EPOCHS = _env_float("TEST_ROUND_SIZE_EPOCHS", 0.2)
     SAFETY_BUFFER_EPOCHS = _env_float("TEST_SAFETY_BUFFER_EPOCHS", 0.02)
     AVG_TASK_DURATION_SECONDS = _env_int("TEST_AVG_TASK_DURATION_SECONDS", 300)
-    PRE_GENERATED_TASKS = _env_int("TEST_PRE_GENERATED_TASKS", 5)
+    PRE_GENERATED_TASKS = _env_int("TEST_PRE_GENERATED_TASKS", 3)
     DZ_STARTING_BLOCK = _env_int("TEST_DZ_STARTING_BLOCK", 6_717_750)
 
     # ── Round Phase Timing (all absolute % of total round) ──────────────────

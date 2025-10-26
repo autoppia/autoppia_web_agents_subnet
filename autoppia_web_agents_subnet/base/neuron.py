@@ -72,6 +72,60 @@ class BaseNeuron(ABC):
         # Set up logging with the provided configuration.
         bt.logging.set_config(config=self.config.logging)
 
+        # Filter out noisy dendrite connection errors without changing global log level
+        # Note: bt.logging uses its own logger; standard logging.Filter may not catch it.
+        # We install both: (1) a stdlib logging Filter for modules that use logging;
+        # (2) a lightweight monkey-patch on bt.logging.debug to drop matching messages.
+        import logging
+        import re
+
+        class DendriteNoiseFilter(logging.Filter):
+            """Filter to block noisy dendrite connection errors (stdlib logging)."""
+            NOISE_PATTERNS = [
+                r"ClientConnectorError.*Cannot connect to host",
+                r"TimeoutError#[a-f0-9-]+:",
+                r"Cannot connect to host 0\.0\.0\.0:(?:0|8091)",
+            ]
+
+            def filter(self, record):
+                try:
+                    msg = record.getMessage()
+                except Exception:
+                    return True
+                for pattern in self.NOISE_PATTERNS:
+                    if re.search(pattern, msg):
+                        return False
+                return True
+
+        # Attach stdlib filter (harmless if unused)
+        logging.getLogger("bittensor.dendrite").addFilter(DendriteNoiseFilter())
+
+        # Optional bt.logging debug filter (covers loguru-style logger used by bittensor)
+        if getattr(self.config, "logging", None) is None or \
+           getattr(self.config.logging, "suppress_dendrite_noise", True):
+            patterns = [
+                re.compile(r"ClientConnectorError.*Cannot connect to host"),
+                re.compile(r"TimeoutError#[a-f0-9-]+:"),
+                re.compile(r"Cannot connect to host 0\.0\.0\.0:(?:0|8091)"),
+            ]
+
+            _orig_debug = bt.logging.debug
+
+            def _filtered_debug(message, *args, **kwargs):
+                try:
+                    text = message if isinstance(message, str) else str(message)
+                except Exception:
+                    text = ""
+                for rgx in patterns:
+                    if rgx.search(text):
+                        return  # swallow noisy debug line
+                return _orig_debug(message, *args, **kwargs)
+
+            # Install once per process
+            if not hasattr(bt.logging, "_dendrite_noise_filter_installed"):
+                bt.logging.debug = _filtered_debug
+                bt.logging._dendrite_noise_filter_installed = True
+
         # If a gpu is required, set the device to cuda:N (e.g. cuda:0)
         self.device = self.config.neuron.device
 

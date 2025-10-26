@@ -25,10 +25,13 @@ def render_weights_table(processed_weight_uids: np.ndarray, processed_weights: n
     for uid, weight in zip(processed_weight_uids, processed_weights):
         if weight > 0:  # Only show non-zero weights
             hotkey = metagraph.hotkeys[uid] if uid < len(metagraph.hotkeys) else "<unknown>"
+            coldkey = metagraph.coldkeys[uid] if uid < len(metagraph.coldkeys) else "<unknown>"
             rows.append({
                 "uid": int(uid),
                 "hotkey": hotkey,
                 "hotkey_prefix": hotkey[:15],  # Show first 15 chars
+                "coldkey": coldkey,
+                "coldkey_prefix": coldkey[:15],  # Show first 15 chars
                 "weight": float(weight),
             })
 
@@ -52,7 +55,8 @@ def render_weights_table(processed_weight_uids: np.ndarray, processed_weights: n
         )
         tbl.add_column("#", justify="right", width=3)
         tbl.add_column("UID", justify="right", width=5)
-        tbl.add_column("Hotkey", style="cyan", overflow="ellipsis")
+        tbl.add_column("Hotkey", style="cyan", overflow="ellipsis", width=17)
+        tbl.add_column("Coldkey", style="yellow", overflow="ellipsis", width=17)
         tbl.add_column("Weight", justify="right", width=10)
 
         for i, r in enumerate(rows, start=1):
@@ -62,6 +66,7 @@ def render_weights_table(processed_weight_uids: np.ndarray, processed_weights: n
                 str(i),
                 str(r["uid"]),
                 r["hotkey_prefix"],
+                r["coldkey_prefix"],
                 f'[{weight_style}]{r["weight"]:.6f}[/{weight_style}]',
             )
 
@@ -72,11 +77,11 @@ def render_weights_table(processed_weight_uids: np.ndarray, processed_weights: n
     # Fallback plain text table
     lines = [
         "🏆 Final Weights (On-Chain)",
-        f'{"#":>3} {"UID":>5} {"HOTKEY":<18} {"Weight":>10}',
+        f'{"#":>3} {"UID":>5} {"HOTKEY":<18} {"COLDKEY":<18} {"Weight":>10}',
     ]
     for i, r in enumerate(rows, start=1):
         lines.append(
-            f'{i:>3} {r["uid"]:>5} {r["hotkey_prefix"]:<18.18} {r["weight"]:>10.6f}'
+            f'{i:>3} {r["uid"]:>5} {r["hotkey_prefix"]:<18.18} {r["coldkey_prefix"]:<18.18} {r["weight"]:>10.6f}'
         )
     text = "\n".join(lines)
     if to_console:
