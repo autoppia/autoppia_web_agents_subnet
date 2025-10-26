@@ -72,6 +72,27 @@ class BaseNeuron(ABC):
         # Set up logging with the provided configuration.
         bt.logging.set_config(config=self.config.logging)
 
+        # Filter out noisy dendrite connection errors using regex pattern matching
+        import logging
+        import re
+
+        class DendriteNoiseFilter(logging.Filter):
+            """Filter to block noisy dendrite connection errors"""
+            NOISE_PATTERNS = [
+                r"ClientConnectorError.*Cannot connect to host",
+                r"TimeoutError#[a-f0-9-]+:",
+            ]
+
+            def filter(self, record):
+                if record.name == "bittensor.dendrite":
+                    msg = record.getMessage()
+                    for pattern in self.NOISE_PATTERNS:
+                        if re.search(pattern, msg):
+                            return False  # Block this log
+                return True  # Allow everything else
+
+        logging.getLogger("bittensor.dendrite").addFilter(DendriteNoiseFilter())
+
         # If a gpu is required, set the device to cuda:N (e.g. cuda:0)
         self.device = self.config.neuron.device
 

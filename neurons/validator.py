@@ -818,18 +818,6 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     self._consensus_published = True
                 else:
                     bt.logging.warning("Consensus publish returned no CID; will retry later if window allows.")
-                ColoredLogger.success(
-                    "\n" + "=" * 80,
-                    ColoredLogger.GREEN,
-                )
-                ColoredLogger.success(
-                    f"✅✅✅ IPFS PUBLISH COMPLETE ✅✅✅",
-                    ColoredLogger.GREEN,
-                )
-                ColoredLogger.success(
-                    "=" * 80 + "\n",
-                    ColoredLogger.GREEN,
-                )
             except Exception as e:
                 bt.logging.error("=" * 80)
                 bt.logging.error(f"[CONSENSUS] ❌ IPFS publish failed | Error: {type(e).__name__}: {e}")
@@ -1480,5 +1468,5 @@ if __name__ == "__main__":
 
     with Validator(config=config(role="validator")) as validator:
         while True:
-            bt.logging.info(f"Heartbeat — validator running... {time.time()}")
-            time.sleep(30)
+            bt.logging.debug(f"Heartbeat — validator running... {time.time()}")
+            time.sleep(120)  # Every 5 minutes instead of 30 seconds
