@@ -773,17 +773,16 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                         bt.logging.info(f"[CONSENSUS] Safety buffer reached - publishing to IPFS with {tasks_completed} tasks")
                         round_number = await self.round_manager.calculate_round(current_block)
                         st = await self._get_async_subtensor()
-
                         cid = await publish_round_snapshot(
                             validator=self,
                             st=st,
                             round_number=round_number,
                             tasks_completed=tasks_completed,
                         )
-
-                        self._consensus_published = True
                         if cid:
-                            bt.logging.success(f"[CONSENSUS] ✅ IPFS publish complete - CID: {cid}")
+                            self._consensus_published = True
+                        else:
+                            bt.logging.warning("Consensus publish returned no CID; will retry later if window allows.")
                         try:
                             self.state_manager.save_checkpoint()
                         except Exception:
@@ -809,19 +808,28 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 current_block = self.metagraph.block.item()
                 round_number = await self.round_manager.calculate_round(current_block)
                 st = await self._get_async_subtensor()
-
                 cid = await publish_round_snapshot(
                     validator=self,
                     st=st,
                     round_number=round_number,
                     tasks_completed=tasks_completed,
                 )
-
-                self._consensus_published = True
                 if cid:
-                    bt.logging.success(f"[CONSENSUS] ✅ IPFS publish complete - CID: {cid}")
+                    self._consensus_published = True
                 else:
-                    bt.logging.warning(f"[CONSENSUS] ⚠️ IPFS publish returned no CID")
+                    bt.logging.warning("Consensus publish returned no CID; will retry later if window allows.")
+                ColoredLogger.success(
+                    "\n" + "=" * 80,
+                    ColoredLogger.GREEN,
+                )
+                ColoredLogger.success(
+                    f"✅✅✅ IPFS PUBLISH COMPLETE ✅✅✅",
+                    ColoredLogger.GREEN,
+                )
+                ColoredLogger.success(
+                    "=" * 80 + "\n",
+                    ColoredLogger.GREEN,
+                )
             except Exception as e:
                 bt.logging.error("=" * 80)
                 bt.logging.error(f"[CONSENSUS] ❌ IPFS publish failed | Error: {type(e).__name__}: {e}")
@@ -1333,6 +1341,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 bt.logging.info(f"[CONSENSUS] Aggregating scores from other validators...")
                 # Prefer cached mid-settlement aggregation if available
                 agg = self._agg_scores_cache or {}
+                agg_meta = None
                 if not agg:
                     # Calculate current progress
                     try:
@@ -1355,7 +1364,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
                     # Natural gap between STOP and FETCH ensures propagation
                     st = await self._get_async_subtensor()
-                    agg = await aggregate_scores_from_commitments(
+                    agg, agg_meta = await aggregate_scores_from_commitments(
                         validator=self,
                         st=st,
                         start_epoch=boundaries['round_start_epoch'],
@@ -1367,6 +1376,11 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                         ColoredLogger.CYAN,
                     )
                     avg_rewards = agg
+                    # Cache the details for rendering
+                    try:
+                        self._consensus_last_details = agg_meta or {}
+                    except Exception:
+                        pass
                 else:
                     ColoredLogger.warning("No aggregated scores available; using local averages.", ColoredLogger.YELLOW)
             except Exception as e:
@@ -1400,9 +1414,20 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         # Convert back to dict
         final_rewards_dict = {uid: float(reward) for uid, reward in zip(uids, final_rewards_array)}
 
-        # Render concise round summary table (UID, hotkey prefix, avg score, avg time, reward)
+        # Render enhanced summary table including consensus details when available
         try:
-            render_round_summary_table(self.round_manager, final_rewards_dict, self.metagraph, to_console=True)
+            agg_scores = avg_rewards if isinstance(avg_rewards, dict) else None
+            active_set = set(self.active_miner_uids or [])
+            consensus_meta = getattr(self, "_consensus_last_details", None)
+            render_round_summary_table(
+                self.round_manager,
+                final_rewards_dict,
+                self.metagraph,
+                to_console=True,
+                agg_scores=agg_scores,
+                consensus_meta=consensus_meta,
+                active_uids=active_set,
+            )
         except Exception as e:
             bt.logging.debug(f"Round summary table failed: {e}")
 
@@ -1417,18 +1442,15 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         else:
             bt.logging.info("❌ No miners evaluated.")
 
-        # Update EMA scores (only for active miners who responded to handshake)
-        # Prepare aligned arrays: rewards and uids must have the same length
-        active_rewards = np.array(
-            [final_rewards_dict.get(uid, 0.0) for uid in self.active_miner_uids], 
-            dtype=np.float32
-        )
-
-        bt.logging.info(f"Updating scores for {len(self.active_miner_uids)} active miners")
-        self.update_scores(
-            rewards=active_rewards,           # Array of rewards for active miners
-            uids=self.active_miner_uids       # List of active miner UIDs (same length)
-        )
+        # Set on-chain weights to the consensus WTA winner, even if not local/active,
+        # to ensure all validators converge on the same winner.
+        winner_uid = max(final_rewards_dict.keys(), key=lambda k: final_rewards_dict[k]) if final_rewards_dict else None
+        wta_full = np.zeros(self.metagraph.n, dtype=np.float32)
+        if winner_uid is not None and 0 <= int(winner_uid) < self.metagraph.n:
+            wta_full[int(winner_uid)] = 1.0
+        all_uids = list(range(self.metagraph.n))
+        bt.logging.info(f"Updating scores for on-chain WTA winner uid={winner_uid}")
+        self.update_scores(rewards=wta_full, uids=all_uids)
         self.set_weights()
 
         try:
