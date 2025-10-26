@@ -69,6 +69,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         # Configure IWA (loguru) logging level based on CLI flag
         try:
             from autoppia_iwa.src.bootstrap import AppBootstrap
+
             iwa_debug = False
             if hasattr(self.config, "iwa") and hasattr(self.config.iwa, "logging") and hasattr(self.config.iwa.logging, "debug"):
                 iwa_debug = bool(self.config.iwa.logging.debug)
@@ -154,10 +155,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             target_epoch = DZ_STARTING_BLOCK / 360
 
             eta = f"~{hours_remaining:.1f}h" if hours_remaining >= 1 else f"~{minutes_remaining:.0f}m"
-            bt.logging.warning(
-                f"🔒 Locked until block {DZ_STARTING_BLOCK:,} (epoch {target_epoch:.2f}) | "
-                f"now {current_block:,} (epoch {current_epoch:.2f}) | ETA {eta}"
-            )
+            bt.logging.warning(f"🔒 Locked until block {DZ_STARTING_BLOCK:,} (epoch {target_epoch:.2f}) | " f"now {current_block:,} (epoch {current_epoch:.2f}) | ETA {eta}")
 
             # Sleep for a bounded interval to re-check later without busy-waiting.
             wait_seconds = min(max(seconds_remaining, 30), 600)
@@ -176,17 +174,14 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             boundaries_preview = self.round_manager.get_round_boundaries(current_block, log_debug=False)
             current_epoch_preview = self.round_manager.block_to_epoch(current_block)
             round_number_preview = await self.round_manager.calculate_round(current_block)
-            blocks_to_target = max(boundaries_preview['target_block'] - current_block, 0)
+            blocks_to_target = max(boundaries_preview["target_block"] - current_block, 0)
             minutes_to_target = (blocks_to_target * self.round_manager.SECONDS_PER_BLOCK) / 60
-            epochs_to_target = max(boundaries_preview['target_epoch'] - current_epoch_preview, 0.0)
+            epochs_to_target = max(boundaries_preview["target_epoch"] - current_epoch_preview, 0.0)
             bt.logging.info(
-                (
-                    "Round status | round={round} | epoch {cur:.2f}/{target:.2f} | "
-                    "epochs_to_next={ep:.2f} | minutes_to_next={mins:.1f}"
-                ).format(
+                ("Round status | round={round} | epoch {cur:.2f}/{target:.2f} | " "epochs_to_next={ep:.2f} | minutes_to_next={mins:.1f}").format(
                     round=round_number_preview,
                     cur=current_epoch_preview,
-                    target=boundaries_preview['target_epoch'],
+                    target=boundaries_preview["target_epoch"],
                     ep=epochs_to_target,
                     mins=minutes_to_target,
                 )
@@ -220,13 +215,9 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 if all_tasks:
                     self.current_round_id = state["validator_round_id"]
                     resumed = True
-                    bt.logging.info(
-                        f"♻️ Resumed {len(all_tasks)} tasks; validator_round_id={self.current_round_id}"
-                    )
+                    bt.logging.info(f"♻️ Resumed {len(all_tasks)} tasks; validator_round_id={self.current_round_id}")
                 else:
-                    bt.logging.warning(
-                        "Resume checkpoint had 0 tasks; generating new tasks."
-                    )
+                    bt.logging.warning("Resume checkpoint had 0 tasks; generating new tasks.")
             except Exception as e:
                 bt.logging.warning(f"Resume failed to restore tasks from checkpoint: {e}")
                 # fall through to fresh generation
@@ -272,10 +263,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             vname = VALIDATOR_NAME or "<unnamed>"
 
             bt.logging.info(
-                (
-                    "🏁 Round header | round={round} | validator_uid={uid} | hotkey={hk} | "
-                    "validator_round_id={rid} | resumed={resumed} | name={vname}"
-                ).format(
+                ("🏁 Round header | round={round} | validator_uid={uid} | hotkey={hk} | " "validator_round_id={rid} | resumed={resumed} | name={vname}").format(
                     round=round_number_header,
                     uid=uid,
                     hk=hk_short,
@@ -293,16 +281,13 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             if not resumed:
                 frac = float(self.round_manager.fraction_elapsed(current_block))
                 bounds = self.round_manager.get_round_boundaries(current_block, log_debug=False)
-                blocks_to_target = max(bounds['target_block'] - current_block, 0)
+                blocks_to_target = max(bounds["target_block"] - current_block, 0)
                 # If we're exactly at the previous boundary (0 blocks remaining), treat as new round start (do not skip)
-                at_boundary = (blocks_to_target == 0)
+                at_boundary = blocks_to_target == 0
                 if (not at_boundary) and (frac >= float(SKIP_ROUND_IF_STARTED_AFTER_FRACTION)):
                     minutes_remaining = (blocks_to_target * self.round_manager.SECONDS_PER_BLOCK) / 60
                     ColoredLogger.warning(
-                        (
-                            f"⏭️ Fresh start late in round: {frac*100:.1f}% >= "
-                            f"{float(SKIP_ROUND_IF_STARTED_AFTER_FRACTION)*100:.0f}% — skipping to next round"
-                        ),
+                        (f"⏭️ Fresh start late in round: {frac*100:.1f}% >= " f"{float(SKIP_ROUND_IF_STARTED_AFTER_FRACTION)*100:.0f}% — skipping to next round"),
                         ColoredLogger.YELLOW,
                     )
                     ColoredLogger.info(
@@ -330,10 +315,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 tasks_generated += len(tasks_to_add)
 
                 batch_elapsed = time.time() - batch_start
-                bt.logging.debug(
-                    f"Generated batch: {len(tasks_to_add)} in {batch_elapsed:.1f}s "
-                    f"(total {tasks_generated}/{PRE_GENERATED_TASKS})"
-                )
+                bt.logging.debug(f"Generated batch: {len(tasks_to_add)} in {batch_elapsed:.1f}s " f"(total {tasks_generated}/{PRE_GENERATED_TASKS})")
 
             self.current_round_id = self._generate_validator_round_id(current_block=current_block)
             self.round_start_timestamp = pre_generation_start
@@ -350,9 +332,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         )
 
         pre_generation_elapsed = time.time() - pre_generation_start
-        bt.logging.info(
-            f"✅ Task list ready: {len(all_tasks)} tasks in {pre_generation_elapsed:.1f}s (resumed={resumed})"
-        )
+        bt.logging.info(f"✅ Task list ready: {len(all_tasks)} tasks in {pre_generation_elapsed:.1f}s (resumed={resumed})")
 
         # ═══════════════════════════════════════════════════════
         # START ROUND HANDSHAKE: Send StartRoundSynapse ONCE
@@ -399,7 +379,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     validator_id=str(self.uid),
                     total_prompts=len(all_tasks),
                     prompts_per_use_case=PROMPTS_PER_USECASE,
-                    note=f"Starting round at epoch {boundaries['round_start_epoch']}"
+                    note=f"Starting round at epoch {boundaries['round_start_epoch']}",
                 )
 
                 # 🔍 DEBUG: Show exactly what we're sending
@@ -434,9 +414,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
             def _truncate_agent_name(name: str) -> str:
                 if MAX_MINER_AGENT_NAME_LENGTH and len(name) > MAX_MINER_AGENT_NAME_LENGTH:
-                    bt.logging.debug(
-                        f"Truncating agent name '{name}' to {MAX_MINER_AGENT_NAME_LENGTH} characters."
-                    )
+                    bt.logging.debug(f"Truncating agent name '{name}' to {MAX_MINER_AGENT_NAME_LENGTH} characters.")
                     return name[:MAX_MINER_AGENT_NAME_LENGTH]
                 return name
 
@@ -452,11 +430,11 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
                 # Track all miners (successful or not)
                 miner_status_map[mapped_uid] = {
-                    'response': response,
-                    'success': False,
-                    'agent_name': None,
-                    'version': None,
-                    'hotkey': self.metagraph.hotkeys[mapped_uid][:12] + '...' if mapped_uid < len(self.metagraph.hotkeys) else 'N/A'
+                    "response": response,
+                    "success": False,
+                    "agent_name": None,
+                    "version": None,
+                    "hotkey": self.metagraph.hotkeys[mapped_uid][:12] + "..." if mapped_uid < len(self.metagraph.hotkeys) else "N/A",
                 }
 
                 if not response:
@@ -489,20 +467,18 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 self.active_miner_uids.append(mapped_uid)
 
                 # Update status map
-                miner_status_map[mapped_uid].update({
-                    'success': True,
-                    'agent_name': agent_name,
-                    'version': getattr(response, 'agent_version', 'N/A')
-                })
+                miner_status_map[mapped_uid].update({"success": True, "agent_name": agent_name, "version": getattr(response, "agent_version", "N/A")})
 
                 # Collect for backward compatibility
-                successful_miners.append({
-                    'uid': mapped_uid,
-                    'agent': agent_name,
-                    'version': getattr(response, 'agent_version', 'N/A'),
-                    'rl': 'Yes' if getattr(response, 'has_rl', False) else 'No',
-                    'hotkey': miner_status_map[mapped_uid]['hotkey']
-                })
+                successful_miners.append(
+                    {
+                        "uid": mapped_uid,
+                        "agent": agent_name,
+                        "version": getattr(response, "agent_version", "N/A"),
+                        "rl": "Yes" if getattr(response, "has_rl", False) else "No",
+                        "hotkey": miner_status_map[mapped_uid]["hotkey"],
+                    }
+                )
 
             # Display results in a Rich table (always show if we have miner data)
             if miner_status_map:
@@ -530,10 +506,10 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     for idx, uid in enumerate(sorted_uids):
                         miner = miner_status_map[uid]
 
-                        if miner['success']:
+                        if miner["success"]:
                             status_icon = "[bold green]✅[/bold green]"
-                            agent_name = miner['agent_name'] or 'N/A'
-                            version = miner['version'] or 'N/A'
+                            agent_name = miner["agent_name"] or "N/A"
+                            version = miner["version"] or "N/A"
                             style = None
                         else:
                             status_icon = "[bold red]❌[/bold red]"
@@ -541,14 +517,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                             version = "[dim]N/A[/dim]"
                             style = "dim"
 
-                        table.add_row(
-                            status_icon,
-                            str(uid),
-                            agent_name,
-                            version,
-                            miner['hotkey'],
-                            style=style
-                        )
+                        table.add_row(status_icon, str(uid), agent_name, version, miner["hotkey"], style=style)
 
                     console.print(table)
                     console.print()
@@ -563,9 +532,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                         ColoredLogger.GREEN,
                     )
                 else:
-                    ColoredLogger.warning(
-                        f"⚠️ Handshake sent: 0/{len(all_axons)} miners responded", ColoredLogger.YELLOW
-                    )
+                    ColoredLogger.warning(f"⚠️ Handshake sent: 0/{len(all_axons)} miners responded", ColoredLogger.YELLOW)
 
             # Mark that handshake was sent (for resume logic)
             # This flag prevents re-sending handshake after restart, regardless of responses
@@ -587,10 +554,10 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
         # Early audit log of round info
         round_number = await self.round_manager.calculate_round(current_block)
-        start_epoch = boundaries['round_start_epoch']
-        target_epoch = boundaries['target_epoch']
-        total_blocks = boundaries['target_block'] - boundaries['round_start_block']
-        blocks_remaining = boundaries['target_block'] - current_block
+        start_epoch = boundaries["round_start_epoch"]
+        target_epoch = boundaries["target_epoch"]
+        total_blocks = boundaries["target_block"] - boundaries["round_start_block"]
+        blocks_remaining = boundaries["target_block"] - current_block
         minutes_remaining = (blocks_remaining * self.round_manager.SECONDS_PER_BLOCK) / 60
 
         from autoppia_web_agents_subnet.utils.log_colors import round_details_tag
@@ -646,9 +613,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             wait_info = self.round_manager.get_wait_info(current_block)
 
             ColoredLogger.info(
-                f"📍 Task {task_index + 1}/{len(all_tasks)} | "
-                f"epoch {current_epoch:.2f}/{boundaries['target_epoch']} | "
-                f"remaining {wait_info['minutes_remaining']:.1f}m",
+                f"📍 Task {task_index + 1}/{len(all_tasks)} | " f"epoch {current_epoch:.2f}/{boundaries['target_epoch']} | " f"remaining {wait_info['minutes_remaining']:.1f}m",
                 ColoredLogger.CYAN,
             )
 
@@ -696,8 +661,8 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             # Compute fractional progress for reserved-window stop
             try:
                 boundaries_now = self.round_manager.get_round_boundaries(current_block, log_debug=False)
-                rsb = boundaries_now['round_start_block']
-                tb = boundaries_now['target_block']
+                rsb = boundaries_now["round_start_block"]
+                tb = boundaries_now["target_block"]
                 bt_total = max(tb - rsb, 1)
                 bt_done = max(current_block - rsb, 0)
                 progress_frac = min(max(bt_done / bt_total, 0.0), 1.0)
@@ -734,6 +699,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     bt.logging.error("=" * 80)
                     bt.logging.error(f"[CONSENSUS] ❌ IPFS publish failed | Error: {type(e).__name__}: {e}")
                     import traceback
+
                     bt.logging.error(f"[CONSENSUS] Traceback:\n{traceback.format_exc()}")
                     bt.logging.error("=" * 80)
                 break
@@ -743,21 +709,17 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     ColoredLogger.YELLOW,
                 )
                 ColoredLogger.info(
-                    f"   epoch={current_epoch:.2f}, remaining={wait_info['seconds_remaining']:.0f}s, "
-                    f"buffer={SAFETY_BUFFER_EPOCHS} epochs, tasks={tasks_completed}/{len(all_tasks)}",
+                    f"   epoch={current_epoch:.2f}, remaining={wait_info['seconds_remaining']:.0f}s, " f"buffer={SAFETY_BUFFER_EPOCHS} epochs, tasks={tasks_completed}/{len(all_tasks)}",
                     ColoredLogger.YELLOW,
                 )
                 try:
                     # Provide explicit context about what the target is (end-of-round)
                     bounds_ctx = self.round_manager.get_round_boundaries(current_block, log_debug=False)
-                    target_epoch_ctx = bounds_ctx['target_epoch']
-                    target_block_ctx = bounds_ctx['target_block']
+                    target_epoch_ctx = bounds_ctx["target_epoch"]
+                    target_block_ctx = bounds_ctx["target_block"]
                     round_no_ctx = await self.round_manager.calculate_round(current_block)
                     ColoredLogger.info(
-                        (
-                            f"   Waiting for end-of-round target epoch to set weights | "
-                            f"round={round_no_ctx} | target_epoch={target_epoch_ctx:.2f} | target_block={target_block_ctx}"
-                        ),
+                        (f"   Waiting for end-of-round target epoch to set weights | " f"round={round_no_ctx} | target_epoch={target_epoch_ctx:.2f} | target_block={target_block_ctx}"),
                         ColoredLogger.YELLOW,
                     )
                 except Exception:
@@ -791,6 +753,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                         bt.logging.error("=" * 80)
                         bt.logging.error(f"[CONSENSUS] ❌ IPFS publish failed | Error: {type(e).__name__}: {e}")
                         import traceback
+
                         bt.logging.error(f"[CONSENSUS] Traceback:\n{traceback.format_exc()}")
                         bt.logging.error("=" * 80)
                 break
@@ -822,6 +785,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 bt.logging.error("=" * 80)
                 bt.logging.error(f"[CONSENSUS] ❌ IPFS publish failed | Error: {type(e).__name__}: {e}")
                 import traceback
+
                 bt.logging.error(f"[CONSENSUS] Traceback:\n{traceback.format_exc()}")
                 bt.logging.error("=" * 80)
 
@@ -905,12 +869,13 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                         test_lines = [f"[yellow]{test_idx}. {test.type}[/yellow]: {test.description}"]
 
                         # Add event name if available
-                        if hasattr(test, 'event_name'):
+                        if hasattr(test, "event_name"):
                             test_lines.append(f"   Event: [cyan]{test.event_name}[/cyan]")
 
                         # Add criteria details
-                        if hasattr(test, 'event_criteria') and test.event_criteria:
+                        if hasattr(test, "event_criteria") and test.event_criteria:
                             import json
+
                             criteria_str = json.dumps(test.event_criteria, indent=2)
                             test_lines.append(f"   Criteria: [dim]{criteria_str}[/dim]")
 
@@ -973,11 +938,11 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     for a in solution.actions:
                         # Use action type and basic attributes for grouping
                         action_str = f"{a.type}"
-                        if hasattr(a, 'url'):
+                        if hasattr(a, "url"):
                             action_str += f"|{a.url}"
-                        if hasattr(a, 'text'):
+                        if hasattr(a, "text"):
                             action_str += f"|{a.text}"
-                        if hasattr(a, 'selector') and a.selector:
+                        if hasattr(a, "selector") and a.selector:
                             selector_str = f"{getattr(a.selector, 'type', '')}:{getattr(a.selector, 'value', '')}"
                             action_str += f"|{selector_str}"
                         actions_repr.append(action_str)
@@ -988,14 +953,10 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     solution_hash = "no_actions"
 
                 if solution_hash not in solution_groups:
-                    solution_groups[solution_hash] = {
-                        'uids': [],
-                        'solution': solution,
-                        'indices': []
-                    }
+                    solution_groups[solution_hash] = {"uids": [], "solution": solution, "indices": []}
 
-                solution_groups[solution_hash]['uids'].append(uid)
-                solution_groups[solution_hash]['indices'].append(i)
+                solution_groups[solution_hash]["uids"].append(uid)
+                solution_groups[solution_hash]["indices"].append(i)
 
             # Evaluate task solutions
             ColoredLogger.debug("🔍 STARTING EVALUATION...", ColoredLogger.CYAN)
@@ -1009,13 +970,13 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             # 🔍 DEBUG: Show actions + results together for each GROUP
             try:
                 console = Console()
-                expected_base = project.frontend_url.rstrip('/')
+                expected_base = project.frontend_url.rstrip("/")
 
                 # Display actions AND results for each GROUP of miners with identical solutions
                 for group_idx, (solution_hash, group_data) in enumerate(solution_groups.items(), 1):
-                    group_uids = group_data['uids']
-                    group_indices = group_data['indices']
-                    solution = group_data['solution']
+                    group_uids = group_data["uids"]
+                    group_indices = group_data["indices"]
+                    solution = group_data["solution"]
 
                     # Get results for all miners in this group
                     group_scores = [eval_scores[i] for i in group_indices]
@@ -1027,11 +988,11 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                         # Count seed issues
                         seed_issues = 0
                         for action in solution.actions:
-                            if hasattr(action, 'url') and action.url and action.type == 'NavigateAction' and seed is not None:
-                                if 'seed=' not in action.url:
+                            if hasattr(action, "url") and action.url and action.type == "NavigateAction" and seed is not None:
+                                if "seed=" not in action.url:
                                     seed_issues += 1
                                 else:
-                                    action_seed = action.url.split('seed=')[1].split('&')[0].split('?')[0]
+                                    action_seed = action.url.split("seed=")[1].split("&")[0].split("?")[0]
                                     if action_seed != str(seed):
                                         seed_issues += 1
 
@@ -1058,21 +1019,21 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                             action_dict = vars(action)
                             details_lines = []
                             for key, value in action_dict.items():
-                                if key == 'type':
+                                if key == "type":
                                     continue  # Skip type as it's in another column
                                 # Format selector objects nicely
-                                if hasattr(value, '__dict__'):
+                                if hasattr(value, "__dict__"):
                                     value = vars(value)
                                 details_lines.append(f"{key}: {value}")
                             details = "\n".join(details_lines)
 
                             # For NavigateAction, check seed
-                            if action_type == 'NavigateAction' and seed is not None:
-                                url = getattr(action, 'url', '')
-                                if 'seed=' not in url:
+                            if action_type == "NavigateAction" and seed is not None:
+                                url = getattr(action, "url", "")
+                                if "seed=" not in url:
                                     status = "[bold red]❌[/bold red]"
                                 else:
-                                    action_seed = url.split('seed=')[1].split('&')[0].split('?')[0]
+                                    action_seed = url.split("seed=")[1].split("&")[0].split("?")[0]
                                     if action_seed != str(seed):
                                         status = "[bold red]❌[/bold red]"
 
@@ -1085,10 +1046,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
                     # 2️⃣ Backend tests summary for this GROUP (compact, sourced from test_results_list)
                     try:
-                        group_tests: list[list[dict]] = [
-                            test_results_list[i] if i < len(test_results_list) else []
-                            for i in group_indices
-                        ]
+                        group_tests: list[list[dict]] = [test_results_list[i] if i < len(test_results_list) else [] for i in group_indices]
                         tests_table = Table(
                             title=f"[bold green]🧪 Group {group_idx} | UIDs: [{uids_str}] - Backend Tests[/bold green]",
                             box=box.SIMPLE,
@@ -1161,13 +1119,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                         else:
                             status_msg = "[red]All tests failed[/red]"
 
-                        result_table.add_row(
-                            str(uid),
-                            score_str,
-                            time_str,
-                            status_msg,
-                            result_icon
-                        )
+                        result_table.add_row(str(uid), score_str, time_str, status_msg, result_icon)
 
                     console.print(result_table)
                     console.print()
@@ -1177,6 +1129,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             except Exception as e:
                 bt.logging.warning(f"Failed to render miner tables: {e}")
                 import traceback
+
                 bt.logging.warning(f"Traceback: {traceback.format_exc()}")
                 # Fallback to simple logging
                 for i, uid in enumerate(self.active_miner_uids):
@@ -1192,12 +1145,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             )
 
             # Accumulate scores for the round using round_manager
-            self.round_manager.accumulate_rewards(
-                miner_uids=list(self.active_miner_uids),
-                rewards=rewards.tolist(),
-                eval_scores=eval_scores.tolist(),
-                execution_times=execution_times
-            )
+            self.round_manager.accumulate_rewards(miner_uids=list(self.active_miner_uids), rewards=rewards.tolist(), eval_scores=eval_scores.tolist(), execution_times=execution_times)
 
             # Send feedback to miners
             try:
@@ -1247,9 +1195,9 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         # Fix the boundary at entry time to avoid jumping to the next window
         start_block_snapshot = self.subtensor.get_current_block()
         initial_bounds = self.round_manager.get_round_boundaries(start_block_snapshot, log_debug=False)
-        fixed_start_block = int(initial_bounds['round_start_block'])
-        fixed_target_block = int(initial_bounds['target_block'])
-        fixed_target_epoch = float(initial_bounds['target_epoch'])
+        fixed_start_block = int(initial_bounds["round_start_block"])
+        fixed_target_block = int(initial_bounds["target_block"])
+        fixed_target_epoch = float(initial_bounds["target_epoch"])
 
         last_log_time = time.time()
         while True:
@@ -1268,9 +1216,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 progress = min(max((done / total) * 100.0, 0.0), 100.0)
 
                 blocks_remaining = max(fixed_target_block - current_block, 0)
-                minutes_remaining = (
-                    blocks_remaining * self.round_manager.SECONDS_PER_BLOCK
-                ) / 60
+                minutes_remaining = (blocks_remaining * self.round_manager.SECONDS_PER_BLOCK) / 60
 
                 if time.time() - last_log_time >= 30:
                     current_epoch = self.round_manager.block_to_epoch(current_block)
@@ -1335,14 +1281,15 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     try:
                         current_block_now = self.metagraph.block.item()
                         bounds_now = self.round_manager.get_round_boundaries(current_block_now, log_debug=False)
-                        rsb = bounds_now['round_start_block']
-                        tb = bounds_now['target_block']
+                        rsb = bounds_now["round_start_block"]
+                        tb = bounds_now["target_block"]
                         progress_now = min(max((current_block_now - rsb) / max(tb - rsb, 1), 0.0), 1.0)
                     except Exception:
                         progress_now = 0.0
                         current_block_now = 0
 
                     from autoppia_web_agents_subnet.utils.log_colors import consensus_tag
+
                     bt.logging.info("=" * 80)
                     bt.logging.info(consensus_tag(f"📥 FETCH COMMITS @ {FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION:.0%}"))
                     bt.logging.info(consensus_tag(f"Progress: {progress_now:.2f}"))
@@ -1355,8 +1302,8 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     agg, agg_meta = await aggregate_scores_from_commitments(
                         validator=self,
                         st=st,
-                        start_epoch=boundaries['round_start_epoch'],
-                        target_epoch=boundaries['target_epoch'],
+                        start_epoch=boundaries["round_start_epoch"],
+                        target_epoch=boundaries["target_epoch"],
                     )
                 if agg:
                     ColoredLogger.info(
@@ -1380,7 +1327,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         except Exception:
             has_positive = False
         if not has_positive:
-            ColoredLogger.error("🔥 All miners scored <= 0: burning all weights", ColoredLogger.RED)
+            ColoredLogger.warning("🔥 All miners scored <= 0: burning all weights", ColoredLogger.RED)
             # Zero-out via standard update_scores path to keep flow consistent
             zero_vec = np.zeros(self.metagraph.n, dtype=np.float32)
             all_uids = list(range(self.metagraph.n))
@@ -1424,9 +1371,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         winner_uid = max(final_rewards_dict.keys(), key=lambda k: final_rewards_dict[k]) if final_rewards_dict else None
         if winner_uid is not None:
             hotkey = self.metagraph.hotkeys[winner_uid] if winner_uid < len(self.metagraph.hotkeys) else "<unknown>"
-            bt.logging.info(
-                f"🏆 Winner uid={winner_uid}, hotkey={hotkey[:10]}..., weight={final_rewards_dict[winner_uid]:.4f}"
-            )
+            bt.logging.info(f"🏆 Winner uid={winner_uid}, hotkey={hotkey[:10]}..., weight={final_rewards_dict[winner_uid]:.4f}")
         else:
             bt.logging.info("❌ No miners evaluated.")
 
