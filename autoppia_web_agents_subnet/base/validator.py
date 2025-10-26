@@ -90,24 +90,17 @@ class BaseValidatorNeuron(BaseNeuron):
                     netuid=self.config.netuid,
                     axon=self.axon,
                 )
-                bt.logging.info(
-                    f"Running validator {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
-                )
+                bt.logging.info(f"Running validator {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}")
             except Exception as e:
                 bt.logging.error(f"Failed to serve Axon with exception: {e}")
                 pass
 
         except Exception as e:
-            bt.logging.error(
-                f"Failed to create Axon initialize with exception: {e}"
-            )
+            bt.logging.error(f"Failed to create Axon initialize with exception: {e}")
             pass
 
     async def concurrent_forward(self):
-        coroutines = [
-            self.forward()
-            for _ in range(self.config.neuron.num_concurrent_forwards)
-        ]
+        coroutines = [self.forward() for _ in range(self.config.neuron.num_concurrent_forwards)]
         await asyncio.gather(*coroutines)
 
     def run(self):
@@ -161,9 +154,7 @@ class BaseValidatorNeuron(BaseNeuron):
         # In case of unforeseen errors, the validator will log the error and continue operations.
         except Exception as err:
             bt.logging.error(f"Error during validation: {str(err)}")
-            bt.logging.debug(
-                str(print_exception(type(err), err, err.__traceback__))
-            )
+            bt.logging.debug(str(print_exception(type(err), err, err.__traceback__)))
 
     def run_in_background_thread(self):
         """
@@ -214,6 +205,7 @@ class BaseValidatorNeuron(BaseNeuron):
             bt.logging.debug("Stopped")
 
         # ─────────────────────────────────────────────────────────────────────
+
     # Utilities
     # ─────────────────────────────────────────────────────────────────────
     def burn_all(self, *, uids: Sequence[int]) -> np.ndarray:
@@ -237,9 +229,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # Check if self.scores contains any NaN values and log a warning if it does.
         if np.isnan(self.scores).any():
-            bt.logging.warning(
-                f"Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."
-            )
+            bt.logging.warning(f"Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions.")
 
         # Calculate the average reward for each uid across non-zero values.
         # Replace any NaN values with 0.
@@ -269,13 +259,12 @@ class BaseValidatorNeuron(BaseNeuron):
         (
             uint_uids,
             uint_weights,
-        ) = convert_weights_and_uids_for_emit(
-            uids=processed_weight_uids, weights=processed_weights
-        )
+        ) = convert_weights_and_uids_for_emit(uids=processed_weight_uids, weights=processed_weights)
 
         # Render clear weights table with Rich
         try:
             from autoppia_web_agents_subnet.validator.visualization.weights_table import render_weights_table
+
             render_weights_table(processed_weight_uids, processed_weights, self.metagraph, to_console=True)
         except Exception as e:
             bt.logging.debug(f"Weights table failed: {e}")
@@ -312,9 +301,7 @@ class BaseValidatorNeuron(BaseNeuron):
         if previous_metagraph.axons == self.metagraph.axons:
             return
 
-        bt.logging.info(
-            "Metagraph updated, re-syncing hotkeys, dendrite pool and moving averages"
-        )
+        bt.logging.info("Metagraph updated, re-syncing hotkeys, dendrite pool and moving averages")
         # Zero out all hotkeys that have been replaced.
         for uid, hotkey in enumerate(self.hotkeys):
             if hotkey != self.metagraph.hotkeys[uid]:
@@ -353,32 +340,24 @@ class BaseValidatorNeuron(BaseNeuron):
         # Handle edge case: If either rewards or uids_array is empty.
         if rewards.size == 0 or uids_array.size == 0:
             bt.logging.info(f"rewards: {rewards}, uids_array: {uids_array}")
-            bt.logging.warning(
-                "Either rewards or uids_array is empty. No updates will be performed."
-            )
+            bt.logging.warning("Either rewards or uids_array is empty. No updates will be performed.")
             return
 
         # Check if sizes of rewards and uids_array match.
         if rewards.size != uids_array.size:
-            raise ValueError(
-                f"Shape mismatch: rewards array of shape {rewards.shape} "
-                f"cannot be broadcast to uids array of shape {uids_array.shape}"
-            )
+            raise ValueError(f"Shape mismatch: rewards array of shape {rewards.shape} " f"cannot be broadcast to uids array of shape {uids_array.shape}")
 
         # Compute forward pass rewards, assumes uids are mutually exclusive.
         # shape: [ metagraph.n ]
         scattered_rewards: np.ndarray = np.zeros_like(self.scores)
         scattered_rewards[uids_array] = rewards
-        import numpy as np
         non_zero = np.count_nonzero(rewards)
         bt.logging.debug(f"Scattered rewards: {len(rewards)} miners, {non_zero} non-zero, max={np.max(rewards):.4f}")
 
         # Update scores with rewards produced by this step.
         # shape: [ metagraph.n ]
         alpha: float = self.config.neuron.moving_average_alpha
-        self.scores: np.ndarray = (
-            alpha * scattered_rewards + (1 - alpha) * self.scores
-        )
+        self.scores: np.ndarray = alpha * scattered_rewards + (1 - alpha) * self.scores
         non_zero_scores = np.count_nonzero(self.scores)
         bt.logging.debug(f"Updated moving avg scores: {len(self.scores)} miners, {non_zero_scores} non-zero, max={np.max(self.scores):.4f}")
 
