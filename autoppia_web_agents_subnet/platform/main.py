@@ -15,7 +15,6 @@ import httpx
 import bittensor as bt
 
 from autoppia_web_agents_subnet.validator.config import MAX_MINER_AGENT_NAME_LENGTH
-from autoppia_web_agents_subnet.platform.utils.iwa_core import log_iwap_phase
 
 from . import models
 
@@ -280,51 +279,44 @@ class IWAPClient:
         if not gif_bytes:
             raise ValueError("GIF payload is empty")
 
+        from autoppia_web_agents_subnet.platform.utils.iwa_core import log_gif_event
+
         path = f"/api/v1/evaluations/{evaluation_id}/gif"
         filename = f"{evaluation_id}.gif"
         payload_bytes = len(gif_bytes)
-        # Use explicit formatting to avoid placeholder/args mismatch with external log handlers
-        bt.logging.info(
-            f"🎬 IWAP: Uploading GIF to API - evaluation_id={evaluation_id} "
-            f"filename={filename} payload_bytes={payload_bytes}"
+        
+        log_gif_event(
+            f"Uploading to API - evaluation_id={evaluation_id} filename={filename} bytes={payload_bytes}"
         )
 
         async def attempt(attempt_index: int) -> httpx.Response:
             attempt_number = attempt_index + 1
             attempt_suffix = f" (attempt {attempt_number})" if attempt_number > 1 else ""
-            bt.logging.info(
-                "🎬 IWAP: GIF upload POST %s started%s",
-                path,
-                attempt_suffix,
-            )
+            log_gif_event(f"POST {path} started{attempt_suffix}")
+            
             try:
                 response = await self._client.post(
                     path,
                     files={"gif": (filename, gif_bytes, "image/gif")},
                 )
                 response.raise_for_status()
-                bt.logging.debug(
-                    "🎬 IWAP: GIF upload request successful - status_code=%s",
-                    response.status_code,
+                log_gif_event(
+                    f"Upload request successful - status {response.status_code}",
+                    level="debug"
                 )
                 return response
             except httpx.HTTPStatusError as exc:
                 body = exc.response.text
-                bt.logging.error(
-                    "❌ IWAP: GIF upload failed - POST %s%s returned %s: %s",
-                    path,
-                    attempt_suffix,
-                    exc.response.status_code,
-                    body,
+                log_gif_event(
+                    f"Upload failed - POST {path}{attempt_suffix} returned {exc.response.status_code}: {body}",
+                    level="error"
                 )
                 raise
             except Exception as exc:  # noqa: BLE001
-                bt.logging.error(
-                    "❌ IWAP: GIF upload failed unexpectedly - POST %s%s: %s",
-                    path,
-                    attempt_suffix,
-                    str(exc),
-                    exc_info=True,
+                log_gif_event(
+                    f"Upload failed unexpectedly - POST {path}{attempt_suffix}: {str(exc)}",
+                    level="error",
+                    exc_info=True
                 )
                 raise
 
@@ -332,9 +324,12 @@ class IWAPClient:
 
         try:
             payload = response.json()
-            bt.logging.debug(f"🎬 IWAP: GIF upload response payload: {payload}")
+            log_gif_event(f"Response payload: {payload}", level="debug")
         except Exception as e:
-            bt.logging.warning(f"⚠️  IWAP: Received non-JSON response for evaluation_id={evaluation_id}: {str(e)}")
+            log_gif_event(
+                f"Received non-JSON response for evaluation_id={evaluation_id}: {str(e)}",
+                level="warning"
+            )
             return None
 
         gif_url = None
@@ -342,12 +337,15 @@ class IWAPClient:
             data_section = payload.get("data")
             if isinstance(data_section, dict):
                 gif_url = data_section.get("gifUrl")
-                bt.logging.debug(f"🎬 IWAP: Extracted GIF URL from response: {gif_url}")
+                log_gif_event(f"Extracted URL from response: {gif_url}", level="debug")
 
         if gif_url:
-            bt.logging.info(f"✅ IWAP: GIF upload completed successfully - URL: {gif_url}")
+            log_gif_event(f"Upload completed successfully - URL: {gif_url}", level="success")
         else:
-            bt.logging.warning(f"⚠️  IWAP: GIF upload completed but no URL returned for evaluation_id={evaluation_id}")
+            log_gif_event(
+                f"Upload completed but no URL returned for evaluation_id={evaluation_id}",
+                level="warning"
+            )
         return gif_url
 
     async def _with_retry(

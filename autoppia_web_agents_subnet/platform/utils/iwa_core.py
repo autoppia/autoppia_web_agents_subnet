@@ -63,16 +63,18 @@ def log_iwap_phase(
         prefix = f"IWAP | [{phase}] {message}"
 
     if level == "success":
-        # Use gold color for IWAP success messages
-        ColoredLogger.info(prefix, color=ColoredLogger.GOLD)
+        # Use green color for IWAP success messages
+        ColoredLogger.success(prefix, color=ColoredLogger.GREEN)
     elif level == "warning":
         ColoredLogger.warning(prefix)
     elif level == "error":
         bt.logging.error(prefix, exc_info=exc_info)
     elif level == "debug":
-        ColoredLogger.debug(prefix)
+        # Use gold color for IWAP debug messages
+        ColoredLogger.info(prefix, color=ColoredLogger.GOLD)
     else:
-        ColoredLogger.info(prefix)
+        # Default INFO in gold too for consistency
+        ColoredLogger.info(prefix, color=ColoredLogger.GOLD)
 
 
 def log_ipfs_event(
@@ -98,16 +100,49 @@ def log_ipfs_event(
         prefix = f"IPFS | [{action}] {message}"
 
     if level == "success":
-        # Use gold color for IPFS success messages too
-        ColoredLogger.info(prefix, color=ColoredLogger.GOLD)
+        # Use green color for IPFS success messages
+        ColoredLogger.success(prefix, color=ColoredLogger.GREEN)
     elif level == "warning":
         ColoredLogger.warning(prefix)
     elif level == "error":
         bt.logging.error(prefix, exc_info=exc_info)
     elif level == "debug":
-        ColoredLogger.debug(prefix)
+        # Use gold color for IPFS debug messages
+        ColoredLogger.info(prefix, color=ColoredLogger.GOLD)
     else:
-        ColoredLogger.info(prefix)
+        # Default INFO in gold too for consistency
+        ColoredLogger.info(prefix, color=ColoredLogger.GOLD)
+
+
+def log_gif_event(
+    message: str,
+    *,
+    level: str = "info",
+    exc_info: bool = False,
+) -> None:
+    """
+    Log GIF upload events in the format: IWAP | [Phase 4] [GIF] message
+
+    Args:
+        message: The message to log
+        level: Log level (info, success, warning, error, debug)
+        exc_info: Whether to include exception traceback
+    """
+    prefix = f"IWAP | [Phase 4] [GIF] {message}"
+
+    if level == "success":
+        # Use green color for GIF success messages
+        ColoredLogger.success(prefix, color=ColoredLogger.GREEN)
+    elif level == "warning":
+        ColoredLogger.warning(prefix)
+    elif level == "error":
+        bt.logging.error(prefix, exc_info=exc_info)
+    elif level == "debug":
+        # Use gold color for GIF debug messages
+        ColoredLogger.info(prefix, color=ColoredLogger.GOLD)
+    else:
+        # Default INFO in gold too for consistency
+        ColoredLogger.info(prefix, color=ColoredLogger.GOLD)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
