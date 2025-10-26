@@ -13,6 +13,8 @@ class ColoredLogger:
     WHITE = "white"
     PURPLE = "purple"
     GRAY = "gray"
+    GOLD = "gold"
+    ORANGE = "orange"
     RESET = "reset"
 
     _COLORS = {
@@ -24,6 +26,8 @@ class ColoredLogger:
         "magenta": "\033[95m",
         "white": "\033[97m",
         "gray": "\033[90m",
+        "gold": "\033[38;5;220m",  # Bright gold/yellow (256 colors)
+        "orange": "\033[38;5;214m",  # Orange (256 colors)
         "reset": "\033[0m",
         "purple": "\033[35m",
     }
@@ -34,9 +38,7 @@ class ColoredLogger:
         if color not in ColoredLogger._COLORS:
             # Default to no color if unsupported color is provided
             return message
-        return (
-            f"{ColoredLogger._COLORS[color]}{message}{ColoredLogger._COLORS['reset']}"
-        )
+        return f"{ColoredLogger._COLORS[color]}{message}{ColoredLogger._COLORS['reset']}"
 
     @staticmethod
     def info(message: str, color: str = "blue") -> None:
