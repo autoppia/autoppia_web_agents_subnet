@@ -141,11 +141,27 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         4. When finished, WAIT until target epoch
         5. Calculates averages, applies WTA, sets weights
         """
-        bt.logging.info("🚀 Starting round-based forward")
-
         # Get current block and prevent early round execution
         # Use live chain height, not metagraph.block (which updates only on sync)
         current_block = self.block
+
+        current_round_number: int | None = None
+        try:
+            current_round_number = await self.round_manager.calculate_round(current_block)
+            if current_round_number is not None:
+                setattr(self, "_current_round_number", int(current_round_number))
+        except Exception as exc:
+            bt.logging.debug(f"Unable to calculate current round number: {exc}")
+            current_round_number = None
+
+        if current_round_number is not None:
+            bt.logging.info(f"🚀 Starting round-based forward (round {current_round_number})")
+            try:
+                ColoredLogger.info(f"🚦 Starting Round: {int(current_round_number)}", ColoredLogger.GREEN)
+            except Exception:
+                pass
+        else:
+            bt.logging.info("🚀 Starting round-based forward")
 
         if not self.round_manager.can_start_round(current_block):
             blocks_remaining = self.round_manager.blocks_until_allowed(current_block)
@@ -1457,7 +1473,14 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         except Exception as e:
             bt.logging.warning(f"IWAP finish_round failed: {e}")
 
-        ColoredLogger.success("✅ Round complete", ColoredLogger.GREEN)
+        try:
+            round_finished = getattr(self, "_current_round_number", None)
+        except Exception:
+            round_finished = None
+        if round_finished is not None:
+            ColoredLogger.success(f"✅ Round completed: {int(round_finished)}", ColoredLogger.GREEN)
+        else:
+            ColoredLogger.success("✅ Round complete", ColoredLogger.GREEN)
         ColoredLogger.info(f"Tasks completed: {tasks_completed}", ColoredLogger.GREEN)
 
 
