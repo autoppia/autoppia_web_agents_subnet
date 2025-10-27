@@ -86,6 +86,8 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         self._consensus_published: bool = False
         self._consensus_mid_fetched: bool = False
         self._agg_scores_cache: dict[int, float] | None = None
+        # Track if final weights + IWAP finish_round were already sent this round
+        self._finalized_this_round: bool = False
 
         # ⭐ Round system components
         self.round_manager = RoundManager(
@@ -138,7 +140,8 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         bt.logging.info("🚀 Starting round-based forward")
 
         # Get current block and prevent early round execution
-        current_block = self.metagraph.block.item()
+        # Use live chain height, not metagraph.block (which updates only on sync)
+        current_block = self.block
 
         if not self.round_manager.can_start_round(current_block):
             blocks_remaining = self.round_manager.blocks_until_allowed(current_block)
@@ -357,6 +360,8 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
         # Initialize new round in RoundManager (logs sync math once)
         self.round_manager.start_new_round(current_block)
+        # New round: ensure finalize flag is reset
+        self._finalized_this_round = False
         boundaries = self.round_manager.get_current_boundaries()
         # If not resuming, reset ephemeral structures; if resuming, keep loaded ones
         if not resumed:
@@ -574,7 +579,8 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
         # Dynamic loop: consume pre-generated tasks and check AFTER evaluating
         while task_index < len(all_tasks):
-            current_block = self.metagraph.block.item()
+            # Always use live chain height to avoid stale epoch math
+            current_block = self.block
             current_epoch = self.round_manager.block_to_epoch(current_block)
             boundaries = self.round_manager.get_current_boundaries()
             wait_info = self.round_manager.get_wait_info(current_block)
@@ -626,7 +632,8 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
             # Dynamic check: should we send another task?
             # Refresh block height after evaluation to get an accurate time window
-            current_block = self.metagraph.block.item()
+            # Refresh block height after evaluation to get an accurate time window
+            current_block = self.block
             # Compute fractional progress for reserved-window stop
             try:
                 boundaries_now = self.round_manager.get_round_boundaries(current_block, log_debug=False)
@@ -637,7 +644,21 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 progress_frac = min(max(bt_done / bt_total, 0.0), 1.0)
             except Exception:
                 progress_frac = 0.0
-            if ENABLE_DISTRIBUTED_CONSENSUS and not self._consensus_published and (progress_frac >= float(STOP_TASK_EVALUATION_AT_ROUND_FRACTION)):
+
+            # Early finalize window: fetch aggregated scores, set weights and finish_round
+            if (not self._finalized_this_round) and (progress_frac >= float(FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION)):
+                ColoredLogger.info(
+                    f"⏳ Finalizing early at {FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION:.0%} to avoid boundary issues",
+                    ColoredLogger.PURPLE,
+                )
+                try:
+                    await self._calculate_final_weights(tasks_completed)
+                    self._finalized_this_round = True
+                except Exception as e:
+                    bt.logging.warning(f"Early finalize failed; will retry later: {e}")
+                # Stop scheduling more tasks; wait for boundary afterwards
+                break
+            if ENABLE_DISTRIBUTED_CONSENSUS and (not self._finalized_this_round) and (not self._consensus_published) and (progress_frac >= float(STOP_TASK_EVALUATION_AT_ROUND_FRACTION)):
                 ColoredLogger.error(
                     "\n" + "=" * 80,
                     ColoredLogger.RED,
@@ -713,8 +734,8 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     self.state_manager.save_checkpoint()
                 except Exception:
                     pass
-                # Try to publish commitments if sharing and not yet published.
-                if ENABLE_DISTRIBUTED_CONSENSUS and not self._consensus_published:
+                # Try to publish commitments if sharing and not yet published and not already finalized.
+                if ENABLE_DISTRIBUTED_CONSENSUS and (not self._consensus_published) and (not self._finalized_this_round):
                     try:
                         round_number = await self.round_manager.calculate_round(current_block)
                         st = await self._get_async_subtensor()
@@ -741,7 +762,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         # If we completed all tasks before reaching 50%, publish NOW
         # This ensures round_number and validator_round_id match
         # ═══════════════════════════════════════════════════════
-        if ENABLE_DISTRIBUTED_CONSENSUS and not self._consensus_published:
+        if ENABLE_DISTRIBUTED_CONSENSUS and (not self._consensus_published) and (not self._finalized_this_round):
             ColoredLogger.error(
                 "\n" + "=" * 80,
                 ColoredLogger.RED,
@@ -759,7 +780,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 ColoredLogger.RED,
             )
             try:
-                current_block = self.metagraph.block.item()
+                current_block = self.block
                 round_number = await self.round_manager.calculate_round(current_block)
                 st = await self._get_async_subtensor()
                 cid = await publish_round_snapshot(
@@ -796,11 +817,20 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             self.state_manager.save_checkpoint()
         except Exception:
             pass
+        # Actively wait until the fixed end-of-round boundary before finalizing
+        try:
+            await self._wait_until_next_round_boundary()
+        except Exception as e:
+            bt.logging.warning(f"Wait-until-boundary failed, proceeding to finalize: {e}")
 
         # ═══════════════════════════════════════════════════════
-        # FINAL WEIGHTS: Calculate averages, apply WTA, set weights
+        # FINAL WEIGHTS (fallback): If not done early, finalize now
         # ═══════════════════════════════════════════════════════
-        await self._calculate_final_weights(tasks_completed)
+        if not self._finalized_this_round:
+            await self._calculate_final_weights(tasks_completed)
+            self._finalized_this_round = True
+        else:
+            ColoredLogger.info("✅ Weights already finalized earlier; skipping.", ColoredLogger.GREEN)
 
     # ═══════════════════════════════════════════════════════════════════════════════
     # TASK EXECUTION HELPERS
