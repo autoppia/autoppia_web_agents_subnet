@@ -8,6 +8,7 @@ import bittensor as bt
 
 from autoppia_web_agents_subnet.platform import main as iwa_main
 from autoppia_web_agents_subnet.platform import models as iwa_models
+from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.validator.config import (
     VALIDATOR_IMAGE,
     VALIDATOR_NAME,
@@ -29,17 +30,119 @@ def log_iwap_phase(
     level: str = "info",
     exc_info: bool = False,
 ) -> None:
-    prefix = f"{IWAP_PHASE_ICON} IWAP {phase}: {message}"
+    """
+    Log IWAP events in the format: IWAP | [Phase X] [action] message
+
+    Args:
+        phase: The phase/context name (e.g., "start_round", "Phase 1", etc.)
+        message: The message to log
+        level: Log level (info, success, warning, error, debug)
+        exc_info: Whether to include exception traceback
+    """
+    # Map contexts to phases
+    phase_map = {
+        "start_round": "Phase 0",
+        "set_tasks": "Phase 2",
+        "start_agent_run": "Phase 3",
+        "add_evaluation": "Phase 4",
+        "finish_round": "Phase 5",
+    }
+
+    # Get the phase number if applicable
+    phase_label = phase_map.get(phase, phase)
+
+    # Format: IWAP | [Phase X] [context] message
+    # If phase is already like "Phase 1", just use it
+    if phase.startswith("Phase"):
+        prefix = f"IWAP | [{phase}] {message}"
+    elif phase in phase_map:
+        # For API calls: IWAP | [Phase X] [context] message
+        prefix = f"IWAP | [{phase_label}] [{phase}] {message}"
+    else:
+        # For other cases
+        prefix = f"IWAP | [{phase}] {message}"
+
     if level == "success":
-        bt.logging.success(prefix)
+        # Use green color for IWAP success messages
+        ColoredLogger.success(prefix, color=ColoredLogger.GREEN)
     elif level == "warning":
-        bt.logging.warning(prefix)
+        ColoredLogger.warning(prefix)
     elif level == "error":
         bt.logging.error(prefix, exc_info=exc_info)
     elif level == "debug":
-        bt.logging.debug(prefix)
+        # Use gold color for IWAP debug messages
+        ColoredLogger.info(prefix, color=ColoredLogger.GOLD)
     else:
-        bt.logging.info(prefix)
+        # Default INFO in gold too for consistency
+        ColoredLogger.info(prefix, color=ColoredLogger.GOLD)
+
+
+def log_ipfs_event(
+    action: str,
+    message: str,
+    *,
+    level: str = "info",
+    exc_info: bool = False,
+) -> None:
+    """
+    Log IPFS events in the format: IPFS | [action] message
+
+    Args:
+        action: The action being performed (e.g., "UPLOAD", "DOWNLOAD", "PUBLISH")
+        message: The message to log
+        level: Log level (info, success, warning, error, debug)
+        exc_info: Whether to include exception traceback
+    """
+    # Format as "IPFS | [ACTION] message"
+    if message.startswith("["):
+        prefix = f"IPFS | {message}"
+    else:
+        prefix = f"IPFS | [{action}] {message}"
+
+    if level == "success":
+        # Use green color for IPFS success messages
+        ColoredLogger.success(prefix, color=ColoredLogger.GREEN)
+    elif level == "warning":
+        ColoredLogger.warning(prefix)
+    elif level == "error":
+        bt.logging.error(prefix, exc_info=exc_info)
+    elif level == "debug":
+        # Use gold color for IPFS debug messages
+        ColoredLogger.info(prefix, color=ColoredLogger.GOLD)
+    else:
+        # Default INFO in gold too for consistency
+        ColoredLogger.info(prefix, color=ColoredLogger.GOLD)
+
+
+def log_gif_event(
+    message: str,
+    *,
+    level: str = "info",
+    exc_info: bool = False,
+) -> None:
+    """
+    Log GIF upload events in the format: IWAP | [Phase 4] [GIF] message
+
+    Args:
+        message: The message to log
+        level: Log level (info, success, warning, error, debug)
+        exc_info: Whether to include exception traceback
+    """
+    prefix = f"IWAP | [Phase 4] [GIF] {message}"
+
+    if level == "success":
+        # Use green color for GIF success messages
+        ColoredLogger.success(prefix, color=ColoredLogger.GREEN)
+    elif level == "warning":
+        ColoredLogger.warning(prefix)
+    elif level == "error":
+        bt.logging.error(prefix, exc_info=exc_info)
+    elif level == "debug":
+        # Use gold color for GIF debug messages
+        ColoredLogger.info(prefix, color=ColoredLogger.GOLD)
+    else:
+        # Default INFO in gold too for consistency
+        ColoredLogger.info(prefix, color=ColoredLogger.GOLD)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -72,9 +175,7 @@ def build_iwap_auth_headers(wallet, message: str) -> Dict[str, str]:
 def metagraph_numeric(metagraph, attribute: str, uid: int) -> Optional[float]:
     collection = getattr(metagraph, attribute, None)
     if collection is None:
-        bt.logging.debug(
-            f"Metagraph attribute '{attribute}' is unavailable when reading uid={uid}"
-        )
+        bt.logging.debug(f"Metagraph attribute '{attribute}' is unavailable when reading uid={uid}")
         return None
     try:
         value = collection[uid]
@@ -82,9 +183,7 @@ def metagraph_numeric(metagraph, attribute: str, uid: int) -> Optional[float]:
             return float(value.item())
         return float(value)
     except Exception as exc:  # noqa: BLE001
-        bt.logging.debug(
-            f"Failed to coerce metagraph attribute '{attribute}' for uid={uid}: {exc}"
-        )
+        bt.logging.debug(f"Failed to coerce metagraph attribute '{attribute}' for uid={uid}: {exc}")
         return None
 
 
@@ -99,15 +198,13 @@ def normalized_stake_tao(metagraph, uid: int) -> Optional[float]:
         if not rao_per_tao:
             raise ValueError("Invalid RAO_PER_TAO constant")
     except Exception as exc:  # noqa: BLE001
-        bt.logging.warning(
-            f"Unable to read RAO_PER_TAO constant ({exc}); defaulting to 1e9"
-        )
+        bt.logging.warning(f"Unable to read RAO_PER_TAO constant ({exc}); defaulting to 1e9")
         rao_per_tao = 1_000_000_000
 
     normalized = raw_stake / rao_per_tao
-    bt.logging.debug(
-        f"Validator stake normalised for uid={uid}: raw={raw_stake} (RAO) -> {normalized} (TAO)"
-    )
+    from autoppia_web_agents_subnet.utils.log_colors import iwap_tag
+
+    bt.logging.debug(iwap_tag("stake", f"Validator stake normalised for uid={uid}: raw={raw_stake} (RAO) -> {normalized} (TAO)"))
     return normalized
 
 
@@ -121,13 +218,13 @@ def validator_vtrust(metagraph, uid: int) -> Optional[float]:
     for attribute in attribute_order:
         value = metagraph_numeric(metagraph, attribute, uid)
         if value is not None:
-            bt.logging.debug(
-                f"Validator vtrust for uid={uid} resolved via '{attribute}' -> {value}"
-            )
+            from autoppia_web_agents_subnet.utils.log_colors import iwap_tag
+
+            bt.logging.debug(iwap_tag("vtrust", f"Validator vtrust for uid={uid} resolved via '{attribute}' -> {value}"))
             return value
-    bt.logging.warning(
-        f"Validator vtrust metric not found in metagraph for uid={uid} (checked: {', '.join(attribute_order)})"
-    )
+    from autoppia_web_agents_subnet.utils.log_colors import iwap_tag
+
+    bt.logging.warning(iwap_tag("vtrust", f"Validator vtrust metric not found in metagraph for uid={uid} (checked: {', '.join(attribute_order)})"))
     return None
 
 
@@ -151,14 +248,10 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
     metadata: Dict[str, Any] = {"source": "autoppia_validator"}
 
     if stake is None:
-        bt.logging.warning(
-            f"Validator snapshot stake is unavailable for uid={validator.uid}; snapshot will omit stake"
-        )
+        bt.logging.warning(f"Validator snapshot stake is unavailable for uid={validator.uid}; snapshot will omit stake")
 
     if vtrust is None:
-        bt.logging.warning(
-            f"Validator snapshot vtrust is unavailable for uid={validator.uid}; snapshot will omit vtrust"
-        )
+        bt.logging.warning(f"Validator snapshot vtrust is unavailable for uid={validator.uid}; snapshot will omit vtrust")
 
     return iwa_models.ValidatorSnapshotIWAP(
         validator_round_id=validator_round_id,
@@ -173,9 +266,7 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
     )
 
 
-def build_iwap_tasks(
-    *, validator_round_id: str, tasks: List[TaskWithProject]
-) -> Dict[str, iwa_models.TaskIWAP]:
+def build_iwap_tasks(*, validator_round_id: str, tasks: List[TaskWithProject]) -> Dict[str, iwa_models.TaskIWAP]:
     task_map: Dict[str, iwa_models.TaskIWAP] = {}
     for index, task_item in enumerate(tasks):
         task = task_item.task
@@ -185,9 +276,7 @@ def build_iwap_tasks(
         specifications = {}
         if hasattr(task, "specifications") and task.specifications is not None:
             try:
-                specifications = task.specifications.model_dump(
-                    mode="json", exclude_none=True
-                )  # type: ignore[attr-defined]
+                specifications = task.specifications.model_dump(mode="json", exclude_none=True)  # type: ignore[attr-defined]
             except Exception:
                 specifications = dict(getattr(task, "specifications", {}) or {})
 
@@ -254,9 +343,7 @@ def extract_gif_bytes(payload: Optional[object]) -> Optional[bytes]:
     elif isinstance(payload, str):
         text = payload.strip()
         if not text:
-            bt.logging.warning(
-                "🛰️ IWAP GIF extraction failed: string payload is empty after strip"
-            )
+            bt.logging.warning("🛰️ IWAP GIF extraction failed: string payload is empty after strip")
             return None
         raw_source = text.encode("utf-8")
     else:
@@ -273,12 +360,7 @@ def extract_gif_bytes(payload: Optional[object]) -> Optional[bytes]:
         return None
 
     if decoded.startswith((b"GIF87a", b"GIF89a")):
-        bt.logging.debug(
-            "🛰️ IWAP GIF extraction decoded GIF successfully (bytes=%s)", len(decoded)
-        )
+        bt.logging.debug("🛰️ IWAP GIF extraction decoded GIF successfully (bytes=%s)", len(decoded))
         return decoded
-    bt.logging.warning(
-        "🛰️ IWAP GIF extraction failed: decoded payload missing GIF header"
-    )
+    bt.logging.warning("🛰️ IWAP GIF extraction failed: decoded payload missing GIF header")
     return None
-

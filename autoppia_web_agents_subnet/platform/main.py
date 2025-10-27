@@ -87,11 +87,13 @@ class IWAPClient:
         resolved_backup = backup_dir or env_dir or default_dir
         self._backup_dir = Path(resolved_backup)
         self._auth_provider = auth_provider
-        bt.logging.info(f"IWAP client initialized with base_url={self._client.base_url}")
+        from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+
+        ColoredLogger.info(f"IWAP client initialized with base_url={self._client.base_url}", color=ColoredLogger.GOLD)
         try:
             self._backup_dir.mkdir(parents=True, exist_ok=True)
         except Exception:
-            bt.logging.warning(f"Unable to create IWAP backup directory at {self._backup_dir}")
+            ColoredLogger.warning(f"IWAP | Unable to create backup directory at {self._backup_dir}")
             self._backup_dir = None
 
     async def close(self) -> None:
@@ -107,7 +109,9 @@ class IWAPClient:
         try:
             headers = dict(self._auth_provider())
         except Exception:
-            bt.logging.error("IWAP auth provider failed to generate headers", exc_info=True)
+            from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+
+            bt.logging.error("IWAP | Auth provider failed to generate headers", exc_info=True)
             raise
         sanitized: Dict[str, str] = {}
         for key, value in headers.items():
@@ -128,9 +132,9 @@ class IWAPClient:
             "validator_round": validator_round.to_payload(),
             "validator_snapshot": validator_snapshot.to_payload(),
         }
-        bt.logging.debug(
-            f"IWAP start_round prepared for validator_round_id={validator_round.validator_round_id} round_number={validator_round.round_number}"
-        )
+        from autoppia_web_agents_subnet.platform.utils.iwa_core import log_iwap_phase
+
+        log_iwap_phase("start_round", f"Preparing request for validator_round_id={validator_round.validator_round_id} round_number={validator_round.round_number}", level="debug")
         return await self._post("/api/v1/validator-rounds/start", payload, context="start_round")
 
     async def set_tasks(
@@ -141,9 +145,9 @@ class IWAPClient:
     ) -> Dict[str, Any]:
         task_payloads = [task.to_payload() for task in tasks]
         payload = {"tasks": task_payloads}
-        bt.logging.debug(
-            f"IWAP set_tasks prepared for validator_round_id={validator_round_id} tasks={len(task_payloads)}"
-        )
+        from autoppia_web_agents_subnet.platform.utils.iwa_core import log_iwap_phase
+
+        log_iwap_phase("set_tasks", f"Preparing request for validator_round_id={validator_round_id} tasks={len(task_payloads)}", level="debug")
         return await self._post(f"/api/v1/validator-rounds/{validator_round_id}/tasks", payload, context="set_tasks")
 
     async def start_agent_run(
@@ -159,9 +163,9 @@ class IWAPClient:
             "miner_identity": miner_identity.to_payload(),
             "miner_snapshot": miner_snapshot.to_payload(),
         }
-        bt.logging.debug(
-            f"IWAP start_agent_run prepared for validator_round_id={validator_round_id} agent_run_id={agent_run.agent_run_id} miner_uid={miner_identity.uid}"
-        )
+        from autoppia_web_agents_subnet.platform.utils.iwa_core import log_iwap_phase
+
+        log_iwap_phase("start_agent_run", f"Preparing request for validator_round_id={validator_round_id} agent_run_id={agent_run.agent_run_id} miner_uid={miner_identity.uid}", level="debug")
         return await self._post(
             f"/api/v1/validator-rounds/{validator_round_id}/agent-runs/start",
             payload,
@@ -210,9 +214,12 @@ class IWAPClient:
             try:
                 # Convert base64 GIF to binary
                 import base64
+
                 gif_binary = base64.b64decode(evaluation_result.gif_recording)
                 files["gif_recording"] = gif_binary
-                bt.logging.debug(f"🎬 GIF prepared for multipart: {len(gif_binary)} bytes")
+                from autoppia_web_agents_subnet.platform.utils.iwa_core import log_gif_event
+
+                log_gif_event(f"GIF prepared for multipart: {len(gif_binary)} bytes", level="debug")
             except Exception as e:
                 bt.logging.warning(f"⚠️  Failed to decode GIF for multipart: {e}")
 
@@ -228,7 +235,7 @@ class IWAPClient:
                 payload_str = json.dumps(_sanitize_json(json_data), indent=2, ensure_ascii=False)
             except Exception:
                 payload_str = json.dumps({"error": "non-serializable-payload"})
-            for line in payload_str.split('\n'):
+            for line in payload_str.split("\n"):
                 bt.logging.debug(line)
             bt.logging.debug("")
             if files:
@@ -237,9 +244,9 @@ class IWAPClient:
                     bt.logging.debug(f"   - {key}: {len(file_data)} bytes (binary GIF)")
             bt.logging.debug("=" * 80)
 
-        bt.logging.debug(
-            f"IWAP add_evaluation prepared for validator_round_id={validator_round_id} agent_run_id={agent_run_id} task_solution_id={task_solution.solution_id}"
-        )
+        from autoppia_web_agents_subnet.platform.utils.iwa_core import log_iwap_phase
+
+        log_iwap_phase("add_evaluation", f"Preparing request for validator_round_id={validator_round_id} agent_run_id={agent_run_id} task_solution_id={task_solution.solution_id}", level="debug")
 
         # Use multipart if we have files, otherwise use regular JSON
         if files:
@@ -262,9 +269,9 @@ class IWAPClient:
         validator_round_id: str,
         finish_request: models.FinishRoundIWAP,
     ) -> Dict[str, Any]:
-        bt.logging.debug(
-            f"IWAP finish_round prepared for validator_round_id={validator_round_id} summary={finish_request.summary}"
-        )
+        from autoppia_web_agents_subnet.platform.utils.iwa_core import log_iwap_phase
+
+        log_iwap_phase("finish_round", f"Preparing request for validator_round_id={validator_round_id} summary={finish_request.summary}", level="debug")
         return await self._post(
             f"/api/v1/validator-rounds/{validator_round_id}/finish",
             finish_request.to_payload(),
@@ -272,68 +279,51 @@ class IWAPClient:
         )
 
     async def auth_check(self) -> Dict[str, Any]:
-        bt.logging.debug("IWAP auth_check prepared")
+        from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+
+        ColoredLogger.info("IWAP | [Auth] Checking authentication", color=ColoredLogger.GOLD)
         return await self._post("/api/v1/validator-rounds/auth-check", {}, context="auth_check")
 
     async def upload_evaluation_gif(self, evaluation_id: str, gif_bytes: bytes) -> Optional[str]:
         if not gif_bytes:
             raise ValueError("GIF payload is empty")
 
+        from autoppia_web_agents_subnet.platform.utils.iwa_core import log_gif_event
+
         path = f"/api/v1/evaluations/{evaluation_id}/gif"
         filename = f"{evaluation_id}.gif"
         payload_bytes = len(gif_bytes)
-        # Use explicit formatting to avoid placeholder/args mismatch with external log handlers
-        bt.logging.info(
-            f"🎬 IWAP: Uploading GIF to API - evaluation_id={evaluation_id} "
-            f"filename={filename} payload_bytes={payload_bytes}"
-        )
+
+        log_gif_event(f"Uploading to API - evaluation_id={evaluation_id} filename={filename} bytes={payload_bytes}")
 
         async def attempt(attempt_index: int) -> httpx.Response:
             attempt_number = attempt_index + 1
             attempt_suffix = f" (attempt {attempt_number})" if attempt_number > 1 else ""
-            bt.logging.info(
-                "🎬 IWAP: GIF upload POST %s started%s",
-                path,
-                attempt_suffix,
-            )
+            log_gif_event(f"POST {path} started{attempt_suffix}")
+
             try:
                 response = await self._client.post(
                     path,
                     files={"gif": (filename, gif_bytes, "image/gif")},
                 )
                 response.raise_for_status()
-                bt.logging.debug(
-                    "🎬 IWAP: GIF upload request successful - status_code=%s",
-                    response.status_code,
-                )
+                log_gif_event(f"Upload request successful - status {response.status_code}", level="debug")
                 return response
             except httpx.HTTPStatusError as exc:
                 body = exc.response.text
-                bt.logging.error(
-                    "❌ IWAP: GIF upload failed - POST %s%s returned %s: %s",
-                    path,
-                    attempt_suffix,
-                    exc.response.status_code,
-                    body,
-                )
+                log_gif_event(f"Upload failed - POST {path}{attempt_suffix} returned {exc.response.status_code}: {body}", level="error")
                 raise
             except Exception as exc:  # noqa: BLE001
-                bt.logging.error(
-                    "❌ IWAP: GIF upload failed unexpectedly - POST %s%s: %s",
-                    path,
-                    attempt_suffix,
-                    str(exc),
-                    exc_info=True,
-                )
+                log_gif_event(f"Upload failed unexpectedly - POST {path}{attempt_suffix}: {str(exc)}", level="error", exc_info=True)
                 raise
 
         response = await self._with_retry(attempt, context="upload_evaluation_gif")
 
         try:
             payload = response.json()
-            bt.logging.debug(f"🎬 IWAP: GIF upload response payload: {payload}")
+            log_gif_event(f"Response payload: {payload}", level="debug")
         except Exception as e:
-            bt.logging.warning(f"⚠️  IWAP: Received non-JSON response for evaluation_id={evaluation_id}: {str(e)}")
+            log_gif_event(f"Received non-JSON response for evaluation_id={evaluation_id}: {str(e)}", level="warning")
             return None
 
         gif_url = None
@@ -341,12 +331,12 @@ class IWAPClient:
             data_section = payload.get("data")
             if isinstance(data_section, dict):
                 gif_url = data_section.get("gifUrl")
-                bt.logging.debug(f"🎬 IWAP: Extracted GIF URL from response: {gif_url}")
+                log_gif_event(f"Extracted URL from response: {gif_url}", level="debug")
 
         if gif_url:
-            bt.logging.info(f"✅ IWAP: GIF upload completed successfully - URL: {gif_url}")
+            log_gif_event(f"Upload completed successfully - URL: {gif_url}", level="success")
         else:
-            bt.logging.warning(f"⚠️  IWAP: GIF upload completed but no URL returned for evaluation_id={evaluation_id}")
+            log_gif_event(f"Upload completed but no URL returned for evaluation_id={evaluation_id}", level="warning")
         return gif_url
 
     async def _with_retry(
@@ -376,18 +366,17 @@ class IWAPClient:
                 last_exc = exc
 
             if attempt == len(delays):
-                bt.logging.error(
-                    f"IWAP {context} exhausted retries after {attempt + 1} attempts"
-                )
+                from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+
+                bt.logging.error(f"IWAP | [{context}] Exhausted retries after {attempt + 1} attempts")
                 if last_exc is not None:
                     raise last_exc
                 raise RuntimeError("IWAP retry failed without exception context")
 
             delay = delays[attempt]
-            bt.logging.warning(
-                f"IWAP {context} attempt {attempt + 1} failed "
-                f"({type(last_exc).__name__}: {last_exc}); retrying in {delay}s"
-            )
+            from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+
+            ColoredLogger.warning(f"IWAP | [{context}] Attempt {attempt + 1} failed ({type(last_exc).__name__}: {last_exc}); retrying in {delay}s")
             await asyncio.sleep(delay)
 
         if last_exc is not None:
@@ -416,7 +405,9 @@ class IWAPClient:
             attempt_number = attempt_index + 1
             attempt_suffix = f" (attempt {attempt_number})" if attempt_number > 1 else ""
 
-            bt.logging.debug("🌐 HTTP REQUEST DETAILS:")
+            from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+
+            ColoredLogger.info(f"IWAP | [{context}] 🌐 HTTP REQUEST DETAILS:", color=ColoredLogger.GOLD)
             bt.logging.debug("   Method: POST")
             bt.logging.debug(f"   URL: {target_url}")
             bt.logging.debug(f"   Context: {context}")
@@ -427,33 +418,22 @@ class IWAPClient:
                 bt.logging.debug(f"   Payload size: {payload_len} chars")
 
             try:
-                bt.logging.info(
-                    f"IWAP {context} POST {target_url} started{attempt_suffix}"
-                )
+                ColoredLogger.info(f"IWAP | [{context}] POST {target_url} started{attempt_suffix}", color=ColoredLogger.GOLD)
                 response = await self._client.send(request)
                 response.raise_for_status()
-                bt.logging.info(
-                    f"IWAP {context} POST {target_url} succeeded with status "
-                    f"{response.status_code}"
-                )
+                ColoredLogger.info(f"IWAP | [{context}] POST {target_url} succeeded with status {response.status_code}", color=ColoredLogger.GOLD)
                 bt.logging.debug(f"   Response status: {response.status_code}")
                 bt.logging.debug(f"   Response headers: {dict(response.headers)}")
                 if response.text:
-                    bt.logging.debug(
-                        "   Response body (first 500 chars): "
-                        f"{response.text[:500]}"
-                    )
+                    bt.logging.debug("   Response body (first 500 chars): " f"{response.text[:500]}")
                 return response
             except httpx.HTTPStatusError as exc:
                 body = exc.response.text
-                bt.logging.error(
-                    f"IWAP {context} POST {target_url} failed "
-                    f"({exc.response.status_code}): {body}"
-                )
+                bt.logging.error(f"IWAP | [{context}] POST {target_url} failed ({exc.response.status_code}): {body}")
                 raise
             except Exception:
                 bt.logging.error(
-                    f"IWAP {context} POST {target_url} failed unexpectedly",
+                    f"IWAP | [{context}] POST {target_url} failed unexpectedly",
                     exc_info=True,
                 )
                 raise
@@ -481,7 +461,7 @@ class IWAPClient:
 
         for key, value in sanitized_data.items():
             body_parts.append(f"--{boundary}")
-            body_parts.append(f"Content-Disposition: form-data; name=\"{key}\"")
+            body_parts.append(f'Content-Disposition: form-data; name="{key}"')
             body_parts.append("Content-Type: application/json")
             body_parts.append("")
             body_parts.append(json.dumps(value))
@@ -489,19 +469,14 @@ class IWAPClient:
 
         for key, file_data in files.items():
             body_parts.append(f"--{boundary}")
-            body_parts.append(
-                f"Content-Disposition: form-data; name=\"{key}\"; filename=\"{key}.gif\""
-            )
+            body_parts.append(f'Content-Disposition: form-data; name="{key}"; filename="{key}.gif"')
             body_parts.append("Content-Type: image/gif")
             body_parts.append("")
             body_parts.append(file_data)
             body_parts.append("")
 
         body_parts.append(f"--{boundary}--")
-        body = b"\r\n".join(
-            part.encode("utf-8") if isinstance(part, str) else part
-            for part in body_parts
-        )
+        body = b"\r\n".join(part.encode("utf-8") if isinstance(part, str) else part for part in body_parts)
 
         auth_headers = self._resolve_auth_headers()
         data_fields = list(sanitized_data.keys())
@@ -510,9 +485,7 @@ class IWAPClient:
 
         async def attempt(attempt_index: int) -> httpx.Response:
             request = self._client.build_request("POST", path, content=body)
-            request.headers["Content-Type"] = (
-                f"multipart/form-data; boundary={boundary}"
-            )
+            request.headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
             if auth_headers:
                 request.headers.update(auth_headers)
 
@@ -520,13 +493,13 @@ class IWAPClient:
             attempt_number = attempt_index + 1
             attempt_suffix = f" (attempt {attempt_number})" if attempt_number > 1 else ""
 
-            bt.logging.debug("🌐 MULTIPART REQUEST DETAILS:")
+            from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+
+            ColoredLogger.info(f"IWAP | [{context}] 🌐 MULTIPART REQUEST DETAILS:", color=ColoredLogger.GOLD)
             bt.logging.debug("   Method: POST")
             bt.logging.debug(f"   URL: {target_url}")
             bt.logging.debug(f"   Context: {context}")
-            bt.logging.debug(
-                f"   Content-Type: multipart/form-data; boundary={boundary}"
-            )
+            bt.logging.debug(f"   Content-Type: multipart/form-data; boundary={boundary}")
             bt.logging.debug(f"   Data fields: {data_fields}")
             bt.logging.debug(f"   File fields: {file_fields}")
             bt.logging.debug(f"   Total body size: {total_body_size} bytes")
@@ -534,34 +507,22 @@ class IWAPClient:
                 bt.logging.debug(f"   File {key}: {len(file_data)} bytes")
 
             try:
-                bt.logging.info(
-                    f"IWAP {context} POST {target_url} started (multipart)"
-                    f"{attempt_suffix}"
-                )
+                ColoredLogger.info(f"IWAP | [{context}] POST {target_url} started (multipart){attempt_suffix}", color=ColoredLogger.GOLD)
                 response = await self._client.send(request)
                 response.raise_for_status()
-                bt.logging.info(
-                    f"IWAP {context} POST {target_url} succeeded with status "
-                    f"{response.status_code}"
-                )
+                ColoredLogger.info(f"IWAP | [{context}] POST {target_url} succeeded with status {response.status_code}", color=ColoredLogger.GOLD)
                 bt.logging.debug(f"   Response status: {response.status_code}")
                 bt.logging.debug(f"   Response headers: {dict(response.headers)}")
                 if response.text:
-                    bt.logging.debug(
-                        "   Response body (first 500 chars): "
-                        f"{response.text[:500]}"
-                    )
+                    bt.logging.debug("   Response body (first 500 chars): " f"{response.text[:500]}")
                 return response
             except httpx.HTTPStatusError as exc:
                 body_text = exc.response.text
-                bt.logging.error(
-                    f"IWAP {context} POST {target_url} failed "
-                    f"({exc.response.status_code}): {body_text}"
-                )
+                bt.logging.error(f"IWAP | [{context}] POST {target_url} failed ({exc.response.status_code}): {body_text}")
                 raise
             except Exception:
                 bt.logging.error(
-                    f"IWAP {context} POST {target_url} failed unexpectedly",
+                    f"IWAP | [{context}] POST {target_url} failed unexpectedly",
                     exc_info=True,
                 )
                 raise
@@ -578,7 +539,9 @@ class IWAPClient:
             with target.open("w", encoding="utf-8") as fh:
                 json.dump(_sanitize_json(payload), fh, ensure_ascii=False, indent=2)
         except Exception:
-            bt.logging.warning(f"Failed to persist IWAP backup payload at {target}")
+            from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+
+            ColoredLogger.warning(f"IWAP | Failed to persist backup payload at {target}")
 
 
 def build_miner_identity(

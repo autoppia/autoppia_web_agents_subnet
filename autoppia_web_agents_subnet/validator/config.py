@@ -28,8 +28,8 @@ if TESTING:
     ROUND_SIZE_EPOCHS = _env_float("TEST_ROUND_SIZE_EPOCHS", 0.2)
     SAFETY_BUFFER_EPOCHS = _env_float("TEST_SAFETY_BUFFER_EPOCHS", 0.02)
     AVG_TASK_DURATION_SECONDS = _env_int("TEST_AVG_TASK_DURATION_SECONDS", 300)
-    PRE_GENERATED_TASKS = _env_int("TEST_PRE_GENERATED_TASKS", 5)
-    DZ_STARTING_BLOCK = _env_int("TEST_DZ_STARTING_BLOCK", 6_717_750)
+    PRE_GENERATED_TASKS = _env_int("TEST_PRE_GENERATED_TASKS", 3)
+    DZ_STARTING_BLOCK = _env_int("TEST_DZ_STARTING_BLOCK", 6726960)
 
     # ── Round Phase Timing (all absolute % of total round) ──────────────────
     # Stop task evaluation at 50% of round to allow time for consensus
@@ -59,7 +59,7 @@ else:
     # reserved consensus window. Previous default was 75; 2.5x -> ~188.
     # Environment variable PRE_GENERATED_TASKS still takes precedence.
     PRE_GENERATED_TASKS = _env_int("PRE_GENERATED_TASKS", 188)
-    DZ_STARTING_BLOCK = _env_int("DZ_STARTING_BLOCK", 6_726_960)
+    DZ_STARTING_BLOCK = _env_int("DZ_STARTING_BLOCK", 6726960)
 
     # ── Round Phase Timing (all absolute % of total round) ──────────────────
     # Stop task evaluation at 90% of round to reserve time for consensus
@@ -113,11 +113,7 @@ ENABLE_DISTRIBUTED_CONSENSUS = _str_to_bool(os.getenv("ENABLE_DISTRIBUTED_CONSEN
 
 # ── IPFS Storage ─────────────────────────────────────────────────────────────
 IPFS_API_URL = os.getenv("IPFS_API_URL", "http://ipfs.metahash73.com:5001/api/v0")
-IPFS_GATEWAYS = [
-    g.strip() for g in 
-    (os.getenv("IPFS_GATEWAYS", "https://ipfs.io/ipfs,https://cloudflare-ipfs.com/ipfs,https://gateway.pinata.cloud/ipfs") or "")
-    .split(",") if g.strip()
-]
+IPFS_GATEWAYS = [g.strip() for g in (os.getenv("IPFS_GATEWAYS", "https://ipfs.io/ipfs,https://cloudflare-ipfs.com/ipfs,https://gateway.pinata.cloud/ipfs") or "").split(",") if g.strip()]
 
 # ── Burn Mechanism ───────────────────────────────────────────────────────────
 BURN_UID = _env_int("BURN_UID", 5)

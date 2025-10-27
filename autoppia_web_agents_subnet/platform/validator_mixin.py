@@ -170,11 +170,8 @@ class ValidatorPlatformMixin:
 
                 if checkpoint_round != current_round:
                     bt.logging.warning(
-                        "State checkpoint discarded: stored round %s (start_block=%s) != current round %s (block=%s)",
-                        checkpoint_round,
-                        ckpt.rm_start_block,
-                        current_round,
-                        current_block,
+                        f"State checkpoint discarded: stored round {checkpoint_round} (start_block={ckpt.rm_start_block}) "
+                        f"!= current round {current_round} (block={current_block})"
                     )
                     try:
                         self._reset_iwap_round_state()
@@ -350,3 +347,86 @@ class ValidatorPlatformMixin:
         except Exception:
             pass
         return st
+
+    async def _close_async_subtensor(self):
+        """
+        Properly close the AsyncSubtensor WebSocket connection to avoid pending tasks.
+        This method handles the internal async_substrate_interface websocket cleanup.
+        """
+        import asyncio
+
+        try:
+            async_subtensor = getattr(self, "_async_subtensor", None) or getattr(self, "async_subtensor", None)
+            if async_subtensor is None:
+                return
+
+            bt.logging.debug("Starting AsyncSubtensor cleanup...")
+
+            # Step 1: Access the substrate interface
+            substrate = getattr(async_subtensor, 'substrate', None)
+            if substrate is not None:
+                bt.logging.debug("Found substrate interface")
+
+                # Step 2: Access the websocket connection
+                websocket = getattr(substrate, 'websocket', None)
+                if websocket is not None:
+                    bt.logging.debug("Found websocket connection, cancelling background tasks...")
+
+                    # Step 3: Cancel all websocket background tasks
+                    task_attrs = ['_sending_task', '_receiving_task', '_start_sending', '_ws_send_task']
+                    for task_attr in task_attrs:
+                        task = getattr(websocket, task_attr, None)
+                        if task is not None and isinstance(task, asyncio.Task):
+                            if not task.done():
+                                bt.logging.debug(f"Cancelling {task_attr}...")
+                                task.cancel()
+                                try:
+                                    await asyncio.wait_for(task, timeout=1.0)
+                                except (asyncio.CancelledError, asyncio.TimeoutError):
+                                    bt.logging.debug(f"{task_attr} cancelled/timeout")
+                                except Exception as e:
+                                    bt.logging.debug(f"{task_attr} cancel error: {e}")
+
+                    # Step 4: Close the websocket
+                    try:
+                        if hasattr(websocket, 'close') and callable(websocket.close):
+                            await websocket.close()
+                            bt.logging.debug("Websocket closed")
+                    except Exception as e:
+                        bt.logging.debug(f"Websocket close error: {e}")
+
+                # Step 5: Close the substrate interface
+                try:
+                    if hasattr(substrate, 'close') and callable(substrate.close):
+                        await substrate.close()
+                        bt.logging.debug("Substrate interface closed")
+                except Exception as e:
+                    bt.logging.debug(f"Substrate close error: {e}")
+
+            # Step 6: Try high-level close methods
+            try:
+                if hasattr(async_subtensor, 'close') and callable(async_subtensor.close):
+                    await async_subtensor.close()
+                    bt.logging.debug("AsyncSubtensor.close() called")
+                elif hasattr(async_subtensor, 'disconnect') and callable(async_subtensor.disconnect):
+                    await async_subtensor.disconnect()
+                    bt.logging.debug("AsyncSubtensor.disconnect() called")
+            except Exception as e:
+                bt.logging.debug(f"High-level close error: {e}")
+
+            # Step 7: Small delay to allow cleanup
+            await asyncio.sleep(0.1)
+
+            bt.logging.debug("AsyncSubtensor cleanup complete")
+
+        except Exception as e:
+            bt.logging.debug(f"Error during AsyncSubtensor cleanup: {e}")
+        finally:
+            # Always clear the reference
+            try:
+                if hasattr(self, "_async_subtensor"):
+                    self._async_subtensor = None
+                if hasattr(self, "async_subtensor"):
+                    self.async_subtensor = None
+            except Exception:
+                pass
