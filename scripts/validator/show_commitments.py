@@ -8,6 +8,10 @@ import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from rich.console import Console  # type: ignore
+from rich.table import Table  # type: ignore
+from rich import box  # type: ignore
+
 from bittensor import AsyncSubtensor  # type: ignore
 
 from autoppia_web_agents_subnet.utils.commitments import read_all_plain_commitments
@@ -139,22 +143,30 @@ def _chunked(seq: Sequence[Any], n: int) -> List[List[Any]]:
     return [list(seq[i : i + n]) for i in range(0, len(seq), n)]
 
 
-def _format_scores_grid(
-    parsed_scores: List[Tuple[int, float]],
+def _print_scores_rich(
+    items: List[Tuple[str, List[Tuple[int, float]]]],
     *,
     cols: int = 4,
-) -> List[str]:
-    if not parsed_scores:
-        return []
-    # Pre-format cells as "uid: score"
-    cells = [f"{uid}:{score:.4f}" for uid, score in parsed_scores]
-    min_cell = 10
-    cell_w = max(min_cell, max(len(c) for c in cells))
-    lines: List[str] = []
-    for row in _chunked(cells, cols):
-        row_text = "  ".join(c.ljust(cell_w) for c in row)
-        lines.append(f"        {row_text}")
-    return lines
+) -> None:
+    if not items:
+        return
+    console = Console()
+    for label, parsed_scores in items:
+        cells = [f"{uid}: {score:.4f}" for uid, score in parsed_scores]
+        table = Table(
+            title=f"{label} miner scores ({len(parsed_scores)})",
+            show_header=False,
+            box=box.SIMPLE_HEAVY,
+            pad_edge=False,
+        )
+        for _ in range(max(1, cols)):
+            table.add_column(justify="left", style="cyan")
+        for row in _chunked(cells, max(1, cols)):
+            # pad row if short
+            if len(row) < cols:
+                row = row + [""] * (cols - len(row))
+            table.add_row(*row)
+        console.print(table)
 
 
 def _select_recent_rounds(
@@ -241,7 +253,7 @@ def _render_validator_table(
     total_weight: float,
     scores_limit: int = 3,
     scores_cols: int = 4,
-) -> Tuple[str, List[str]]:
+) -> Tuple[str, List[str], List[Tuple[str, List[Tuple[int, float]]]]]:
     headers = [
         "validator",
         "uid",
@@ -260,6 +272,7 @@ def _render_validator_table(
 
     rows: List[List[str]] = []
     extra: List[str] = []
+    scores_tables: List[Tuple[str, List[Tuple[int, float]]]] = []
 
     for item in validators:
         weight_pct = (item.stake_tao / total_weight) * 100.0 if total_weight else 0.0
@@ -307,13 +320,9 @@ def _render_validator_table(
                 agents = str(agents_val)
             if top_line:
                 extra.append(f"      {item.hotkey[:10]}… {top_line}")
-            # When scores_limit <= 0, print all miner scores for this validator as a grid
+            # When scores_limit <= 0, collect full miner scores for Rich table rendering
             if parsed_scores and scores_limit <= 0:
-                extra.append(
-                    f"      {item.hotkey[:10]}… miner scores ({len(parsed_scores)}):"
-                )
-                grid_lines = _format_scores_grid(parsed_scores, cols=scores_cols)
-                extra.extend(grid_lines)
+                scores_tables.append((f"{item.hotkey[:10]}…", parsed_scores))
 
         mean_text = f"{mean:.4f}" if mean is not None else "-"
         std_text = f"{stddev:.4f}" if stddev is not None else "-"
@@ -339,7 +348,7 @@ def _render_validator_table(
         )
 
     if not rows:
-        return "", extra
+        return "", extra, scores_tables
 
     col_widths = [len(header) for header in headers]
     for row in rows:
@@ -356,7 +365,7 @@ def _render_validator_table(
         table_lines.append(_fmt_row(row))
     table_lines.append(divider)
 
-    return "\n".join(table_lines), extra
+    return "\n".join(table_lines), extra, scores_tables
 
 
 def _decode_weight_payload(raw: Any) -> Dict[int, int]:
@@ -686,7 +695,7 @@ async def inspect_rounds(
             validators.sort(key=lambda v: v.stake_tao, reverse=True)
             total_weight = sum(filter(None, (v.stake_tao for v in validators)))
 
-            table_text, extra_lines = _render_validator_table(
+            table_text, extra_lines, scores_tables = _render_validator_table(
                 validators,
                 total_weight=total_weight,
                 scores_limit=scores_limit,
@@ -702,6 +711,9 @@ async def inspect_rounds(
                 print(table_text)
             for line in extra_lines:
                 print(line)
+            # When showing all miner scores, render them as Rich tables
+            if scores_tables:
+                _print_scores_rich(scores_tables, cols=scores_cols)
 
             if target_block > current_block:
                 print("  • weights unavailable (round still active)")
