@@ -133,6 +133,30 @@ async def _fetch_payload(
         return None, None, f"{type(exc).__name__}: {exc}"
 
 
+def _chunked(seq: Sequence[Any], n: int) -> List[List[Any]]:
+    if n <= 0:
+        n = 1
+    return [list(seq[i : i + n]) for i in range(0, len(seq), n)]
+
+
+def _format_scores_grid(
+    parsed_scores: List[Tuple[int, float]],
+    *,
+    cols: int = 4,
+) -> List[str]:
+    if not parsed_scores:
+        return []
+    # Pre-format cells as "uid: score"
+    cells = [f"{uid}:{score:.4f}" for uid, score in parsed_scores]
+    min_cell = 10
+    cell_w = max(min_cell, max(len(c) for c in cells))
+    lines: List[str] = []
+    for row in _chunked(cells, cols):
+        row_text = "  ".join(c.ljust(cell_w) for c in row)
+        lines.append(f"        {row_text}")
+    return lines
+
+
 def _select_recent_rounds(
     commits: Dict[str, Any],
 ) -> Dict[int, List[Tuple[str, Dict[str, Any]]]]:
@@ -158,10 +182,13 @@ def _round_label(round_number: Optional[int], target_epoch: Optional[int]) -> st
     return "unknown round"
 
 
-def _score_summary(payload: Dict[str, Any]) -> Tuple[int, str]:
+def _score_summary(
+    payload: Dict[str, Any],
+    limit: int = 3,
+) -> Tuple[int, str, List[Tuple[int, float]]]:
     scores = payload.get("scores")
     if not isinstance(scores, dict):
-        return 0, "scores unavailable"
+        return 0, "scores unavailable", []
 
     parsed: List[Tuple[int, float]] = []
     for uid_str, score_val in scores.items():
@@ -170,13 +197,19 @@ def _score_summary(payload: Dict[str, Any]) -> Tuple[int, str]:
         except Exception:
             continue
 
+    # sort descending by score
+    parsed.sort(key=lambda item: item[1], reverse=True)
+
     count = len(parsed)
     if count == 0:
-        return 0, "scores empty"
+        return 0, "scores empty", []
 
-    top = sorted(parsed, key=lambda item: item[1], reverse=True)[:3]
-    top_str = ", ".join(f"{uid}:{score:.4f}" for uid, score in top)
-    return count, f"top {top_str}"
+    if limit and limit > 0:
+        top = parsed[:limit]
+        top_str = ", ".join(f"{uid}:{score:.4f}" for uid, score in top)
+        return count, f"top {top_str}", parsed
+    else:
+        return count, f"all {count} scores listed", parsed
 
 
 def _score_stats(
@@ -206,6 +239,8 @@ def _render_validator_table(
     validators: List[ValidatorCommitment],
     *,
     total_weight: float,
+    scores_limit: int = 3,
+    scores_cols: int = 4,
 ) -> Tuple[str, List[str]]:
     headers = [
         "validator",
@@ -249,6 +284,7 @@ def _render_validator_table(
         tasks = "-"
         agents = "-"
         top_line: Optional[str] = None
+        parsed_scores: List[Tuple[int, float]] = []
 
         if item.payload_error:
             extra.append(
@@ -258,7 +294,9 @@ def _render_validator_table(
             extra.append(f"      {item.hotkey[:10]}… payload missing")
         else:
             payload = item.payload
-            scores_count, top_line = _score_summary(payload)
+            scores_count, top_line, parsed_scores = _score_summary(
+                payload, limit=scores_limit
+            )
             count_stats, mean, stddev, variance = _score_stats(payload.get("scores"))
             scores_count = count_stats
             tasks_val = payload.get("tasks_completed") or payload.get("n")
@@ -269,6 +307,13 @@ def _render_validator_table(
                 agents = str(agents_val)
             if top_line:
                 extra.append(f"      {item.hotkey[:10]}… {top_line}")
+            # When scores_limit <= 0, print all miner scores for this validator as a grid
+            if parsed_scores and scores_limit <= 0:
+                extra.append(
+                    f"      {item.hotkey[:10]}… miner scores ({len(parsed_scores)}):"
+                )
+                grid_lines = _format_scores_grid(parsed_scores, cols=scores_cols)
+                extra.extend(grid_lines)
 
         mean_text = f"{mean:.4f}" if mean is not None else "-"
         std_text = f"{stddev:.4f}" if stddev is not None else "-"
@@ -458,6 +503,8 @@ async def inspect_rounds(
     include_below: bool,
     ipfs_api: Optional[str],
     gateways: Optional[Sequence[str]],
+    scores_limit: int,
+    scores_cols: int,
 ) -> None:
     if rounds <= 0:
         rounds = 1
@@ -642,6 +689,8 @@ async def inspect_rounds(
             table_text, extra_lines = _render_validator_table(
                 validators,
                 total_weight=total_weight,
+                scores_limit=scores_limit,
+                scores_cols=scores_cols,
             )
             print(
                 f"  • validators_considered={len(validators)} "
@@ -756,6 +805,23 @@ def parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
         default=None,
         help="Comma-separated list of IPFS gateways to try when fetching payloads.",
     )
+    parser.add_argument(
+        "--scores-limit",
+        type=int,
+        default=0,
+        help=(
+            "Number of top miner scores to show per validator (default: all). "
+            "Use 0 for all, or a positive N for top-N."
+        ),
+    )
+    parser.add_argument(
+        "--scores-cols",
+        type=int,
+        default=4,
+        help=(
+            "Number of columns to use when printing full miner scores (default: 4)."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -780,6 +846,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
                 include_below=args.include_below,
                 ipfs_api=args.ipfs_api,
                 gateways=gateways,
+                scores_limit=args.scores_limit,
+                scores_cols=args.scores_cols,
             )
         )
     except KeyboardInterrupt:  # pragma: no cover - user abort
