@@ -55,10 +55,16 @@ class RoundManager:
         # Calculate round block length based on round_size_epochs (not hardcoded)
         self.ROUND_BLOCK_LENGTH = int(self.BLOCKS_PER_EPOCH * self.round_size_epochs)
 
-        # Round state management
-        self.round_rewards = {} 
-        self.round_eval_scores = {}   
+        # Round state management (screening vs final separated)
+        self.round_rewards = {}
+        self.round_eval_scores = {}
         self.round_times = {}
+
+        self.final_round_rewards = {}
+        self.final_round_eval_scores = {}
+        self.final_round_times = {}
+        # Track duplicate-solution penalties per miner (count per round)
+        self.round_duplicate_counts: dict[int, int] = {}
 
         # Track round start block
         self.start_block: int | None = None  
@@ -409,6 +415,34 @@ class RoundManager:
             self.round_eval_scores[uid].append(eval_scores[i])
             self.round_times[uid].append(execution_times[i])
 
+    def accumulate_final_rewards(self, miner_uids: List[int], rewards: List[float], eval_scores: List[float], execution_times: List[float]):
+        """Accumulate scores for the final phase only."""
+        for i, uid in enumerate(miner_uids):
+            if uid not in self.final_round_rewards:
+                self.final_round_rewards[uid] = []
+                self.final_round_eval_scores[uid] = []
+                self.final_round_times[uid] = []
+
+            self.final_round_rewards[uid].append(rewards[i])
+            self.final_round_eval_scores[uid].append(eval_scores[i])
+            self.final_round_times[uid].append(execution_times[i])
+
+    def record_duplicate_penalties(self, miner_uids: List[int], groups: List[List[int]]):
+        """Record duplicate-solution penalties for visibility across the round.
+
+        Args:
+            miner_uids: list of UIDs aligned with current task solutions
+            groups: list of index-lists (each >=2) that were penalized
+        """
+        try:
+            for g in groups or []:
+                for idx in g:
+                    if 0 <= idx < len(miner_uids):
+                        uid = int(miner_uids[idx])
+                        self.round_duplicate_counts[uid] = int(self.round_duplicate_counts.get(uid, 0)) + 1
+        except Exception:
+            pass
+
     def get_average_rewards(self) -> Dict[int, float]:
         """
         Calculate average scores for each miner.
@@ -418,6 +452,16 @@ class RoundManager:
         """
         avg_rewards = {}
         for uid, rewards in self.round_rewards.items():
+            if rewards:
+                avg_rewards[uid] = sum(rewards) / len(rewards)
+            else:
+                avg_rewards[uid] = 0.0
+        return avg_rewards
+
+    def get_final_average_rewards(self) -> Dict[int, float]:
+        """Calculate average scores for FINAL phase only."""
+        avg_rewards = {}
+        for uid, rewards in self.final_round_rewards.items():
             if rewards:
                 avg_rewards[uid] = sum(rewards) / len(rewards)
             else:
@@ -448,6 +492,10 @@ class RoundManager:
         self.round_rewards = {}
         self.round_times = {}
         self.round_eval_scores = {}
+        self.round_duplicate_counts = {}
+        self.final_round_rewards = {}
+        self.final_round_eval_scores = {}
+        self.final_round_times = {}
 
     def log_round_summary(self):
         """Log concise round summary with statistics (debug-level)."""

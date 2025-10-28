@@ -25,6 +25,11 @@ from autoppia_web_agents_subnet.protocol import (
 )
 from autoppia_web_agents_subnet.validator.config import FEEDBACK_TIMEOUT, TIMEOUT
 from autoppia_web_agents_subnet.utils.dendrite import dendrite_with_retries
+from autoppia_web_agents_subnet.validator.tasks import (
+    get_task_solution_from_synapse,
+)
+from autoppia_iwa.src.web_agents.classes import TaskSolution  # type: ignore
+from autoppia_iwa.src.data_generation.domain.classes import Task as IWATask  # type: ignore
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -205,3 +210,110 @@ async def send_feedback_synapse_to_miners(
     ]
     await asyncio.gather(*tasks)
     ColoredLogger.info("Feedback responses received from miners", ColoredLogger.BLUE)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 4. HTTP helpers for FINAL PHASE (local deployed miners)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+async def send_task_synapse_to_http_endpoints(
+    *,
+    endpoints: list[str],
+    task_synapse: TaskSynapse,
+    timeout: int,
+) -> tuple[list[TaskSynapse | None], list[float]]:
+    """
+    Send TaskSynapse as JSON over HTTP to each base endpoint.
+
+    Returns:
+      - responses: list aligned with endpoints; None for failures
+      - times: per-request measured elapsed seconds
+    """
+    import httpx
+    out: list[TaskSynapse | None] = []
+    times: list[float] = []
+
+    payload = {
+        "prompt": task_synapse.prompt,
+        "url": task_synapse.url,
+        "html": task_synapse.html or "",
+        "screenshot": task_synapse.screenshot or "",
+        "actions": task_synapse.actions or [],
+        "version": getattr(task_synapse, "version", ""),
+    }
+
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        for base in endpoints:
+            base = (base or "").rstrip("/")
+            url = f"{base}/api/task"
+            start = asyncio.get_event_loop().time()
+            try:
+                resp = await client.post(url, json=payload)
+                elapsed = asyncio.get_event_loop().time() - start
+                times.append(float(elapsed))
+                if resp.status_code == 200:
+                    data = resp.json()
+                    ts = TaskSynapse(
+                        prompt=payload["prompt"],
+                        url=payload["url"],
+                        html=payload["html"],
+                        screenshot=payload["screenshot"],
+                        actions=data.get("actions", []) or [],
+                        version=payload.get("version", ""),
+                    )
+                    out.append(ts)
+                else:
+                    out.append(None)
+            except Exception:
+                elapsed = asyncio.get_event_loop().time() - start
+                times.append(float(elapsed))
+                out.append(None)
+
+    # Pad times if needed
+    if len(times) < len(endpoints):
+        times.extend([float(timeout)] * (len(endpoints) - len(times)))
+    return out, times
+
+
+def collect_task_solutions_and_execution_times_http(
+    *,
+    task: IWATask,
+    http_responses: list[TaskSynapse | None],
+    measured_times: list[float],
+    miner_uids: list[int],
+) -> tuple[list[TaskSolution], list[float]]:
+    """
+    Convert HTTP responses into TaskSolution list aligned with miner_uids and
+    use client-side measured times as execution_times.
+    """
+    task_solutions: list[TaskSolution] = []
+    execution_times: list[float] = []
+
+    for miner_uid, resp, t in zip(miner_uids, http_responses, measured_times):
+        try:
+            if resp is not None:
+                task_solutions.append(
+                    get_task_solution_from_synapse(
+                        task_id=task.id,
+                        synapse=resp,
+                        web_agent_id=str(miner_uid),
+                    )
+                )
+            else:
+                task_solutions.append(TaskSolution(task_id=task.id, actions=[], web_agent_id=str(miner_uid)))
+        except Exception:
+            task_solutions.append(TaskSolution(task_id=task.id, actions=[], web_agent_id=str(miner_uid)))
+
+        try:
+            execution_times.append(float(t))
+        except Exception:
+            execution_times.append(float(TIMEOUT))
+
+    # Pad to miner_uids length if needed
+    n = len(miner_uids)
+    if len(task_solutions) < n:
+        pad = n - len(task_solutions)
+        task_solutions.extend([TaskSolution(task_id=task.id, actions=[], web_agent_id="0")] * pad)
+        execution_times.extend([float(TIMEOUT)] * pad)
+
+    return task_solutions, execution_times

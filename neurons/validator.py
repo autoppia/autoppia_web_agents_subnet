@@ -22,7 +22,6 @@ from autoppia_web_agents_subnet.validator.config import (
     PROMPTS_PER_USECASE,
     PRE_GENERATED_TASKS,
     VALIDATOR_NAME,
-    VALIDATOR_IMAGE,
     DZ_STARTING_BLOCK,
     MAX_MINER_AGENT_NAME_LENGTH,
     ENABLE_DISTRIBUTED_CONSENSUS,
@@ -30,6 +29,12 @@ from autoppia_web_agents_subnet.validator.config import (
     FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION,
     SKIP_ROUND_IF_STARTED_AFTER_FRACTION,
     BURN_UID,
+    SCREENING_TOP_S,
+    SCREENING_STOP_FRACTION,
+    ENABLE_FINAL_LOCAL,
+    FINAL_TIE_BONUS_PCT,
+    FINAL_TIE_EPSILON,
+    CONSENSUS_PROPAGATION_DELAY_SEC,
 )
 from autoppia_web_agents_subnet.validator.tasks import get_task_collection_interleaved, collect_task_solutions_and_execution_times
 from autoppia_iwa.src.demo_webs.classes import WebProject
@@ -38,6 +43,8 @@ from autoppia_web_agents_subnet.validator.synapse_handlers import (
     send_start_round_synapse_to_miners,
     send_task_synapse_to_miners,
     send_feedback_synapse_to_miners,
+    send_task_synapse_to_http_endpoints,
+    collect_task_solutions_and_execution_times_http,
 )
 from autoppia_web_agents_subnet.protocol import StartRoundSynapse, TaskSynapse
 from autoppia_web_agents_subnet.validator.rewards import calculate_rewards_for_task, wta_rewards
@@ -51,17 +58,17 @@ from rich.table import Table
 from rich import box
 from autoppia_web_agents_subnet.platform.validator_mixin import ValidatorPlatformMixin
 from autoppia_web_agents_subnet.platform.round_phases import RoundPhaseValidatorMixin
-from autoppia_web_agents_subnet.validator.consensus import (
-    publish_round_snapshot,
-    aggregate_scores_from_commitments,
-)
+from autoppia_web_agents_subnet.validator.consensus_manager import ConsensusManager
+from autoppia_web_agents_subnet.validator.dataset import RoundDatasetCollector
 from autoppia_iwa.src.bootstrap import AppBootstrap
+from autoppia_web_agents_subnet.validator.phases.screening import ScreeningPhase
+from autoppia_web_agents_subnet.validator.phases.final import FinalPhase
 
 
 class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorNeuron):
     def __init__(self, config=None):
-        if not VALIDATOR_NAME or not VALIDATOR_IMAGE:
-            bt.logging.error("VALIDATOR_NAME and VALIDATOR_IMAGE must be set in the environment before starting the validator.")
+        if not VALIDATOR_NAME:
+            bt.logging.error("VALIDATOR_NAME must be set in the environment before starting the validator.")
             raise SystemExit(1)
 
         super().__init__(config=config)
@@ -92,6 +99,14 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         self._agg_scores_cache: dict[int, float] | None = None
         # Track if final weights + IWAP finish_round were already sent this round
         self._finalized_this_round: bool = False
+        # Two-phase evaluation state
+        self._final_started: bool = False
+        self._final_top_s_uids: list[int] = []
+        self._final_endpoints: dict[int, str] = {}
+        self._last_round_winner_uid: int | None = None  # mocked lookup for tie-break
+        self._screening_phase = ScreeningPhase()
+        self._final_phase = FinalPhase()
+        self._consensus = ConsensusManager()
 
         # ⭐ Round system components
         self.round_manager = RoundManager(
@@ -127,6 +142,11 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     setattr(self, attr, None)
                 except Exception:
                     pass
+        # Drop dataset collector between rounds
+        try:
+            self.dataset_collector = None
+        except Exception:
+            pass
 
     # ═══════════════════════════════════════════════════════════════════════════════
     # MAIN FORWARD LOOP - Round-based system
@@ -142,6 +162,40 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         5. Calculates averages, applies WTA, sets weights
         """
         bt.logging.info("🚀 Starting round-based forward")
+
+        # Config sanity: screening must end before STOP window begins
+        try:
+            if float(SCREENING_STOP_FRACTION) >= float(STOP_TASK_EVALUATION_AT_ROUND_FRACTION):
+                import sys
+                # Detailed guidance for operators
+                bt.logging.error("Invalid validator configuration detected. Aborting startup.")
+                bt.logging.error(
+                    (
+                        "SCREENING_STOP_FRACTION (currently {scr:.3f}) must be STRICTLY LESS than "
+                        "STOP_TASK_EVALUATION_AT_ROUND_FRACTION (currently {stp:.3f})."
+                    ).format(scr=float(SCREENING_STOP_FRACTION), stp=float(STOP_TASK_EVALUATION_AT_ROUND_FRACTION))
+                )
+                bt.logging.error(
+                    (
+                        "Rationale: screening debe finalizar antes de la ventana de STOP para reservar tiempo de "
+                        "consenso/propagación y para la fase final."
+                    )
+                )
+                bt.logging.error(
+                    (
+                        "Fix: ajusta variables de entorno o .env y reinicia. Sugerido: "
+                        "SCREENING_STOP_FRACTION ≈ 0.30–0.50 y STOP_TASK_EVALUATION_AT_ROUND_FRACTION ≈ 0.65–0.80."
+                    )
+                )
+                bt.logging.error(
+                    (
+                        "Vars: SCREENING_STOP_FRACTION, STOP_TASK_EVALUATION_AT_ROUND_FRACTION. "
+                        "Archivo de config: autoppia_web_agents_subnet/validator/config.py"
+                    )
+                )
+                sys.exit(1)
+        except Exception:
+            pass
 
         # Get current block and prevent early round execution
         # Use live chain height, not metagraph.block (which updates only on sync)
@@ -171,6 +225,11 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
         # Log configuration summary
         self.round_manager.log_calculation_summary()
+        # Log Phase Plan (concise targets)
+        try:
+            self._log_phase_plan(current_block)
+        except Exception as e:
+            bt.logging.debug(f"Phase plan logging failed: {e}")
 
         # Round status snapshot before generation/resume
         try:
@@ -334,6 +393,12 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             tasks=all_tasks,
         )
 
+        # Initialize dataset collector for this round (tasks + solutions + evals)
+        try:
+            self.dataset_collector = RoundDatasetCollector()
+        except Exception:
+            self.dataset_collector = None
+
         pre_generation_elapsed = time.time() - pre_generation_start
         bt.logging.info(f"✅ Task list ready: {len(all_tasks)} tasks in {pre_generation_elapsed:.1f}s (resumed={resumed})")
 
@@ -345,6 +410,9 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         self.round_manager.start_new_round(current_block)
         # New round: ensure finalize flag is reset
         self._finalized_this_round = False
+        self._final_started = False
+        self._final_top_s_uids = []
+        self._final_endpoints = {}
         boundaries = self.round_manager.get_current_boundaries()
         # If not resuming, reset ephemeral structures; if resuming, keep loaded ones
         if not resumed:
@@ -689,6 +757,46 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     bt.logging.warning(f"Early finalize failed; will retry later: {e}")
                 # Stop scheduling more tasks; wait for boundary afterwards
                 break
+
+            # Start FINAL (local HTTP) when screening cutoff fraction reached
+            if ENABLE_FINAL_LOCAL and (not self._final_started) and (progress_frac >= float(SCREENING_STOP_FRACTION)):
+                try:
+                    screening_avgs = self.round_manager.get_average_rewards() or {}
+                    active_set = set(self.active_miner_uids or [])
+                    # average execution time per UID (screening)
+                    avg_time_map = {}
+                    try:
+                        for uid, times in (self.round_manager.round_times or {}).items():
+                            if uid in active_set and times:
+                                avg_time_map[int(uid)] = float(sum(times) / max(len(times), 1))
+                    except Exception:
+                        avg_time_map = {}
+                    # Sort deterministically by: score desc, avg_time asc (missing as +inf), uid asc
+                    def _avg_time(uid: int) -> float:
+                        return avg_time_map.get(uid, float('inf'))
+                    pairs = [(uid, float(score), _avg_time(int(uid))) for uid, score in screening_avgs.items() if uid in active_set]
+                    pairs.sort(key=lambda x: (-x[1], x[2], int(x[0])))
+                    top_s = [int(uid) for uid, _, _ in pairs[: max(int(SCREENING_TOP_S), 0)]]
+                    if top_s:
+                        self._final_top_s_uids = top_s
+                        self._final_started = True
+                        # Prepare mocked local endpoints
+                        for uid in top_s:
+                            gh = None
+                            try:
+                                payload = self.round_handshake_payloads.get(uid)
+                                gh = getattr(payload, "github_url", None)
+                            except Exception:
+                                gh = None
+                            self._final_endpoints[uid] = self._deploy_local_for_miner(uid=uid, github_url=gh)
+                        ColoredLogger.info(
+                            f"🏁 FINAL phase started at {progress_frac:.2f}: Top-{len(top_s)} {top_s}",
+                            ColoredLogger.CYAN,
+                        )
+                    else:
+                        ColoredLogger.warning("Screening produced no Top-S at cutoff; continuing screening.", ColoredLogger.YELLOW)
+                except Exception as e:
+                    bt.logging.warning(f"FINAL phase init failed: {e}")
             if ENABLE_DISTRIBUTED_CONSENSUS and (not self._finalized_this_round) and (not self._consensus_published) and (progress_frac >= float(STOP_TASK_EVALUATION_AT_ROUND_FRACTION)):
                 ColoredLogger.error("\n" + "=" * 80, ColoredLogger.RED)
                 ColoredLogger.error(
@@ -718,28 +826,14 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 except Exception:
                     pass
                 try:
-                    round_number = await self.round_manager.calculate_round(current_block)
-                    st = await self._get_async_subtensor()
-
-                    cid = await publish_round_snapshot(
-                        validator=self,
-                        st=st,
-                        round_number=round_number,
-                        tasks_completed=tasks_completed,
-                    )
-
+                    cid = await self._consensus.publish_midround(validator=self, tasks_completed=tasks_completed)
                     self._consensus_published = True
                     if cid:
                         bt.logging.success(f"[CONSENSUS] ✅ IPFS publish complete - CID: {cid}")
                     else:
                         bt.logging.warning(f"[CONSENSUS] ⚠️ IPFS publish returned no CID")
                 except Exception as e:
-                    bt.logging.error("=" * 80)
-                    bt.logging.error(f"[CONSENSUS] ❌ IPFS publish failed | Error: {type(e).__name__}: {e}")
-                    import traceback
-
-                    bt.logging.error(f"[CONSENSUS] Traceback:\n{traceback.format_exc()}")
-                    bt.logging.error("=" * 80)
+                    bt.logging.warning(f"[CONSENSUS] publish_midround failed: {e}")
                 break
             if not self.round_manager.should_send_next_task(current_block):
                 ColoredLogger.warning(
@@ -972,27 +1066,36 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 web_project_name=web_project_name,
             )
 
-            # Send task to miners
-            responses = await send_task_synapse_to_miners(
-                validator=self,
-                miner_axons=active_axons,
-                task_synapse=task_synapse,
-                timeout=120,
-            )
-
-            # Process responses and calculate rewards
-            task_solutions, execution_times = collect_task_solutions_and_execution_times(
-                task=task,
-                responses=responses,
-                miner_uids=list(self.active_miner_uids),
-            )
+            # Send task (screening via dendrite; final via HTTP local endpoints)
+            if self._final_started and ENABLE_FINAL_LOCAL:
+                target_uids = list(self._final_top_s_uids)
+                endpoints = [self._final_endpoints.get(uid, "") for uid in target_uids]
+                task_solutions, execution_times = await self._final_phase.send_and_collect(
+                    project=project,
+                    task=task,
+                    target_uids=target_uids,
+                    endpoints=endpoints,
+                    task_synapse=task_synapse,
+                    timeout=120,
+                )
+            else:
+                target_uids = list(self.active_miner_uids)
+                task_solutions, execution_times = await self._screening_phase.send_and_collect(
+                    validator=self,
+                    project=project,
+                    task=task,
+                    target_uids=target_uids,
+                    axons=list(active_axons),
+                    task_synapse=task_synapse,
+                    timeout=120,
+                )
 
             # Group miners by identical solutions (same actions)
             import hashlib
 
             solution_groups = {}  # hash -> {'uids': [list], 'solution': solution, 'results': [list]}
-
-            for i, (uid, solution) in enumerate(zip(self.active_miner_uids, task_solutions)):
+            current_uids_seq = list(self._final_top_s_uids) if (self._final_started and ENABLE_FINAL_LOCAL) else list(self.active_miner_uids)
+            for i, (uid, solution) in enumerate(zip(current_uids_seq, task_solutions)):
                 # Create hash of actions to group identical solutions
                 if solution and solution.actions:
                     # Create a simple string representation for hashing (avoid JSON serialization issues)
@@ -1022,12 +1125,58 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
             # Evaluate task solutions
             ColoredLogger.debug("🔍 STARTING EVALUATION...", ColoredLogger.CYAN)
-            eval_scores, test_results_list, evaluation_results = await evaluate_task_solutions(
+            eval_scores, test_results_list, evaluation_results, penalty_meta = await evaluate_task_solutions(
                 web_project=project,
                 task=task,
                 task_solutions=task_solutions,
                 execution_times=execution_times,
             )
+
+            # Log and record duplicate-solution penalties with UID visibility
+            try:
+                groups = (penalty_meta or {}).get("same_solution_groups") or []
+                if groups:
+                    # Map indices -> UIDs
+                    penalized_groups_uids: list[list[int]] = []
+                    for g in groups:
+                        g_uids = []
+                        for idx in g:
+                            if 0 <= idx < len(current_uids_seq):
+                                g_uids.append(int(current_uids_seq[idx]))
+                        if len(g_uids) >= 2:
+                            penalized_groups_uids.append(g_uids)
+
+                    if penalized_groups_uids:
+                        # Record in round_manager for round summary visualization
+                        try:
+                            self.round_manager.record_duplicate_penalties(list(current_uids_seq), groups)
+                        except Exception:
+                            pass
+
+                        try:
+                            from rich.console import Console
+                            console = Console()
+                            console.print("[bold red]🚫 Same-solution penalty groups (UIDs):[/bold red]")
+                            for g_uids in penalized_groups_uids:
+                                console.print(f"  • [red]{g_uids}[/red]")
+                        except Exception:
+                            bt.logging.warning(f"Same-solution penalty groups (UIDs): {penalized_groups_uids}")
+            except Exception as e:
+                bt.logging.debug(f"Penalty group logging failed: {e}")
+
+            # Collect for IPFS dataset (deterministic re-evaluation)
+            try:
+                if getattr(self, "dataset_collector", None) is not None:
+                    self.dataset_collector.add_task(project=project, task=task)
+                    self.dataset_collector.add_solutions(
+                        task_id=task.id,
+                        task_solutions=task_solutions,
+                        eval_scores=eval_scores.tolist() if hasattr(eval_scores, "tolist") else list(eval_scores),
+                        execution_times=execution_times,
+                        miner_uids=list(current_uids_seq),
+                    )
+            except Exception:
+                pass
 
             # 🔍 DEBUG: Show actions + results together for each GROUP
             try:
@@ -1194,27 +1343,40 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
                 bt.logging.warning(f"Traceback: {traceback.format_exc()}")
                 # Fallback to simple logging
-                for i, uid in enumerate(self.active_miner_uids):
+                for i, uid in enumerate(target_uids):
                     ColoredLogger.debug(f"UID={uid}: Score={eval_scores[i]:.4f}, Time={execution_times[i]:.2f}s", ColoredLogger.GREEN)
 
             # Calculate final scores (combining eval quality + execution speed)
             rewards = calculate_rewards_for_task(
                 eval_scores=eval_scores,
                 execution_times=execution_times,
-                n_miners=len(self.active_miner_uids),
+                n_miners=len(target_uids),
                 eval_score_weight=EVAL_SCORE_WEIGHT,
                 time_weight=TIME_WEIGHT,
             )
 
-            # Accumulate scores for the round using round_manager
-            self.round_manager.accumulate_rewards(miner_uids=list(self.active_miner_uids), rewards=rewards.tolist(), eval_scores=eval_scores.tolist(), execution_times=execution_times)
+            # Accumulate into screening or final buffers
+            if self._final_started and ENABLE_FINAL_LOCAL:
+                self.round_manager.accumulate_final_rewards(
+                    miner_uids=list(target_uids),
+                    rewards=rewards.tolist(),
+                    eval_scores=eval_scores.tolist(),
+                    execution_times=execution_times,
+                )
+            else:
+                self.round_manager.accumulate_rewards(
+                    miner_uids=list(target_uids),
+                    rewards=rewards.tolist(),
+                    eval_scores=eval_scores.tolist(),
+                    execution_times=execution_times,
+                )
 
             # Send feedback to miners
             try:
                 await send_feedback_synapse_to_miners(
                     validator=self,
                     miner_axons=list(active_axons),
-                    miner_uids=list(self.active_miner_uids),
+                    miner_uids=list(target_uids),
                     task=task,
                     rewards=rewards.tolist(),
                     execution_times=execution_times,
@@ -1247,6 +1409,16 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             return False
 
         # reached target: minimal separator not needed
+
+    # ─────────────────────────────────────────────────────────────────────
+    # Public alias for a full round pipeline (clear entrypoint)
+    # ─────────────────────────────────────────────────────────────────────
+    async def round(self) -> None:
+        """
+        Execute one full round as a pipeline by delegating to forward().
+        This keeps the entrypoint explicit while reusing the existing logic.
+        """
+        await self.forward()
 
     async def _wait_until_next_round_boundary(self) -> None:
         """Wait until the end of the current (global) round window.
@@ -1327,18 +1499,42 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             ColoredLogger.info(f"Tasks attempted: {tasks_completed}", ColoredLogger.RED)
             return
 
-        # Calculate average scores using round_manager
-        avg_rewards = self.round_manager.get_average_rewards()
+        # Calculate FINAL average scores using round_manager
+        avg_rewards = self.round_manager.get_final_average_rewards()
+        if not avg_rewards:
+            # Fallback: if final had 0 tasks (edge), fall back to screening averages
+            avg_rewards = self.round_manager.get_average_rewards()
 
-        # If sharing enabled, attempt to aggregate across validators via commitments/IPFS
+        # If sharing enabled, publish final scores and attempt to aggregate via commitments/IPFS
         if ENABLE_DISTRIBUTED_CONSENSUS:
             try:
                 boundaries = self.round_manager.get_current_boundaries()
-                bt.logging.info(f"[CONSENSUS] Aggregating scores from other validators...")
+                bt.logging.info(f"[CONSENSUS] Publishing FINAL scores to IPFS before aggregation...")
+                round_number = await self.round_manager.calculate_round(self.block)
+                st = await self._get_async_subtensor()
+                try:
+                    await publish_scores_snapshot(
+                        validator=self,
+                        st=st,
+                        round_number=round_number,
+                        tasks_completed=tasks_completed,
+                        scores=avg_rewards,
+                    )
+                except Exception as e:
+                    bt.logging.warning(f"Publish final scores snapshot failed: {e}")
+
+                # Allow time for propagation before fetching aggregates
+                try:
+                    import asyncio as _asyncio
+                    await _asyncio.sleep(float(CONSENSUS_PROPAGATION_DELAY_SEC))
+                except Exception:
+                    pass
+
+                bt.logging.info(f"[CONSENSUS] Aggregating FINAL scores from validators...")
                 # Prefer cached mid-settlement aggregation if available
                 agg = self._agg_scores_cache or {}
                 agg_meta = None
-                if not agg:
+                if True:  # always try to fetch latest after publishing final
                     # Calculate current progress
                     try:
                         current_block_now = self.metagraph.block.item()
@@ -1360,7 +1556,6 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     bt.logging.info("=" * 80)
 
                     # Natural gap between STOP and FETCH ensures propagation
-                    st = await self._get_async_subtensor()
                     agg, agg_meta = await aggregate_scores_from_commitments(
                         validator=self,
                         st=st,
@@ -1369,7 +1564,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     )
                 if agg:
                     ColoredLogger.info(
-                        f"🤝 Using aggregated scores from commitments ({len(agg)} miners)",
+                        f"🤝 Using aggregated FINAL scores from commitments ({len(agg)} miners)",
                         ColoredLogger.CYAN,
                     )
                     avg_rewards = agg
@@ -1379,9 +1574,9 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     except Exception:
                         pass
                 else:
-                    ColoredLogger.warning("No aggregated scores available; using local averages.", ColoredLogger.YELLOW)
+                    ColoredLogger.warning("No aggregated FINAL scores available; using local FINAL averages.", ColoredLogger.YELLOW)
             except Exception as e:
-                bt.logging.warning(f"Aggregation failed; using local averages: {e}")
+                bt.logging.warning(f"Aggregation of FINAL failed; using local FINAL averages: {e}")
 
         # If all miners have non-positive average scores, burn all weights and exit
         try:
@@ -1402,10 +1597,34 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         # Log round summary
         self.round_manager.log_round_summary()
 
+        # Optional tie-break bonus for last round's winner (mocked source)
+        try:
+            agg_prev, _ = await self._consensus.aggregate_previous_window(validator=self)
+            prev_winner_uid = int(max(agg_prev.items(), key=lambda kv: float(kv[1]))[0]) if agg_prev else None
+        except Exception:
+            prev_winner_uid = None
+
         # Apply WTA to get final weights
         # Convert dict to numpy array for wta_rewards
         uids = list(avg_rewards.keys())
         scores_array = np.array([avg_rewards[uid] for uid in uids], dtype=np.float32)
+
+        if prev_winner_uid is not None and prev_winner_uid in uids and len(uids) > 0:
+            try:
+                max_score = float(np.max(scores_array))
+                eps = float(FINAL_TIE_EPSILON)
+                tied = [i for i, s in enumerate(scores_array.tolist()) if abs(s - max_score) <= eps]
+                if len(tied) > 1:
+                    idx = uids.index(prev_winner_uid)
+                    if idx in tied:
+                        bonus = 1.0 + float(FINAL_TIE_BONUS_PCT) / 100.0
+                        scores_array[idx] = float(scores_array[idx]) * bonus
+                        ColoredLogger.info(
+                            f"🏅 Tie-break bonus applied to UID {prev_winner_uid} (+{FINAL_TIE_BONUS_PCT}%)",
+                            ColoredLogger.CYAN,
+                        )
+            except Exception:
+                pass
         final_rewards_array = wta_rewards(scores_array)
 
         # Convert back to dict
@@ -1425,8 +1644,112 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 consensus_meta=consensus_meta,
                 active_uids=active_set,
             )
+
+            # Duplicate-penalty summary (final)
+            try:
+                dup_map = dict(getattr(self.round_manager, 'round_duplicate_counts', {}) or {})
+                penalized = [(int(uid), int(cnt)) for uid, cnt in dup_map.items() if int(cnt) > 0]
+                penalized.sort(key=lambda x: x[1], reverse=True)
+                total_penalized_uids = len(penalized)
+                total_penalties = sum(cnt for _, cnt in penalized)
+
+                if total_penalties > 0:
+                    try:
+                        from rich.console import Console
+                        from rich.table import Table
+                        from rich import box
+                        console = Console()
+                        console.print("[bold red]🚫 Duplicate-Solution Penalties — Round Summary[/bold red]")
+                        console.print(f"Penalized UIDs: [bold]{total_penalized_uids}[/bold] | Total penalties applied: [bold]{total_penalties}[/bold]")
+                        tbl = Table(title=None, box=box.SIMPLE, show_header=True, header_style="bold red", expand=False)
+                        tbl.add_column("UID", justify="right", width=8)
+                        tbl.add_column("Hotkey", style="cyan", overflow="ellipsis")
+                        tbl.add_column("Dup", justify="right", width=6)
+                        top = penalized[:10]
+                        for uid, cnt in top:
+                            hk = self.metagraph.hotkeys[uid] if uid < len(self.metagraph.hotkeys) else "<unknown>"
+                            tbl.add_row(str(uid), hk[:10] + ("…" if len(hk) > 10 else ""), str(cnt))
+                        console.print(tbl)
+                    except Exception:
+                        bt.logging.info(
+                            f"[DUPLICATES] Penalized UIDs: {total_penalized_uids} | Total penalties: {total_penalties} | Top: {penalized[:10]}"
+                        )
+                else:
+                    bt.logging.info("[DUPLICATES] No duplicate-solution penalties this round.")
+            except Exception as e:
+                bt.logging.debug(f"Duplicate-penalty summary failed: {e}")
         except Exception as e:
             bt.logging.debug(f"Round summary table failed: {e}")
+
+    def _log_phase_plan(self, current_block: int) -> None:
+        """
+        Print a concise Phase Plan:
+          Phase name — fraction — target block — ETA minutes
+        """
+        bounds = self.round_manager.get_round_boundaries(current_block, log_debug=False)
+        start_block = int(bounds["round_start_block"])
+        target_block = int(bounds["target_block"])
+        total_blocks = max(target_block - start_block, 1)
+        spb = self.round_manager.SECONDS_PER_BLOCK
+
+        def _line(name: str, frac: float) -> str:
+            frac = max(0.0, min(1.0, float(frac)))
+            blk = start_block + int(total_blocks * frac)
+            remain_blocks = max(blk - current_block, 0)
+            eta_min = (remain_blocks * spb) / 60.0
+            return f"• {name}: {frac:.0%} — block {blk} — ~{eta_min:.1f}m"
+
+        bt.logging.info("Phase Plan (targets)")
+        # Current position
+        try:
+            now_frac = min(max((current_block - start_block) / total_blocks, 0.0), 1.0)
+            end_eta_min = max((target_block - current_block), 0) * spb / 60.0
+            bt.logging.info(f"• Now: {now_frac:.0%} — block {current_block} — ~{end_eta_min:.1f}m to end")
+        except Exception:
+            pass
+        bt.logging.info(_line("Screening end", SCREENING_STOP_FRACTION))
+        bt.logging.info(_line("Stop tasks eval", STOP_TASK_EVALUATION_AT_ROUND_FRACTION))
+        bt.logging.info(_line("Final fetch", FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION))
+        bt.logging.info(_line("Round end", 1.0))
+
+    def _deploy_local_for_miner(self, *, uid: int, github_url: str | None) -> str:
+        """
+        Mocked local deploy resolver: returns a base URL (or empty string on failure).
+        Integrate with the deployment controller here to get a real URL.
+        If empty is returned, the miner's final-phase response becomes empty
+        and scores 0, as intended by the rules.
+        """
+        try:
+            _ = github_url
+            return ""
+        except Exception:
+            return ""
+
+    async def _get_last_round_winner_uid_async(self) -> int | None:
+        """
+        Determine last round's winner from commitments/IPFS.
+
+        Strategy:
+         - Compute previous round window using round_manager.
+         - Aggregate scores from commitments for that window.
+         - Return UID with max aggregated score.
+        """
+        try:
+            current_block = self.block
+            bounds_now = self.round_manager.get_round_boundaries(current_block, log_debug=False)
+            # Previous round's target is current round's start
+            prev_target_epoch = float(bounds_now["round_start_epoch"])  # end of previous window
+            round_len_epochs = float(self.round_manager.round_size_epochs)
+            prev_start_epoch = max(prev_target_epoch - round_len_epochs, 0.0)
+
+            agg_scores, _meta = await self._consensus.aggregate_previous_window(validator=self)
+            if not agg_scores:
+                return None
+            # Winner UID by aggregated score
+            best_uid = max(agg_scores.items(), key=lambda kv: float(kv[1]))[0]
+            return int(best_uid)
+        except Exception:
+            return None
 
         # Minimal final weights log: only winner
         bt.logging.info("🎯 Final weights (WTA)")

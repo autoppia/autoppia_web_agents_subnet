@@ -45,6 +45,14 @@ if TESTING:
     # Testing: No stake required (0 τ) - anyone can participate
     MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO = 0.0
     IWAP_API_BASE_URL = "https://dev-api-leaderboard.autoppia.com"
+    # ── Consensus dataset verification (testing defaults) ─────────────────────
+    CONSENSUS_VERIFICATION_ENABLED = _str_to_bool(os.getenv("CONSENSUS_VERIFICATION_ENABLED", "true"))
+    CONSENSUS_VERIFICATION_SAMPLE_FRACTION = _env_float("CONSENSUS_VERIFICATION_SAMPLE_FRACTION", 0.10)
+    CONSENSUS_VERIFY_SAMPLE_MIN = _env_int("CONSENSUS_VERIFY_SAMPLE_MIN", 30)
+    CONSENSUS_VERIFY_SAMPLE_TOLERANCE = _env_float("CONSENSUS_VERIFY_SAMPLE_TOLERANCE", 1e-6)
+    # Renamed for clarity: concurrency cap during verify sampling
+    CONSENSUS_VERIFY_SAMPLE_MAX_CONCURRENCY = _env_int("CONSENSUS_VERIFY_SAMPLE_MAX_CONCURRENCY", 2)
+    CONSENSUS_DATASET_EMBED = _str_to_bool(os.getenv("CONSENSUS_DATASET_EMBED", "false"))
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PRODUCTION CONFIGURATION (4.8-hour rounds, conservative)
@@ -75,6 +83,14 @@ else:
     # Production: Minimum 10k τ stake required to be included in consensus calculations
     MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO = 10000.0
     IWAP_API_BASE_URL = "https://api-leaderboard.autoppia.com"
+    # ── Consensus dataset verification (production defaults) ──────────────────
+    CONSENSUS_VERIFICATION_ENABLED = _str_to_bool(os.getenv("CONSENSUS_VERIFICATION_ENABLED", "false"))
+    CONSENSUS_VERIFICATION_SAMPLE_FRACTION = _env_float("CONSENSUS_VERIFICATION_SAMPLE_FRACTION", 0.10)
+    CONSENSUS_VERIFY_SAMPLE_MIN = _env_int("CONSENSUS_VERIFY_SAMPLE_MIN", 100)
+    CONSENSUS_VERIFY_SAMPLE_TOLERANCE = _env_float("CONSENSUS_VERIFY_SAMPLE_TOLERANCE", 1e-6)
+    # Renamed for clarity: concurrency cap during verify sampling
+    CONSENSUS_VERIFY_SAMPLE_MAX_CONCURRENCY = _env_int("CONSENSUS_VERIFY_SAMPLE_MAX_CONCURRENCY", 2)
+    CONSENSUS_DATASET_EMBED = _str_to_bool(os.getenv("CONSENSUS_DATASET_EMBED", "false"))
 # ═══════════════════════════════════════════════════════════════════════════
 # SHARED CONFIGURATION (same for all modes)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -92,6 +108,14 @@ SHOULD_RECORD_GIF = _str_to_bool(os.getenv("SHOULD_RECORD_GIF", "true"))
 # ── Scoring Weights ──────────────────────────────────────────────────────────
 EVAL_SCORE_WEIGHT = 1.0
 TIME_WEIGHT = 0.0
+
+# ── Duplicate Solution Penalty ───────────────────────────────────────────────
+# If 2+ miners submit the same or highly similar solutions for a task,
+# multiply their evaluation score by this penalty. Default 0.0 to zero-out.
+SAME_SOLUTION_PENALTY = _env_float("SAME_SOLUTION_PENALTY", 0.0)
+# Similarity threshold in [0,1] to consider two solutions "the same".
+# Keep this high to only catch near-identical solutions.
+SAME_SOLUTION_SIM_THRESHOLD = _env_float("SAME_SOLUTION_SIM_THRESHOLD", 0.90)
 
 # ── Validator Identity (IWAP) ────────────────────────────────────────────────
 VALIDATOR_NAME = _normalized(os.getenv("VALIDATOR_NAME"))
@@ -117,3 +141,19 @@ IPFS_GATEWAYS = [g.strip() for g in (os.getenv("IPFS_GATEWAYS", "https://ipfs.io
 
 # ── Burn Mechanism ───────────────────────────────────────────────────────────
 BURN_UID = _env_int("BURN_UID", 5)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Screening / Final phase (two-stage evaluation)
+# ═══════════════════════════════════════════════════════════════════════════
+# Number of miners to take to the final local phase
+SCREENING_TOP_S = _env_int("SCREENING_TOP_S", 4)
+# Fraction of the round time reserved for screening (0..1)
+SCREENING_STOP_FRACTION = _env_float("SCREENING_STOP_FRACTION", 0.40 if not TESTING else 0.30)
+# Final tie-break bonus percentage for last round's winner (only when tied)
+FINAL_TIE_BONUS_PCT = _env_float("FINAL_TIE_BONUS_PCT", 5.0)
+FINAL_TIE_EPSILON = _env_float("FINAL_TIE_EPSILON", 1e-6)
+# Enable final stage local HTTP evaluation
+ENABLE_FINAL_LOCAL = _str_to_bool(os.getenv("ENABLE_FINAL_LOCAL", "true"))
+
+# Give the network time to propagate IPFS + on-chain commits before fetching
+CONSENSUS_PROPAGATION_DELAY_SEC = _env_int("CONSENSUS_PROPAGATION_DELAY_SEC", 12)

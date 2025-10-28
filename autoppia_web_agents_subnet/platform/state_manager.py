@@ -53,6 +53,7 @@ class RoundCheckpoint:
 
     # Consensus flags
     consensus_published: bool = False
+    prev_winner_uid: Optional[int] = None
 
 
 class RoundStateManager:
@@ -242,6 +243,7 @@ class RoundStateManager:
             rm_round_eval_scores=dict(getattr(rm, "round_eval_scores", {}) or {}) if rm is not None else {},
             rm_round_times=dict(getattr(rm, "round_times", {}) or {}) if rm is not None else {},
             consensus_published=bool(getattr(v, "_consensus_published", False)),
+            prev_winner_uid=getattr(v, "_last_round_winner_uid", None),
         )
         return ckpt
 
@@ -282,6 +284,10 @@ class RoundStateManager:
             v._consensus_published = bool(ckpt.consensus_published)
         except Exception:
             v._consensus_published = False
+        try:
+            v._last_round_winner_uid = int(ckpt.prev_winner_uid) if ckpt.prev_winner_uid is not None else None
+        except Exception:
+            v._last_round_winner_uid = None
 
         # Round manager aggregates
         rm = getattr(v, "round_manager", None)

@@ -158,10 +158,15 @@ def _round_label(round_number: Optional[int], target_epoch: Optional[int]) -> st
     return "unknown round"
 
 
-def _score_summary(payload: Dict[str, Any]) -> Tuple[int, str]:
+def _score_summary(payload: Dict[str, Any], limit: int = 3) -> Tuple[int, str, List[Tuple[int, float]]]:
+    """Return score count, a short summary line, and sorted scores.
+
+    - limit > 0: summary shows the top-N.
+    - limit <= 0: summary indicates full listing is shown elsewhere.
+    """
     scores = payload.get("scores")
     if not isinstance(scores, dict):
-        return 0, "scores unavailable"
+        return 0, "scores unavailable", []
 
     parsed: List[Tuple[int, float]] = []
     for uid_str, score_val in scores.items():
@@ -170,13 +175,18 @@ def _score_summary(payload: Dict[str, Any]) -> Tuple[int, str]:
         except Exception:
             continue
 
+    parsed.sort(key=lambda item: item[1], reverse=True)
+
     count = len(parsed)
     if count == 0:
-        return 0, "scores empty"
+        return 0, "scores empty", []
 
-    top = sorted(parsed, key=lambda item: item[1], reverse=True)[:3]
-    top_str = ", ".join(f"{uid}:{score:.4f}" for uid, score in top)
-    return count, f"top {top_str}"
+    if limit > 0:
+        top = parsed[:limit]
+        top_str = ", ".join(f"{uid}:{score:.4f}" for uid, score in top)
+        return count, f"top {top_str}", parsed
+    else:
+        return count, f"all {count} scores listed", parsed
 
 
 def _score_stats(
@@ -206,6 +216,7 @@ def _render_validator_table(
     validators: List[ValidatorCommitment],
     *,
     total_weight: float,
+    scores_limit: int = 3,
 ) -> Tuple[str, List[str]]:
     headers = [
         "validator",
@@ -249,6 +260,7 @@ def _render_validator_table(
         tasks = "-"
         agents = "-"
         top_line: Optional[str] = None
+        parsed_scores: List[Tuple[int, float]] = []
 
         if item.payload_error:
             extra.append(
@@ -258,7 +270,7 @@ def _render_validator_table(
             extra.append(f"      {item.hotkey[:10]}… payload missing")
         else:
             payload = item.payload
-            scores_count, top_line = _score_summary(payload)
+            scores_count, top_line, parsed_scores = _score_summary(payload, limit=scores_limit)
             count_stats, mean, stddev, variance = _score_stats(payload.get("scores"))
             scores_count = count_stats
             tasks_val = payload.get("tasks_completed") or payload.get("n")
@@ -269,6 +281,13 @@ def _render_validator_table(
                 agents = str(agents_val)
             if top_line:
                 extra.append(f"      {item.hotkey[:10]}… {top_line}")
+            # When limit <= 0, print all miner scores for this validator
+            if parsed_scores and scores_limit <= 0:
+                extra.append(
+                    f"      {item.hotkey[:10]}… scores ({len(parsed_scores)} miners):"
+                )
+                for uid, score in parsed_scores:
+                    extra.append(f"        - {uid}: {score:.4f}")
 
         mean_text = f"{mean:.4f}" if mean is not None else "-"
         std_text = f"{stddev:.4f}" if stddev is not None else "-"
@@ -458,6 +477,7 @@ async def inspect_rounds(
     include_below: bool,
     ipfs_api: Optional[str],
     gateways: Optional[Sequence[str]],
+    scores_limit: int,
 ) -> None:
     if rounds <= 0:
         rounds = 1
@@ -642,6 +662,7 @@ async def inspect_rounds(
             table_text, extra_lines = _render_validator_table(
                 validators,
                 total_weight=total_weight,
+                scores_limit=scores_limit,
             )
             print(
                 f"  • validators_considered={len(validators)} "
@@ -756,6 +777,15 @@ def parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
         default=None,
         help="Comma-separated list of IPFS gateways to try when fetching payloads.",
     )
+    parser.add_argument(
+        "--scores-limit",
+        type=int,
+        default=3,
+        help=(
+            "Number of top miner scores to show per validator (default: 3). "
+            "Use 0 to show all miner scores."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -780,6 +810,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
                 include_below=args.include_below,
                 ipfs_api=args.ipfs_api,
                 gateways=gateways,
+                scores_limit=args.scores_limit,
             )
         )
     except KeyboardInterrupt:  # pragma: no cover - user abort

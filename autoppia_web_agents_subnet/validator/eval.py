@@ -13,7 +13,10 @@ from autoppia_iwa.src.evaluation.evaluator.evaluator import (
     ConcurrentEvaluator,
     EvaluatorConfig,
 )
-from autoppia_web_agents_subnet.validator.config import SHOULD_RECORD_GIF
+from autoppia_web_agents_subnet.validator.config import (
+    SHOULD_RECORD_GIF,
+)
+from autoppia_web_agents_subnet.validator.penalties import apply_same_solution_penalty_with_meta
 
 
 def _test_result_to_dict(tr: Any) -> Dict[str, Any]:
@@ -112,4 +115,29 @@ async def evaluate_task_solutions(
 
     scores_arr = np.asarray(eval_scores, dtype=np.float32).ravel()
     np.clip(scores_arr, 0.0, 1.0, out=scores_arr)
-    return scores_arr, test_results_list, evaluation_results
+
+    # Apply duplicate/near-identical solution penalty across miners for this task
+    penalized, groups = apply_same_solution_penalty_with_meta(safe_solutions, scores_arr)
+
+    # Annotate evaluation_results with penalty flags per miner
+    try:
+        n = len(safe_solutions)
+        penalized_mask = [False] * n
+        for gid, g in enumerate(groups):
+            for idx in g:
+                penalized_mask[idx] = True
+                # Attach small metadata markers (safe for IWAP payload)
+                if idx < len(evaluation_results) and isinstance(evaluation_results[idx], dict):
+                    evaluation_results[idx]["same_solution_penalized"] = True
+                    evaluation_results[idx]["same_solution_group_id"] = int(gid)
+                    evaluation_results[idx]["same_solution_group_size"] = int(len(g))
+        # Ensure others have explicit False for consistency
+        for idx in range(n):
+            if idx < len(evaluation_results) and isinstance(evaluation_results[idx], dict) and "same_solution_penalized" not in evaluation_results[idx]:
+                evaluation_results[idx]["same_solution_penalized"] = False
+    except Exception:
+        pass
+
+    # Return penalty metadata as a fourth result for visibility/logging upstream
+    penalty_meta = {"same_solution_groups": groups}
+    return penalized, test_results_list, evaluation_results, penalty_meta

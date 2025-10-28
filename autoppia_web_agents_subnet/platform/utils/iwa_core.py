@@ -10,7 +10,6 @@ from autoppia_web_agents_subnet.platform import main as iwa_main
 from autoppia_web_agents_subnet.platform import models as iwa_models
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.validator.config import (
-    VALIDATOR_IMAGE,
     VALIDATOR_NAME,
 )
 from autoppia_web_agents_subnet.validator.models import TaskWithProject
@@ -260,7 +259,6 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
         name=VALIDATOR_NAME,
         stake=stake,
         vtrust=vtrust,
-        image_url=VALIDATOR_IMAGE,
         version=validator.version,
         metadata=metadata,
     )

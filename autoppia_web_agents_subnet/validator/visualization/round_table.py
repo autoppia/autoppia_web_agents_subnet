@@ -107,6 +107,8 @@ def render_round_summary_table(
                     ]
                 )
                 _C().print(f"[bold]Aggregators:[/bold] {hdr}")
+                # Add a short legend for the duplicate column
+                _C().print("[dim]Legend: Dup = tasks penalized as duplicate this round[/dim]")
             except Exception:
                 pass
 
@@ -115,6 +117,7 @@ def render_round_summary_table(
         tbl.add_column("Hotkey", style="cyan", overflow="ellipsis")
         tbl.add_column("Active", justify="center", width=6)
         tbl.add_column("LocalScore", justify="right", width=10)
+        tbl.add_column("Dup", justify="center", width=5)
         # Per-validator dynamic columns
         if validators_hk_order:
             for idx, v in enumerate(validators_info, start=1):
@@ -126,12 +129,19 @@ def render_round_summary_table(
         tbl.add_column("WTA", justify="right", width=6)
 
         for i, r in enumerate(rows, start=1):
+            dup_count = 0
+            try:
+                dup_count = int(getattr(round_manager, 'round_duplicate_counts', {}).get(r["uid"], 0))
+            except Exception:
+                dup_count = 0
+
             base_cols = [
                 str(i),
                 str(r["uid"]),
                 r["hotkey_prefix"],
                 ("yes" if (active_uids and r["uid"] in active_uids) else ("yes" if r["local"] else "no")),
                 f'{r["avg_eval"]:.4f}',
+                ("-" if dup_count <= 0 else str(dup_count)),
             ]
             pv_cols = []
             if validators_hk_order and r.get("per_val_scores"):
@@ -149,7 +159,7 @@ def render_round_summary_table(
     # Fallback plain text table
     # Plain text fallback
     header = [
-        "#", "UID", "HOTKEY", "Active", "LocalScore",
+        "#", "UID", "HOTKEY", "Active", "LocalScore", "Dup",
     ]
     if validators_info:
         header.extend([f"V{idx}:{v.get('hotkey','')[:6]}…({float(v.get('stake') or 0.0):.0f}τ)" for idx, v in enumerate(validators_info, start=1)])
@@ -157,13 +167,20 @@ def render_round_summary_table(
 
     lines = [
         "Round Summary — Miners",
+        "Legend: Dup = tasks penalized as duplicate this round",
         " ".join([f"{h:>12}" for h in header]),
     ]
     for i, r in enumerate(rows, start=1):
+        try:
+            dup_count = int(getattr(round_manager, 'round_duplicate_counts', {}).get(r['uid'], 0))
+        except Exception:
+            dup_count = 0
+
         fields = [
             f"{i:>3}", f"{r['uid']:>5}", f"{r['hotkey_prefix']:<12.12}",
             ("yes" if (active_uids and r["uid"] in active_uids) else ("yes" if r["local"] else "no")),
             f"{r['avg_eval']:.4f}",
+            ("-" if dup_count <= 0 else str(dup_count)),
         ]
         if validators_hk_order and r.get("per_val_scores"):
             fields.extend([f"{val:.4f}" for val in r["per_val_scores"]])
