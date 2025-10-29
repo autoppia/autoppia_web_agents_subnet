@@ -28,6 +28,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_STATE_FILE = REPO_ROOT / "data" / "monitor" / "last_summary_round.txt"
 SUMMARY_SCRIPT = Path(__file__).resolve().with_name("summary.sh")
 ROUND_RE = re.compile(r"Validator round summary \(round (\d+)\)")
+MAX_LINES = 20000
 
 
 def parse_args() -> argparse.Namespace:
@@ -41,7 +42,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--wait-seconds",
         type=int,
-        default=int(read_env("SUMMARY_WAIT_SECONDS", "90")),
+        default=int(read_env("SUMMARY_WAIT_SECONDS", "45")),
         help="Delay after detecting a new round before emailing",
     )
     parser.add_argument(
@@ -112,6 +113,36 @@ def run_summary(
     return completed.stdout.strip()
 
 
+def collect_summary_with_retry(
+    summary_script: Path,
+    pm2_identifier: Optional[str],
+    log_path: Optional[str],
+    lines: int,
+    round_arg: Optional[str],
+) -> str:
+    lines_try = lines
+    attempts = 0
+    while True:
+        try:
+            return run_summary(summary_script, pm2_identifier, log_path, lines_try, round_arg)
+        except RuntimeError as exc:
+            attempts += 1
+            message = str(exc)
+            retryable = (
+                "Could not find start marker" in message
+                or "No log lines available" in message
+                or "Unable to locate a completed round" in message
+            )
+            if not retryable or lines_try >= MAX_LINES or attempts >= 2:
+                raise
+            lines_try = min(lines_try * 2, MAX_LINES)
+            print(
+                f"[summary-monitor] summary.sh retrying with {lines_try} lines "
+                f"for round {round_arg or 'latest'} (previous error: {message})",
+                file=sys.stderr,
+            )
+
+
 def extract_round(summary_output: str) -> Optional[str]:
     match = ROUND_RE.search(summary_output)
     return match.group(1) if match else None
@@ -147,7 +178,9 @@ def main() -> None:
     if args.round_forced is not None:
         target_round = str(args.round_forced)
         try:
-            summary_out = run_summary(summary_path, args.pm2_identifier, args.log_path, args.lines, target_round)
+            summary_out = collect_summary_with_retry(
+                summary_path, args.pm2_identifier, args.log_path, args.lines, target_round
+            )
         except Exception as exc:  # noqa: BLE001
             raise SystemExit(f"Failed to run summary for round {target_round}: {exc}") from exc
         subject, html_body, text_body = build_email(target_round, summary_out)
@@ -172,7 +205,9 @@ def main() -> None:
 
     while True:
         try:
-            latest_out = run_summary(summary_path, args.pm2_identifier, args.log_path, args.lines)
+            latest_out = collect_summary_with_retry(
+                summary_path, args.pm2_identifier, args.log_path, args.lines, None
+            )
         except Exception as exc:  # noqa: BLE001
             print(f"[summary-monitor] summary.sh failed: {exc}", file=sys.stderr)
             time.sleep(args.poll)
@@ -206,14 +241,18 @@ def main() -> None:
         if args.wait_seconds > 0:
             time.sleep(args.wait_seconds)
             try:
-                summary_out = run_summary(summary_path, args.pm2_identifier, args.log_path, args.lines, target_round)
+                summary_out = collect_summary_with_retry(
+                    summary_path, args.pm2_identifier, args.log_path, args.lines, target_round
+                )
             except Exception as exc:  # noqa: BLE001
                 print(f"[summary-monitor] summary.sh failed for target round {target_round}: {exc}", file=sys.stderr)
                 time.sleep(args.poll)
                 continue
         else:
             try:
-                summary_out = run_summary(summary_path, args.pm2_identifier, args.log_path, args.lines, target_round)
+                summary_out = collect_summary_with_retry(
+                    summary_path, args.pm2_identifier, args.log_path, args.lines, target_round
+                )
             except Exception as exc:  # noqa: BLE001
                 print(f"[summary-monitor] summary.sh failed for target round {target_round}: {exc}", file=sys.stderr)
                 time.sleep(args.poll)
