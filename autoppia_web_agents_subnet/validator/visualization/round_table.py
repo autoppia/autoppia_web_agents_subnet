@@ -1,6 +1,7 @@
 # autoppia_web_agents_subnet/validator/visualization/round_table.py
 from __future__ import annotations
 
+import shutil
 from typing import Dict, Any, Optional, List, Set
 
 import numpy as np
@@ -189,28 +190,49 @@ def render_round_summary_table(
         title_base = f"{title_base} — Round {round_number}"
 
     if _RICH:
+        min_table_width = BASE_COLUMN_WIDTH + VALIDATOR_COLUMN_WIDTH
+        probe_console: Optional[Console] = None
+        target_width = MAX_TERMINAL_WIDTH
+        try:
+            probe_console = Console()
+            measured = probe_console.width or getattr(probe_console, "options", None)
+            measured_width = getattr(measured, "max_width", None) if hasattr(measured, "max_width") else measured
+            if measured_width:
+                try:
+                    measured_width = int(measured_width)
+                except Exception:  # noqa: BLE001
+                    measured_width = MAX_TERMINAL_WIDTH
+            else:
+                measured_width = MAX_TERMINAL_WIDTH
+            target_width = min(MAX_TERMINAL_WIDTH, max(int(measured_width), min_table_width))
+        except Exception:  # noqa: BLE001
+            probe_console = None
+            target_width = MAX_TERMINAL_WIDTH
+
+        console_kwargs: Dict[str, Any] = {"width": target_width}
+        if probe_console is not None:
+            console_kwargs["force_terminal"] = probe_console.is_terminal
+            console_kwargs["color_system"] = probe_console.color_system
+        console = probe_console if (probe_console and probe_console.width == target_width) else Console(**console_kwargs)
+
+        available_width = max(target_width - BASE_COLUMN_WIDTH, VALIDATOR_COLUMN_WIDTH)
         max_validator_cols = 0
         if validators_hk_order:
-            available = max(MAX_TERMINAL_WIDTH - BASE_COLUMN_WIDTH, VALIDATOR_COLUMN_WIDTH)
-            max_validator_cols = max(1, available // VALIDATOR_COLUMN_WIDTH)
+            max_validator_cols = max(1, available_width // VALIDATOR_COLUMN_WIDTH)
         validator_ranges = _chunk_indices(len(validators_hk_order), max_validator_cols or 1)
 
         # Header note with validators and stakes (weights used)
         if validators_info:
             try:
-                from rich.console import Console as _C
-
                 hdr = ", ".join(
                     [
                         f"{v.get('hotkey', '')[:10]}…({float(v.get('stake') or 0.0):.0f}τ)"
                         for v in validators_info
                     ]
                 )
-                _C().print(f"[bold]Aggregators:[/bold] {hdr}")
+                console.print(f"[bold]Aggregators:[/bold] {hdr}")
             except Exception:  # noqa: BLE001
                 pass
-
-        console = Console()
 
         for part_idx, rng in enumerate(validator_ranges, start=1):
             title = title_base
@@ -275,7 +297,9 @@ def render_round_summary_table(
         for idx, v in enumerate(validators_info, start=1)
     ]
 
-    available = max(MAX_TERMINAL_WIDTH - BASE_COLUMN_WIDTH, VALIDATOR_COLUMN_WIDTH)
+    terminal_cols = shutil.get_terminal_size((MAX_TERMINAL_WIDTH, 0)).columns
+    target_width = min(MAX_TERMINAL_WIDTH, max(terminal_cols, BASE_COLUMN_WIDTH + VALIDATOR_COLUMN_WIDTH))
+    available = max(target_width - BASE_COLUMN_WIDTH, VALIDATOR_COLUMN_WIDTH)
     max_validator_cols = max(1, available // VALIDATOR_COLUMN_WIDTH) if validator_headers else 1
     validator_ranges = _chunk_indices(len(validator_headers), max_validator_cols)
 
