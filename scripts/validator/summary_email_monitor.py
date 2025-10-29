@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import argparse
 import html
-import os
 import re
 import subprocess
 import sys
@@ -51,9 +50,21 @@ def parse_args() -> argparse.Namespace:
         help="File to store the last emailed round number",
     )
     parser.add_argument(
+        "--offset",
+        type=int,
+        default=int(read_env("SUMMARY_ROUND_OFFSET", "1")),
+        help="Rounds to subtract from the latest completed round (default 1). Set to 0 to email the latest.",
+    )
+    parser.add_argument(
         "--summary-script",
         default=str(read_env("SUMMARY_SCRIPT_PATH", str(SUMMARY_SCRIPT))),
         help="Path to the summary.sh script",
+    )
+    parser.add_argument(
+        "--round",
+        dest="round_forced",
+        type=int,
+        help="Send a single email for the specified round and exit.",
     )
     parser.add_argument(
         "--dry-run",
@@ -82,7 +93,7 @@ def save_state(path: Path, round_number: str) -> None:
 
 
 def run_summary(
-    summary_script: Path, pm2_identifier: Optional[str], log_path: Optional[str], lines: int
+    summary_script: Path, pm2_identifier: Optional[str], log_path: Optional[str], lines: int, round_arg: Optional[str] = None
 ) -> str:
     cmd = [str(summary_script)]
     if log_path:
@@ -92,6 +103,8 @@ def run_summary(
     else:
         raise RuntimeError("Provide --pm2 or --path to locate validator logs.")
     cmd.extend(["--lines", str(lines)])
+    if round_arg is not None:
+        cmd.extend(["--round", str(round_arg)])
     completed = subprocess.run(cmd, capture_output=True, text=True)
     if completed.returncode != 0:
         stderr = completed.stderr.strip()
@@ -119,6 +132,8 @@ def build_email(round_number: str, summary_output: str) -> tuple[str, str, str]:
 
 def main() -> None:
     args = parse_args()
+    if args.offset < 0:
+        args.offset = 0
 
     summary_path = Path(args.summary_script).expanduser().resolve()
     if not summary_path.exists():
@@ -128,56 +143,96 @@ def main() -> None:
         raise SystemExit("Provide --pm2 or --path to locate validator logs.")
 
     state_path = Path(args.state_file).expanduser()
+
+    if args.round_forced is not None:
+        target_round = str(args.round_forced)
+        try:
+            summary_out = run_summary(summary_path, args.pm2_identifier, args.log_path, args.lines, target_round)
+        except Exception as exc:  # noqa: BLE001
+            raise SystemExit(f"Failed to run summary for round {target_round}: {exc}") from exc
+        subject, html_body, text_body = build_email(target_round, summary_out)
+        if args.dry_run:
+            print(f"[summary-monitor] dry-run email subject: {subject}")
+            print(summary_out)
+            return
+        try:
+            send_email(subject, html_body, text_body)
+            print(f"[summary-monitor] emailed summary for round {target_round}")
+        except Exception as exc:  # noqa: BLE001
+            raise SystemExit(f"Failed to send email: {exc}") from exc
+        save_state(state_path, target_round)
+        return
+
     last_round = load_state(state_path)
 
     print(
         f"[summary-monitor] starting with last_round={last_round or 'None'}, "
-        f"poll={args.poll}s, wait={args.wait_seconds}s"
+        f"poll={args.poll}s, wait={args.wait_seconds}s, offset={args.offset}"
     )
 
     while True:
         try:
-            summary_out = run_summary(summary_path, args.pm2_identifier, args.log_path, args.lines)
+            latest_out = run_summary(summary_path, args.pm2_identifier, args.log_path, args.lines)
         except Exception as exc:  # noqa: BLE001
             print(f"[summary-monitor] summary.sh failed: {exc}", file=sys.stderr)
             time.sleep(args.poll)
             continue
 
-        round_number = extract_round(summary_out)
-        if not round_number:
+        latest_round = extract_round(latest_out)
+        if not latest_round:
             print("[summary-monitor] unable to detect round number from summary output", file=sys.stderr)
             time.sleep(args.poll)
             continue
 
-        if last_round == round_number:
+        target_round = latest_round
+        if args.offset:
+            try:
+                latest_int = int(latest_round)
+                target_round = str(max(latest_int - args.offset, 0))
+            except ValueError:
+                print(
+                    f"[summary-monitor] latest round '{latest_round}' not numeric; using without offset.",
+                    file=sys.stderr,
+                )
+
+        if last_round == target_round:
             time.sleep(args.poll)
             continue
 
-        print(f"[summary-monitor] detected new round {round_number}, waiting {args.wait_seconds}s before emailing")
+        print(
+            f"[summary-monitor] detected candidate round {target_round} "
+            f"(latest {latest_round}), waiting {args.wait_seconds}s before emailing"
+        )
         if args.wait_seconds > 0:
             time.sleep(args.wait_seconds)
             try:
-                summary_out = run_summary(summary_path, args.pm2_identifier, args.log_path, args.lines)
-                round_check = extract_round(summary_out)
-                if round_check:
-                    round_number = round_check
+                summary_out = run_summary(summary_path, args.pm2_identifier, args.log_path, args.lines, target_round)
             except Exception as exc:  # noqa: BLE001
-                print(f"[summary-monitor] second summary attempt failed: {exc}", file=sys.stderr)
+                print(f"[summary-monitor] summary.sh failed for target round {target_round}: {exc}", file=sys.stderr)
+                time.sleep(args.poll)
+                continue
+        else:
+            try:
+                summary_out = run_summary(summary_path, args.pm2_identifier, args.log_path, args.lines, target_round)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[summary-monitor] summary.sh failed for target round {target_round}: {exc}", file=sys.stderr)
+                time.sleep(args.poll)
+                continue
 
-        subject, html_body, text_body = build_email(round_number, summary_out)
+        subject, html_body, text_body = build_email(target_round, summary_out)
         if args.dry_run:
             print(f"[summary-monitor] dry-run email subject: {subject}")
             print(summary_out)
-            last_round = round_number
-            save_state(state_path, round_number)
+            last_round = target_round
+            save_state(state_path, target_round)
             time.sleep(args.poll)
             continue
 
         try:
             send_email(subject, html_body, text_body)
-            print(f"[summary-monitor] emailed summary for round {round_number}")
-            save_state(state_path, round_number)
-            last_round = round_number
+            print(f"[summary-monitor] emailed summary for round {target_round}")
+            save_state(state_path, target_round)
+            last_round = target_round
         except Exception as exc:  # noqa: BLE001
             print(f"[summary-monitor] failed to send email: {exc}", file=sys.stderr)
 
