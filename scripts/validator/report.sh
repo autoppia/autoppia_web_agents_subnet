@@ -108,8 +108,9 @@ extract_latest_round() {
 }
 
 target_round="$round_arg"
+latest_completed_round=$(extract_latest_round)
 if [[ -z "$target_round" ]]; then
-    target_round=$(extract_latest_round)
+    target_round="$latest_completed_round"
     if [[ -z "$target_round" ]]; then
         echo "Unable to locate a completed round in logs." >&2
         exit 1
@@ -187,6 +188,7 @@ printf '%s\n' "${round_lines[@]}" > "$tmpfile"
 TARGET_ROUND="$target_round" \
 SOURCE_DESC="$source_desc" \
 ROUND_ACTIVE="$round_active" \
+LATEST_COMPLETED="${latest_completed_round:-}" \
 python3 - "$tmpfile" <<'PY'
 import os
 import re
@@ -196,6 +198,7 @@ from collections import OrderedDict
 target_round = os.environ.get("TARGET_ROUND", "?")
 source_desc = os.environ.get("SOURCE_DESC", "")
 round_active = os.environ.get("ROUND_ACTIVE", "0") == "1"
+latest_completed = os.environ.get("LATEST_COMPLETED", "") or ""
 
 if len(sys.argv) < 2:
     lines: list[str] = []
@@ -211,12 +214,43 @@ for raw in lines:
     if not raw:
         entries.append({"raw": raw, "message": "", "timestamp": None, "level": None})
         continue
-    parts = raw.split(None, 2)
-    if len(parts) >= 3 and ts_pattern.match(parts[0]):
-        timestamp, level, message = parts[0], parts[1], parts[2]
-    else:
-        timestamp, level, message = None, None, raw
-    entries.append({"raw": raw, "message": message, "timestamp": timestamp, "level": level})
+    timestamp = None
+    level = None
+    message = ""
+
+    # Detect pm2-prefixed log lines (id|name|timestamp|level|module|message)
+    if raw.lstrip().split("|", 1)[0].strip().isdigit() if "|" in raw else False:
+        pm2_parts = raw.split("|", 5)
+        if len(pm2_parts) >= 6:
+            timestamp = pm2_parts[2].strip() or None
+            level = pm2_parts[3].strip() or None
+            message = pm2_parts[5].strip()
+        else:
+            message = pm2_parts[-1].strip()
+
+    if not message:
+        parts = raw.split(None, 2)
+        if len(parts) >= 3 and ts_pattern.match(parts[0]):
+            timestamp = timestamp or parts[0]
+            level = level or parts[1]
+            message = parts[2]
+        else:
+            message = raw
+
+    entries.append({"raw": raw, "message": message.strip(), "timestamp": timestamp, "level": level})
+
+pm2_prefix_regex = re.compile(r"^\s*\d+\|[^|]*\|\s*[^|]*\|\s*[^|]*\|\s*[^|]*\|\s*")
+
+def strip_pm2_prefix(text: str | None) -> str:
+    if not text:
+        return ""
+    return pm2_prefix_regex.sub("", text).strip()
+
+COLOR_TITLE = "\033[95m"
+COLOR_RESET = "\033[0m"
+COLOR_OK = "\033[92m"
+COLOR_WARN = "\033[93m"
+COLOR_FAIL = "\033[91m"
 
 def first_message(pattern: str) -> str | None:
     regex = re.compile(pattern)
@@ -274,7 +308,7 @@ def table_section() -> tuple[str | None, str | None, list[str]]:
 def format_section(title: str, lines: list[str]) -> None:
     if not lines:
         return
-    print(f"=== {title} ===")
+    print(f"{COLOR_TITLE}=== {title} ==={COLOR_RESET}")
     for line in lines:
         print(line)
     print()
@@ -338,8 +372,11 @@ phase = "unknown"
 phase_details: list[str] = []
 
 def append_detail(line: str) -> None:
-    if line and line not in phase_details:
-        phase_details.append(line)
+    if not line:
+        return
+    clean_line = strip_pm2_prefix(line)
+    if clean_line and clean_line not in phase_details:
+        phase_details.append(clean_line)
 
 if not round_active:
     phase = "completed"
@@ -382,14 +419,161 @@ if tasks_completed_last and round_active:
     if m:
         append_detail(f"Tasks completed so far: {m.group(1)}/{m.group(2)}")
 
+round_header_clean = strip_pm2_prefix(round_header)
+validator_uid = None
+hotkey_prefix = None
+if round_header_clean:
+    m_uid = re.search(r"validator_uid=([0-9]+)", round_header_clean)
+    if m_uid:
+        validator_uid = m_uid.group(1)
+    m_hotkey = re.search(r"hotkey=([^\s|]+)", round_header_clean)
+    if m_hotkey:
+        hotkey_prefix = m_hotkey.group(1)
+validator_round_id = round_info.get("Validator Round ID")
+if not validator_round_id and round_header_clean:
+    m_rid = re.search(r"validator_round_id=([^\s|]+)", round_header_clean)
+    if m_rid:
+        validator_round_id = m_rid.group(1)
+
+if round_active:
+    round_context_label = "CURRENT ROUND (in progress)"
+elif latest_completed and target_round == latest_completed:
+    round_context_label = "Latest completed round"
+elif latest_completed:
+    round_context_label = f"Historical round (latest completed: {latest_completed})"
+else:
+    round_context_label = "Historical round"
+
+def parse_int(text: str | None, pattern: str) -> int | None:
+    if not text:
+        return None
+    match = re.search(pattern, text)
+    if match:
+        try:
+            return int(match.group(1))
+        except Exception:
+            return None
+    return None
+
+def parse_int_pair(text: str | None, pattern: str) -> tuple[int | None, int | None]:
+    if not text:
+        return (None, None)
+    match = re.search(pattern, text)
+    if match:
+        try:
+            first = int(match.group(1))
+        except Exception:
+            first = None
+        try:
+            second = int(match.group(2))
+        except Exception:
+            second = None
+        return (first, second)
+    return (None, None)
+
+task_ready_clean = strip_pm2_prefix(task_ready)
+tasks_completed_clean = strip_pm2_prefix(tasks_completed_display)
+handshake_line_clean = strip_pm2_prefix(handshake_line)
+handshake_sent_clean = strip_pm2_prefix(handshake_sent_line) if handshake_sent_line else ""
+clean_winner = strip_pm2_prefix(winner_line)
+clean_aggregators = strip_pm2_prefix(aggregators_line)
+
+planned_tasks = parse_int(round_info.get("Tasks to Execute"), r"(\d+)")
+if planned_tasks is None:
+    planned_tasks = parse_int(task_ready_clean, r"Task list ready:\s*([0-9]+)")
+
+completed_tasks, completed_total = parse_int_pair(tasks_completed_clean, r"Tasks completed[:\s]*(\d+)\s*/\s*(\d+)")
+handshake_responded, handshake_total = parse_int_pair(handshake_line_clean, r"(\d+)\s*/\s*(\d+)\s*Miners Responded")
+
+consensus_published_clean = [strip_pm2_prefix(line) for line in consensus_published]
+consensus_commits_clean = [strip_pm2_prefix(line) for line in consensus_commits]
+consensus_fetch_clean = [strip_pm2_prefix(line) for line in consensus_fetch]
+consensus_meta_clean = [strip_pm2_prefix(line) for line in consensus_meta]
+score_updates_clean = [strip_pm2_prefix(line) for line in score_updates]
+
+consensus_upload_ok = any("✅" in line and "[IPFS] [UPLOAD]" in line for line in consensus_published_clean)
+consensus_commit_ok = any("✅" in line and "[IPFS] [BLOCKCHAIN]" in line for line in consensus_published_clean)
+consensus_fetch_ok = any("✅" in line for line in consensus_fetch_clean)
+final_weights_logged = any("Final weights" in line or "Updating scores" in line for line in score_updates_clean)
+winner_logged = bool(strip_pm2_prefix(winner_line))
+round_completion_logged = (not round_active) and any("Round completed" in strip_pm2_prefix(entry["message"]) for entry in entries[-10:])
+tasks_match_plan = None
+if planned_tasks is not None and completed_tasks is not None:
+    tasks_match_plan = completed_tasks >= planned_tasks
+
+handshake_ok = handshake_responded is not None and handshake_responded > 0
+fetch_aggregated_ok = any("Aggregated scores" in line or "Using aggregated scores" in line for line in consensus_meta_clean + consensus_fetch_clean)
+weights_set_ok = any("Updating scores for on-chain WTA winner" in line or "set_weights" in line.lower() for line in score_updates_clean + consensus_meta_clean)
+
+consensus_publish_status = consensus_upload_ok if consensus_published_clean else None
+if consensus_published_clean:
+    consensus_publish_detail = "upload success log" if consensus_upload_ok else "upload success missing"
+else:
+    consensus_publish_detail = "no upload logs"
+
+consensus_commit_status = consensus_commit_ok if consensus_published_clean else None
+if consensus_published_clean:
+    consensus_commit_detail = "commit success log" if consensus_commit_ok else "commit success missing"
+else:
+    consensus_commit_detail = "no commit logs"
+
+consensus_fetch_status = consensus_fetch_ok if consensus_fetch_clean else None
+if consensus_fetch_clean:
+    consensus_fetch_detail = "fetch success log" if consensus_fetch_ok else "fetch success missing"
+else:
+    consensus_fetch_detail = "no fetch logs"
+
+aggregated_status = fetch_aggregated_ok if consensus_meta_clean or consensus_fetch_clean else None
+if consensus_meta_clean or consensus_fetch_clean:
+    aggregated_detail = "aggregated scores success" if fetch_aggregated_ok else "aggregated scores missing"
+else:
+    aggregated_detail = "no aggregation logs"
+
+final_weights_status = final_weights_logged if score_updates_clean else None
+if score_updates_clean:
+    final_weights_detail = "final weight log" if final_weights_logged else "final weight log missing"
+else:
+    final_weights_detail = "no final weight logs"
+
+weights_set_status = weights_set_ok if score_updates_clean or consensus_meta_clean else None
+if score_updates_clean or consensus_meta_clean:
+    weights_set_detail = "weight update log" if weights_set_ok else "weight update missing"
+else:
+    weights_set_detail = "no weight update logs"
+
+checks: list[tuple[str, bool | None, str]] = []
+checks.append(("Tasks executed", tasks_match_plan, f"{completed_tasks or '?'} / {planned_tasks or '?'} tasks"))
+checks.append(("Task completion log present", bool(tasks_completed_clean), tasks_completed_clean or "missing"))
+if handshake_line_clean:
+    checks.append(("Handshake responses", handshake_ok, f"{handshake_responded or 0}/{handshake_total or '?'} responded"))
+else:
+    checks.append(("Handshake responses", None, "no handshake info"))
+checks.append(("Consensus publish (IPFS)", consensus_publish_status, consensus_publish_detail))
+checks.append(("Consensus commit on-chain", consensus_commit_status, consensus_commit_detail))
+checks.append(("Consensus fetch", consensus_fetch_status, consensus_fetch_detail))
+checks.append(("Aggregated scores fetched", aggregated_status, aggregated_detail))
+checks.append(("Winner recorded", winner_logged if not round_active else winner_logged or None, clean_winner or "Winner missing"))
+checks.append(("Final weights logged", final_weights_status, final_weights_detail))
+checks.append(("Weights set on-chain", weights_set_status, weights_set_detail))
+checks.append(("Round completion marker", round_completion_logged if not round_active else None, "Round completed log"))
+
 print(f"Validator round report (round {target_round})")
 if source_desc:
     print(f"Source: {source_desc}")
 print()
 
 print("=== Round Overview ===")
-if round_header:
-    print(round_header)
+headline = f"ROUND: {target_round}"
+if validator_uid:
+    headline += f" | Validator UID: {validator_uid}"
+if hotkey_prefix:
+    headline += f" | Hotkey: {hotkey_prefix}"
+print(headline)
+print(f"Round context: {round_context_label}")
+if validator_round_id:
+    print(f"Validator Round ID: {validator_round_id}")
+if round_header_clean:
+    print(round_header_clean)
 print(f"Start mode: {resume_status}")
 print(f"Current round: {target_round}")
 status_line = f"Status: {status_label}"
@@ -419,24 +603,34 @@ print()
 
 markers: list[str] = []
 if entries:
-    markers.append(entries[0]["raw"])
-    markers.append(entries[-1]["raw"])
+    markers.append(strip_pm2_prefix(entries[0]["raw"]))
+    markers.append(strip_pm2_prefix(entries[-1]["raw"]))
 format_section("Round markers", markers)
+
+def format_check_row(label: str, status: bool | None, detail: str) -> str:
+    if status is None:
+        return f"{COLOR_WARN}[--]{COLOR_RESET} {label}: {detail}"
+    if status:
+        return f"{COLOR_OK}[OK]{COLOR_RESET} {label}: {detail}"
+    return f"{COLOR_FAIL}[FAIL]{COLOR_RESET} {label}: {detail}"
+
+check_lines = [format_check_row(label, status, detail) for label, status, detail in checks]
+format_section("Health checks", check_lines)
 
 tasks_section: list[str] = []
 if task_ready:
-    tasks_section.append(task_ready)
+    tasks_section.append(task_ready_clean)
 if "Tasks to Execute" in round_info:
     tasks_section.append(f"Planned tasks: {round_info['Tasks to Execute']}")
 if tasks_completed_display:
-    tasks_section.append(tasks_completed_display)
+    tasks_section.append(tasks_completed_clean)
 format_section("Tasks", tasks_section)
 
 miners_section: list[str] = []
 if handshake_line:
-    miners_section.append(handshake_line)
-if handshake_sent_line and handshake_sent_line not in miners_section:
-    miners_section.append(handshake_sent_line)
+    miners_section.append(handshake_line_clean)
+if handshake_sent_clean and handshake_sent_clean not in miners_section:
+    miners_section.append(handshake_sent_clean)
 if miner_rows_count:
     miners_section.append(f"Miners evaluated (from summary table): {miner_rows_count}")
 format_section("Miners", miners_section)
@@ -455,28 +649,35 @@ if table_title or table_header or table_rows:
     format_section("Round Summary table", table_lines)
 
 score_lines = []
-if winner_line:
-    score_lines.append(winner_line)
-if aggregators_line:
-    score_lines.append(aggregators_line)
-for line in score_updates:
-    if line not in score_lines:
+if clean_winner:
+    score_lines.append(clean_winner)
+if clean_aggregators:
+    score_lines.append(clean_aggregators)
+for line in score_updates_clean:
+    if line and line not in score_lines:
         score_lines.append(line)
 format_section("Scores & winners", score_lines)
 
 consensus_section: list[str] = []
-consensus_section.extend(consensus_published)
-consensus_section.extend(consensus_commits)
+for line in consensus_published_clean:
+    if line:
+        consensus_section.append(line)
+for line in consensus_commits_clean:
+    if line:
+        consensus_section.append(line)
 format_section("Consensus publish", consensus_section)
 
 fetch_section: list[str] = []
-fetch_section.extend(consensus_fetch)
-for line in consensus_meta:
-    if line not in fetch_section and "[UPLOAD]" not in line:
+for line in consensus_fetch_clean:
+    if line:
+        fetch_section.append(line)
+for line in consensus_meta_clean:
+    if line and line not in fetch_section:
         fetch_section.append(line)
 for line in commitment_mentions:
-    if line not in fetch_section:
-        fetch_section.append(line)
+    clean_line = strip_pm2_prefix(line)
+    if clean_line and clean_line not in fetch_section:
+        fetch_section.append(clean_line)
 format_section("Consensus fetch & shared scores", fetch_section)
 PY
 rm -f "$tmpfile"
