@@ -754,6 +754,13 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
                     bt.logging.error(f"[CONSENSUS] Traceback:\n{traceback.format_exc()}")
                     bt.logging.error("=" * 80)
+                if not self._finalized_this_round:
+                    bt.logging.info("[CONSENSUS] Finalizing immediately after consensus publish window")
+                    try:
+                        await self._calculate_final_weights(tasks_completed)
+                        self._finalized_this_round = True
+                    except Exception as e:
+                        bt.logging.warning(f"Immediate finalize failed; will retry later: {e}")
                 break
             if not self.round_manager.should_send_next_task(current_block):
                 ColoredLogger.warning(
@@ -808,6 +815,13 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
                         bt.logging.error(f"[CONSENSUS] Traceback:\n{traceback.format_exc()}")
                         bt.logging.error("=" * 80)
+                if not self._finalized_this_round:
+                    bt.logging.info("[CONSENSUS] Finalizing immediately after safety-buffer publish")
+                    try:
+                        await self._calculate_final_weights(tasks_completed)
+                        self._finalized_this_round = True
+                    except Exception as e:
+                        bt.logging.warning(f"Immediate finalize failed; will retry later: {e}")
                 break
 
         # ═══════════════════════════════════════════════════════
@@ -855,6 +869,13 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
                 bt.logging.error(f"[CONSENSUS] Traceback:\n{traceback.format_exc()}")
                 bt.logging.error("=" * 80)
+            if not self._finalized_this_round:
+                bt.logging.info("[CONSENSUS] Finalizing immediately after all-tasks completion publish")
+                try:
+                    await self._calculate_final_weights(tasks_completed)
+                    self._finalized_this_round = True
+                except Exception as e:
+                    bt.logging.warning(f"Immediate finalize failed; will retry later: {e}")
 
         # ═══════════════════════════════════════════════════════
         # WAIT FOR TARGET EPOCH: Wait until the round ends
