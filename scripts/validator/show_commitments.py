@@ -8,6 +8,10 @@ import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from rich.console import Console  # type: ignore
+from rich.table import Table  # type: ignore
+from rich import box  # type: ignore
+
 from bittensor import AsyncSubtensor  # type: ignore
 
 from autoppia_web_agents_subnet.utils.commitments import read_all_plain_commitments
@@ -133,6 +137,38 @@ async def _fetch_payload(
         return None, None, f"{type(exc).__name__}: {exc}"
 
 
+def _chunked(seq: Sequence[Any], n: int) -> List[List[Any]]:
+    if n <= 0:
+        n = 1
+    return [list(seq[i : i + n]) for i in range(0, len(seq), n)]
+
+
+def _print_scores_rich(
+    items: List[Tuple[str, List[Tuple[int, float]]]],
+    *,
+    cols: int = 4,
+) -> None:
+    if not items:
+        return
+    console = Console()
+    for label, parsed_scores in items:
+        cells = [f"{uid}: {score:.4f}" for uid, score in parsed_scores]
+        table = Table(
+            title=f"{label} miner scores ({len(parsed_scores)})",
+            show_header=False,
+            box=box.SIMPLE_HEAVY,
+            pad_edge=False,
+        )
+        for _ in range(max(1, cols)):
+            table.add_column(justify="left", style="cyan")
+        for row in _chunked(cells, max(1, cols)):
+            # pad row if short
+            if len(row) < cols:
+                row = row + [""] * (cols - len(row))
+            table.add_row(*row)
+        console.print(table)
+
+
 def _select_recent_rounds(
     commits: Dict[str, Any],
 ) -> Dict[int, List[Tuple[str, Dict[str, Any]]]]:
@@ -158,10 +194,13 @@ def _round_label(round_number: Optional[int], target_epoch: Optional[int]) -> st
     return "unknown round"
 
 
-def _score_summary(payload: Dict[str, Any]) -> Tuple[int, str]:
+def _score_summary(
+    payload: Dict[str, Any],
+    limit: int = 3,
+) -> Tuple[int, str, List[Tuple[int, float]]]:
     scores = payload.get("scores")
     if not isinstance(scores, dict):
-        return 0, "scores unavailable"
+        return 0, "scores unavailable", []
 
     parsed: List[Tuple[int, float]] = []
     for uid_str, score_val in scores.items():
@@ -170,13 +209,19 @@ def _score_summary(payload: Dict[str, Any]) -> Tuple[int, str]:
         except Exception:
             continue
 
+    # sort descending by score
+    parsed.sort(key=lambda item: item[1], reverse=True)
+
     count = len(parsed)
     if count == 0:
-        return 0, "scores empty"
+        return 0, "scores empty", []
 
-    top = sorted(parsed, key=lambda item: item[1], reverse=True)[:3]
-    top_str = ", ".join(f"{uid}:{score:.4f}" for uid, score in top)
-    return count, f"top {top_str}"
+    if limit and limit > 0:
+        top = parsed[:limit]
+        top_str = ", ".join(f"{uid}:{score:.4f}" for uid, score in top)
+        return count, f"top {top_str}", parsed
+    else:
+        return count, f"all {count} scores listed", parsed
 
 
 def _score_stats(
@@ -206,7 +251,9 @@ def _render_validator_table(
     validators: List[ValidatorCommitment],
     *,
     total_weight: float,
-) -> Tuple[str, List[str]]:
+    scores_limit: int = 3,
+    scores_cols: int = 4,
+) -> Tuple[str, List[str], List[Tuple[str, List[Tuple[int, float]]]]]:
     headers = [
         "validator",
         "uid",
@@ -225,6 +272,7 @@ def _render_validator_table(
 
     rows: List[List[str]] = []
     extra: List[str] = []
+    scores_tables: List[Tuple[str, List[Tuple[int, float]]]] = []
 
     for item in validators:
         weight_pct = (item.stake_tao / total_weight) * 100.0 if total_weight else 0.0
@@ -249,6 +297,7 @@ def _render_validator_table(
         tasks = "-"
         agents = "-"
         top_line: Optional[str] = None
+        parsed_scores: List[Tuple[int, float]] = []
 
         if item.payload_error:
             extra.append(
@@ -258,7 +307,9 @@ def _render_validator_table(
             extra.append(f"      {item.hotkey[:10]}… payload missing")
         else:
             payload = item.payload
-            scores_count, top_line = _score_summary(payload)
+            scores_count, top_line, parsed_scores = _score_summary(
+                payload, limit=scores_limit
+            )
             count_stats, mean, stddev, variance = _score_stats(payload.get("scores"))
             scores_count = count_stats
             tasks_val = payload.get("tasks_completed") or payload.get("n")
@@ -269,6 +320,9 @@ def _render_validator_table(
                 agents = str(agents_val)
             if top_line:
                 extra.append(f"      {item.hotkey[:10]}… {top_line}")
+            # When scores_limit <= 0, collect full miner scores for Rich table rendering
+            if parsed_scores and scores_limit <= 0:
+                scores_tables.append((f"{item.hotkey[:10]}…", parsed_scores))
 
         mean_text = f"{mean:.4f}" if mean is not None else "-"
         std_text = f"{stddev:.4f}" if stddev is not None else "-"
@@ -294,7 +348,7 @@ def _render_validator_table(
         )
 
     if not rows:
-        return "", extra
+        return "", extra, scores_tables
 
     col_widths = [len(header) for header in headers]
     for row in rows:
@@ -311,7 +365,7 @@ def _render_validator_table(
         table_lines.append(_fmt_row(row))
     table_lines.append(divider)
 
-    return "\n".join(table_lines), extra
+    return "\n".join(table_lines), extra, scores_tables
 
 
 def _decode_weight_payload(raw: Any) -> Dict[int, int]:
@@ -458,6 +512,8 @@ async def inspect_rounds(
     include_below: bool,
     ipfs_api: Optional[str],
     gateways: Optional[Sequence[str]],
+    scores_limit: int,
+    scores_cols: int,
 ) -> None:
     if rounds <= 0:
         rounds = 1
@@ -639,9 +695,11 @@ async def inspect_rounds(
             validators.sort(key=lambda v: v.stake_tao, reverse=True)
             total_weight = sum(filter(None, (v.stake_tao for v in validators)))
 
-            table_text, extra_lines = _render_validator_table(
+            table_text, extra_lines, scores_tables = _render_validator_table(
                 validators,
                 total_weight=total_weight,
+                scores_limit=scores_limit,
+                scores_cols=scores_cols,
             )
             print(
                 f"  • validators_considered={len(validators)} "
@@ -653,6 +711,9 @@ async def inspect_rounds(
                 print(table_text)
             for line in extra_lines:
                 print(line)
+            # When showing all miner scores, render them as Rich tables
+            if scores_tables:
+                _print_scores_rich(scores_tables, cols=scores_cols)
 
             if target_block > current_block:
                 print("  • weights unavailable (round still active)")
@@ -756,6 +817,23 @@ def parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
         default=None,
         help="Comma-separated list of IPFS gateways to try when fetching payloads.",
     )
+    parser.add_argument(
+        "--scores-limit",
+        type=int,
+        default=0,
+        help=(
+            "Number of top miner scores to show per validator (default: all). "
+            "Use 0 for all, or a positive N for top-N."
+        ),
+    )
+    parser.add_argument(
+        "--scores-cols",
+        type=int,
+        default=4,
+        help=(
+            "Number of columns to use when printing full miner scores (default: 4)."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -780,6 +858,8 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
                 include_below=args.include_below,
                 ipfs_api=args.ipfs_api,
                 gateways=gateways,
+                scores_limit=args.scores_limit,
+                scores_cols=args.scores_cols,
             )
         )
     except KeyboardInterrupt:  # pragma: no cover - user abort
