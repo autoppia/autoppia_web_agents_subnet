@@ -239,12 +239,25 @@ for raw in lines:
 
     entries.append({"raw": raw, "message": message.strip(), "timestamp": timestamp, "level": level})
 
-pm2_prefix_regex = re.compile(r"^\s*\d+\|[^|]*\|\s*[^|]*\|\s*[^|]*\|\s*[^|]*\|\s*")
-
 def strip_pm2_prefix(text: str | None) -> str:
     if not text:
         return ""
-    return pm2_prefix_regex.sub("", text).strip()
+    raw = text.rstrip()
+    if "|" not in raw:
+        return raw.strip()
+    parts = raw.split("|", 5)
+    if not parts or not parts[0].strip().isdigit():
+        return raw.strip()
+    # Drop id and name segments when present
+    remainder = parts[1:]
+    if remainder:
+        remainder = remainder[1:]
+    message = remainder[-1] if remainder else ""
+    if not message and remainder:
+        message = remainder[-1]
+    if not message and parts:
+        message = parts[-1]
+    return message.strip()
 
 COLOR_TITLE = "\033[95m"
 COLOR_RESET = "\033[0m"
@@ -282,6 +295,7 @@ def table_section() -> tuple[str | None, list[str]]:
     title = None
     block: list[str] = []
     capturing = False
+    stop_tokens = ("[IPFS]", "[CONSENSUS]", "Round stats", "Scattered rewards", "Updated moving avg", "Tasks completed", "Winner", "Round completed")
     for entry in entries:
         msg = entry["message"]
         raw = strip_pm2_prefix(entry["raw"])
@@ -294,8 +308,9 @@ def table_section() -> tuple[str | None, list[str]]:
         if not capturing:
             continue
         if not display.strip():
-            break
-        if any(token in display for token in ("Round completed", "Winner", "Tasks completed", "Consensus")):
+            block.append("")
+            continue
+        if any(token in display for token in stop_tokens):
             break
         block.append(display)
     return title, block
@@ -343,9 +358,14 @@ def count_table_rows(lines: list[str]) -> int:
     count = 0
     for line in lines:
         stripped = line.strip()
-        if not stripped or "#" in stripped and stripped.upper().startswith("#"):
+        if not stripped:
             continue
-        if re.match(r"^[0-9]+", stripped) or re.match(r"^[│|]+\s*[0-9]+", stripped):
+        stripped = stripped.lstrip("│┣┫┠┨┤┘└┴┬┼─━┄┅┆┇┈┉┊┋ ")
+        if not stripped:
+            continue
+        if stripped.startswith("#"):
+            continue
+        if re.match(r"^\d+", stripped):
             count += 1
     return count
 
