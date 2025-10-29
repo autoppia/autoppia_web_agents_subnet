@@ -32,8 +32,6 @@ from autoppia_web_agents_subnet.validator.config import (
     BURN_UID,
 )
 from autoppia_web_agents_subnet.validator.tasks import get_task_collection_interleaved, collect_task_solutions_and_execution_times
-from autoppia_iwa.src.demo_webs.classes import WebProject
-from autoppia_iwa.src.data_generation.domain.classes import Task
 from autoppia_web_agents_subnet.validator.synapse_handlers import (
     send_start_round_synapse_to_miners,
     send_task_synapse_to_miners,
@@ -306,7 +304,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 if (not at_boundary) and (frac >= float(SKIP_ROUND_IF_STARTED_AFTER_FRACTION)):
                     minutes_remaining = (blocks_to_target * self.round_manager.SECONDS_PER_BLOCK) / 60
                     ColoredLogger.warning(
-                        (f"⏭️ Fresh start late in round: {frac*100:.1f}% >= " f"{float(SKIP_ROUND_IF_STARTED_AFTER_FRACTION)*100:.0f}% — skipping to next round"),
+                        (f"⏭️ Fresh start late in round: {frac * 100:.1f}% >= " f"{float(SKIP_ROUND_IF_STARTED_AFTER_FRACTION) * 100:.0f}% — skipping to next round"),
                         ColoredLogger.YELLOW,
                     )
                     ColoredLogger.info(
@@ -1321,7 +1319,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
     async def _calculate_final_weights(self, tasks_completed: int):
         """Calculate averages, apply WTA, set weights"""
         bt.logging.info("=" * 80)
-        bt.logging.info(f"[CONSENSUS] Phase: SetWeights - Calculating final weights")
+        bt.logging.info("[CONSENSUS] Phase: SetWeights - Calculating final weights")
         bt.logging.info(f"[CONSENSUS] Distributed consensus: {str(ENABLE_DISTRIBUTED_CONSENSUS).lower()}")
         bt.logging.info("=" * 80)
 
@@ -1350,7 +1348,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         if ENABLE_DISTRIBUTED_CONSENSUS:
             try:
                 boundaries = self.round_manager.get_current_boundaries()
-                bt.logging.info(f"[CONSENSUS] Aggregating scores from other validators...")
+                bt.logging.info("[CONSENSUS] Aggregating scores from other validators...")
                 # Prefer cached mid-settlement aggregation if available
                 agg = self._agg_scores_cache or {}
                 agg_meta = None
@@ -1372,7 +1370,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     bt.logging.info(consensus_tag(f"📥 FETCH COMMITS @ {FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION:.0%}"))
                     bt.logging.info(consensus_tag(f"Progress: {progress_now:.2f}"))
                     bt.logging.info(consensus_tag(f"Current Block: {current_block_now:,}"))
-                    bt.logging.info(consensus_tag(f"Fetching commitments from IPFS to aggregate scores"))
+                    bt.logging.info(consensus_tag("Fetching commitments from IPFS to aggregate scores"))
                     bt.logging.info("=" * 80)
 
                     # Natural gap between STOP and FETCH ensures propagation
