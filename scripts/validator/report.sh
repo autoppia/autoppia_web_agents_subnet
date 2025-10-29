@@ -278,32 +278,27 @@ def collect_messages(pattern: str) -> list[str]:
                 results.append(msg)
     return results
 
-def table_section() -> tuple[str | None, str | None, list[str]]:
+def table_section() -> tuple[str | None, list[str]]:
     title = None
-    header = None
-    rows: list[str] = []
+    block: list[str] = []
     capturing = False
     for entry in entries:
         msg = entry["message"]
+        raw = strip_pm2_prefix(entry["raw"])
+        display = msg.strip() or raw
         if "Round Summary — Miners" in msg:
-            title = msg
+            title = display
+            block.append(title)
             capturing = True
             continue
         if not capturing:
             continue
-        stripped = msg.strip()
-        if not stripped:
-            continue
-        if stripped.startswith("#"):
-            header = stripped
-            continue
-        if re.match(r"^\d+\s+", stripped):
-            rows.append(stripped)
-            continue
-        # Stop capturing once we have rows and encounter unrelated text
-        if rows or header:
+        if not display.strip():
             break
-    return title, header, rows
+        if any(token in display for token in ("Round completed", "Winner", "Tasks completed", "Consensus")):
+            break
+        block.append(display)
+    return title, block
 
 def format_section(title: str, lines: list[str]) -> None:
     if not lines:
@@ -342,7 +337,17 @@ for entry in entries:
     if match:
         round_details_lines.append(match.group(1))
 
-table_title, table_header, table_rows = table_section()
+table_title, table_block = table_section()
+
+def count_table_rows(lines: list[str]) -> int:
+    count = 0
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or "#" in stripped and stripped.upper().startswith("#"):
+            continue
+        if re.match(r"^[0-9]+", stripped) or re.match(r"^[│|]+\s*[0-9]+", stripped):
+            count += 1
+    return count
 
 resume_status = None
 if round_header:
@@ -363,7 +368,7 @@ for entry in round_details_lines:
 handshake_line = first_message(r"Handshake Results")
 handshake_sent_line = first_message(r"Handshake sent")
 
-miner_rows_count = len(table_rows)
+miner_rows_count = count_table_rows(table_block[1:] if table_block else [])
 if miner_rows_count == 0:
     miner_rows_count = len(collect_messages(r"Score=\d"))
 
@@ -635,17 +640,14 @@ if miner_rows_count:
     miners_section.append(f"Miners evaluated (from summary table): {miner_rows_count}")
 format_section("Miners", miners_section)
 
-if table_title or table_header or table_rows:
+if table_title or table_block:
     table_lines = []
-    if table_title:
+    if table_block:
+        table_lines.extend(table_block)
+    elif table_title:
         table_lines.append(table_title)
-        if f"Round {target_round}" not in table_title:
-            table_lines.append(f"(Current round: {target_round})")
-    else:
-        table_lines.append(f"Round Summary — Miners — Round {target_round}")
-    if table_header:
-        table_lines.append(table_header)
-    table_lines.extend(table_rows)
+    if table_lines and f"Round {target_round}" not in table_lines[0]:
+        table_lines.insert(0, f"Round Summary — Miners — Round {target_round}")
     format_section("Round Summary table", table_lines)
 
 score_lines = []

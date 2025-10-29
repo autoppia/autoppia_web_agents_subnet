@@ -329,6 +329,11 @@ def _render_validator_table(
         var_text = f"{variance:.4f}" if variance is not None else "-"
         scores_text = str(scores_count) if scores_count else "-"
 
+        if item.cid:
+            extra.append(f"      {item.hotkey[:10]}… cid={item.cid}")
+        if item.payload_hash:
+            extra.append(f"      {item.hotkey[:10]}… payload_sha256={item.payload_hash}")
+
         rows.append(
             [
                 f"{item.hotkey[:10]}…",
@@ -594,6 +599,7 @@ async def inspect_rounds(
                 continue
 
             validators: List[ValidatorCommitment] = []
+            below_min_validators: List[ValidatorCommitment] = []
             reported_rounds: List[int] = []
             base_epochs: List[int] = []
 
@@ -610,23 +616,23 @@ async def inspect_rounds(
                 raw_cid = entry.get("c")
                 cid_text = str(raw_cid) if raw_cid else None
 
-                _, preview_stake = stake_for_hotkey(hotkey)
-                if not include_below and preview_stake < min_stake:
-                    continue
-
                 uid, stake_tao = stake_for_hotkey(hotkey)
 
-                validators.append(
-                    ValidatorCommitment(
-                        hotkey=hotkey,
-                        uid=uid,
-                        stake_tao=stake_tao,
-                        cid=cid_text,
-                        round_number=round_int,
-                        epoch=epoch_val,
-                        target_epoch=target_epoch,
-                    )
+                record = ValidatorCommitment(
+                    hotkey=hotkey,
+                    uid=uid,
+                    stake_tao=stake_tao,
+                    cid=cid_text,
+                    round_number=round_int,
+                    epoch=epoch_val,
+                    target_epoch=target_epoch,
                 )
+
+                if not include_below and stake_tao < min_stake:
+                    below_min_validators.append(record)
+                    continue
+
+                validators.append(record)
                 if round_int is not None:
                     reported_rounds.append(round_int)
                 if epoch_val is not None:
@@ -671,14 +677,10 @@ async def inspect_rounds(
             ):
                 print(f"  • derived_round_index≈{derived_round}")
 
-            if not validators:
-                print(
-                    f"  • No validators meet stake ≥ {min_stake:.2f} τ for this window"
-                )
-                continue
+            combined_commitments = validators + below_min_validators
 
             payload_tasks: List[Tuple[ValidatorCommitment, asyncio.Task]] = []
-            for item in validators:
+            for item in combined_commitments:
                 if not item.cid:
                     continue
                 task = asyncio.create_task(
@@ -695,25 +697,56 @@ async def inspect_rounds(
             validators.sort(key=lambda v: v.stake_tao, reverse=True)
             total_weight = sum(filter(None, (v.stake_tao for v in validators)))
 
-            table_text, extra_lines, scores_tables = _render_validator_table(
-                validators,
-                total_weight=total_weight,
-                scores_limit=scores_limit,
-                scores_cols=scores_cols,
-            )
-            print(
-                f"  • validators_considered={len(validators)} "
-                f"(stake ≥ {min_stake:.2f} τ)"
-            )
-            if total_weight > 0:
-                print(f"  • total_stake={total_weight:,.2f} τ")
-            if table_text:
-                print(table_text)
-            for line in extra_lines:
-                print(line)
-            # When showing all miner scores, render them as Rich tables
-            if scores_tables:
-                _print_scores_rich(scores_tables, cols=scores_cols)
+            if not validators:
+                print(
+                    f"  • No validators meet stake ≥ {min_stake:.2f} τ for this window"
+                )
+            else:
+                table_text, extra_lines, scores_tables = _render_validator_table(
+                    validators,
+                    total_weight=total_weight,
+                    scores_limit=scores_limit,
+                    scores_cols=scores_cols,
+                )
+                print(
+                    f"  • validators_considered={len(validators)} "
+                    f"(stake ≥ {min_stake:.2f} τ)"
+                )
+                if total_weight > 0:
+                    print(f"  • total_stake={total_weight:,.2f} τ")
+                if table_text:
+                    print(table_text)
+                for line in extra_lines:
+                    print(line)
+                # When showing all miner scores, render them as Rich tables
+                if scores_tables:
+                    _print_scores_rich(scores_tables, cols=scores_cols)
+
+            if below_min_validators:
+                below_min_validators.sort(
+                    key=lambda v: v.stake_tao, reverse=True
+                )
+                below_total = sum(
+                    filter(None, (v.stake_tao for v in below_min_validators))
+                )
+                print(
+                    f"  • validators_below_min_stake={len(below_min_validators)} "
+                    f"(stake < {min_stake:.2f} τ)"
+                )
+                if below_total > 0:
+                    print(f"  • total_stake_below={below_total:,.2f} τ")
+                table_text, extra_lines, scores_tables = _render_validator_table(
+                    below_min_validators,
+                    total_weight=below_total,
+                    scores_limit=scores_limit,
+                    scores_cols=scores_cols,
+                )
+                if table_text:
+                    print(table_text)
+                for line in extra_lines:
+                    print(line)
+                if scores_tables:
+                    _print_scores_rich(scores_tables, cols=scores_cols)
 
             if target_block > current_block:
                 print("  • weights unavailable (round still active)")
