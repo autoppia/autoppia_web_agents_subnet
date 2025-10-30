@@ -1,19 +1,28 @@
-"""
-Utilities shared by validator reporting and monitoring scripts.
+"""Validator reporting toolkit grouped by concerns (analysis, batch, monitor, legacy, tools)."""
 
-This package centralizes helpers that were previously duplicated across
-stand-alone scripts so they can share configuration, IO helpers, and
-email delivery plumbing.
-"""
+from __future__ import annotations
 
-from .emailing import EmailConfig, load_email_config_from_env, parse_recipients, send_email
-from .state import load_last_state, save_last_state
+import importlib
+from types import ModuleType
+from typing import Any
 
 __all__ = [
-    "EmailConfig",
-    "load_email_config_from_env",
-    "parse_recipients",
-    "send_email",
-    "load_last_state",
-    "save_last_state",
+    "analysis",
+    "batch",
+    "common",
+    "legacy",
+    "monitor",
+    "tools",
 ]
+
+
+def __getattr__(name: str) -> ModuleType:
+    if name in __all__:
+        module = importlib.import_module(f"{__name__}.{name}")
+        globals()[name] = module
+        return module
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__() -> list[str]:
+    return sorted(__all__ + list(globals().keys()))

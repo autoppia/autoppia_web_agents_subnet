@@ -20,11 +20,19 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-sys.path.append(str(Path(__file__).resolve().parent))
-from monitor_rounds import read_env, send_email  # noqa: E402
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parents[2]
+
+if __package__ in (None, ""):
+    sys.path.append(str(PROJECT_ROOT))
+    from reporting.common import send_email  # type: ignore
+    from reporting.monitor.loop import load_monitor_email_config, read_env  # type: ignore
+else:  # pragma: no cover
+    from ..common import send_email
+    from ..monitor.loop import load_monitor_email_config, read_env
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[4]
 DEFAULT_STATE_FILE = REPO_ROOT / "data" / "monitor" / "last_summary_round.txt"
 SUMMARY_SCRIPT = Path(__file__).resolve().with_name("summary.sh")
 ROUND_RE = re.compile(r"Validator round summary \(round (\d+)\)")
@@ -175,6 +183,11 @@ def main() -> None:
 
     state_path = Path(args.state_file).expanduser()
 
+    try:
+        email_config = load_monitor_email_config()
+    except Exception as exc:  # noqa: BLE001
+        raise SystemExit(f"Failed to load email configuration: {exc}") from exc
+
     if args.round_forced is not None:
         target_round = str(args.round_forced)
         try:
@@ -189,7 +202,7 @@ def main() -> None:
             print(summary_out)
             return
         try:
-            send_email(subject, html_body, text_body)
+            send_email(email_config, subject, html_body, text_body)
             print(f"[summary-monitor] emailed summary for round {target_round}")
         except Exception as exc:  # noqa: BLE001
             raise SystemExit(f"Failed to send email: {exc}") from exc
@@ -268,7 +281,7 @@ def main() -> None:
             continue
 
         try:
-            send_email(subject, html_body, text_body)
+            send_email(email_config, subject, html_body, text_body)
             print(f"[summary-monitor] emailed summary for round {target_round}")
             save_state(state_path, target_round)
             last_round = target_round

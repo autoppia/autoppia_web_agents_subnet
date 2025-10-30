@@ -1,5 +1,15 @@
 from __future__ import annotations
 
+"""
+Continuous monitor that watches pm2 logs for round completion and emails a
+summary report every round (~4 epochs).
+
+Usage example under pm2:
+  pm2 start autoppia_web_agents_subnet/scripts/validator/reporting/monitor_rounds.py --name monitor-rounds \
+    --interpreter python3 -- \
+    --pm2 11 --netuid 36 --network finney
+"""
+
 import argparse
 import os
 import re
@@ -11,8 +21,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional, Sequence
 
-from .emailing import EmailConfig, load_email_config_from_env, send_email
-from .state import load_last_state, save_last_state
+from ..common import EmailConfig, load_email_config_from_env, load_last_state, save_last_state, send_email
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ROUND_COMPLETE_MARK = "✅ Round complete"
@@ -71,6 +80,8 @@ def extract_score_snippet(lines: Sequence[str], marker_index: int) -> str:
 def run_analyzer(pm2_identifier: str, netuid: int, network: Optional[str], lines: int) -> str:
     """Invoke the analyzer helper script to gather GPT-5 insights."""
     candidates = [
+        REPO_ROOT / "autoppia_web_agents_subnet" / "scripts" / "validator" / "reporting" / "analysis" / "analyze_validator_logs.py",
+        REPO_ROOT / "scripts" / "validator" / "reporting" / "analysis" / "analyze_validator_logs.py",
         REPO_ROOT / "autoppia_web_agents_subnet" / "scripts" / "validator" / "analyze_validator_logs.py",
         REPO_ROOT / "scripts" / "validator" / "analyze_validator_logs.py",
     ]
@@ -104,6 +115,8 @@ def run_analyzer(pm2_identifier: str, netuid: int, network: Optional[str], lines
 def run_show_commitments(netuid: int, network: Optional[str], count: int = 1) -> str:
     """Invoke show_commitments helper to capture latest stakes snapshot."""
     candidates = [
+        REPO_ROOT / "autoppia_web_agents_subnet" / "scripts" / "validator" / "reporting" / "tools" / "show_commitments.py",
+        REPO_ROOT / "scripts" / "validator" / "reporting" / "tools" / "show_commitments.py",
         REPO_ROOT / "autoppia_web_agents_subnet" / "scripts" / "validator" / "show_commitments.py",
         REPO_ROOT / "scripts" / "validator" / "show_commitments.py",
     ]

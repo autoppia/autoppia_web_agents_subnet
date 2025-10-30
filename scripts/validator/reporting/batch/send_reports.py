@@ -3,10 +3,19 @@ from __future__ import annotations
 
 import os
 import socket
+import sys
 from datetime import datetime
+from pathlib import Path
 
-from reporting.emailing import EmailConfig, parse_recipients, send_email
-from reporting.forward import ForwardReportData, ForwardReportPaths, build_forward_report_data
+PACKAGE_ROOT = Path(__file__).resolve().parents[2]
+
+if __package__ in (None, ""):
+    sys.path.append(str(PACKAGE_ROOT))
+    from reporting.batch.forward import ForwardReportData, ForwardReportPaths, build_forward_report_data  # type: ignore
+    from reporting.common import EmailConfig, parse_recipients, send_email  # type: ignore
+else:  # pragma: no cover
+    from ..common import EmailConfig, parse_recipients, send_email
+    from .forward import ForwardReportData, ForwardReportPaths, build_forward_report_data
 
 from html_report_template import render_html_report
 
@@ -50,7 +59,7 @@ def main() -> None:
 
     report_data = build_report_payload()
     host = socket.gethostname()
-    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     body_html = render_html_report(
         report_data.forwards_table,
@@ -59,10 +68,10 @@ def main() -> None:
         report_data.last_forward_tasks,
         report_data.task_summary,
         host,
-        now,
+        timestamp,
     )
-    body_text = f"Autoppia Web Agents Report – {now}\nVer versión HTML."
-    subject = f"[Autoppia] Reporte horario – {now}"
+    body_text = f"Autoppia Web Agents Report – {timestamp}\nVer versión HTML."
+    subject = f"[Autoppia] Reporte horario – {timestamp}"
     send_email(email_config, subject, body_html, body_text)
     print("✅ Email enviado.")
 
