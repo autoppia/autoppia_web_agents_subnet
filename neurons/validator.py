@@ -142,7 +142,12 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         bt.logging.info("🚀 Starting round-based forward")
 
         # Get current block and prevent early round execution
-        current_block = self.metagraph.block.item()
+        # Use subtensor height for real-time boundary checks to avoid stale metagraph heights
+        try:
+            current_block = int(self.subtensor.get_current_block())
+        except Exception:
+            # Fallback to metagraph height if subtensor fails, but this may be slightly stale
+            current_block = int(self.metagraph.block.item())
 
         if not self.round_manager.can_start_round(current_block):
             blocks_remaining = self.round_manager.blocks_until_allowed(current_block)
