@@ -39,7 +39,8 @@ if TESTING:
 
     # ── Late Start Protection ────────────────────────────────────────────────
     # Skip round only if started when >95% complete (very permissive for testing)
-    SKIP_ROUND_IF_STARTED_AFTER_FRACTION = 0.95
+    # Allow overriding via env var for local tuning.
+    SKIP_ROUND_IF_STARTED_AFTER_FRACTION = _env_float("SKIP_ROUND_IF_STARTED_AFTER_FRACTION", 0.95)
 
     # ── Consensus Participation Requirements ─────────────────────────────────
     # Testing: No stake required (0 τ) - anyone can participate
@@ -70,7 +71,8 @@ else:
 
     # ── Late Start Protection ────────────────────────────────────────────────
     # Skip round if started when >30% complete (conservative for production)
-    SKIP_ROUND_IF_STARTED_AFTER_FRACTION = 0.30
+    # Allow overriding via env var for operators who want to be more permissive.
+    SKIP_ROUND_IF_STARTED_AFTER_FRACTION = _env_float("SKIP_ROUND_IF_STARTED_AFTER_FRACTION", 0.30)
 
     # ── Consensus Participation Requirements ─────────────────────────────────
     # Production: Minimum 10k τ stake required to be included in consensus calculations
