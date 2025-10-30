@@ -1,15 +1,51 @@
 # autoppia_web_agents_subnet/validator/round_manager.py
 from __future__ import annotations
 
+import time
+from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
-import httpx
-
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
-from autoppia_web_agents_subnet.validator.config import (
-    IWAP_API_BASE_URL,
-    TESTING,
-)
+from autoppia_web_agents_subnet.validator.config import TESTING
+
+
+class RoundPhase(Enum):
+    """Named phases in the validator round lifecycle."""
+
+    IDLE = "idle"
+    PREPARING = "preparing"
+    HANDSHAKE = "handshake"
+    TASK_EXECUTION = "task_execution"
+    CONSENSUS = "consensus"
+    WAITING = "waiting"
+    FINALIZING = "finalizing"
+    COMPLETE = "complete"
+    ERROR = "error"
+
+
+@dataclass
+class PhaseTransition:
+    """Record of a phase transition within a round."""
+
+    phase: RoundPhase
+    started_at_block: Optional[int] = None
+    started_at_epoch: Optional[float] = None
+    note: Optional[str] = None
+    started_at_time: float = field(default_factory=time.time)
+
+
+@dataclass
+class RoundStatus:
+    """Lightweight snapshot of the current round status."""
+
+    phase: RoundPhase
+    round_start_block: Optional[int]
+    target_block: Optional[int]
+    current_block: Optional[int]
+    blocks_remaining: Optional[int]
+    minutes_remaining: Optional[float]
+    note: Optional[str] = None
 
 
 class RoundManager:
@@ -56,12 +92,17 @@ class RoundManager:
         self.ROUND_BLOCK_LENGTH = int(self.BLOCKS_PER_EPOCH * self.round_size_epochs)
 
         # Round state management
-        self.round_rewards = {} 
-        self.round_eval_scores = {}   
+        self.round_rewards = {}
+        self.round_eval_scores = {}
         self.round_times = {}
+        self.round_task_attempts = {}
 
         # Track round start block
-        self.start_block: int | None = None  
+        self.start_block: int | None = None
+
+        # Track lifecycle phases for visibility
+        self.current_phase: RoundPhase = RoundPhase.IDLE
+        self.phase_history: List[PhaseTransition] = []
 
     @classmethod
     def block_to_epoch(cls, block: int) -> float:
@@ -96,6 +137,11 @@ class RoundManager:
         # Fix start_block to the beginning of the computed window for stability
         self.start_block = int(boundaries['round_start_block'])
         self.reset_round()
+        self.enter_phase(
+            RoundPhase.PREPARING,
+            block=self.start_block,
+            note="Round window established",
+        )
 
         # Concise round start line
         blocks_remaining = boundaries['target_block'] - current_block
@@ -294,56 +340,6 @@ class RoundManager:
         round_index = blocks_since_start // self.ROUND_BLOCK_LENGTH
         return int(round_index + 1)
 
-    async def _calculate_round_from_backend(self) -> Optional[int]:
-        """Use the dashboard rounds endpoint to derive the next round number when testing."""
-        base_url = (IWAP_API_BASE_URL or "").rstrip("/")
-        if not base_url:
-            return None
-
-        url = f"{base_url}/api/v1/rounds"
-        params = {
-            "limit": 1,
-            "page": 1,
-            "sortBy": "round",
-            "sortOrder": "desc",
-        }
-
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(url, params=params)
-            response.raise_for_status()
-        except httpx.HTTPError as exc:
-            ColoredLogger.warning(
-                f"Unable to fetch rounds from backend ({url}): {exc}",
-                ColoredLogger.YELLOW,
-            )
-            return None
-        except Exception as exc:  # noqa: BLE001
-            ColoredLogger.warning(
-                f"Unexpected error when fetching rounds from backend ({url}): {exc}",
-                ColoredLogger.YELLOW,
-            )
-            return None
-
-        try:
-            payload = response.json()
-        except ValueError:
-            ColoredLogger.warning(
-                f"Received non-JSON response from backend rounds endpoint ({url})",
-                ColoredLogger.YELLOW,
-            )
-            return None
-
-        entries = self._extract_round_entries(payload)
-        if not entries:
-            # No prior rounds recorded; start from first round.
-            return 1
-
-        latest_entry = entries[0]
-        round_value = self._extract_round_value(latest_entry)
-        if round_value is None:
-            return None
-        return round_value + 1
 
     @staticmethod
     def _extract_round_entries(payload: Any) -> List[Dict[str, Any]]:
@@ -390,25 +386,6 @@ class RoundManager:
     # SCORE MANAGEMENT METHODS
     # ═══════════════════════════════════════════════════════════════════════════════
 
-    def accumulate_rewards(self, miner_uids: List[int], rewards: List[float], eval_scores: List[float], execution_times: List[float]):
-        """
-        Accumulate scores for the round.
-
-        Args:
-            miner_uids: List of miner UIDs
-            rewards: List of rewards for each miner
-            execution_times: List of execution times for each miner
-        """
-        for i, uid in enumerate(miner_uids):
-            if uid not in self.round_rewards:
-                self.round_rewards[uid] = []
-                self.round_eval_scores[uid] = []
-                self.round_times[uid] = []
-
-            self.round_rewards[uid].append(rewards[i])
-            self.round_eval_scores[uid].append(eval_scores[i])
-            self.round_times[uid].append(execution_times[i])
-
     def get_average_rewards(self) -> Dict[int, float]:
         """
         Calculate average scores for each miner.
@@ -416,31 +393,9 @@ class RoundManager:
         Returns:
             Dict mapping miner_uid to average score
         """
-        avg_rewards = {}
-        for uid, rewards in self.round_rewards.items():
-            if rewards:
-                avg_rewards[uid] = sum(rewards) / len(rewards)
-            else:
-                avg_rewards[uid] = 0.0
-        return avg_rewards
-
-    def get_round_stats(self) -> Dict[str, Any]:
-        """
-        Get round statistics.
-
-        Returns:
-            Dict with round statistics
-        """
-        total_miners = len(self.round_rewards)
-        total_tasks = sum(len(reward) for reward in self.round_rewards.values())
-
         return {
-            'total_miners': total_miners,
-            'total_tasks': total_tasks,
-            'miners_with_rewards': len([uid for uid, rewards in self.round_rewards.items() if rewards]),
-            'round_rewards': self.round_rewards,
-            'round_times': self.round_times,
-            'round_eval_scores': self.round_eval_scores
+            uid: (sum(rewards) / len(rewards)) if rewards else 0.0
+            for uid, rewards in self.round_rewards.items()
         }
 
     def reset_round(self):
@@ -448,11 +403,141 @@ class RoundManager:
         self.round_rewards = {}
         self.round_times = {}
         self.round_eval_scores = {}
+        self.round_task_attempts = {}
+        self.reset_phase_tracking()
 
     def log_round_summary(self):
         """Log concise round summary with statistics (debug-level)."""
-        stats = self.get_round_stats()
+        total_miners = len(self.round_rewards)
+        total_tasks = sum(len(rewards) for rewards in self.round_rewards.values())
         ColoredLogger.debug(
-            f"Round stats | miners={stats['total_miners']} | tasks={stats['total_tasks']}",
+            f"Round stats | miners={total_miners} | tasks={total_tasks}",
             ColoredLogger.PURPLE,
         )
+        if self.round_task_attempts:
+            parts = []
+            for uid, attempts in self.round_task_attempts.items():
+                evals_used = len(self.round_rewards.get(uid, []))
+                parts.append(f"{uid}:{evals_used}/{attempts}")
+            summary = ", ".join(parts)
+            ColoredLogger.info(
+                f"Evaluation counts (evaluated/attempted per miner): {summary}",
+                ColoredLogger.CYAN,
+            )
+
+    # ═══════════════════════════════════════════════════════════════════════════════
+    # PHASE MANAGEMENT
+    # ═══════════════════════════════════════════════════════════════════════════════
+
+    def enter_phase(
+        self,
+        phase: RoundPhase,
+        *,
+        block: Optional[int] = None,
+        note: Optional[str] = None,
+        force: bool = False,
+    ) -> PhaseTransition:
+        """
+        Record a phase transition. Subsequent attempts to enter the same phase are ignored
+        unless `force` is True.
+        """
+        if not force and self.current_phase == phase and self.phase_history:
+            transition = self.phase_history[-1]
+            if note:
+                transition.note = note
+            if block is not None and transition.started_at_block is None:
+                transition.started_at_block = block
+                transition.started_at_epoch = self.block_to_epoch(block)
+            return transition
+
+        transition = PhaseTransition(
+            phase=phase,
+            started_at_block=block,
+            started_at_epoch=self.block_to_epoch(block) if block is not None else None,
+            note=note,
+        )
+        self.current_phase = phase
+        self.phase_history.append(transition)
+        self._log_phase_transition(transition)
+        return transition
+
+    def current_phase_state(self) -> PhaseTransition:
+        """Return the latest phase transition (or a default idle state)."""
+        if self.phase_history:
+            return self.phase_history[-1]
+        return PhaseTransition(phase=self.current_phase)
+
+    def log_phase_history(self) -> None:
+        """Emit a condensed phase timeline for debugging and dashboards."""
+        if not self.phase_history:
+            return
+
+        lines = []
+        for item in self.phase_history:
+            block_info = f"block={item.started_at_block}" if item.started_at_block is not None else ""
+            note_info = f"note={item.note}" if item.note else ""
+            epoch_info = (
+                f"epoch={item.started_at_epoch:.2f}"
+                if item.started_at_epoch is not None
+                else ""
+            )
+            parts = [part for part in (block_info, epoch_info, note_info) if part]
+            suffix = " | ".join(parts)
+            lines.append(f"{item.phase.value}: {suffix}" if suffix else item.phase.value)
+
+        ColoredLogger.info("Round phase timeline ➜ " + " → ".join(lines), ColoredLogger.ORANGE)
+
+    def get_status(self, current_block: Optional[int] = None) -> RoundStatus:
+        """
+        Produce a structured status summary for dashboards or logs.
+        """
+        boundaries: Dict[str, Any] = {}
+        if self.start_block is not None:
+            boundaries = self.get_round_boundaries(self.start_block, log_debug=False)
+
+        target_block = boundaries.get("target_block")
+        blocks_remaining: Optional[int] = None
+        minutes_remaining: Optional[float] = None
+        if current_block is not None and target_block is not None:
+            blocks_remaining = max(target_block - current_block, 0)
+            minutes_remaining = (blocks_remaining * self.SECONDS_PER_BLOCK) / 60
+
+        transition = self.current_phase_state()
+        return RoundStatus(
+            phase=self.current_phase,
+            round_start_block=self.start_block,
+            target_block=target_block,
+            current_block=current_block,
+            blocks_remaining=blocks_remaining,
+            minutes_remaining=minutes_remaining,
+            note=transition.note,
+        )
+
+    def reset_phase_tracking(self) -> None:
+        """Clear stored phase history."""
+        self.current_phase = RoundPhase.IDLE
+        self.phase_history = []
+
+    def _log_phase_transition(self, transition: PhaseTransition) -> None:
+        """Log a phase transition with color-coded output."""
+        color_map = {
+            RoundPhase.PREPARING: ColoredLogger.CYAN,
+            RoundPhase.HANDSHAKE: ColoredLogger.MAGENTA,
+            RoundPhase.TASK_EXECUTION: ColoredLogger.BLUE,
+            RoundPhase.CONSENSUS: ColoredLogger.PURPLE,
+            RoundPhase.WAITING: ColoredLogger.GRAY,
+            RoundPhase.FINALIZING: ColoredLogger.GOLD,
+            RoundPhase.COMPLETE: ColoredLogger.GREEN,
+            RoundPhase.ERROR: ColoredLogger.RED,
+        }
+        color = color_map.get(transition.phase, ColoredLogger.WHITE)
+
+        message = f"🧭 Phase → {transition.phase.value}"
+        if transition.started_at_block is not None:
+            message += f" | block={transition.started_at_block}"
+        if transition.started_at_epoch is not None:
+            message += f" | epoch={transition.started_at_epoch:.2f}"
+        if transition.note:
+            message += f" | {transition.note}"
+
+        ColoredLogger.info(message, color)

@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 
 import bittensor as bt
 
-from autoppia_web_agents_subnet.platform import main as iwa_main
+from autoppia_web_agents_subnet.platform import client as iwa_main
 from autoppia_web_agents_subnet.platform import models as iwa_models
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.validator.config import (

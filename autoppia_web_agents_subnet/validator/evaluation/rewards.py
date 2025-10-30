@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-import math
 from typing import List
+
 import numpy as np
 from numpy.typing import NDArray
-
-# Default weights (override at call-site if desired)
-EVAL_SCORE_WEIGHT: float = 0.8
-TIME_WEIGHT: float = 0.2
 
 
 def pad_or_trim(vec: NDArray[np.float32], n: int) -> NDArray[np.float32]:
@@ -62,8 +58,8 @@ def calculate_rewards_for_task(
     eval_scores: NDArray[np.float32],
     execution_times: List[float],
     n_miners: int,
-    eval_score_weight: float = EVAL_SCORE_WEIGHT,
-    time_weight: float = TIME_WEIGHT,
+    eval_score_weight: float,
+    time_weight: float,
 ) -> NDArray[np.float32]:
     """
     Calculate final scores by combining eval scores and execution time scores.
@@ -77,39 +73,3 @@ def calculate_rewards_for_task(
     time_scores = times_to_scores(execution_times, n_miners)
     final = (eval_score_weight * eval_scores) + (time_weight * time_scores)
     return final.astype(np.float32)
-
-
-def reduce_rewards_to_averages(rewards_sum: np.ndarray, counts: np.ndarray) -> np.ndarray:
-    """
-    Safe element-wise division: average = sum / max(count, 1).
-    Returns float32 vector with same length as inputs.
-    """
-    counts_safe = np.maximum(counts, 1).astype(np.float32)
-    avg = (rewards_sum.astype(np.float32) / counts_safe).astype(np.float32)
-    return avg
-
-
-def wta_rewards(avg_rewards: NDArray[np.float32]) -> NDArray[np.float32]:
-    """
-    Winner-takes-all transform:
-      - Returns a 0/1 vector with a single 1 at the index of the maximum value.
-      - Deterministic on ties: selects the *first* index with the max value.
-      - If input is empty, returns it unchanged.
-    NaNs are treated as -inf for the purpose of argmax.
-    """
-    if avg_rewards.size == 0:
-        return avg_rewards
-
-    arr = np.asarray(avg_rewards, dtype=np.float32)
-    # Treat NaN as -inf so they never win.
-    where_nan = ~np.isfinite(arr)
-    if np.any(where_nan):
-        tmp = arr.copy()
-        tmp[where_nan] = -np.inf
-        winner = int(np.argmax(tmp))
-    else:
-        winner = int(np.argmax(arr))
-
-    out = np.zeros_like(arr, dtype=np.float32)
-    out[winner] = 1.0
-    return out

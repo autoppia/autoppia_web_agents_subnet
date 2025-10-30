@@ -154,12 +154,13 @@ def render_round_summary_table(
 
     for uid in sorted(uids_to_show):
         hotkey = metagraph.hotkeys[uid] if uid < len(metagraph.hotkeys) else "<unknown>"
-        coldkey = metagraph.coldkeys[uid] if uid < len(metagraph.coldkeys) else "<unknown>"
         avg_eval = _mean_safe(round_manager.round_eval_scores.get(uid, []))
         avg_time = _mean_safe(round_manager.round_times.get(uid, []))
         local_participated = bool(round_manager.round_rewards.get(uid)) or bool(round_manager.round_eval_scores.get(uid))
         final_score = float(normalized_scores.get(uid, 0.0))
         wta_reward = float(final_rewards.get(uid, 0.0))  # 1.0 for winner else 0.0
+        eval_count = len(round_manager.round_rewards.get(uid, []))
+        task_attempts = round_manager.round_task_attempts.get(uid, eval_count)
 
         # Per-validator scores for this UID, ordered by validators_hk_order
         per_val_scores = []
@@ -177,6 +178,8 @@ def render_round_summary_table(
             "final_score": final_score,
             "wta_reward": wta_reward,
             "per_val_scores": per_val_scores,
+            "eval_count": eval_count,
+            "task_attempts": task_attempts,
         })
 
     # Sort by WTA reward desc, then by avg_eval desc for tie-break
@@ -255,6 +258,8 @@ def render_round_summary_table(
             tbl.add_column("UID", justify="right", width=5)
             tbl.add_column("Hotkey", style="cyan", width=HOTKEY_COLUMN_WIDTH, overflow="ellipsis")
             tbl.add_column("Active", justify="center", width=6)
+            tbl.add_column("Evals", justify="right", width=6)
+            tbl.add_column("Tasks", justify="right", width=6)
             tbl.add_column("LocalScore", justify="right", width=10)
 
             if validators_hk_order:
@@ -268,11 +273,14 @@ def render_round_summary_table(
             tbl.add_column("FinalScore", justify="right", width=11)
 
             for i, r in enumerate(rows, start=1):
+                active_display = "yes" if (active_uids and r["uid"] in active_uids) else ("yes" if r["local"] else "no")
                 base_cols = [
                     str(i),
                     str(r["uid"]),
                     r["hotkey_prefix"],
-                    ("yes" if (active_uids and r["uid"] in active_uids) else ("yes" if r["local"] else "no")),
+                    active_display,
+                    str(r["eval_count"]),
+                    str(r["task_attempts"]),
                     f'{r["avg_eval"]:.4f}',
                 ]
                 pv_cols: List[str] = []
@@ -291,7 +299,7 @@ def render_round_summary_table(
         return f"{title_base} (n={len(rows)}, sections={len(validator_ranges)})."
 
     # Fallback plain text table
-    header_base = ["#", "UID", "Hotkey", "Active", "LocalScore"]
+    header_base = ["#", "UID", "Hotkey", "Active", "Evals", "Tasks", "LocalScore"]
     tail_headers = ["FinalScore"]
     validator_headers: List[str] = []
     for v in validators_info:
@@ -321,6 +329,8 @@ def render_round_summary_table(
             "{:>5}",
             hotkey_header_format,
             "{:>6}",
+            "{:>6}",
+            "{:>6}",
             "{:>10}",
         ]
         header_formats.extend([validator_header_format] * len(rng))
@@ -328,11 +338,14 @@ def render_round_summary_table(
         lines.append(" ".join(fmt.format(h) for fmt, h in zip(header_formats, headers)))
 
         for i, r in enumerate(rows, start=1):
+            active_display = "yes" if (active_uids and r["uid"] in active_uids) else ("yes" if r["local"] else "no")
             row_base = [
                 i,
                 r["uid"],
                 (r["hotkey_prefix"] + ELLIPSIS) if len(r["hotkey"]) > HOTKEY_PREFIX_LEN else r["hotkey_prefix"],
-                ("yes" if (active_uids and r["uid"] in active_uids) else ("yes" if r["local"] else "no")),
+                active_display,
+                r["eval_count"],
+                r["task_attempts"],
                 f"{r['avg_eval']:.4f}",
             ]
             validator_values = []
@@ -348,6 +361,8 @@ def render_round_summary_table(
                 "{:>3}",
                 "{:>5}",
                 hotkey_header_format,
+                "{:>6}",
+                "{:>6}",
                 "{:>6}",
                 "{:>10}",
             ]

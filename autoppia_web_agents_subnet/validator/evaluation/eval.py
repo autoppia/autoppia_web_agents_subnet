@@ -1,7 +1,7 @@
 # autoppia_web_agents_subnet/validator/eval.py
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple, Iterable
+from typing import Any, Dict, List, Tuple, Iterable
 import numpy as np
 from numpy.typing import NDArray
 import bittensor as bt
@@ -56,7 +56,6 @@ async def evaluate_task_solutions(
     safe_solutions: List[TaskSolution] = [
         s if s is not None else TaskSolution(actions=[]) for s in task_solutions
     ]
-
     cfg = EvaluatorConfig(normalize_scores=normalize_scores, should_record_gif=SHOULD_RECORD_GIF)
     evaluator = ConcurrentEvaluator(web_project, cfg)
 

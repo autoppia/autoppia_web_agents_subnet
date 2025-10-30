@@ -92,6 +92,13 @@ Primary tasks:
    python scripts/validator/utils/alert_admins.py "Validator Round ${ROUND_ID:-?} Alert" "<reason>"
 3. Keep notes concise and reference relevant log lines or sections in this transcript.
 
+Respond using this exact structure (keep it short—bullets max 5):
+- Overall Status: <OK|WARN|FAIL> — one-sentence justification.
+- Highlights:
+  - key finding with file:line reference (if none, write "None").
+- Actions:
+  - remediation or follow-up (if none, write "None").
+
 Round report:
 EOF
 
@@ -113,6 +120,21 @@ if [[ -f "$ENV_CANDIDATE" ]]; then
   } >> "$PROMPT_FILE"
 fi
 
+if [[ -n "$CONTEXT_FILE" ]]; then
+  if codex --help 2>/dev/null | grep -q -- "--context-file"; then
+    CONTEXT_ARGS=(--context-file "$CONTEXT_FILE")
+  else
+    {
+      echo ""
+      echo "Reference context from ${CONTEXT_FILE}:"
+      sed 's/^/  /' "$CONTEXT_FILE"
+    } >> "$PROMPT_FILE"
+    CONTEXT_ARGS=()
+  fi
+else
+  CONTEXT_ARGS=()
+fi
+
 PROMPT_CONTENT="$(cat "$PROMPT_FILE")"
 
 if ! command -v codex >/dev/null 2>&1; then
@@ -120,8 +142,10 @@ if ! command -v codex >/dev/null 2>&1; then
   exit 1
 fi
 
-if [[ -n "$CONTEXT_FILE" ]]; then
-  codex --sandbox danger-full-access --context-file "$CONTEXT_FILE" <<<"$PROMPT_CONTENT"
-else
-  codex --sandbox danger-full-access <<<"$PROMPT_CONTENT"
+CODEX_COMMAND=(codex exec --sandbox danger-full-access)
+if ((${#CONTEXT_ARGS[@]})); then
+  CODEX_COMMAND+=( "${CONTEXT_ARGS[@]}" )
 fi
+CODEX_COMMAND+=(-)
+
+"${CODEX_COMMAND[@]}" <<<"$PROMPT_CONTENT"

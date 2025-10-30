@@ -42,14 +42,14 @@ Each round follows these steps (see `neurons/validator.py`):
 
 5. **Phase 4 – Evaluation**
    - `evaluate_task_solutions` scores outputs (functional tests + heuristics).
-   - Rewards combine evaluation scores and execution time (`validator/rewards.calculate_rewards_for_task`).
+   - Rewards combine evaluation scores and execution time (`validator/evaluation/rewards.calculate_rewards_for_task`).
    - GIFs and metadata upload through IWAP (Phase 4 logging: see `platform/utils/iwa_core.py`).
    - Results are stored in `RoundManager` accumulators and IWAP via `add_evaluation`.
 
-6. **Phase 5 – Finalization & Settlement**
-   - Winnners decided via WTA (`wta_rewards`), weights coerced to one-hot.
+6. **Phase 5 – Settlement & Boundary Wait**
+   - Consensus snapshot publishes (when enabled), shared scores fetched, and final weights set (`validator/settlement/mixin.py`).
    - IWAP `finish_round` posts burn/weights summary to the Autoppia backend.
-   - Validator emits canonical logs: `🏁 Finishing Round: X`, `✅ Round completed: X`, and `Tasks completed: n`.
+   - Validator idles in `WAITING` until the next round boundary before the loop restarts.
 
 7. **Checkpoint & Resume Safety**
    - `state_manager.save_checkpoint()` persists round state at key points (after each task, before waiting for boundary, upon finalization).
@@ -69,7 +69,7 @@ IWAP phases (see `platform/utils/iwa_core.py`):
 | Phase 4 | `add_evaluation`, GIF logging | Upload evaluation payloads and optional GIF captures. |
 | Phase 5 | `finish_round` | Post final weights, winners, burn summary, and round settlement metadata. |
 
-All IWAP requests include validator-hotkey signature headers (set in `platform/main.IWAPClient` via `iwap_core.build_iwap_auth_headers`). GIF capture, uploads, and error logging happen per evaluation—stripe with `[Phase 4] [GIF]` entries in logs.
+All IWAP requests include validator-hotkey signature headers (set in `platform/client.IWAPClient` via `iwap_core.build_iwap_auth_headers`). GIF capture, uploads, and error logging happen per evaluation—stripe with `[Phase 4] [GIF]` entries in logs.
 
 ---
 
@@ -197,7 +197,7 @@ It loads `.env`, infers SMTP (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`
 ## 9. Operational Tips
 
 - **Testing vs Production**: `TESTING=true` shrinks rounds and removes stake gates, but expect more on-chain `TimeoutError: Max retries exceeded` because the validator lacks weight. Monitor emails will flag these as `ERROR`.
-- **Handling Commitment Failures**: When consensus commits time out, `_close_async_subtensor()` can be called (see `validator_mixin`) before the next attempt to reset the websocket connection.
+- **Handling Commitment Failures**: When consensus commits time out, `_close_async_subtensor()` can be called (see `platform/mixin`) before the next attempt to reset the websocket connection.
 - **Codex IAM**: Ensure `codex` CLI has the necessary credentials (API key, etc.) before launching pm2 processes. Restart with `pm2 restart … --update-env` after changing `.env`.
 - **Checkpoint hygiene**: Clear `data/validator_state/round_state/*.pkl` if you need a completely fresh start; otherwise resume works seamlessly.
 - **Log housekeeping**: `pm2 flush validator_monitor` trims old notifications if the log history gets noisy.

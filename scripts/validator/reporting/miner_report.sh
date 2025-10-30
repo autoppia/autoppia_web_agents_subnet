@@ -2,7 +2,10 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 DEFAULT_LINES=${LINES:-4000}
+DEFAULT_CODEX=${CODEX_REPORT:-false}
 DEFAULT_PM2_IDENTIFIER=${PM2_IDENTIFIER:-}
 
 usage() {
@@ -17,6 +20,7 @@ Options:
   --pm2 ID    pm2 process id or name to pull logs from (default: $PM2_IDENTIFIER or required when --path omitted).
   --path FILE Path to a log file instead of pm2 logs.
   --lines N   Number of log lines to read (default: 4000 or $LINES env).
+  --codex     Send the generated report to Codex for audit (stdout still prints the report).
   -h, --help  Show this help message.
 
 Either --pm2 or --path must be provided. When both are supplied, --path takes precedence.
@@ -28,6 +32,7 @@ pm2_identifier="$DEFAULT_PM2_IDENTIFIER"
 log_path=""
 lines="$DEFAULT_LINES"
 target_uid=""
+codex_request="$DEFAULT_CODEX"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -55,6 +60,10 @@ while [[ $# -gt 0 ]]; do
             [[ $# -lt 2 ]] && { echo "Missing value for --lines" >&2; exit 1; }
             lines="$2"
             shift 2
+            ;;
+        --codex)
+            codex_request="true"
+            shift
             ;;
         -h|--help)
             usage
@@ -577,3 +586,28 @@ for entry in relevant_entries:
 print()
 print("End of miner report.")
 PY
+
+cat "$tmpfile"
+
+if [[ "$codex_request" == "true" ]]; then
+  COD_PROMPT=$(cat <<EOF
+Miner audit briefing
+- Round: $target_round
+- Miner UID: $target_uid
+
+Focus your analysis on:
+  • Detecting exploit-like behaviour (replays, suspicious retries, abnormal timings).
+  • Verifying evaluation results versus rewards; flag inconsistencies or skipped phases.
+  • Highlighting any missing IWAP phases, unexpected API responses, or log anomalies.
+
+Conclude with: "Verdict: <OK|WARN|ISSUE> — <concise justification>."
+EOF
+)
+
+  {
+    echo "$COD_PROMPT"
+    echo ""
+    echo "--- Miner Report ---"
+    cat "$tmpfile"
+  } | "$SCRIPT_DIR/run_codex.sh" --round "$target_round" --status "MINER_AUDIT"
+fi
