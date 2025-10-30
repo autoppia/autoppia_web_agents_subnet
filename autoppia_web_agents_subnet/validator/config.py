@@ -16,12 +16,12 @@ from autoppia_web_agents_subnet.utils.env import (  # noqa: E402
 # ENVIRONMENT MODE
 # ═══════════════════════════════════════════════════════════════════════════
 
+TESTING = _str_to_bool(os.getenv("TESTING", "false"))
+
 # ── Burn Mechanism ───────────────────────────────────────────────────────────
 BURN_UID = _env_int("BURN_UID", 5)
 BURN_ALL = _str_to_bool(os.getenv("BURN_ALL", "true"))
 
-
-TESTING = _str_to_bool(os.getenv("TESTING", "false"))
 
 # ═══════════════════════════════════════════════════════════════════════════
 # TESTING CONFIGURATION (Fast iterations for development)

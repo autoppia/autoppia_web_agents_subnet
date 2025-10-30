@@ -4,6 +4,23 @@ This document explains how the subnet validator, IWAP integration, consensus wor
 
 ---
 
+## IMPORTANT – Fail Fast Over Defensive Code
+
+- Treat core dependencies and invariants as non-negotiable. If we cannot import/initialize a required module, crash loudly instead of logging and re-raising.
+- **Do NOT** wrap critical imports or setup in blanket `try/except` that simply logs and rethrows; it only adds noise and hides the root cause. Example to avoid:
+
+```python
+try:
+    from autoppia_iwa.src.bootstrap import AppBootstrap
+except ImportError as exc:  # pragma: no cover - bootstrap only in runtime
+    bt.logging.warning("autoppia_iwa bootstrap import failed; validator will exit")
+    raise exc
+```
+
+The import should be unconditional so the process fails immediately when the dependency is missing. Apply the same philosophy to round calculations, IWAP payload parsing, and any path that must succeed for the validator to operate.
+
+---
+
 ## 1. Repository Layout
 
 | Path | Purpose |

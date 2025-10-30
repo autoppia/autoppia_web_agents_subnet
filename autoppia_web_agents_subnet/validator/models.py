@@ -1,15 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterator, List, Optional, Tuple, Dict
-
-import numpy as np
-from numpy.typing import NDArray
+from typing import List
 
 # IWA domain types
 from autoppia_iwa.src.demo_webs.classes import WebProject
 from autoppia_iwa.src.data_generation.domain.classes import Task
-from autoppia_iwa.src.web_agents.classes import TaskSolution
 
 
 # ─────────────────────────────────────────────────────────────────────────────

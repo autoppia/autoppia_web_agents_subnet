@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-import bittensor as bt
 from bittensor import Synapse
 from pydantic import Field
 

@@ -20,7 +20,7 @@ from autoppia_web_agents_subnet.validator.config import (
     STOP_TASK_EVALUATION_AT_ROUND_FRACTION,
 )
 from autoppia_web_agents_subnet.validator.round_manager import RoundPhase
-from autoppia_web_agents_subnet.validator.start.types import StartPhaseResult
+from autoppia_web_agents_subnet.validator.round_start.types import StartPhaseResult
 from autoppia_web_agents_subnet.validator.models import TaskWithProject
 from autoppia_web_agents_subnet.validator.evaluation.tasks import get_task_collection_interleaved
 from autoppia_web_agents_subnet.validator.evaluation.synapse_handlers import (
@@ -28,7 +28,7 @@ from autoppia_web_agents_subnet.validator.evaluation.synapse_handlers import (
 )
 
 
-class StartPhaseMixin:
+class RoundStartMixin:
     """Round preparation: resume checkpoints, pre-generate tasks, and perform handshake."""
 
     async def _run_start_phase(self, current_block: int) -> StartPhaseResult:

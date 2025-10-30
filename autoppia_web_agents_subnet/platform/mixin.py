@@ -113,7 +113,6 @@ class ValidatorPlatformMixin:
     def _build_validator_identity(self) -> iwa_models.ValidatorIdentityIWAP:
         return _utils_build_validator_identity(self)
 
-
     def _metagraph_numeric(self, attribute: str, uid: int) -> Optional[float]:
         return _metrics_metagraph_numeric(self.metagraph, attribute, uid)
 

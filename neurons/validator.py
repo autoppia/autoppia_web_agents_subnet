@@ -28,7 +28,7 @@ from autoppia_web_agents_subnet.validator.round_state import (
     RoundStateValidatorMixin,
     RoundPhaseValidatorMixin,
 )
-from autoppia_web_agents_subnet.validator.start import StartPhaseMixin
+from autoppia_web_agents_subnet.validator.round_start import RoundStartMixin
 from autoppia_web_agents_subnet.validator.evaluation import EvaluationPhaseMixin
 from autoppia_web_agents_subnet.validator.settlement import SettlementMixin
 
@@ -36,7 +36,7 @@ from autoppia_web_agents_subnet.validator.settlement import SettlementMixin
 class Validator(
     RoundStateValidatorMixin,
     RoundPhaseValidatorMixin,
-    StartPhaseMixin,
+    RoundStartMixin,
     EvaluationPhaseMixin,
     SettlementMixin,
     ValidatorPlatformMixin,
@@ -101,30 +101,7 @@ class Validator(
         else:
             bt.logging.info("🚀 Starting round-based forward")
 
-        if not self.round_manager.can_start_round(current_block):
-            blocks_remaining = self.round_manager.blocks_until_allowed(current_block)
-            seconds_remaining = blocks_remaining * self.round_manager.SECONDS_PER_BLOCK
-            minutes_remaining = seconds_remaining / 60
-            hours_remaining = minutes_remaining / 60
-
-            current_epoch = current_block / 360
-            target_epoch = DZ_STARTING_BLOCK / 360
-
-            eta = f"~{hours_remaining:.1f}h" if hours_remaining >= 1 else f"~{minutes_remaining:.0f}m"
-            bt.logging.warning(
-                f"🔒 Locked until block {DZ_STARTING_BLOCK:,} (epoch {target_epoch:.2f}) | "
-                f"now {current_block:,} (epoch {current_epoch:.2f}) | ETA {eta}"
-            )
-
-            wait_seconds = min(max(seconds_remaining, 30), 600)
-            self.round_manager.enter_phase(
-                RoundPhase.WAITING,
-                block=current_block,
-                note=f"Waiting for minimum start block {DZ_STARTING_BLOCK}",
-            )
-            bt.logging.warning(f"💤 Rechecking in {wait_seconds:.0f}s...")
-
-            await asyncio.sleep(wait_seconds)
+        if await self._wait_for_minimum_start_block(current_block):
             return
 
         self.round_manager.log_calculation_summary()
