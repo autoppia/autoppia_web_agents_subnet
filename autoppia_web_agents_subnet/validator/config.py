@@ -1,6 +1,4 @@
 import os
-from pathlib import Path
-from typing import Optional
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -17,6 +15,12 @@ from autoppia_web_agents_subnet.utils.env import (  # noqa: E402
 # ═══════════════════════════════════════════════════════════════════════════
 # ENVIRONMENT MODE
 # ═══════════════════════════════════════════════════════════════════════════
+
+# ── Burn Mechanism ───────────────────────────────────────────────────────────
+BURN_UID = _env_int("BURN_UID", 5)
+BURN_ALL = _str_to_bool(os.getenv("BURN_ALL", "true"))
+
+
 TESTING = _str_to_bool(os.getenv("TESTING", "false"))
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -54,9 +58,9 @@ if TESTING:
 else:
     # ── Round Structure ──────────────────────────────────────────────────────
     # Production rounds (~4.8 hours) - Changed from 20 epochs to 4 for faster iterations
-    ROUND_SIZE_EPOCHS = _env_float("ROUND_SIZE_EPOCHS", 4.0)
+    ROUND_SIZE_EPOCHS = _env_float("ROUND_SIZE_EPOCHS", 2.0)
     SAFETY_BUFFER_EPOCHS = _env_float("SAFETY_BUFFER_EPOCHS", 0.5)
-    AVG_TASK_DURATION_SECONDS = _env_int("AVG_TASK_DURATION_SECONDS", 300)
+    AVG_TASK_DURATION_SECONDS = _env_int("AVG_TASK_DURATION_SECONDS", 150)
     # Increased default tasks for production to extend execution closer to the
     # reserved consensus window. Previous default was 75; 2.5x -> ~188.
     # Environment variable PRE_GENERATED_TASKS still takes precedence.
@@ -119,7 +123,3 @@ PROPAGATION_BLOCKS_SLEEP = _env_int("PROPAGATION_BLOCKS_SLEEP", _PROPAGATION_BLO
 # ── IPFS Storage ─────────────────────────────────────────────────────────────
 IPFS_API_URL = os.getenv("IPFS_API_URL", "http://ipfs.metahash73.com:5001/api/v0")
 IPFS_GATEWAYS = [g.strip() for g in (os.getenv("IPFS_GATEWAYS", "https://ipfs.io/ipfs,https://cloudflare-ipfs.com/ipfs,https://gateway.pinata.cloud/ipfs") or "").split(",") if g.strip()]
-
-# ── Burn Mechanism ───────────────────────────────────────────────────────────
-BURN_UID = _env_int("BURN_UID", 5)
-BURN_ALL = _str_to_bool(os.getenv("BURN_ALL", "true"))
