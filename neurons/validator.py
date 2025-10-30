@@ -1373,31 +1373,20 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         bt.logging.info(f"[CONSENSUS] Distributed consensus: {str(ENABLE_DISTRIBUTED_CONSENSUS).lower()}")
         bt.logging.info("=" * 80)
 
-        # Check if no miners responded to handshake - BURN ALL WEIGHTS
+        avg_rewards: Dict[int, float] = {}
+        burn_reason: str | None = None
+
         if not self.active_miner_uids:
             ColoredLogger.error("🔥 No active miners: burning all weights", ColoredLogger.RED)
+            burn_reason = "burn (no active miners)"
+        else:
+            # Calculate average scores using round_manager
+            avg_rewards = self.round_manager.get_average_rewards()
+            if BURN_ALL:
+                ColoredLogger.warning("🔥 BURN_ALL enabled: forcing burn and skipping consensus", ColoredLogger.RED)
+                burn_reason = "burn (forced)"
 
-            # Create burn weights: UID BURN_UID = 1.0, all others = 0.0
-            burn_weights = np.zeros(self.metagraph.n, dtype=np.float32)
-            idx = int(BURN_UID) if 0 <= int(BURN_UID) < self.metagraph.n else min(5, self.metagraph.n - 1)
-            burn_weights[idx] = 1.0  # burn recipient
-
-            # Update scores via standard path to keep behavior consistent
-            all_uids = list(range(self.metagraph.n))
-            self.update_scores(rewards=burn_weights, uids=all_uids)
-            self.set_weights()
-
-            ColoredLogger.success(f"✅ Burn complete (weight to UID {idx})", ColoredLogger.RED)
-            ColoredLogger.info(f"Tasks attempted: {tasks_completed}", ColoredLogger.RED)
-            self._log_round_completion(tasks_completed, color=ColoredLogger.RED, reason="burn (no active miners)")
-            return
-
-        # Calculate average scores using round_manager
-        avg_rewards = self.round_manager.get_average_rewards()
-
-        # Force burn when BURN_ALL flag is set.
-        if BURN_ALL:
-            ColoredLogger.warning("🔥 BURN_ALL enabled: forcing burn and skipping consensus", ColoredLogger.RED)
+        if burn_reason:
             burn_weights = np.zeros(self.metagraph.n, dtype=np.float32)
             burn_idx = int(BURN_UID) if 0 <= int(BURN_UID) < self.metagraph.n else min(5, self.metagraph.n - 1)
             burn_weights[burn_idx] = 1.0
@@ -1412,11 +1401,11 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     tasks_completed=tasks_completed,
                 )
             except Exception as e:
-                bt.logging.warning(f"IWAP finish_round failed (forced burn): {e}")
+                bt.logging.warning(f"IWAP finish_round failed ({burn_reason}): {e}")
 
-            ColoredLogger.success(f"✅ Burn complete (forced burn to UID {burn_idx})", ColoredLogger.RED)
+            ColoredLogger.success(f"✅ Burn complete (weight to UID {burn_idx})", ColoredLogger.RED)
             ColoredLogger.info(f"Tasks attempted: {tasks_completed}", ColoredLogger.RED)
-            self._log_round_completion(tasks_completed, color=ColoredLogger.RED, reason="burn (forced)")
+            self._log_round_completion(tasks_completed, color=ColoredLogger.RED, reason=burn_reason)
             return
 
         # If sharing enabled, attempt to aggregate across validators via commitments/IPFS

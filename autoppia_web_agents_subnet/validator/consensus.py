@@ -188,7 +188,7 @@ async def publish_round_snapshot(
             bt.logging.success(ipfs_tag("BLOCKCHAIN", f"✅ Commitment successful | CID: {cid}"))
             return str(cid)
         else:
-            bt.logging.warning(ipfs_tag("BLOCKCHAIN", f"⚠️ Commitment failed - write returned false"))
+            bt.logging.warning(ipfs_tag("BLOCKCHAIN", "⚠️ Commitment failed - write returned false"))
             return None
     except Exception as e:
         bt.logging.error("=" * 80)

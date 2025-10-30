@@ -23,7 +23,7 @@ from autoppia_web_agents_subnet.protocol import (
     TaskFeedbackSynapse,
     StartRoundSynapse,
 )
-from autoppia_web_agents_subnet.validator.config import FEEDBACK_TIMEOUT, TIMEOUT
+from autoppia_web_agents_subnet.validator.config import FEEDBACK_TIMEOUT
 from autoppia_web_agents_subnet.utils.dendrite import dendrite_with_retries
 
 
