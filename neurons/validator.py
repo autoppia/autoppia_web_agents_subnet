@@ -32,8 +32,6 @@ from autoppia_web_agents_subnet.validator.config import (
     BURN_UID,
 )
 from autoppia_web_agents_subnet.validator.tasks import get_task_collection_interleaved, collect_task_solutions_and_execution_times
-from autoppia_iwa.src.demo_webs.classes import WebProject
-from autoppia_iwa.src.data_generation.domain.classes import Task
 from autoppia_web_agents_subnet.validator.synapse_handlers import (
     send_start_round_synapse_to_miners,
     send_task_synapse_to_miners,
@@ -90,6 +88,8 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         self._consensus_published: bool = False
         self._consensus_mid_fetched: bool = False
         self._agg_scores_cache: dict[int, float] | None = None
+        # Track if final weights + IWAP finish_round were already sent this round
+        self._finalized_this_round: bool = False
 
         # ⭐ Round system components
         self.round_manager = RoundManager(
@@ -139,15 +139,27 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         4. When finished, WAIT until target epoch
         5. Calculates averages, applies WTA, sets weights
         """
-        bt.logging.info("🚀 Starting round-based forward")
-
         # Get current block and prevent early round execution
-        # Use subtensor height for real-time boundary checks to avoid stale metagraph heights
+        # Use live chain height, not metagraph.block (which updates only on sync)
+        current_block = self.block
+
+        current_round_number: int | None = None
         try:
-            current_block = int(self.subtensor.get_current_block())
-        except Exception:
-            # Fallback to metagraph height if subtensor fails, but this may be slightly stale
-            current_block = int(self.metagraph.block.item())
+            current_round_number = await self.round_manager.calculate_round(current_block)
+            if current_round_number is not None:
+                setattr(self, "_current_round_number", int(current_round_number))
+        except Exception as exc:
+            bt.logging.debug(f"Unable to calculate current round number: {exc}")
+            current_round_number = None
+
+        if current_round_number is not None:
+            bt.logging.info(f"🚀 Starting round-based forward (round {current_round_number})")
+            try:
+                ColoredLogger.info(f"🚦 Starting Round: {int(current_round_number)}", ColoredLogger.GREEN)
+            except Exception:
+                pass
+        else:
+            bt.logging.info("🚀 Starting round-based forward")
 
         if not self.round_manager.can_start_round(current_block):
             blocks_remaining = self.round_manager.blocks_until_allowed(current_block)
@@ -292,7 +304,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 if (not at_boundary) and (frac >= float(SKIP_ROUND_IF_STARTED_AFTER_FRACTION)):
                     minutes_remaining = (blocks_to_target * self.round_manager.SECONDS_PER_BLOCK) / 60
                     ColoredLogger.warning(
-                        (f"⏭️ Fresh start late in round: {frac*100:.1f}% >= " f"{float(SKIP_ROUND_IF_STARTED_AFTER_FRACTION)*100:.0f}% — skipping to next round"),
+                        (f"⏭️ Fresh start late in round: {frac * 100:.1f}% >= " f"{float(SKIP_ROUND_IF_STARTED_AFTER_FRACTION) * 100:.0f}% — skipping to next round"),
                         ColoredLogger.YELLOW,
                     )
                     ColoredLogger.info(
@@ -345,6 +357,8 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
         # Initialize new round in RoundManager (logs sync math once)
         self.round_manager.start_new_round(current_block)
+        # New round: ensure finalize flag is reset
+        self._finalized_this_round = False
         boundaries = self.round_manager.get_current_boundaries()
         # If not resuming, reset ephemeral structures; if resuming, keep loaded ones
         if not resumed:
@@ -612,7 +626,8 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
         # Dynamic loop: consume pre-generated tasks and check AFTER evaluating
         while task_index < len(all_tasks):
-            current_block = self.metagraph.block.item()
+            # Always use live chain height to avoid stale epoch math
+            current_block = self.block
             current_epoch = self.round_manager.block_to_epoch(current_block)
             boundaries = self.round_manager.get_current_boundaries()
             wait_info = self.round_manager.get_wait_info(current_block)
@@ -662,7 +677,8 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
             # Dynamic check: should we send another task?
             # Refresh block height after evaluation to get an accurate time window
-            current_block = self.metagraph.block.item()
+            # Refresh block height after evaluation to get an accurate time window
+            current_block = self.block
             # Compute fractional progress for reserved-window stop
             try:
                 boundaries_now = self.round_manager.get_round_boundaries(current_block, log_debug=False)
@@ -673,17 +689,48 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 progress_frac = min(max(bt_done / bt_total, 0.0), 1.0)
             except Exception:
                 progress_frac = 0.0
-            if ENABLE_DISTRIBUTED_CONSENSUS and not self._consensus_published and (progress_frac >= float(STOP_TASK_EVALUATION_AT_ROUND_FRACTION)):
-                from autoppia_web_agents_subnet.utils.log_colors import consensus_tag
 
-                bt.logging.info("=" * 80)
-                bt.logging.info(consensus_tag(f"🛑 STOP EVAL @ {STOP_TASK_EVALUATION_AT_ROUND_FRACTION:.0%}"))
-                bt.logging.info(consensus_tag(f"Progress: {progress_frac:.2f}"))
-                bt.logging.info(consensus_tag(f"Current Block: {current_block:,}"))
-                bt.logging.info(consensus_tag(f"Blocks Done/Total: {bt_done}/{bt_total}"))
-                bt.logging.info(consensus_tag(f"Tasks Completed: {tasks_completed}"))
-                bt.logging.info(consensus_tag(f"Publishing to IPFS now..."))
-                bt.logging.info("=" * 80)
+            # Early finalize window: fetch aggregated scores, set weights and finish_round
+            if (not self._finalized_this_round) and (progress_frac >= float(FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION)):
+                ColoredLogger.info(
+                    f"⏳ Finalizing early at {FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION:.0%} to avoid boundary issues",
+                    ColoredLogger.PURPLE,
+                )
+                try:
+                    await self._calculate_final_weights(tasks_completed)
+                    self._finalized_this_round = True
+                except Exception as e:
+                    bt.logging.warning(f"Early finalize failed; will retry later: {e}")
+                # Stop scheduling more tasks; wait for boundary afterwards
+                break
+            if ENABLE_DISTRIBUTED_CONSENSUS and (not self._finalized_this_round) and (not self._consensus_published) and (progress_frac >= float(STOP_TASK_EVALUATION_AT_ROUND_FRACTION)):
+                ColoredLogger.error("\n" + "=" * 80, ColoredLogger.RED)
+                ColoredLogger.error(
+                    f"🛑🛑🛑 STOP FRACTION REACHED: {STOP_TASK_EVALUATION_AT_ROUND_FRACTION:.0%} 🛑🛑🛑",
+                    ColoredLogger.RED,
+                )
+                ColoredLogger.error(
+                    f"📤📤📤 PUBLISHING TO IPFS NOW WITH {tasks_completed} TASKS 📤📤📤",
+                    ColoredLogger.RED,
+                )
+                ColoredLogger.error(
+                    f"⏸️⏸️⏸️  HALTING ALL TASK EXECUTION ⏸️⏸️⏸️",
+                    ColoredLogger.RED,
+                )
+                ColoredLogger.error("=" * 80 + "\n", ColoredLogger.RED)
+                # Additional structured consensus logs (no logic change)
+                try:
+                    from autoppia_web_agents_subnet.utils.log_colors import consensus_tag
+                    bt.logging.info("=" * 80)
+                    bt.logging.info(consensus_tag(f"🛑 STOP EVAL @ {STOP_TASK_EVALUATION_AT_ROUND_FRACTION:.0%}"))
+                    bt.logging.info(consensus_tag(f"Progress: {progress_frac:.2f}"))
+                    bt.logging.info(consensus_tag(f"Current Block: {current_block:,}"))
+                    bt.logging.info(consensus_tag(f"Blocks Done/Total: {bt_done}/{bt_total}"))
+                    bt.logging.info(consensus_tag(f"Tasks Completed: {tasks_completed}"))
+                    bt.logging.info(consensus_tag("Publishing to IPFS now..."))
+                    bt.logging.info("=" * 80)
+                except Exception:
+                    pass
                 try:
                     round_number = await self.round_manager.calculate_round(current_block)
                     st = await self._get_async_subtensor()
@@ -707,6 +754,13 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
                     bt.logging.error(f"[CONSENSUS] Traceback:\n{traceback.format_exc()}")
                     bt.logging.error("=" * 80)
+                if not self._finalized_this_round:
+                    bt.logging.info("[CONSENSUS] Finalizing immediately after consensus publish window")
+                    try:
+                        await self._calculate_final_weights(tasks_completed)
+                        self._finalized_this_round = True
+                    except Exception as e:
+                        bt.logging.warning(f"Immediate finalize failed; will retry later: {e}")
                 break
             if not self.round_manager.should_send_next_task(current_block):
                 ColoredLogger.warning(
@@ -734,8 +788,8 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     self.state_manager.save_checkpoint()
                 except Exception:
                     pass
-                # Try to publish commitments if sharing and not yet published.
-                if ENABLE_DISTRIBUTED_CONSENSUS and not self._consensus_published:
+                # Try to publish commitments if sharing and not yet published and not already finalized.
+                if ENABLE_DISTRIBUTED_CONSENSUS and (not self._consensus_published) and (not self._finalized_this_round):
                     try:
                         bt.logging.info(f"[CONSENSUS] Safety buffer reached - publishing to IPFS with {tasks_completed} tasks")
                         round_number = await self.round_manager.calculate_round(current_block)
@@ -761,6 +815,13 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
                         bt.logging.error(f"[CONSENSUS] Traceback:\n{traceback.format_exc()}")
                         bt.logging.error("=" * 80)
+                if not self._finalized_this_round:
+                    bt.logging.info("[CONSENSUS] Finalizing immediately after safety-buffer publish")
+                    try:
+                        await self._calculate_final_weights(tasks_completed)
+                        self._finalized_this_round = True
+                    except Exception as e:
+                        bt.logging.warning(f"Immediate finalize failed; will retry later: {e}")
                 break
 
         # ═══════════════════════════════════════════════════════
@@ -768,12 +829,27 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         # If we completed all tasks before reaching 50%, publish NOW
         # This ensures round_number and validator_round_id match
         # ═══════════════════════════════════════════════════════
-        if ENABLE_DISTRIBUTED_CONSENSUS and not self._consensus_published:
-            bt.logging.info("=" * 80)
-            bt.logging.info(f"[CONSENSUS] All tasks done ({tasks_completed}/{len(all_tasks)}) - Publishing to IPFS now...")
-            bt.logging.info("=" * 80)
+        if ENABLE_DISTRIBUTED_CONSENSUS and (not self._consensus_published) and (not self._finalized_this_round):
+            ColoredLogger.error("\n" + "=" * 80, ColoredLogger.RED)
+            ColoredLogger.error(
+                f"📤📤📤 ALL TASKS DONE - PUBLISHING TO IPFS NOW 📤📤📤",
+                ColoredLogger.RED,
+            )
+            ColoredLogger.error(
+                f"📦 Tasks completed: {tasks_completed}/{len(all_tasks)}",
+                ColoredLogger.RED,
+            )
+            ColoredLogger.error("=" * 80 + "\n", ColoredLogger.RED)
+            # Additional structured consensus logs (no logic change)
             try:
-                current_block = self.metagraph.block.item()
+                from autoppia_web_agents_subnet.utils.log_colors import consensus_tag
+                bt.logging.info("=" * 80)
+                bt.logging.info(consensus_tag(f"All tasks done ({tasks_completed}/{len(all_tasks)}) - Publishing to IPFS now..."))
+                bt.logging.info("=" * 80)
+            except Exception:
+                pass
+            try:
+                current_block = self.block
                 round_number = await self.round_manager.calculate_round(current_block)
                 st = await self._get_async_subtensor()
                 cid = await publish_round_snapshot(
@@ -793,6 +869,13 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
                 bt.logging.error(f"[CONSENSUS] Traceback:\n{traceback.format_exc()}")
                 bt.logging.error("=" * 80)
+            if not self._finalized_this_round:
+                bt.logging.info("[CONSENSUS] Finalizing immediately after all-tasks completion publish")
+                try:
+                    await self._calculate_final_weights(tasks_completed)
+                    self._finalized_this_round = True
+                except Exception as e:
+                    bt.logging.warning(f"Immediate finalize failed; will retry later: {e}")
 
         # ═══════════════════════════════════════════════════════
         # WAIT FOR TARGET EPOCH: Wait until the round ends
@@ -803,11 +886,20 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             self.state_manager.save_checkpoint()
         except Exception:
             pass
+        # Actively wait until the fixed end-of-round boundary before finalizing
+        try:
+            await self._wait_until_next_round_boundary()
+        except Exception as e:
+            bt.logging.warning(f"Wait-until-boundary failed, proceeding to finalize: {e}")
 
         # ═══════════════════════════════════════════════════════
-        # FINAL WEIGHTS: Calculate averages, apply WTA, set weights
+        # FINAL WEIGHTS (fallback): If not done early, finalize now
         # ═══════════════════════════════════════════════════════
-        await self._calculate_final_weights(tasks_completed)
+        if not self._finalized_this_round:
+            await self._calculate_final_weights(tasks_completed)
+            self._finalized_this_round = True
+        else:
+            ColoredLogger.info("✅ Weights already finalized earlier; skipping.", ColoredLogger.GREEN)
 
     # ═══════════════════════════════════════════════════════════════════════════════
     # TASK EXECUTION HELPERS
@@ -1248,7 +1340,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
     async def _calculate_final_weights(self, tasks_completed: int):
         """Calculate averages, apply WTA, set weights"""
         bt.logging.info("=" * 80)
-        bt.logging.info(f"[CONSENSUS] Phase: SetWeights - Calculating final weights")
+        bt.logging.info("[CONSENSUS] Phase: SetWeights - Calculating final weights")
         bt.logging.info(f"[CONSENSUS] Distributed consensus: {str(ENABLE_DISTRIBUTED_CONSENSUS).lower()}")
         bt.logging.info("=" * 80)
 
@@ -1277,7 +1369,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         if ENABLE_DISTRIBUTED_CONSENSUS:
             try:
                 boundaries = self.round_manager.get_current_boundaries()
-                bt.logging.info(f"[CONSENSUS] Aggregating scores from other validators...")
+                bt.logging.info("[CONSENSUS] Aggregating scores from other validators...")
                 # Prefer cached mid-settlement aggregation if available
                 agg = self._agg_scores_cache or {}
                 agg_meta = None
@@ -1299,7 +1391,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     bt.logging.info(consensus_tag(f"📥 FETCH COMMITS @ {FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION:.0%}"))
                     bt.logging.info(consensus_tag(f"Progress: {progress_now:.2f}"))
                     bt.logging.info(consensus_tag(f"Current Block: {current_block_now:,}"))
-                    bt.logging.info(consensus_tag(f"Fetching commitments from IPFS to aggregate scores"))
+                    bt.logging.info(consensus_tag("Fetching commitments from IPFS to aggregate scores"))
                     bt.logging.info("=" * 80)
 
                     # Natural gap between STOP and FETCH ensures propagation
@@ -1400,7 +1492,14 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         except Exception as e:
             bt.logging.warning(f"IWAP finish_round failed: {e}")
 
-        ColoredLogger.success("✅ Round complete", ColoredLogger.GREEN)
+        try:
+            round_finished = getattr(self, "_current_round_number", None)
+        except Exception:
+            round_finished = None
+        if round_finished is not None:
+            ColoredLogger.success(f"✅ Round completed: {int(round_finished)}", ColoredLogger.GREEN)
+        else:
+            ColoredLogger.success("✅ Round complete", ColoredLogger.GREEN)
         ColoredLogger.info(f"Tasks completed: {tasks_completed}", ColoredLogger.GREEN)
 
 

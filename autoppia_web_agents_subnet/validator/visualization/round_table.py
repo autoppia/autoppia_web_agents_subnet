@@ -1,6 +1,7 @@
 # autoppia_web_agents_subnet/validator/visualization/round_table.py
 from __future__ import annotations
 
+import shutil
 from typing import Dict, Any, Optional, List, Set
 
 import numpy as np
@@ -20,6 +21,100 @@ def _mean_safe(values: list[float]) -> float:
     return float(np.mean(np.asarray(values, dtype=np.float32)))
 
 
+MAX_TERMINAL_WIDTH = 118
+BASE_COLUMN_WIDTH = 3 + 5 + 12 + 6 + 10 + 11 + 6  # estimated from explicit widths below
+VALIDATOR_COLUMN_WIDTH = 12
+
+
+def _derive_round_number(round_manager) -> Optional[int]:
+    """Best-effort calculation of the human-readable round number."""
+
+    try:
+        block_length = int(getattr(round_manager, "ROUND_BLOCK_LENGTH", 0))
+        if block_length <= 0:
+            return None
+
+        start_block = getattr(round_manager, "start_block", None)
+        if start_block is None:
+            try:
+                boundaries = round_manager.get_current_boundaries()
+                start_block = int(boundaries.get("round_start_block"))
+            except Exception:  # noqa: BLE001
+                start_block = None
+        if start_block is None:
+            return None
+
+        base_block = getattr(round_manager, "minimum_start_block", None) or 0
+        blocks_since_start = max(int(start_block) - int(base_block), 0)
+        round_index = blocks_since_start // block_length
+        return int(round_index + 1)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _chunk_indices(length: int, chunk_size: int) -> List[range]:
+    if length <= 0:
+        return [range(0)]
+    ranges: List[range] = []
+    for start in range(0, length, chunk_size):
+        stop = min(start + chunk_size, length)
+        ranges.append(range(start, stop))
+    return ranges
+
+
+def _coerce_score_mapping(raw: Optional[Any]) -> Dict[int, float]:
+    """Normalize various score payload shapes into {uid: score}."""
+
+    mapping: Dict[int, float] = {}
+    if raw is None:
+        return mapping
+
+    try:
+        if isinstance(raw, dict):
+            candidate = raw
+            # Some payloads wrap the scores under a named key (e.g. "avg_reward").
+            if any(isinstance(k, str) and not k.isdigit() for k in candidate.keys()):
+                for key in ("avg_reward", "scores", "final_score", "data"):
+                    nested = candidate.get(key)
+                    if isinstance(nested, dict):
+                        candidate = nested
+                        break
+            for key, value in candidate.items():
+                try:
+                    uid = int(key)
+                    mapping[uid] = float(value)
+                except Exception:  # noqa: BLE001
+                    continue
+            return mapping
+
+        if isinstance(raw, list):
+            for entry in raw:
+                if not isinstance(entry, dict):
+                    continue
+                uid = entry.get("uid") or entry.get("miner_uid")
+                score_value = (
+                    entry.get("avg_reward")
+                    if entry.get("avg_reward") is not None
+                    else entry.get("score")
+                )
+                if score_value is None:
+                    score_value = entry.get("final_score")
+                if uid is None or score_value is None:
+                    continue
+                try:
+                    mapping[int(uid)] = float(score_value)
+                except Exception:  # noqa: BLE001
+                    continue
+            return mapping
+
+        if hasattr(raw, "to_dict"):
+            return _coerce_score_mapping(raw.to_dict())
+    except Exception:  # noqa: BLE001
+        return mapping
+
+    return mapping
+
+
 def render_round_summary_table(
     round_manager,
     final_rewards: Dict[int, float],  # WTA rewards mapping (1.0 to winner)
@@ -36,10 +131,13 @@ def render_round_summary_table(
     Sorted by Reward desc.
     """
     rows: list[dict[str, Any]] = []
+    round_number = _derive_round_number(round_manager)
 
     # Decide which UIDs to show: if agg_scores provided, show only UIDs with final score > 0
-    if agg_scores:
-        uids_to_show = {int(uid) for uid, sc in agg_scores.items() if float(sc) > 0.0}
+    normalized_scores = _coerce_score_mapping(agg_scores)
+
+    if normalized_scores:
+        uids_to_show = {int(uid) for uid, sc in normalized_scores.items() if float(sc) > 0.0}
     else:
         uids_to_show = set(list(round_manager.round_rewards.keys()) + list(final_rewards.keys()))
 
@@ -57,7 +155,7 @@ def render_round_summary_table(
         avg_eval = _mean_safe(round_manager.round_eval_scores.get(uid, []))
         avg_time = _mean_safe(round_manager.round_times.get(uid, []))
         local_participated = bool(round_manager.round_rewards.get(uid)) or bool(round_manager.round_eval_scores.get(uid))
-        final_score = float((agg_scores or {}).get(uid, 0.0))
+        final_score = float(normalized_scores.get(uid, 0.0))
         wta_reward = float(final_rewards.get(uid, 0.0))  # 1.0 for winner else 0.0
 
         # Per-validator scores for this UID, ordered by validators_hk_order
@@ -87,88 +185,174 @@ def render_round_summary_table(
             Console().print(text)
         return text
 
+    title_base = "Round Summary — Miners"
+    if round_number is not None:
+        title_base = f"{title_base} — Round {round_number}"
+
     if _RICH:
-        tbl = Table(
-            title="[bold magenta]Round Summary — Miners[/bold magenta]",
-            box=box.SIMPLE_HEAVY,
-            header_style="bold cyan",
-            expand=True,
-            show_lines=False,
-            padding=(0, 1),
-        )
+        min_table_width = BASE_COLUMN_WIDTH + VALIDATOR_COLUMN_WIDTH
+        probe_console: Optional[Console] = None
+        target_width = MAX_TERMINAL_WIDTH
+        try:
+            probe_console = Console()
+            measured = probe_console.width or getattr(probe_console, "options", None)
+            measured_width = getattr(measured, "max_width", None) if hasattr(measured, "max_width") else measured
+            if measured_width:
+                try:
+                    measured_width = int(measured_width)
+                except Exception:  # noqa: BLE001
+                    measured_width = MAX_TERMINAL_WIDTH
+            else:
+                measured_width = MAX_TERMINAL_WIDTH
+            target_width = min(MAX_TERMINAL_WIDTH, max(int(measured_width), min_table_width))
+        except Exception:  # noqa: BLE001
+            probe_console = None
+            target_width = MAX_TERMINAL_WIDTH
+
+        console_kwargs: Dict[str, Any] = {"width": target_width}
+        if probe_console is not None:
+            console_kwargs["force_terminal"] = probe_console.is_terminal
+            console_kwargs["color_system"] = probe_console.color_system
+        console = probe_console if (probe_console and probe_console.width == target_width) else Console(**console_kwargs)
+
+        available_width = max(target_width - BASE_COLUMN_WIDTH, VALIDATOR_COLUMN_WIDTH)
+        max_validator_cols = 0
+        if validators_hk_order:
+            max_validator_cols = max(1, available_width // VALIDATOR_COLUMN_WIDTH)
+        validator_ranges = _chunk_indices(len(validators_hk_order), max_validator_cols or 1)
+
         # Header note with validators and stakes (weights used)
         if validators_info:
             try:
-                from rich.console import Console as _C
                 hdr = ", ".join(
                     [
                         f"{v.get('hotkey', '')[:10]}…({float(v.get('stake') or 0.0):.0f}τ)"
                         for v in validators_info
                     ]
                 )
-                _C().print(f"[bold]Aggregators:[/bold] {hdr}")
-            except Exception:
+                console.print(f"[bold]Aggregators:[/bold] {hdr}")
+            except Exception:  # noqa: BLE001
                 pass
 
-        tbl.add_column("#", justify="right", width=3)
-        tbl.add_column("UID", justify="right", width=5)
-        tbl.add_column("Hotkey", style="cyan", overflow="ellipsis")
-        tbl.add_column("Active", justify="center", width=6)
-        tbl.add_column("LocalScore", justify="right", width=10)
-        # Per-validator dynamic columns
-        if validators_hk_order:
-            for idx, v in enumerate(validators_info, start=1):
-                hk = v.get("hotkey", "")
-                stake = float(v.get("stake") or 0.0)
-                header = f"V{idx}:{hk[:6]}…({stake:.0f}τ)"
-                tbl.add_column(header, justify="right", width=12)
-        tbl.add_column("FinalScore", justify="right", width=11)
-        tbl.add_column("WTA", justify="right", width=6)
+        for part_idx, rng in enumerate(validator_ranges, start=1):
+            title = title_base
+            if len(validator_ranges) > 1:
+                title = f"{title} (part {part_idx})"
 
-        for i, r in enumerate(rows, start=1):
-            base_cols = [
-                str(i),
-                str(r["uid"]),
-                r["hotkey_prefix"],
-                ("yes" if (active_uids and r["uid"] in active_uids) else ("yes" if r["local"] else "no")),
-                f'{r["avg_eval"]:.4f}',
-            ]
-            pv_cols = []
-            if validators_hk_order and r.get("per_val_scores"):
-                pv_cols = [f"{val:.4f}" for val in r["per_val_scores"]]
-            tail_cols = [
-                f'{r["final_score"]:.4f}',
-                f'{r["wta_reward"]:.4f}',
-            ]
-            tbl.add_row(*(base_cols + pv_cols + tail_cols))
+            tbl = Table(
+                title=f"[bold magenta]{title}[/bold magenta]",
+                box=box.SIMPLE_HEAVY,
+                header_style="bold cyan",
+                expand=False,
+                show_lines=False,
+                padding=(0, 1),
+            )
 
-        console = Console()
-        console.print(tbl)
-        return f"Round Summary — Miners (n={len(rows)})."
+            tbl.add_column("#", justify="right", width=3)
+            tbl.add_column("UID", justify="right", width=5)
+            tbl.add_column("Hotkey", style="cyan", width=12, overflow="ellipsis")
+            tbl.add_column("Active", justify="center", width=6)
+            tbl.add_column("LocalScore", justify="right", width=10)
+
+            if validators_hk_order:
+                for idx in rng:
+                    validator = validators_info[idx]
+                    hk = validator.get("hotkey", "")
+                    stake = float(validator.get("stake") or 0.0)
+                    header = f"V{idx + 1}:{hk[:6]}…({stake:.0f}τ)"
+                    tbl.add_column(header, justify="right", width=12)
+
+            tbl.add_column("FinalScore", justify="right", width=11)
+            tbl.add_column("WTA", justify="right", width=6)
+
+            for i, r in enumerate(rows, start=1):
+                base_cols = [
+                    str(i),
+                    str(r["uid"]),
+                    r["hotkey_prefix"],
+                    ("yes" if (active_uids and r["uid"] in active_uids) else ("yes" if r["local"] else "no")),
+                    f'{r["avg_eval"]:.4f}',
+                ]
+                pv_cols: List[str] = []
+                if validators_hk_order and r.get("per_val_scores"):
+                    pv_cols = [
+                        f"{r['per_val_scores'][idx]:.4f}" if idx < len(r["per_val_scores"]) else "0.0000"
+                        for idx in rng
+                    ]
+                tail_cols = [
+                    f'{r["final_score"]:.4f}',
+                    f'{r["wta_reward"]:.4f}',
+                ]
+                tbl.add_row(*(base_cols + pv_cols + tail_cols))
+
+            console.print(tbl)
+
+        return f"{title_base} (n={len(rows)}, sections={len(validator_ranges)})."
 
     # Fallback plain text table
-    # Plain text fallback
-    header = [
-        "#", "UID", "HOTKEY", "Active", "LocalScore",
+    header_base = ["#", "UID", "Hotkey", "Active", "LocalScore"]
+    tail_headers = ["FinalScore", "WTA"]
+    validator_headers = [
+        f"V{idx}:{v.get('hotkey', '')[:6]}…({float(v.get('stake') or 0.0):.0f}τ)"
+        for idx, v in enumerate(validators_info, start=1)
     ]
-    if validators_info:
-        header.extend([f"V{idx}:{v.get('hotkey','')[:6]}…({float(v.get('stake') or 0.0):.0f}τ)" for idx, v in enumerate(validators_info, start=1)])
-    header.extend(["FinalScore", "WTA"])
 
-    lines = [
-        "Round Summary — Miners",
-        " ".join([f"{h:>12}" for h in header]),
-    ]
-    for i, r in enumerate(rows, start=1):
-        fields = [
-            f"{i:>3}", f"{r['uid']:>5}", f"{r['hotkey_prefix']:<12.12}",
-            ("yes" if (active_uids and r["uid"] in active_uids) else ("yes" if r["local"] else "no")),
-            f"{r['avg_eval']:.4f}",
+    terminal_cols = shutil.get_terminal_size((MAX_TERMINAL_WIDTH, 0)).columns
+    target_width = min(MAX_TERMINAL_WIDTH, max(terminal_cols, BASE_COLUMN_WIDTH + VALIDATOR_COLUMN_WIDTH))
+    available = max(target_width - BASE_COLUMN_WIDTH, VALIDATOR_COLUMN_WIDTH)
+    max_validator_cols = max(1, available // VALIDATOR_COLUMN_WIDTH) if validator_headers else 1
+    validator_ranges = _chunk_indices(len(validator_headers), max_validator_cols)
+
+    lines: List[str] = []
+    for part_idx, rng in enumerate(validator_ranges, start=1):
+        title = title_base
+        if len(validator_ranges) > 1:
+            title = f"{title} (part {part_idx})"
+        lines.append(title)
+
+        headers = header_base + [validator_headers[i] for i in rng] + tail_headers
+        header_formats = [
+            "{:>3}",
+            "{:>5}",
+            "{:<12}",
+            "{:>6}",
+            "{:>10}",
         ]
-        if validators_hk_order and r.get("per_val_scores"):
-            fields.extend([f"{val:.4f}" for val in r["per_val_scores"]])
-        fields.extend([f"{r['final_score']:.4f}", f"{r['wta_reward']:.4f}"])
-        lines.append(" ".join([f"{x:>12}" for x in fields]))
+        header_formats.extend(["{:>12}"] * len(rng))
+        header_formats.extend(["{:>11}", "{:>6}"])
+        lines.append(" ".join(fmt.format(h) for fmt, h in zip(header_formats, headers)))
+
+        for i, r in enumerate(rows, start=1):
+            row_base = [
+                i,
+                r["uid"],
+                r["hotkey_prefix"][:12],
+                ("yes" if (active_uids and r["uid"] in active_uids) else ("yes" if r["local"] else "no")),
+                f"{r['avg_eval']:.4f}",
+            ]
+            validator_values = []
+            if validators_hk_order and r.get("per_val_scores"):
+                validator_values = [
+                    f"{r['per_val_scores'][idx]:.4f}" if idx < len(r["per_val_scores"]) else "0.0000"
+                    for idx in rng
+                ]
+            tail_values = [f"{r['final_score']:.4f}", f"{r['wta_reward']:.4f}"]
+
+            values = row_base + validator_values + tail_values
+            row_formats = [
+                "{:>3}",
+                "{:>5}",
+                "{:<12}",
+                "{:>6}",
+                "{:>10}",
+            ]
+            row_formats.extend(["{:>12}"] * len(validator_values))
+            row_formats.extend(["{:>11}", "{:>6}"])
+            lines.append(" ".join(fmt.format(val) for fmt, val in zip(row_formats, values)))
+
+        if part_idx < len(validator_ranges):
+            lines.append("")
+
     text = "\n".join(lines)
     if to_console:
         print(text)
