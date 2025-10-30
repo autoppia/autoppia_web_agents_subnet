@@ -1356,6 +1356,51 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         ColoredLogger.success(message, color)
         ColoredLogger.info(f"Tasks completed: {tasks_completed}", color)
 
+    async def _burn_all(
+        self,
+        *,
+        avg_rewards: Dict[int, float] | None,
+        tasks_completed: int,
+        reason: str,
+        weights: np.ndarray | None = None,
+        success_message: str | None = None,
+        success_color: str = ColoredLogger.RED,
+    ) -> None:
+        """Override on-chain weights with burn-style weights and finalize the round."""
+        n = self.metagraph.n
+        if weights is None:
+            burn_idx = int(BURN_UID) if 0 <= int(BURN_UID) < n else min(5, n - 1)
+            weights = np.zeros(n, dtype=np.float32)
+            weights[burn_idx] = 1.0
+            success_message = success_message or f"✅ Burn complete (weight to UID {burn_idx})"
+        else:
+            burn_idx = None
+            if not isinstance(weights, np.ndarray):
+                weights = np.asarray(weights, dtype=np.float32)
+            elif weights.dtype != np.float32:
+                weights = weights.astype(np.float32)
+            success_message = success_message or "✅ Burn complete"
+
+        all_uids = list(range(n))
+        self.update_scores(rewards=weights, uids=all_uids)
+        self.set_weights()
+
+        # Only report non-zero weights to IWAP to keep payload small.
+        final_weights = {uid: float(weights[uid]) for uid in range(len(weights)) if float(weights[uid]) > 0.0}
+
+        try:
+            await self._finish_iwap_round(
+                avg_rewards=avg_rewards or {},
+                final_weights=final_weights,
+                tasks_completed=tasks_completed,
+            )
+        except Exception as e:
+            bt.logging.warning(f"IWAP finish_round failed ({reason}): {e}")
+
+        ColoredLogger.success(success_message, success_color)
+        ColoredLogger.info(f"Tasks attempted: {tasks_completed}", success_color)
+        self._log_round_completion(tasks_completed, color=success_color, reason=reason)
+
     async def _calculate_final_weights(self, tasks_completed: int):
         """Calculate averages, apply WTA, set weights"""
         try:
@@ -1387,25 +1432,11 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                 burn_reason = "burn (forced)"
 
         if burn_reason:
-            burn_weights = np.zeros(self.metagraph.n, dtype=np.float32)
-            burn_idx = int(BURN_UID) if 0 <= int(BURN_UID) < self.metagraph.n else min(5, self.metagraph.n - 1)
-            burn_weights[burn_idx] = 1.0
-            all_uids = list(range(self.metagraph.n))
-            self.update_scores(rewards=burn_weights, uids=all_uids)
-            self.set_weights()
-
-            try:
-                await self._finish_iwap_round(
-                    avg_rewards=avg_rewards or {},
-                    final_weights={burn_idx: 1.0},
-                    tasks_completed=tasks_completed,
-                )
-            except Exception as e:
-                bt.logging.warning(f"IWAP finish_round failed ({burn_reason}): {e}")
-
-            ColoredLogger.success(f"✅ Burn complete (weight to UID {burn_idx})", ColoredLogger.RED)
-            ColoredLogger.info(f"Tasks attempted: {tasks_completed}", ColoredLogger.RED)
-            self._log_round_completion(tasks_completed, color=ColoredLogger.RED, reason=burn_reason)
+            await self._burn_all(
+                avg_rewards=avg_rewards,
+                tasks_completed=tasks_completed,
+                reason=burn_reason,
+            )
             return
 
         # If sharing enabled, attempt to aggregate across validators via commitments/IPFS
@@ -1468,14 +1499,15 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             has_positive = False
         if not has_positive:
             ColoredLogger.warning("🔥 All miners scored <= 0: burning all weights", ColoredLogger.RED)
-            # Zero-out via standard update_scores path to keep flow consistent
+            # Zero-out via helper to keep flow consistent and share logging.
             zero_vec = np.zeros(self.metagraph.n, dtype=np.float32)
-            all_uids = list(range(self.metagraph.n))
-            self.update_scores(rewards=zero_vec, uids=all_uids)
-            self.set_weights()
-            ColoredLogger.success("✅ Burn complete (no winners)", ColoredLogger.RED)
-            ColoredLogger.info(f"Tasks attempted: {tasks_completed}", ColoredLogger.RED)
-            self._log_round_completion(tasks_completed, color=ColoredLogger.RED, reason="burn (no winners)")
+            await self._burn_all(
+                avg_rewards=avg_rewards,
+                tasks_completed=tasks_completed,
+                reason="burn (no winners)",
+                weights=zero_vec,
+                success_message="✅ Burn complete (no winners)",
+            )
             return
 
         # Log round summary
