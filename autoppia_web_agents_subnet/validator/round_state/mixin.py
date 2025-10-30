@@ -170,12 +170,9 @@ class RoundPhaseValidatorMixin:
                     acc["execution_time"] / acc["tasks"] if acc["tasks"] else None
                 )
 
-            try:
-                rr = self.round_manager.round_rewards.setdefault(uid, [])
-                rs = self.round_manager.round_eval_scores.setdefault(uid, [])
-                rt = self.round_manager.round_times.setdefault(uid, [])
-                rr.append(reward)
-                rs.append(score)
-                rt.append(exec_time)
-            except Exception:
-                pass
+            rr = self.round_manager.round_rewards.setdefault(uid, [])
+            rs = self.round_manager.round_eval_scores.setdefault(uid, [])
+            rt = self.round_manager.round_times.setdefault(uid, [])
+            rr.append(reward)
+            rs.append(score)
+            rt.append(exec_time)

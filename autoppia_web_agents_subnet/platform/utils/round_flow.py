@@ -5,6 +5,7 @@ import time
 from typing import Any, Dict, List
 
 import httpx
+import bittensor as bt
 
 from autoppia_web_agents_subnet.validator.config import ROUND_SIZE_EPOCHS
 from autoppia_web_agents_subnet.platform import models as iwa_models
@@ -14,6 +15,23 @@ from .iwa_core import (
     build_validator_identity,
     build_validator_snapshot,
 )
+
+
+def _extract_validator_round_id(resp: Any) -> str:
+    if not isinstance(resp, dict):
+        raise RuntimeError("IWAP start_round response must be a dictionary")
+
+    direct = resp.get("validator_round_id")
+    if isinstance(direct, str) and direct.strip():
+        return direct
+
+    data_section = resp.get("data")
+    if isinstance(data_section, dict):
+        nested = data_section.get("validator_round_id")
+        if isinstance(nested, str) and nested.strip():
+            return nested
+
+    raise RuntimeError("IWAP start_round response missing 'validator_round_id'")
 
 
 async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
@@ -74,20 +92,20 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
         # Even on resume, ensure the backend still has this round (dev DBs may be reset).
         # Re-send start_round idempotently; backend treats duplicates as OK.
         log_iwap_phase("Phase 1", "resume: verifying start_round on backend", level="warning")
+        resp = await ctx.iwap_client.start_round(
+            validator_identity=validator_identity,
+            validator_round=validator_round,
+            validator_snapshot=validator_snapshot,
+        )
+        vrid = _extract_validator_round_id(resp)
+        if vrid != ctx.current_round_id:
+            ctx.current_round_id = vrid
+        ctx._phases["p1_done"] = True
         try:
-            resp = await ctx.iwap_client.start_round(
-                validator_identity=validator_identity,
-                validator_round=validator_round,
-                validator_snapshot=validator_snapshot,
-            )
-            try:
-                vrid = (resp or {}).get("validator_round_id") or (resp.get("data", {}) if isinstance(resp, dict) else {}).get("validator_round_id")  # type: ignore[union-attr]
-                if vrid and vrid != ctx.current_round_id:
-                    ctx.current_round_id = vrid
-            except Exception:
-                pass
-            ctx._phases["p1_done"] = True
-        except httpx.HTTPStatusError as exc:
+            ctx._save_round_state()
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("Failed to persist round state after start_round verification") from exc
+    except httpx.HTTPStatusError as exc:
             status = exc.response.status_code if exc.response is not None else None
             if status in (409, 500):
                 # Treat as idempotent success
@@ -105,11 +123,6 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                     exc_info=True,
                 )
                 return
-        finally:
-            try:
-                ctx._save_round_state()
-            except Exception:
-                pass
     else:
         try:
             resp = await ctx.iwap_client.start_round(
@@ -117,12 +130,9 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                 validator_round=validator_round,
                 validator_snapshot=validator_snapshot,
             )
-            try:
-                vrid = (resp or {}).get("validator_round_id") or (resp.get("data", {}) if isinstance(resp, dict) else {}).get("validator_round_id")  # type: ignore[union-attr]
-                if vrid and vrid != ctx.current_round_id:
-                    ctx.current_round_id = vrid
-            except Exception:
-                pass
+            vrid = _extract_validator_round_id(resp)
+            if vrid != ctx.current_round_id:
+                ctx.current_round_id = vrid
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code if exc.response is not None else None
             if status in (409, 500):
@@ -140,14 +150,14 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                     exc_info=True,
                 )
                 return
-        except Exception:
+        except Exception as exc:  # noqa: BLE001
             log_iwap_phase(
                 "Phase 1",
                 f"start_round failed for round_id={ctx.current_round_id}",
                 level="error",
                 exc_info=True,
             )
-            return
+            raise
         else:
             log_iwap_phase(
                 "Phase 1",
@@ -155,11 +165,10 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                 level="success",
             )
             ctx._phases["p1_done"] = True
-        finally:
-            try:
-                ctx._save_round_state()
-            except Exception:
-                pass
+        try:
+            ctx._save_round_state()
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError("Failed to persist round state after start_round") from exc
 
     task_count = len(ctx.current_round_tasks)
     set_tasks_message = (
@@ -408,9 +417,9 @@ async def finish_round_flow(
     avg_rewards: Dict[int, float],
     final_weights: Dict[int, float],
     tasks_completed: int,
-) -> None:
+) -> bool:
     if not ctx.current_round_id:
-        return
+        return True
 
     ended_at = time.time()
     for agent_run in ctx.current_agent_runs.values():
@@ -470,25 +479,27 @@ async def finish_round_flow(
         f"Calling finish_round for round_id={round_id}, winners={len(winners)}, tasks_completed={tasks_completed}"
     )
     log_iwap_phase("Phase 5", finish_round_message)
+    success = False
     try:
         await ctx.iwap_client.finish_round(
             validator_round_id=round_id,
             finish_request=finish_request,
         )
-    except Exception:
-        log_iwap_phase(
-            "Phase 5",
-            f"finish_round failed for round_id={round_id}",
-            level="error",
-            exc_info=True,
+    except Exception as exc:  # noqa: BLE001
+        error_msg = (
+            f"finish_round failed for round_id={round_id} ({type(exc).__name__}: {exc})"
         )
-        raise
+        log_iwap_phase("Phase 5", error_msg, level="error", exc_info=False)
+        bt.logging.error(f"IWAP finish_round failed for round_id={round_id}: {exc}")
+        success = False
     else:
         log_iwap_phase(
             "Phase 5",
             f"finish_round completed for round_id={round_id}",
             level="success",
         )
+        success = True
     finally:
         ctx._reset_iwap_round_state()
         ctx._remove_round_state()
+    return success

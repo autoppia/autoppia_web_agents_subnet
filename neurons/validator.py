@@ -31,6 +31,7 @@ from autoppia_web_agents_subnet.validator.round_state import (
 from autoppia_web_agents_subnet.validator.round_start import RoundStartMixin
 from autoppia_web_agents_subnet.validator.evaluation import EvaluationPhaseMixin
 from autoppia_web_agents_subnet.validator.settlement import SettlementMixin
+from autoppia_iwa.src.bootstrap import AppBootstrap
 
 
 class Validator(
@@ -86,20 +87,10 @@ class Validator(
             note="Starting forward pass",
         )
 
-        current_round_number: int | None = None
-        try:
-            current_round_number = await self.round_manager.calculate_round(current_block)
-            if current_round_number is not None:
-                setattr(self, "_current_round_number", int(current_round_number))
-        except Exception as exc:
-            bt.logging.debug(f"Unable to calculate current round number: {exc}")
-            current_round_number = None
-
-        if current_round_number is not None:
-            bt.logging.info(f"🚀 Starting round-based forward (round {current_round_number})")
-            ColoredLogger.info(f"🚦 Starting Round: {int(current_round_number)}", ColoredLogger.GREEN)
-        else:
-            bt.logging.info("🚀 Starting round-based forward")
+        current_round_number = await self.round_manager.calculate_round(current_block)
+        setattr(self, "_current_round_number", int(current_round_number))
+        bt.logging.info(f"🚀 Starting round-based forward (round {current_round_number})")
+        ColoredLogger.info(f"🚦 Starting Round: {int(current_round_number)}", ColoredLogger.GREEN)
 
         if await self._wait_for_minimum_start_block(current_block):
             return
@@ -124,12 +115,6 @@ class Validator(
 
 
 if __name__ == "__main__":
-    try:
-        from autoppia_iwa.src.bootstrap import AppBootstrap
-    except ImportError as exc:  # pragma: no cover - bootstrap only in runtime
-        bt.logging.warning("autoppia_iwa bootstrap import failed; validator will exit")
-        raise exc
-
     AppBootstrap()
     logger.remove()
     logger.add("logfile.log", level="INFO")

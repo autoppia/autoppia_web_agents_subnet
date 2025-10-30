@@ -219,40 +219,38 @@ async def aggregate_scores_from_commitments(
           }
     """
     if not ENABLE_DISTRIBUTED_CONSENSUS:
-        return {}
+        raise RuntimeError("Consensus aggregation requested while distributed consensus is disabled")
 
     # Build hotkey->uid and stake map
     hk_to_uid = _hotkey_to_uid_map(validator.metagraph)
     stake_list = getattr(validator.metagraph, "stake", None)
 
     def stake_for_hk(hk: str) -> float:
+        uid = hk_to_uid.get(hk)
+        if uid is None:
+            raise RuntimeError(f"No UID mapping found for hotkey {hk}")
+        if stake_list is None:
+            raise RuntimeError("Metagraph stake information is unavailable")
         try:
-            uid = hk_to_uid.get(hk)
-            if uid is None:
-                return 0.0
-            return _stake_to_float(stake_list[uid]) if stake_list is not None else 0.0  # type: ignore[index]
-        except Exception:
-            return 0.0
+            return _stake_to_float(stake_list[uid])  # type: ignore[index]
+        except Exception as exc:  # noqa: BLE001
+            raise RuntimeError(f"Unable to read stake for UID {uid}") from exc
 
     # Fetch all plain commitments and select those for this round (v4 with CID)
     blocks_per_epoch = getattr(validator.round_manager, "BLOCKS_PER_EPOCH", 360)
 
-    try:
-        commits = await read_all_plain_commitments(st, netuid=validator.config.netuid, block=None)
-        start_epoch = start_block / blocks_per_epoch
-        target_epoch = target_block / blocks_per_epoch
-        expected_window = f"{start_block:,}→{target_block:,} (epochs {start_epoch:.2f}→{target_epoch:.2f})"
-        bt.logging.info(consensus_tag(f"Aggregate | Expected blocks {expected_window} | Commitments found: {len(commits or {})}"))
-        if commits:
-            bt.logging.info(consensus_tag(f"Found {len(commits)} validator commitments:"))
-            for hk, entry in list(commits.items())[:5]:
-                sb = entry.get("sb") or entry.get("round_start_block")
-                tb = entry.get("tb") or entry.get("target_block")
-                window_str = f"blocks {sb}→{tb}" if sb is not None and tb is not None else f"epochs {entry.get('e')}→{entry.get('pe')}"
-                bt.logging.info(consensus_tag(f"  - {hk[:12]}... | {window_str} | CID {str(entry.get('c', 'N/A'))[:24]}..."))
-    except Exception as e:
-        bt.logging.error(f"❌ Failed to read commitments from blockchain: {e}")
-        commits = {}
+    commits = await read_all_plain_commitments(st, netuid=validator.config.netuid, block=None)
+    start_epoch = start_block / blocks_per_epoch
+    target_epoch = target_block / blocks_per_epoch
+    expected_window = f"{start_block:,}→{target_block:,} (epochs {start_epoch:.2f}→{target_epoch:.2f})"
+    bt.logging.info(consensus_tag(f"Aggregate | Expected blocks {expected_window} | Commitments found: {len(commits or {})}"))
+    if commits:
+        bt.logging.info(consensus_tag(f"Found {len(commits)} validator commitments:"))
+        for hk, entry in list(commits.items())[:5]:
+            sb = entry.get("sb") or entry.get("round_start_block")
+            tb = entry.get("tb") or entry.get("target_block")
+            window_str = f"blocks {sb}→{tb}" if sb is not None and tb is not None else f"epochs {entry.get('e')}→{entry.get('pe')}"
+            bt.logging.info(consensus_tag(f"  - {hk[:12]}... | {window_str} | CID {str(entry.get('c', 'N/A'))[:24]}..."))
 
     expected_start_block = int(start_block)
     expected_target_block = int(target_block)

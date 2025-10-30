@@ -396,11 +396,8 @@ class RoundStartMixin:
                 f"♻️ Resume: rebuilding accumulators from {len(self._eval_records)} evaluations",
                 ColoredLogger.CYAN,
             )
-            try:
-                self._rebuild_from_saved_evaluations()
-                ColoredLogger.success("✅ Resume: accumulators restored", ColoredLogger.GREEN)
-            except Exception as exc:
-                bt.logging.warning(f"Resume rebuild failed: {exc}")
+            self._rebuild_from_saved_evaluations()
+            ColoredLogger.success("✅ Resume: accumulators restored", ColoredLogger.GREEN)
 
         return StartPhaseResult(
             all_tasks=all_tasks,

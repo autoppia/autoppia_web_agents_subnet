@@ -66,20 +66,23 @@ class ValidatorPlatformMixin:
 
         Calculates round number via round_manager.calculate_round(current_block).
         """
-        round_number: Optional[int] = None
-        try:
-            rm = getattr(self, "round_manager", None)
-            if rm is not None and getattr(rm, "ROUND_BLOCK_LENGTH", 0):
-                base_block = getattr(rm, "minimum_start_block", 0) or 0
-                if current_block <= base_block:
-                    round_number = 0
-                else:
-                    blocks_since_start = current_block - base_block
-                    round_index = blocks_since_start // rm.ROUND_BLOCK_LENGTH
-                    round_number = int(round_index + 1)
-        except Exception as e:  # noqa: BLE001
-            bt.logging.debug(f"Could not calculate round number: {e}")
-            round_number = None
+        rm = getattr(self, "round_manager", None)
+        if rm is None or not getattr(rm, "ROUND_BLOCK_LENGTH", 0):
+            raise RuntimeError("Round manager is not initialized; cannot derive validator round id")
+
+        base_block = int(getattr(rm, "minimum_start_block", 0) or 0)
+        if current_block < base_block:
+            raise RuntimeError(
+                f"Current block {current_block} predates configured minimum start block {base_block}"
+            )
+
+        round_length = int(rm.ROUND_BLOCK_LENGTH)
+        if round_length <= 0:
+            raise RuntimeError("ROUND_BLOCK_LENGTH must be a positive integer")
+
+        blocks_since_start = current_block - base_block
+        round_index = blocks_since_start // round_length
+        round_number = int(round_index + 1)
 
         return iwa_main.generate_validator_round_id(round_number=round_number)
 
@@ -90,25 +93,14 @@ class ValidatorPlatformMixin:
 
         message = self._IWAP_VALIDATOR_AUTH_MESSAGE
         if not message:
-            if not self._auth_warning_emitted:
-                self._log_iwap_phase(
-                    "Auth",
-                    "Validator auth message not configured; IWAP requests will not be signed",
-                    level="warning",
-                )
-                self._auth_warning_emitted = True
-            return {}
-
-        try:
-            return build_iwap_auth_headers(self.wallet, message)
-        except Exception as exc:
             self._log_iwap_phase(
                 "Auth",
-                f"Failed to sign IWAP auth message: {exc}",
+                "Validator auth message not configured; aborting IWAP request signing",
                 level="error",
-                exc_info=True,
             )
-            raise
+            raise RuntimeError("Validator auth message not configured; cannot sign IWAP requests")
+
+        return build_iwap_auth_headers(self.wallet, message)
 
     def _build_validator_identity(self) -> iwa_models.ValidatorIdentityIWAP:
         return _utils_build_validator_identity(self)
@@ -168,8 +160,8 @@ class ValidatorPlatformMixin:
         avg_rewards: Dict[int, float],
         final_weights: Dict[int, float],
         tasks_completed: int,
-    ) -> None:
-        await _utils_finish_round_flow(
+    ) -> bool:
+        return await _utils_finish_round_flow(
             self,
             avg_rewards=avg_rewards,
             final_weights=final_weights,

@@ -105,7 +105,7 @@ class IWAPClient:
 
     def _resolve_auth_headers(self) -> Dict[str, str]:
         if not self._auth_provider:
-            return {}
+            raise RuntimeError("IWAP auth provider is not configured")
         try:
             headers = dict(self._auth_provider())
         except Exception:
@@ -441,8 +441,12 @@ class IWAPClient:
         response = await self._with_retry(attempt, context=context)
         try:
             return response.json()
-        except Exception:
-            return {}
+        except Exception as exc:
+            bt.logging.error(
+                f"IWAP | [{context}] Response body is not valid JSON",
+                exc_info=True,
+            )
+            raise ValueError(f"IWAP response for '{context}' is not valid JSON") from exc
 
     async def _post_multipart(
         self,

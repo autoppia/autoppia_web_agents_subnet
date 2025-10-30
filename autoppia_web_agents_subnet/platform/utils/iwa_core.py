@@ -156,7 +156,7 @@ def build_iwap_auth_headers(wallet, message: str) -> Dict[str, str]:
         raise RuntimeError("Validator hotkey is unavailable for IWAP authentication")
 
     if not message:
-        return {}
+        raise RuntimeError("Validator auth message not defined; cannot sign IWAP headers")
 
     message_bytes = message.encode("utf-8")
     signature_bytes = wallet.hotkey.sign(message_bytes)

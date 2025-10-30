@@ -281,19 +281,33 @@ class SettlementMixin:
             uid: float(weights[uid]) for uid in range(len(weights)) if float(weights[uid]) > 0.0
         }
 
-        try:
-            await self._finish_iwap_round(
-                avg_rewards=avg_rewards or {},
-                final_weights=final_weights,
-                tasks_completed=tasks_completed,
-            )
-        except Exception as exc:  # noqa: BLE001
-            bt.logging.warning(f"IWAP finish_round failed ({reason}): {exc}")
-            raise
+        finish_success = await self._finish_iwap_round(
+            avg_rewards=avg_rewards or {},
+            final_weights=final_weights,
+            tasks_completed=tasks_completed,
+        )
 
-        ColoredLogger.success(success_message, success_color)
-        ColoredLogger.info(f"Tasks attempted: {tasks_completed}", success_color)
-        self._log_round_completion(tasks_completed, color=success_color, reason=reason)
+        round_reason = reason
+        log_color = success_color if finish_success else ColoredLogger.YELLOW
+        if finish_success:
+            ColoredLogger.success(success_message, success_color)
+            ColoredLogger.info(f"Tasks attempted: {tasks_completed}", success_color)
+        else:
+            bt.logging.warning(
+                f"IWAP finish_round failed during burn-all ({reason}); continuing without remote acknowledgement."
+            )
+            ColoredLogger.warning(
+                "⚠️ IWAP finish_round did not complete; proceeding locally.",
+                ColoredLogger.YELLOW,
+            )
+            ColoredLogger.info(f"Tasks attempted: {tasks_completed}", ColoredLogger.YELLOW)
+            round_reason = f"{reason} — IWAP finish failed"
+
+        self._log_round_completion(
+            tasks_completed,
+            color=log_color,
+            reason=round_reason,
+        )
 
     async def _calculate_final_weights(self, tasks_completed: int):
         """Calculate averages, apply WTA, and set final on-chain weights."""
@@ -369,19 +383,13 @@ class SettlementMixin:
                 bt.logging.info("=" * 80)
 
                 st = await self._get_async_subtensor()
-                try:
-                    agg, agg_meta = await aggregate_scores_from_commitments(
-                        validator=self,
-                        st=st,
-                        start_block=boundaries["round_start_block"],
-                        target_block=boundaries["target_block"],
-                    )
-                except Exception as exc:  # noqa: BLE001
-                    bt.logging.warning(f"Aggregation failed; using local averages: {exc}")
-                    agg = {}
-                    agg_meta = None
-                else:
-                    self._agg_scores_cache = agg
+                agg, agg_meta = await aggregate_scores_from_commitments(
+                    validator=self,
+                    st=st,
+                    start_block=boundaries["round_start_block"],
+                    target_block=boundaries["target_block"],
+                )
+                self._agg_scores_cache = agg
 
             if agg:
                 ColoredLogger.info(
@@ -456,17 +464,25 @@ class SettlementMixin:
         self.update_scores(rewards=wta_full, uids=all_uids)
         self.set_weights()
 
-        try:
-            await self._finish_iwap_round(
-                avg_rewards=avg_rewards,
-                final_weights=final_rewards_dict,
-                tasks_completed=tasks_completed,
-            )
-        except Exception as exc:  # noqa: BLE001
-            bt.logging.warning(f"IWAP finish_round failed: {exc}")
-            raise
+        finish_success = await self._finish_iwap_round(
+            avg_rewards=avg_rewards,
+            final_weights=final_rewards_dict,
+            tasks_completed=tasks_completed,
+        )
+        completion_color = ColoredLogger.GREEN if finish_success else ColoredLogger.YELLOW
+        completion_reason = None
 
-        self._log_round_completion(tasks_completed)
+        if not finish_success:
+            bt.logging.warning(
+                "IWAP finish_round failed during final weight submission; continuing without remote acknowledgement."
+            )
+            completion_reason = "IWAP finish failed"
+
+        self._log_round_completion(
+            tasks_completed,
+            color=completion_color,
+            reason=completion_reason,
+        )
 
     def _log_round_completion(
         self,
