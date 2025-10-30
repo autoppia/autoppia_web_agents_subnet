@@ -184,6 +184,7 @@ testing/
 data/mongodb_data/
 data/validator_state/
 data/iwap_payloads/
+data/
 
 # Archivos generados automáticamente
 forward_reports/

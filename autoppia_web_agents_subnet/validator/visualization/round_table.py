@@ -22,8 +22,11 @@ def _mean_safe(values: list[float]) -> float:
 
 
 MAX_TERMINAL_WIDTH = 118
-BASE_COLUMN_WIDTH = 3 + 5 + 12 + 6 + 10 + 11 + 6  # estimated from explicit widths below
-VALIDATOR_COLUMN_WIDTH = 12
+HOTKEY_COLUMN_WIDTH = 9
+HOTKEY_PREFIX_LEN = HOTKEY_COLUMN_WIDTH - 2  # allow room for ellipsis when rendered
+BASE_COLUMN_WIDTH = 3 + 5 + HOTKEY_COLUMN_WIDTH + 6 + 10 + 11  # estimated from explicit widths below
+VALIDATOR_COLUMN_WIDTH = 10
+ELLIPSIS = "…"
 
 
 def _derive_round_number(round_manager) -> Optional[int]:
@@ -127,7 +130,7 @@ def render_round_summary_table(
 ) -> str:
     """
     Render a concise per-miner summary at end of round:
-    Columns: UID, Hotkey(10), AvgScore, AvgTime(s), Reward (final)
+    Columns: UID, Hotkey (truncated), AvgScore, AvgTime(s), FinalScore
     Sorted by Reward desc.
     """
     rows: list[dict[str, Any]] = []
@@ -167,7 +170,7 @@ def render_round_summary_table(
         rows.append({
             "uid": int(uid),
             "hotkey": hotkey,
-            "hotkey_prefix": hotkey[:10],
+            "hotkey_prefix": hotkey[:HOTKEY_PREFIX_LEN],
             "local": local_participated,
             "avg_eval": avg_eval,
             "avg_time": avg_time,
@@ -250,7 +253,7 @@ def render_round_summary_table(
 
             tbl.add_column("#", justify="right", width=3)
             tbl.add_column("UID", justify="right", width=5)
-            tbl.add_column("Hotkey", style="cyan", width=12, overflow="ellipsis")
+            tbl.add_column("Hotkey", style="cyan", width=HOTKEY_COLUMN_WIDTH, overflow="ellipsis")
             tbl.add_column("Active", justify="center", width=6)
             tbl.add_column("LocalScore", justify="right", width=10)
 
@@ -258,12 +261,11 @@ def render_round_summary_table(
                 for idx in rng:
                     validator = validators_info[idx]
                     hk = validator.get("hotkey", "")
-                    stake = float(validator.get("stake") or 0.0)
-                    header = f"V{idx + 1}:{hk[:6]}…({stake:.0f}τ)"
-                    tbl.add_column(header, justify="right", width=12)
+                    trimmed = (hk or "")[:3]
+                    header = f"{trimmed}{ELLIPSIS}" if hk and len(hk) > len(trimmed) else trimmed
+                    tbl.add_column(header, justify="right", width=VALIDATOR_COLUMN_WIDTH)
 
             tbl.add_column("FinalScore", justify="right", width=11)
-            tbl.add_column("WTA", justify="right", width=6)
 
             for i, r in enumerate(rows, start=1):
                 base_cols = [
@@ -281,7 +283,6 @@ def render_round_summary_table(
                     ]
                 tail_cols = [
                     f'{r["final_score"]:.4f}',
-                    f'{r["wta_reward"]:.4f}',
                 ]
                 tbl.add_row(*(base_cols + pv_cols + tail_cols))
 
@@ -291,11 +292,13 @@ def render_round_summary_table(
 
     # Fallback plain text table
     header_base = ["#", "UID", "Hotkey", "Active", "LocalScore"]
-    tail_headers = ["FinalScore", "WTA"]
-    validator_headers = [
-        f"V{idx}:{v.get('hotkey', '')[:6]}…({float(v.get('stake') or 0.0):.0f}τ)"
-        for idx, v in enumerate(validators_info, start=1)
-    ]
+    tail_headers = ["FinalScore"]
+    validator_headers: List[str] = []
+    for v in validators_info:
+        hk = (v.get("hotkey", "") or "")
+        trimmed = hk[:3]
+        header = f"{trimmed}{ELLIPSIS}" if hk and len(hk) > len(trimmed) else trimmed
+        validator_headers.append(header)
 
     terminal_cols = shutil.get_terminal_size((MAX_TERMINAL_WIDTH, 0)).columns
     target_width = min(MAX_TERMINAL_WIDTH, max(terminal_cols, BASE_COLUMN_WIDTH + VALIDATOR_COLUMN_WIDTH))
@@ -311,22 +314,24 @@ def render_round_summary_table(
         lines.append(title)
 
         headers = header_base + [validator_headers[i] for i in rng] + tail_headers
+        hotkey_header_format = f"{{:<{HOTKEY_COLUMN_WIDTH}}}"
+        validator_header_format = f"{{:>{VALIDATOR_COLUMN_WIDTH}}}"
         header_formats = [
             "{:>3}",
             "{:>5}",
-            "{:<12}",
+            hotkey_header_format,
             "{:>6}",
             "{:>10}",
         ]
-        header_formats.extend(["{:>12}"] * len(rng))
-        header_formats.extend(["{:>11}", "{:>6}"])
+        header_formats.extend([validator_header_format] * len(rng))
+        header_formats.extend(["{:>11}"])
         lines.append(" ".join(fmt.format(h) for fmt, h in zip(header_formats, headers)))
 
         for i, r in enumerate(rows, start=1):
             row_base = [
                 i,
                 r["uid"],
-                r["hotkey_prefix"][:12],
+                (r["hotkey_prefix"] + ELLIPSIS) if len(r["hotkey"]) > HOTKEY_PREFIX_LEN else r["hotkey_prefix"],
                 ("yes" if (active_uids and r["uid"] in active_uids) else ("yes" if r["local"] else "no")),
                 f"{r['avg_eval']:.4f}",
             ]
@@ -336,18 +341,18 @@ def render_round_summary_table(
                     f"{r['per_val_scores'][idx]:.4f}" if idx < len(r["per_val_scores"]) else "0.0000"
                     for idx in rng
                 ]
-            tail_values = [f"{r['final_score']:.4f}", f"{r['wta_reward']:.4f}"]
+            tail_values = [f"{r['final_score']:.4f}"]
 
             values = row_base + validator_values + tail_values
             row_formats = [
                 "{:>3}",
                 "{:>5}",
-                "{:<12}",
+                hotkey_header_format,
                 "{:>6}",
                 "{:>10}",
             ]
-            row_formats.extend(["{:>12}"] * len(validator_values))
-            row_formats.extend(["{:>11}", "{:>6}"])
+            row_formats.extend([validator_header_format] * len(validator_values))
+            row_formats.extend(["{:>11}"])
             lines.append(" ".join(fmt.format(val) for fmt, val in zip(row_formats, values)))
 
         if part_idx < len(validator_ranges):

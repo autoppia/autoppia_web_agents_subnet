@@ -72,6 +72,8 @@ async def publish_round_snapshot(
     boundaries = validator.round_manager.get_current_boundaries()
     start_epoch = boundaries["round_start_epoch"]
     target_epoch = boundaries["target_epoch"]
+    start_block = int(boundaries["round_start_block"])
+    target_block = int(boundaries["target_block"])
     avg_rewards = validator.round_manager.get_average_rewards()
 
     # Agents that actually received/produced scores (participated)
@@ -87,6 +89,8 @@ async def publish_round_snapshot(
         "round_number": int(round_number) if round_number is not None else None,
         "es": float(start_epoch),
         "et": float(target_epoch),
+        "round_start_block": start_block,
+        "target_block": target_block,
         # Validator identity fields
         "hk": validator.wallet.hotkey.ss58_address,
         "validator_hotkey": validator.wallet.hotkey.ss58_address,
@@ -138,14 +142,16 @@ async def publish_round_snapshot(
         "v": 4,
         "e": int(target_epoch) - 1,
         "pe": int(target_epoch),
+        "sb": start_block,
+        "tb": target_block,
         "c": str(cid),
         "r": int(round_number) if round_number is not None else None,
     }
 
     try:
         bt.logging.info(
-            f"📮 CONSENSUS COMMIT START | e={commit_v4['e']}→pe={commit_v4['pe']} "
-            f"r={commit_v4.get('r')} cid={commit_v4['c']}"
+            f"📮 CONSENSUS COMMIT START | blocks {start_block}→{target_block} | "
+            f"e={commit_v4['e']}→pe={commit_v4['pe']} r={commit_v4.get('r')} cid={commit_v4['c']}"
         )
         ok = False
         try:
@@ -197,12 +203,12 @@ async def aggregate_scores_from_commitments(
     *,
     validator,
     st: AsyncSubtensor,
-    start_epoch: float,
-    target_epoch: float,
+    start_block: int,
+    target_block: int,
 ) -> tuple[Dict[int, float], Dict[str, Any]]:
     """
-    Read all validators' commitments for this round window and compute stake-weighted
-    average scores per miner UID.
+    Read all validators' commitments for this round block window and compute
+    stake-weighted average scores per miner UID.
 
     Returns a tuple: (final_scores, details)
       - final_scores: Dict[uid -> aggregated score]
@@ -229,35 +235,39 @@ async def aggregate_scores_from_commitments(
             return 0.0
 
     # Fetch all plain commitments and select those for this round (v4 with CID)
+    blocks_per_epoch = getattr(validator.round_manager, "BLOCKS_PER_EPOCH", 360)
+
     try:
         commits = await read_all_plain_commitments(st, netuid=validator.config.netuid, block=None)
-        bt.logging.info(
-            consensus_tag(f"Aggregate | Expected epochs {int(target_epoch)-1}→{int(target_epoch)} | Commitments found: {len(commits or {})}")
-        )
+        start_epoch = start_block / blocks_per_epoch
+        target_epoch = target_block / blocks_per_epoch
+        expected_window = f"{start_block:,}→{target_block:,} (epochs {start_epoch:.2f}→{target_epoch:.2f})"
+        bt.logging.info(consensus_tag(f"Aggregate | Expected blocks {expected_window} | Commitments found: {len(commits or {})}"))
         if commits:
             bt.logging.info(consensus_tag(f"Found {len(commits)} validator commitments:"))
             for hk, entry in list(commits.items())[:5]:
-                bt.logging.info(
-                    consensus_tag(f"  - {hk[:12]}... | Epochs {entry.get('e')}→{entry.get('pe')} | CID {str(entry.get('c', 'N/A'))[:24]}...")
-                )
+                sb = entry.get("sb") or entry.get("round_start_block")
+                tb = entry.get("tb") or entry.get("target_block")
+                window_str = f"blocks {sb}→{tb}" if sb is not None and tb is not None else f"epochs {entry.get('e')}→{entry.get('pe')}"
+                bt.logging.info(consensus_tag(f"  - {hk[:12]}... | {window_str} | CID {str(entry.get('c', 'N/A'))[:24]}..."))
     except Exception as e:
         bt.logging.error(f"❌ Failed to read commitments from blockchain: {e}")
         commits = {}
 
-    e = int(target_epoch) - 1
-    pe = int(target_epoch)
+    expected_start_block = int(start_block)
+    expected_target_block = int(target_block)
 
-    bt.logging.info(f"[CONSENSUS] Filtering commitments for current epoch window: {e}→{pe}")
+    bt.logging.info(f"[CONSENSUS] Filtering commitments for current block window: {expected_start_block:,}→{expected_target_block:,}")
 
     weighted_sum: Dict[int, float] = {}
     weight_total: Dict[int, float] = {}
 
     included = 0
-    skipped_wrong_epoch = 0
+    skipped_wrong_window = 0
     skipped_missing_cid = 0
     skipped_low_stake = 0
     skipped_ipfs = 0
-    skipped_wrong_epoch_list: list[tuple[str, int, int]] = []  # (hk, e, pe)
+    skipped_wrong_window_list: list[tuple[str, int, int]] = []  # (hk, start_block, target_block)
     skipped_missing_cid_list: list[str] = []
     skipped_low_stake_list: list[tuple[str, float]] = []  # (hk, stake)
     skipped_ipfs_list: list[tuple[str, str]] = []  # (hk, cid)
@@ -265,20 +275,58 @@ async def aggregate_scores_from_commitments(
     fetched: list[tuple[str, str, float]] = []
     scores_by_validator: Dict[str, Dict[int, float]] = {}
 
+    blocks_per_epoch = getattr(validator.round_manager, "BLOCKS_PER_EPOCH", 360)
+
+    def _coerce_int(val) -> Optional[int]:
+        try:
+            if val is None:
+                return None
+            return int(val)
+        except Exception:
+            return None
+
+    def _extract_block_window_from_entry(entry_dict: Dict[str, Any]) -> Optional[tuple[int, int]]:
+        sb = _coerce_int(entry_dict.get("sb"))
+        tb = _coerce_int(entry_dict.get("tb"))
+        if sb is not None and tb is not None:
+            return sb, tb
+        sb = _coerce_int(entry_dict.get("round_start_block"))
+        tb = _coerce_int(entry_dict.get("target_block"))
+        if sb is not None and tb is not None:
+            return sb, tb
+        return None
+
+    def _extract_block_window_from_payload(payload_dict: Dict[str, Any]) -> Optional[tuple[int, int]]:
+        sb = _coerce_int(payload_dict.get("round_start_block"))
+        tb = _coerce_int(payload_dict.get("target_block"))
+        if sb is not None and tb is not None:
+            return sb, tb
+        es = payload_dict.get("es")
+        et = payload_dict.get("et")
+        try:
+            if es is not None and et is not None:
+                start_b = int(round(float(es) * blocks_per_epoch))
+                target_b = int(round(float(et) * blocks_per_epoch))
+                return start_b, target_b
+        except Exception:
+            return None
+        return None
+
     for hk, entry in (commits or {}).items():
         if not isinstance(entry, dict):
             bt.logging.info(f"[CONSENSUS] Skip {hk[:12]}... | Reason: entry is not dict")
             continue
 
-        entry_e = int(entry.get("e", -1))
-        entry_pe = int(entry.get("pe", -1))
-        if entry_e != e or entry_pe != pe:
-            skipped_wrong_epoch += 1
-            skipped_wrong_epoch_list.append((hk, entry_e, entry_pe))
-            bt.logging.debug(
-                f"⏭️ Skip {hk[:10]}…: wrong epoch (has e={entry_e} pe={entry_pe}, need e={e} pe={pe})"
-            )
-            continue
+        entry_window = _extract_block_window_from_entry(entry)
+        if entry_window is not None:
+            entry_sb, entry_tb = entry_window
+            if entry_sb != expected_start_block or entry_tb != expected_target_block:
+                skipped_wrong_window += 1
+                skipped_wrong_window_list.append((hk, entry_sb, entry_tb))
+                bt.logging.debug(
+                    f"⏭️ Skip {hk[:10]}…: wrong window (has blocks {entry_sb}→{entry_tb}, need {expected_start_block}→{expected_target_block})"
+                )
+                continue
 
         cid = entry.get("c")
         if not isinstance(cid, str) or not cid:
@@ -303,6 +351,17 @@ async def aggregate_scores_from_commitments(
             import json
 
             payload_json = json.dumps(payload, indent=2, sort_keys=True)
+
+            payload_window = _extract_block_window_from_payload(payload) if isinstance(payload, dict) else None
+            if payload_window is not None:
+                payload_sb, payload_tb = payload_window
+                if payload_sb != expected_start_block or payload_tb != expected_target_block:
+                    skipped_wrong_window += 1
+                    skipped_wrong_window_list.append((hk, payload_sb, payload_tb))
+                    bt.logging.debug(
+                        f"⏭️ Skip {hk[:10]}…: payload window {payload_sb}→{payload_tb} does not match {expected_start_block}→{expected_target_block}"
+                    )
+                    continue
 
             bt.logging.info("=" * 80)
             bt.logging.info(f"[IPFS] [DOWNLOAD] Validator {hk[:12]}... (UID {validator_uid}) | CID: {cid}")
@@ -353,16 +412,16 @@ async def aggregate_scores_from_commitments(
             f"[CONSENSUS] ✅ Aggregation complete | Validators: {included} | Miners: {len(result)} | Mode: {consensus_mode}"
         )
         bt.logging.info(
-            f"[CONSENSUS] Skipped | Wrong epoch: {skipped_wrong_epoch} | Missing CID: {skipped_missing_cid} | Low stake: {skipped_low_stake} | IPFS fail: {skipped_ipfs}"
+            f"[CONSENSUS] Skipped | Wrong window: {skipped_wrong_window} | Missing CID: {skipped_missing_cid} | Low stake: {skipped_low_stake} | IPFS fail: {skipped_ipfs}"
         )
         # Extra verbose logs to diagnose stake/epoch filtering
         try:
             if skipped_low_stake_list:
                 low_str = ", ".join([f"{hk[:10]}…({stake:.0f}τ)" for hk, stake in skipped_low_stake_list])
                 bt.logging.debug(f"   ⏭️ Low-stake excluded: {low_str}")
-            if skipped_wrong_epoch_list:
-                wrong_str = ", ".join([f"{hk[:10]}…(e={ee},pe={ppe})" for hk, ee, ppe in skipped_wrong_epoch_list])
-                bt.logging.debug(f"   ⏭️ Wrong-epoch excluded: {wrong_str}")
+            if skipped_wrong_window_list:
+                wrong_str = ", ".join([f"{hk[:10]}…(sb={sb},tb={tb})" for hk, sb, tb in skipped_wrong_window_list])
+                bt.logging.debug(f"   ⏭️ Wrong-window excluded: {wrong_str}")
             if skipped_missing_cid_list:
                 miss_str = ", ".join([f"{hk[:10]}…" for hk in skipped_missing_cid_list])
                 bt.logging.debug(f"   ⏭️ Missing-CID excluded: {miss_str}")
@@ -372,6 +431,28 @@ async def aggregate_scores_from_commitments(
         except Exception:
             pass
         if len(result) > 0:
+            # Log validator contributions used for the aggregation so we can inspect their raw scores.
+            try:
+                bt.logging.info(
+                    f"[CONSENSUS] Validators included ({included}): "
+                    + ", ".join(f"{hk[:12]}…(stake={stake:.2f}τ)" for hk, _, stake in fetched)
+                )
+                for hk, cid, stake in fetched:
+                    per_val_scores = scores_by_validator.get(hk, {})
+                    miner_count = len(per_val_scores)
+                    bt.logging.info(
+                        f"[CONSENSUS]   ↳ {hk[:12]}… | miners={miner_count} | stake={stake:.2f}τ | cid={cid}"
+                    )
+                    if per_val_scores:
+                        top_items = list(per_val_scores.items())[:10]
+                        for uid, score in top_items:
+                            bt.logging.info(f"[CONSENSUS]      UID {uid}: {score:.4f}")
+                        if miner_count > len(top_items):
+                            bt.logging.info(
+                                f"[CONSENSUS]      … {miner_count - len(top_items)} more miners omitted for brevity"
+                            )
+            except Exception:
+                pass
             bt.logging.info(f"[CONSENSUS] Aggregated scores ({len(result)} miners):")
             top_sample = list(sorted(result.items(), key=lambda x: x[1], reverse=True))[:10]
             for uid, score in top_sample:
@@ -381,7 +462,7 @@ async def aggregate_scores_from_commitments(
     else:
         bt.logging.warning(f"[CONSENSUS] ⚠️ No validators included in aggregation")
         bt.logging.info(
-            f"[CONSENSUS] Reasons | Wrong epoch: {skipped_wrong_epoch} | Missing CID: {skipped_missing_cid} | Low stake: {skipped_low_stake} | IPFS fail: {skipped_ipfs} | Total commits: {len(commits or {})}"
+            f"[CONSENSUS] Reasons | Wrong window: {skipped_wrong_window} | Missing CID: {skipped_missing_cid} | Low stake: {skipped_low_stake} | IPFS fail: {skipped_ipfs} | Total commits: {len(commits or {})}"
         )
 
     # Build details structure for reporting/visualization
@@ -393,7 +474,7 @@ async def aggregate_scores_from_commitments(
         "validators": validators_info,
         "scores_by_validator": scores_by_validator,
         "skips": {
-            "wrong_epoch": skipped_wrong_epoch_list,
+            "wrong_window": skipped_wrong_window_list,
             "missing_cid": skipped_missing_cid_list,
             "low_stake": skipped_low_stake_list,
             "ipfs_fail": skipped_ipfs_list,

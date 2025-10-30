@@ -1,4 +1,3 @@
-import os
 import time
 from typing import List
 
@@ -22,7 +21,6 @@ from autoppia_iwa.src.web_agents.random.agent import RandomClickerWebAgent
 from autoppia_iwa.src.web_agents.apified_agent import ApifiedWebAgent
 from autoppia_iwa.config.config import (
     AGENT_HOST,
-    AGENT_NAME as CFG_AGENT_NAME,
     AGENT_PORT,
     USE_APIFIED_AGENT,
 )
@@ -122,7 +120,7 @@ class Miner(BaseMinerNeuron):
 
             # 🔍 DEBUG: Validate synapse before returning
             try:
-                ColoredLogger.info(f"  Final synapse state:", ColoredLogger.GRAY)
+                ColoredLogger.info("  Final synapse state:", ColoredLogger.GRAY)
                 ColoredLogger.info(f"    - agent_name: {synapse.agent_name}", ColoredLogger.GRAY)
                 ColoredLogger.info(f"    - agent_version: {synapse.agent_version}", ColoredLogger.GRAY)
                 ColoredLogger.info(f"    - has_rl: {synapse.has_rl}", ColoredLogger.GRAY)
@@ -161,11 +159,52 @@ class Miner(BaseMinerNeuron):
         try:
             start_time = time.time()
 
+            seed = getattr(synapse, "seed", None)
+            url = synapse.url
+
+            if seed is None and isinstance(url, str):
+                try:
+                    from urllib.parse import parse_qs, urlparse
+
+                    parsed = urlparse(url)
+                    query = parse_qs(parsed.query or "")
+                    raw_seed = query.get("seed", [None])[0]
+                    if raw_seed is not None:
+                        seed = int(str(raw_seed))
+                except (ValueError, TypeError):
+                    seed = None
+
+            if seed is not None and isinstance(url, str) and "seed=" not in url:
+                separator = "&" if "?" in url else "?"
+                url = f"{url}{separator}seed={seed}"
+                synapse.url = url
+
+            synapse_seed = getattr(synapse, "seed", None)
+            if seed is not None:
+                if synapse_seed is None:
+                    synapse.seed = int(seed)
+                elif int(synapse_seed) != int(seed):
+                    ColoredLogger.warning(
+                        f"Seed mismatch detected: synapse.seed={synapse_seed} url_seed={seed}",
+                        ColoredLogger.YELLOW,
+                    )
+                    synapse.seed = int(seed)
+
             task = Task(
                 prompt=synapse.prompt,
-                url=synapse.url,
+                url=url,
                 screenshot=synapse.screenshot,
             )
+
+            if seed is not None:
+                try:
+                    task.assign_seed = False
+                    object.__setattr__(task, "_seed_value", int(seed))
+                except Exception as err:
+                    ColoredLogger.warning(f"Unable to set task seed: {err}", ColoredLogger.YELLOW)
+            else:
+                ColoredLogger.debug("Received task without seed.", ColoredLogger.YELLOW)
+
             task_for_agent = task.prepare_for_agent(str(self.uid))
 
             ColoredLogger.debug(
@@ -203,7 +242,7 @@ class Miner(BaseMinerNeuron):
         ColoredLogger.info("Received feedback", ColoredLogger.GRAY)
 
         # DEBUG: Log detailed TaskFeedbackSynapse content
-        ColoredLogger.info(f"🔍 DEBUG TaskFeedbackSynapse content:", ColoredLogger.YELLOW)
+        ColoredLogger.info("🔍 DEBUG TaskFeedbackSynapse content:", ColoredLogger.YELLOW)
         ColoredLogger.info(f"  - task_id: {synapse.task_id}", ColoredLogger.GRAY)
         ColoredLogger.info(f"  - score: {synapse.score}", ColoredLogger.GRAY)
         ColoredLogger.info(f"  - execution_time: {synapse.execution_time}", ColoredLogger.GRAY)
@@ -221,7 +260,7 @@ class Miner(BaseMinerNeuron):
         ColoredLogger.info(f"  - evaluation_result: {eval_result_display}", ColoredLogger.GRAY)
 
         # 🔍 DEBUG: Log web project details
-        ColoredLogger.info(f"  📦 WEB PROJECT DETAILS:", ColoredLogger.MAGENTA)
+        ColoredLogger.info("  📦 WEB PROJECT DETAILS:", ColoredLogger.MAGENTA)
         ColoredLogger.info(f"     - Web Project: {getattr(synapse, 'web_project_name', 'N/A')}", ColoredLogger.MAGENTA)
         ColoredLogger.info(f"     - Task URL: {synapse.task_url}", ColoredLogger.MAGENTA)
 

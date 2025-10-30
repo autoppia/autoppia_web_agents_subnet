@@ -117,3 +117,4 @@ IPFS_GATEWAYS = [g.strip() for g in (os.getenv("IPFS_GATEWAYS", "https://ipfs.io
 
 # ── Burn Mechanism ───────────────────────────────────────────────────────────
 BURN_UID = _env_int("BURN_UID", 5)
+BURN_ALL = _str_to_bool(os.getenv("BURN_ALL", "false"))

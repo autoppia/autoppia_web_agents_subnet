@@ -30,6 +30,7 @@ from autoppia_web_agents_subnet.validator.config import (
     FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION,
     SKIP_ROUND_IF_STARTED_AFTER_FRACTION,
     BURN_UID,
+    BURN_ALL,
 )
 from autoppia_web_agents_subnet.validator.tasks import get_task_collection_interleaved, collect_task_solutions_and_execution_times
 from autoppia_web_agents_subnet.validator.synapse_handlers import (
@@ -582,7 +583,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         from autoppia_web_agents_subnet.utils.log_colors import round_details_tag
 
         bt.logging.info("=" * 100)
-        bt.logging.info(round_details_tag(f"🚀 ROUND START"))
+        bt.logging.info(round_details_tag("🚀 ROUND START"))
         bt.logging.info(round_details_tag(f"Round Number: {round_number}"))
         bt.logging.info(round_details_tag(f"Validator Round ID: {self.current_round_id}"))
         bt.logging.info(round_details_tag(f"Start Block: {current_block:,}"))
@@ -714,7 +715,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     ColoredLogger.RED,
                 )
                 ColoredLogger.error(
-                    f"⏸️⏸️⏸️  HALTING ALL TASK EXECUTION ⏸️⏸️⏸️",
+                    "⏸️⏸️⏸️  HALTING ALL TASK EXECUTION ⏸️⏸️⏸️",
                     ColoredLogger.RED,
                 )
                 ColoredLogger.error("=" * 80 + "\n", ColoredLogger.RED)
@@ -746,7 +747,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     if cid:
                         bt.logging.success(f"[CONSENSUS] ✅ IPFS publish complete - CID: {cid}")
                     else:
-                        bt.logging.warning(f"[CONSENSUS] ⚠️ IPFS publish returned no CID")
+                        bt.logging.warning("[CONSENSUS] ⚠️ IPFS publish returned no CID")
                 except Exception as e:
                     bt.logging.error("=" * 80)
                     bt.logging.error(f"[CONSENSUS] ❌ IPFS publish failed | Error: {type(e).__name__}: {e}")
@@ -1337,8 +1338,36 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
             await asyncio.sleep(12)
 
+    def _log_round_completion(self, tasks_completed: int, color: str = ColoredLogger.GREEN, reason: str | None = None) -> None:
+        """Emit a standardized round completion message that the reporter can parse."""
+        try:
+            round_finished = getattr(self, "_current_round_number", None)
+        except Exception:
+            round_finished = None
+
+        if round_finished is not None:
+            message = f"✅ Round completed: {int(round_finished)}"
+        else:
+            message = "✅ Round completed"
+
+        if reason:
+            message = f"{message} — {reason}"
+
+        ColoredLogger.success(message, color)
+        ColoredLogger.info(f"Tasks completed: {tasks_completed}", color)
+
     async def _calculate_final_weights(self, tasks_completed: int):
         """Calculate averages, apply WTA, set weights"""
+        try:
+            round_number = getattr(self, "_current_round_number", None)
+        except Exception:
+            round_number = None
+
+        if round_number is not None:
+            ColoredLogger.info(f"🏁 Finishing Round: {int(round_number)}", ColoredLogger.GOLD)
+        else:
+            ColoredLogger.info("🏁 Finishing current round", ColoredLogger.GOLD)
+
         bt.logging.info("=" * 80)
         bt.logging.info("[CONSENSUS] Phase: SetWeights - Calculating final weights")
         bt.logging.info(f"[CONSENSUS] Distributed consensus: {str(ENABLE_DISTRIBUTED_CONSENSUS).lower()}")
@@ -1360,10 +1389,35 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
 
             ColoredLogger.success(f"✅ Burn complete (weight to UID {idx})", ColoredLogger.RED)
             ColoredLogger.info(f"Tasks attempted: {tasks_completed}", ColoredLogger.RED)
+            self._log_round_completion(tasks_completed, color=ColoredLogger.RED, reason="burn (no active miners)")
             return
 
         # Calculate average scores using round_manager
         avg_rewards = self.round_manager.get_average_rewards()
+
+        # Force burn when BURN_ALL flag is set.
+        if BURN_ALL:
+            ColoredLogger.warning("🔥 BURN_ALL enabled: forcing burn and skipping consensus", ColoredLogger.RED)
+            burn_weights = np.zeros(self.metagraph.n, dtype=np.float32)
+            burn_idx = int(BURN_UID) if 0 <= int(BURN_UID) < self.metagraph.n else min(5, self.metagraph.n - 1)
+            burn_weights[burn_idx] = 1.0
+            all_uids = list(range(self.metagraph.n))
+            self.update_scores(rewards=burn_weights, uids=all_uids)
+            self.set_weights()
+
+            try:
+                await self._finish_iwap_round(
+                    avg_rewards=avg_rewards or {},
+                    final_weights={burn_idx: 1.0},
+                    tasks_completed=tasks_completed,
+                )
+            except Exception as e:
+                bt.logging.warning(f"IWAP finish_round failed (forced burn): {e}")
+
+            ColoredLogger.success(f"✅ Burn complete (forced burn to UID {burn_idx})", ColoredLogger.RED)
+            ColoredLogger.info(f"Tasks attempted: {tasks_completed}", ColoredLogger.RED)
+            self._log_round_completion(tasks_completed, color=ColoredLogger.RED, reason="burn (forced)")
+            return
 
         # If sharing enabled, attempt to aggregate across validators via commitments/IPFS
         if ENABLE_DISTRIBUTED_CONSENSUS:
@@ -1399,8 +1453,8 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
                     agg, agg_meta = await aggregate_scores_from_commitments(
                         validator=self,
                         st=st,
-                        start_epoch=boundaries["round_start_epoch"],
-                        target_epoch=boundaries["target_epoch"],
+                        start_block=boundaries["round_start_block"],
+                        target_block=boundaries["target_block"],
                     )
                 if agg:
                     ColoredLogger.info(
@@ -1432,6 +1486,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
             self.set_weights()
             ColoredLogger.success("✅ Burn complete (no winners)", ColoredLogger.RED)
             ColoredLogger.info(f"Tasks attempted: {tasks_completed}", ColoredLogger.RED)
+            self._log_round_completion(tasks_completed, color=ColoredLogger.RED, reason="burn (no winners)")
             return
 
         # Log round summary
@@ -1472,13 +1527,12 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         else:
             bt.logging.info("❌ No miners evaluated.")
 
-        # Set on-chain weights to the consensus WTA winner, even if not local/active,
-        # to ensure all validators converge on the same winner.
+        # Set on-chain weights to the WTA winner so validators converge on the same hotkey.
         winner_uid = max(final_rewards_dict.keys(), key=lambda k: final_rewards_dict[k]) if final_rewards_dict else None
+        all_uids = list(range(self.metagraph.n))
         wta_full = np.zeros(self.metagraph.n, dtype=np.float32)
         if winner_uid is not None and 0 <= int(winner_uid) < self.metagraph.n:
             wta_full[int(winner_uid)] = 1.0
-        all_uids = list(range(self.metagraph.n))
         bt.logging.info(f"Updating scores for on-chain WTA winner uid={winner_uid}")
         self.update_scores(rewards=wta_full, uids=all_uids)
         self.set_weights()
@@ -1492,15 +1546,7 @@ class Validator(RoundPhaseValidatorMixin, ValidatorPlatformMixin, BaseValidatorN
         except Exception as e:
             bt.logging.warning(f"IWAP finish_round failed: {e}")
 
-        try:
-            round_finished = getattr(self, "_current_round_number", None)
-        except Exception:
-            round_finished = None
-        if round_finished is not None:
-            ColoredLogger.success(f"✅ Round completed: {int(round_finished)}", ColoredLogger.GREEN)
-        else:
-            ColoredLogger.success("✅ Round complete", ColoredLogger.GREEN)
-        ColoredLogger.info(f"Tasks completed: {tasks_completed}", ColoredLogger.GREEN)
+        self._log_round_completion(tasks_completed)
 
 
 if __name__ == "__main__":
