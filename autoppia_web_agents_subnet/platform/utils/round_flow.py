@@ -92,20 +92,21 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
         # Even on resume, ensure the backend still has this round (dev DBs may be reset).
         # Re-send start_round idempotently; backend treats duplicates as OK.
         log_iwap_phase("Phase 1", "resume: verifying start_round on backend", level="warning")
-        resp = await ctx.iwap_client.start_round(
-            validator_identity=validator_identity,
-            validator_round=validator_round,
-            validator_snapshot=validator_snapshot,
-        )
-        vrid = _extract_validator_round_id(resp)
-        if vrid != ctx.current_round_id:
-            ctx.current_round_id = vrid
-        ctx._phases["p1_done"] = True
         try:
-            ctx._save_round_state()
-        except Exception as exc:  # noqa: BLE001
-            raise RuntimeError("Failed to persist round state after start_round verification") from exc
-    except httpx.HTTPStatusError as exc:
+            resp = await ctx.iwap_client.start_round(
+                validator_identity=validator_identity,
+                validator_round=validator_round,
+                validator_snapshot=validator_snapshot,
+            )
+            vrid = _extract_validator_round_id(resp)
+            if vrid != ctx.current_round_id:
+                ctx.current_round_id = vrid
+            ctx._phases["p1_done"] = True
+            try:
+                ctx._save_round_state()
+            except Exception as exc:  # noqa: BLE001
+                raise RuntimeError("Failed to persist round state after start_round verification") from exc
+        except httpx.HTTPStatusError as exc:
             status = exc.response.status_code if exc.response is not None else None
             if status in (409, 500):
                 # Treat as idempotent success
@@ -115,6 +116,10 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                     f"start_round returned {status} (already exists); continuing idempotently",
                     level="warning",
                 )
+                try:
+                    ctx._save_round_state()
+                except Exception as save_exc:  # noqa: BLE001
+                    raise RuntimeError("Failed to persist round state after start_round verification") from save_exc
             else:
                 log_iwap_phase(
                     "Phase 1",
@@ -142,6 +147,10 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                     level="warning",
                 )
                 ctx._phases["p1_done"] = True
+                try:
+                    ctx._save_round_state()
+                except Exception as save_exc:  # noqa: BLE001
+                    raise RuntimeError("Failed to persist round state after start_round") from save_exc
             else:
                 log_iwap_phase(
                     "Phase 1",
@@ -165,10 +174,10 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                 level="success",
             )
             ctx._phases["p1_done"] = True
-        try:
-            ctx._save_round_state()
-        except Exception as exc:  # noqa: BLE001
-            raise RuntimeError("Failed to persist round state after start_round") from exc
+            try:
+                ctx._save_round_state()
+            except Exception as exc:  # noqa: BLE001
+                raise RuntimeError("Failed to persist round state after start_round") from exc
 
     task_count = len(ctx.current_round_tasks)
     set_tasks_message = (
