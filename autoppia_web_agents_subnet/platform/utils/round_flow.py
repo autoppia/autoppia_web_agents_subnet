@@ -106,7 +106,7 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
             "Auth",
             f"Validator auth check failed – aborting round: {exc}",
             level="error",
-            exc_info=True,
+            exc_info=False,
         )
         raise SystemExit("Validator authentication failed; shutting down") from exc
 
@@ -168,23 +168,16 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                         "Phase 1",
                         (
                             "start_round verification rejected due to round_number mismatch "
-                            f"(expected={expected}, got={got}); assuming prior round is still active and continuing"
+                            f"(expected={expected}, got={got}); continuing without IWAP sync"
                         ),
-                        level="warning",
+                        level="error",
                     )
-                    ctx._phases["p1_done"] = True
-                    try:
-                        ctx._save_round_state()
-                    except Exception as save_exc:  # noqa: BLE001
-                        raise RuntimeError("Failed to persist round state after start_round verification") from save_exc
                 else:
                     log_iwap_phase(
                         "Phase 1",
-                        f"start_round verification failed for round_id={ctx.current_round_id}",
+                        f"start_round verification failed for round_id={ctx.current_round_id} (status={status}); continuing without IWAP sync",
                         level="error",
-                        exc_info=True,
                     )
-                    return
     else:
         try:
             resp = await ctx.iwap_client.start_round(
@@ -216,31 +209,23 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                         "Phase 1",
                         (
                             "start_round rejected due to round_number mismatch "
-                            f"(expected={expected}, got={got}); assuming prior round is still active and continuing"
+                            f"(expected={expected}, got={got}); continuing without IWAP sync"
                         ),
-                        level="warning",
+                        level="error",
                     )
-                    ctx._phases["p1_done"] = True
-                    try:
-                        ctx._save_round_state()
-                    except Exception as save_exc:  # noqa: BLE001
-                        raise RuntimeError("Failed to persist round state after start_round") from save_exc
                 else:
                     log_iwap_phase(
                         "Phase 1",
                         f"start_round failed for round_id={ctx.current_round_id}",
                         level="error",
-                        exc_info=True,
+                        exc_info=False,
                     )
-                    return
         except Exception as exc:  # noqa: BLE001
             log_iwap_phase(
                 "Phase 1",
-                f"start_round failed for round_id={ctx.current_round_id}",
+                f"start_round failed for round_id={ctx.current_round_id}: {exc}; continuing without IWAP sync",
                 level="error",
-                exc_info=True,
             )
-            raise
         else:
             log_iwap_phase(
                 "Phase 1",
@@ -271,7 +256,7 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                 "Phase 2",
                 f"set_tasks verification failed for round_id={ctx.current_round_id}",
                 level="error",
-                exc_info=True,
+                exc_info=False,
             )
             return
         finally:
@@ -301,7 +286,7 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                     "Phase 2",
                     f"set_tasks failed for round_id={ctx.current_round_id}",
                     level="error",
-                    exc_info=True,
+                    exc_info=False,
                 )
                 return
         except Exception:
@@ -309,7 +294,7 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                 "Phase 2",
                 f"set_tasks failed for round_id={ctx.current_round_id}",
                 level="error",
-                exc_info=True,
+                exc_info=False,
             )
             return
         else:
@@ -468,14 +453,14 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                     "Phase 3",
                     start_agent_run_error,
                     level="error",
-                    exc_info=True,
+                    exc_info=False,
                 )
                 continue
         except Exception:
             start_agent_run_error = (
                 f"start_agent_run failed for miner_uid={miner_uid}, agent_run_id={agent_run_id}"
             )
-            log_iwap_phase("Phase 3", start_agent_run_error, level="error", exc_info=True)
+            log_iwap_phase("Phase 3", start_agent_run_error, level="error", exc_info=False)
             continue
         else:
             start_agent_run_success = (
