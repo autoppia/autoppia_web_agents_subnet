@@ -79,6 +79,9 @@ class RoundStartMixin:
 
         if not resumed:
             self._reset_iwap_round_state()
+            reset_consensus = getattr(self, "_reset_consensus_state", None)
+            if callable(reset_consensus):
+                reset_consensus()
 
         if not resumed:
             frac = float(self.round_manager.fraction_elapsed(current_block))

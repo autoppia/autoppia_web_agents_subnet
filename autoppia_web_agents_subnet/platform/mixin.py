@@ -178,9 +178,6 @@ class ValidatorPlatformMixin:
         self.agent_run_accumulators = {}
         self._completed_pairs = set()
         self._phases = {"p1_done": False, "p2_done": False}
-        reset_consensus = getattr(self, "_reset_consensus_state", None)
-        if callable(reset_consensus):
-            reset_consensus()
 
     # ──────────────────────────────────────────────────────────────────────────
     # Async subtensor provider for consensus (single instance per validator)

@@ -227,9 +227,16 @@ class RoundStateManager:
             pass
 
         rm = getattr(v, "round_manager", None)
+        current_round_number = None
+        try:
+            current_round_number = getattr(v, "_current_round_number", None)
+            if current_round_number is not None:
+                current_round_number = int(current_round_number)
+        except Exception:
+            current_round_number = None
         ckpt = RoundCheckpoint(
             validator_round_id=getattr(v, "current_round_id", None),
-            round_number=None,  # Not strictly needed; can be recomputed
+            round_number=current_round_number,
             round_start_timestamp=float(getattr(v, "round_start_timestamp", 0.0) or 0.0),
             all_tasks=list(tasks if tasks is not None else getattr(v, "_all_tasks_cache", []) or []),
             current_round_tasks=dict(getattr(v, "current_round_tasks", {}) or {}),
@@ -255,6 +262,11 @@ class RoundStateManager:
         # Core IDs
         v.current_round_id = ckpt.validator_round_id
         v.round_start_timestamp = float(ckpt.round_start_timestamp or 0.0)
+        try:
+            if ckpt.round_number is not None:
+                v._current_round_number = int(ckpt.round_number)
+        except Exception:
+            pass
 
         # Tasks
         v._all_tasks_cache = list(ckpt.all_tasks or [])  # internal helper cache

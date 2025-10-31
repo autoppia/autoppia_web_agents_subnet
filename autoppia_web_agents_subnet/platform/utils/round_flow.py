@@ -49,7 +49,18 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
         "target_epoch": boundaries.get("target_epoch"),
     }
 
-    round_number = await ctx.round_manager.calculate_round(current_block)
+    stored_round_number = getattr(ctx, "_current_round_number", None)
+    if stored_round_number is not None:
+        try:
+            round_number = int(stored_round_number)
+        except Exception:
+            round_number = await ctx.round_manager.calculate_round(current_block)
+    else:
+        round_number = await ctx.round_manager.calculate_round(current_block)
+        try:
+            ctx._current_round_number = int(round_number)
+        except Exception:
+            pass
     miner_count = len(getattr(ctx, "active_miner_uids", []))
 
     start_round_message = (
@@ -120,6 +131,42 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                     ctx._save_round_state()
                 except Exception as save_exc:  # noqa: BLE001
                     raise RuntimeError("Failed to persist round state after start_round verification") from save_exc
+            elif status == 400:
+                detail = None
+                try:
+                    if exc.response is not None:
+                        detail = exc.response.json()
+                except Exception:
+                    try:
+                        detail = exc.response.text if exc.response is not None else None
+                    except Exception:
+                        detail = None
+                if isinstance(detail, dict) and detail.get("detail"):
+                    detail = detail["detail"]
+                if isinstance(detail, dict) and detail.get("error") == "round_number mismatch":
+                    expected = detail.get("expectedRoundNumber")
+                    got = detail.get("got")
+                    log_iwap_phase(
+                        "Phase 1",
+                        (
+                            "start_round verification rejected due to round_number mismatch "
+                            f"(expected={expected}, got={got}); assuming prior round is still active and continuing"
+                        ),
+                        level="warning",
+                    )
+                    ctx._phases["p1_done"] = True
+                    try:
+                        ctx._save_round_state()
+                    except Exception as save_exc:  # noqa: BLE001
+                        raise RuntimeError("Failed to persist round state after start_round verification") from save_exc
+                else:
+                    log_iwap_phase(
+                        "Phase 1",
+                        f"start_round verification failed for round_id={ctx.current_round_id}",
+                        level="error",
+                        exc_info=True,
+                    )
+                    return
             else:
                 log_iwap_phase(
                     "Phase 1",

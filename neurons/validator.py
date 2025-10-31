@@ -87,8 +87,19 @@ class Validator(
             note="Starting forward pass",
         )
 
-        current_round_number = await self.round_manager.calculate_round(current_block)
-        setattr(self, "_current_round_number", int(current_round_number))
+        resume_status = getattr(self, "_last_resume_info", {}).get("status")
+        stored_round_number = getattr(self, "_current_round_number", None)
+        if resume_status == "loaded" and stored_round_number is not None:
+            try:
+                current_round_number = int(stored_round_number)
+            except Exception:
+                current_round_number = await self.round_manager.calculate_round(current_block)
+        else:
+            current_round_number = await self.round_manager.calculate_round(current_block)
+            try:
+                setattr(self, "_current_round_number", int(current_round_number))
+            except Exception:
+                pass
         bt.logging.info(f"🚀 Starting round-based forward (round {current_round_number})")
         ColoredLogger.info(f"🚦 Starting Round: {int(current_round_number)}", ColoredLogger.GREEN)
 
