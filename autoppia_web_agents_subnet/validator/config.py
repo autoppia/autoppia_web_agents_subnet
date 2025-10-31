@@ -64,7 +64,7 @@ else:
     # Increased default tasks for production to extend execution closer to the
     # reserved consensus window. Previous default was 75; 2.5x -> ~188.
     # Environment variable PRE_GENERATED_TASKS still takes precedence.
-    PRE_GENERATED_TASKS = _env_int("PRE_GENERATED_TASKS", 188)
+    PRE_GENERATED_TASKS = _env_int("PRE_GENERATED_TASKS", 75)
     DZ_STARTING_BLOCK = _env_int("DZ_STARTING_BLOCK", 6726960)
 
     # ── Round Phase Timing (all absolute % of total round) ──────────────────
