@@ -26,6 +26,7 @@ round_arg=""
 pm2_identifier="$DEFAULT_PM2_IDENTIFIER"
 log_path=""
 lines="$DEFAULT_LINES"
+round_active=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -107,13 +108,32 @@ extract_latest_round() {
     echo "$latest_round"
 }
 
+extract_latest_started_round() {
+    local latest_round=""
+    while IFS= read -r line; do
+        if [[ "$line" =~ Starting[[:space:]]+Round:\ ([0-9]+) ]]; then
+            latest_round="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ Starting[[:space:]]+round-based[[:space:]]+forward[[:space:]]*\(round[[:space:]]*([0-9]+)\) ]]; then
+            latest_round="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ Round[[:space:]]+status[[:space:]]*\|\s*round=([0-9]+) ]]; then
+            latest_round="${BASH_REMATCH[1]}"
+        fi
+    done <<< "$log_text"
+    echo "$latest_round"
+}
+
 target_round="$round_arg"
 latest_completed_round=$(extract_latest_round)
 if [[ -z "$target_round" ]]; then
     target_round="$latest_completed_round"
     if [[ -z "$target_round" ]]; then
-        echo "Unable to locate a completed round in logs." >&2
-        exit 1
+        target_round=$(extract_latest_started_round)
+        if [[ -n "$target_round" ]]; then
+            round_active=1
+        else
+            echo "Unable to locate a round marker in logs." >&2
+            exit 1
+        fi
     fi
 fi
 
@@ -124,7 +144,6 @@ fi
 
 start_index=-1
 end_index=-1
-round_active=0
 
 for idx in "${!LOG_LINES[@]}"; do
     line=${LOG_LINES[$idx]}
