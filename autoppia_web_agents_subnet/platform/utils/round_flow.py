@@ -34,6 +34,35 @@ def _extract_validator_round_id(resp: Any) -> str:
     raise RuntimeError("IWAP start_round response missing 'validator_round_id'")
 
 
+def _parse_round_mismatch(exc: httpx.HTTPStatusError) -> tuple[int | None, int | None] | None:
+    response = exc.response
+    if response is None or response.status_code != 400:
+        return None
+    detail: Any = None
+    try:
+        detail = response.json()
+    except Exception:
+        try:
+            detail = response.text
+        except Exception:
+            detail = None
+    if isinstance(detail, dict) and "detail" in detail:
+        detail = detail["detail"]
+    if isinstance(detail, dict) and detail.get("error") == "round_number mismatch":
+        expected = detail.get("expectedRoundNumber")
+        got = detail.get("got")
+        try:
+            expected = int(expected) if expected is not None else None
+        except (TypeError, ValueError):
+            expected = None
+        try:
+            got = int(got) if got is not None else None
+        except (TypeError, ValueError):
+            got = None
+        return expected, got
+    return None
+
+
 async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
     if not ctx.current_round_id:
         return
@@ -131,21 +160,10 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                     ctx._save_round_state()
                 except Exception as save_exc:  # noqa: BLE001
                     raise RuntimeError("Failed to persist round state after start_round verification") from save_exc
-            elif status == 400:
-                detail = None
-                try:
-                    if exc.response is not None:
-                        detail = exc.response.json()
-                except Exception:
-                    try:
-                        detail = exc.response.text if exc.response is not None else None
-                    except Exception:
-                        detail = None
-                if isinstance(detail, dict) and detail.get("detail"):
-                    detail = detail["detail"]
-                if isinstance(detail, dict) and detail.get("error") == "round_number mismatch":
-                    expected = detail.get("expectedRoundNumber")
-                    got = detail.get("got")
+            else:
+                mismatch = _parse_round_mismatch(exc)
+                if mismatch is not None:
+                    expected, got = mismatch
                     log_iwap_phase(
                         "Phase 1",
                         (
@@ -167,14 +185,6 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                         exc_info=True,
                     )
                     return
-            else:
-                log_iwap_phase(
-                    "Phase 1",
-                    f"start_round verification failed for round_id={ctx.current_round_id}",
-                    level="error",
-                    exc_info=True,
-                )
-                return
     else:
         try:
             resp = await ctx.iwap_client.start_round(
@@ -199,13 +209,30 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                 except Exception as save_exc:  # noqa: BLE001
                     raise RuntimeError("Failed to persist round state after start_round") from save_exc
             else:
-                log_iwap_phase(
-                    "Phase 1",
-                    f"start_round failed for round_id={ctx.current_round_id}",
-                    level="error",
-                    exc_info=True,
-                )
-                return
+                mismatch = _parse_round_mismatch(exc)
+                if mismatch is not None:
+                    expected, got = mismatch
+                    log_iwap_phase(
+                        "Phase 1",
+                        (
+                            "start_round rejected due to round_number mismatch "
+                            f"(expected={expected}, got={got}); assuming prior round is still active and continuing"
+                        ),
+                        level="warning",
+                    )
+                    ctx._phases["p1_done"] = True
+                    try:
+                        ctx._save_round_state()
+                    except Exception as save_exc:  # noqa: BLE001
+                        raise RuntimeError("Failed to persist round state after start_round") from save_exc
+                else:
+                    log_iwap_phase(
+                        "Phase 1",
+                        f"start_round failed for round_id={ctx.current_round_id}",
+                        level="error",
+                        exc_info=True,
+                    )
+                    return
         except Exception as exc:  # noqa: BLE001
             log_iwap_phase(
                 "Phase 1",

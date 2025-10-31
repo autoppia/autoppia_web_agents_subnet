@@ -16,8 +16,14 @@ from email.message import EmailMessage
 from pathlib import Path
 from typing import Deque, Optional
 import html
-from datetime import datetime, UTC
 from textwrap import dedent
+
+try:  # Python 3.11+
+    from datetime import datetime, UTC  # type: ignore[attr-defined]
+except ImportError:  # Python 3.10 fallback
+    from datetime import datetime, timezone
+
+    UTC = timezone.utc  # type: ignore[assignment]
 
 
 ROUND_START_RE = re.compile(r"Starting Round: (\d+)")
