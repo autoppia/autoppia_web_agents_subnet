@@ -33,7 +33,7 @@ if TESTING:
     SAFETY_BUFFER_EPOCHS = _env_float("TEST_SAFETY_BUFFER_EPOCHS", 0.02)
     AVG_TASK_DURATION_SECONDS = _env_int("TEST_AVG_TASK_DURATION_SECONDS", 300)
     PRE_GENERATED_TASKS = _env_int("TEST_PRE_GENERATED_TASKS", 3)
-    DZ_STARTING_BLOCK = _env_int("TEST_DZ_STARTING_BLOCK", 6789000)
+    DZ_STARTING_BLOCK = _env_int("TEST_DZ_STARTING_BLOCK", 6788860)
 
     # ── Round Phase Timing (all absolute % of total round) ──────────────────
     # Stop task evaluation at 50% of round to allow time for consensus
@@ -65,7 +65,7 @@ else:
     # reserved consensus window. Previous default was 75; 2.5x -> ~188.
     # Environment variable PRE_GENERATED_TASKS still takes precedence.
     PRE_GENERATED_TASKS = _env_int("PRE_GENERATED_TASKS", 75)
-    DZ_STARTING_BLOCK = _env_int("DZ_STARTING_BLOCK", 6789000)
+    DZ_STARTING_BLOCK = _env_int("DZ_STARTING_BLOCK", 6788860)
 
     # ── Round Phase Timing (all absolute % of total round) ──────────────────
     # Stop task evaluation at 90% of round to reserve time for consensus
