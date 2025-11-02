@@ -72,9 +72,7 @@ class ValidatorPlatformMixin:
 
         base_block = int(getattr(rm, "minimum_start_block", 0) or 0)
         if current_block < base_block:
-            raise RuntimeError(
-                f"Current block {current_block} predates configured minimum start block {base_block}"
-            )
+            raise RuntimeError(f"Current block {current_block} predates configured minimum start block {base_block}")
 
         round_length = int(rm.ROUND_BLOCK_LENGTH)
         if round_length <= 0:
@@ -178,6 +176,9 @@ class ValidatorPlatformMixin:
         self.agent_run_accumulators = {}
         self._completed_pairs = set()
         self._phases = {"p1_done": False, "p2_done": False}
+        # Reset round number to force recalculation on next round start
+        # This prevents reusing stale values when discarding old checkpoints
+        self._current_round_number = None
 
     # ──────────────────────────────────────────────────────────────────────────
     # Async subtensor provider for consensus (single instance per validator)
@@ -236,17 +237,17 @@ class ValidatorPlatformMixin:
             bt.logging.debug("Starting AsyncSubtensor cleanup...")
 
             # Step 1: Access the substrate interface
-            substrate = getattr(async_subtensor, 'substrate', None)
+            substrate = getattr(async_subtensor, "substrate", None)
             if substrate is not None:
                 bt.logging.debug("Found substrate interface")
 
                 # Step 2: Access the websocket connection
-                websocket = getattr(substrate, 'websocket', None)
+                websocket = getattr(substrate, "websocket", None)
                 if websocket is not None:
                     bt.logging.debug("Found websocket connection, cancelling background tasks...")
 
                     # Step 3: Cancel all websocket background tasks
-                    task_attrs = ['_sending_task', '_receiving_task', '_start_sending', '_ws_send_task']
+                    task_attrs = ["_sending_task", "_receiving_task", "_start_sending", "_ws_send_task"]
                     for task_attr in task_attrs:
                         task = getattr(websocket, task_attr, None)
                         if task is not None and isinstance(task, asyncio.Task):
@@ -262,7 +263,7 @@ class ValidatorPlatformMixin:
 
                     # Step 4: Close the websocket
                     try:
-                        if hasattr(websocket, 'close') and callable(websocket.close):
+                        if hasattr(websocket, "close") and callable(websocket.close):
                             await websocket.close()
                             bt.logging.debug("Websocket closed")
                     except Exception as e:
@@ -270,7 +271,7 @@ class ValidatorPlatformMixin:
 
                 # Step 5: Close the substrate interface
                 try:
-                    if hasattr(substrate, 'close') and callable(substrate.close):
+                    if hasattr(substrate, "close") and callable(substrate.close):
                         await substrate.close()
                         bt.logging.debug("Substrate interface closed")
                 except Exception as e:
@@ -278,10 +279,10 @@ class ValidatorPlatformMixin:
 
             # Step 6: Try high-level close methods
             try:
-                if hasattr(async_subtensor, 'close') and callable(async_subtensor.close):
+                if hasattr(async_subtensor, "close") and callable(async_subtensor.close):
                     await async_subtensor.close()
                     bt.logging.debug("AsyncSubtensor.close() called")
-                elif hasattr(async_subtensor, 'disconnect') and callable(async_subtensor.disconnect):
+                elif hasattr(async_subtensor, "disconnect") and callable(async_subtensor.disconnect):
                     await async_subtensor.disconnect()
                     bt.logging.debug("AsyncSubtensor.disconnect() called")
             except Exception as e:
