@@ -316,9 +316,11 @@ class RoundManager:
         ColoredLogger.info(base, ColoredLogger.CYAN)
 
     def can_start_round(self, current_block: int) -> bool:
-        """Return True when the chain height has passed the minimum start block gate."""
-        if TESTING:
-            return True
+        """Return True when the chain height has passed the minimum start block gate.
+        
+        Respects DZ_STARTING_BLOCK in ALL modes (testing and production).
+        This prevents crashes from negative round number calculations.
+        """
         if self.minimum_start_block is None:
             return True
         return current_block >= self.minimum_start_block
