@@ -92,23 +92,43 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
             pass
     miner_count = len(getattr(ctx, "active_miner_uids", []))
 
-    start_round_message = (
-        f"Calling start_round with round_number={round_number}, "
-        f"tasks={n_tasks}, miners={miner_count}, "
-        f"round_id={ctx.current_round_id}"
-    )
+    start_round_message = f"Calling start_round with round_number={round_number}, " f"tasks={n_tasks}, miners={miner_count}, " f"round_id={ctx.current_round_id}"
     log_iwap_phase("Phase 1", start_round_message)
 
+    # Try to authenticate with IWAP, but don't kill validator if it fails
     try:
         await ctx.iwap_client.auth_check()
+        ctx._iwap_offline_mode = False
+        log_iwap_phase("Auth", "✅ IWAP authentication successful", level="success")
     except Exception as exc:
+        # CRITICAL: IWAP is down, but validator MUST continue and set weights
+        ctx._iwap_offline_mode = True
+        bt.logging.critical(
+            f"🔴 CRITICAL: IWAP authentication FAILED - Continuing in OFFLINE mode\n"
+            f"   → IWAP endpoint unreachable: {exc}\n"
+            f"   → Validator will continue: handshake, tasks, and SET WEIGHTS on-chain\n"
+            f"   → IWAP data (leaderboard/dashboard) will NOT be updated this round\n"
+            f"   → On-chain consensus and rewards WILL PROCEED normally"
+        )
         log_iwap_phase(
             "Auth",
-            f"Validator auth check failed – aborting round: {exc}",
+            f"⚠️ IWAP offline - validator continuing without dashboard sync: {exc}",
             level="error",
             exc_info=False,
         )
-        raise SystemExit("Validator authentication failed; shutting down") from exc
+
+    # If IWAP is offline, skip all backend sync but continue validation
+    if getattr(ctx, "_iwap_offline_mode", False):
+        log_iwap_phase(
+            "Phase 1",
+            "⚠️ OFFLINE MODE: Skipping all IWAP backend calls - validator continues normally",
+            level="warning",
+        )
+        # Mark phases as done so validator doesn't get stuck
+        ctx._phases["p1_done"] = True
+        ctx._phases["p2_done"] = True
+        bt.logging.info("✅ Validator will proceed with: handshake → tasks → evaluations → SET WEIGHTS on-chain")
+        return
 
     validator_round = iwa_models.ValidatorRoundIWAP(
         validator_round_id=ctx.current_round_id,
@@ -166,10 +186,7 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                     expected, got = mismatch
                     log_iwap_phase(
                         "Phase 1",
-                        (
-                            "start_round verification rejected due to round_number mismatch "
-                            f"(expected={expected}, got={got}); continuing without IWAP sync"
-                        ),
+                        ("start_round verification rejected due to round_number mismatch " f"(expected={expected}, got={got}); continuing without IWAP sync"),
                         level="error",
                     )
                 else:
@@ -207,10 +224,7 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                     expected, got = mismatch
                     log_iwap_phase(
                         "Phase 1",
-                        (
-                            "start_round rejected due to round_number mismatch "
-                            f"(expected={expected}, got={got}); continuing without IWAP sync"
-                        ),
+                        ("start_round rejected due to round_number mismatch " f"(expected={expected}, got={got}); continuing without IWAP sync"),
                         level="error",
                     )
                 else:
@@ -239,9 +253,7 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                 raise RuntimeError("Failed to persist round state after start_round") from exc
 
     task_count = len(ctx.current_round_tasks)
-    set_tasks_message = (
-        f"Calling set_tasks with tasks={task_count} for round_id={ctx.current_round_id}"
-    )
+    set_tasks_message = f"Calling set_tasks with tasks={task_count} for round_id={ctx.current_round_id}"
     if ctx._phases.get("p2_done"):
         # Idempotently re-send tasks to ensure backend state is present after resumes.
         log_iwap_phase("Phase 2", "resume: verifying set_tasks on backend", level="warning")
@@ -345,9 +357,7 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
         )
 
         existing_run = ctx.current_agent_runs.get(miner_uid)
-        agent_run_id = (
-            existing_run.agent_run_id if existing_run else iwa_main.generate_agent_run_id(miner_uid)
-        )
+        agent_run_id = existing_run.agent_run_id if existing_run else iwa_main.generate_agent_run_id(miner_uid)
         agent_run = iwa_models.AgentRunIWAP(
             agent_run_id=agent_run_id,
             validator_round_id=ctx.current_round_id,
@@ -370,20 +380,14 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                     level="warning",
                 )
                 ctx.current_agent_runs[miner_uid] = existing_run
-                ctx.current_miner_snapshots[miner_uid] = (
-                    ctx.current_miner_snapshots.get(miner_uid) or miner_snapshot
-                )
-                ctx.agent_run_accumulators.setdefault(
-                    miner_uid, {"reward": 0.0, "score": 0.0, "execution_time": 0.0, "tasks": 0}
-                )
+                ctx.current_miner_snapshots[miner_uid] = ctx.current_miner_snapshots.get(miner_uid) or miner_snapshot
+                ctx.agent_run_accumulators.setdefault(miner_uid, {"reward": 0.0, "score": 0.0, "execution_time": 0.0, "tasks": 0})
                 try:
                     ctx._save_round_state()
                 except Exception:
                     pass
                 continue
-            start_agent_run_message = (
-                f"Calling start_agent_run for miner_uid={miner_uid}, agent_run_id={agent_run_id}"
-            )
+            start_agent_run_message = f"Calling start_agent_run for miner_uid={miner_uid}, agent_run_id={agent_run_id}"
             log_iwap_phase("Phase 3", start_agent_run_message)
             try:
                 await ctx.iwap_client.start_agent_run(
@@ -436,19 +440,13 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                 )
                 try:
                     ctx.current_agent_runs[miner_uid] = agent_run
-                    ctx.current_miner_snapshots[miner_uid] = (
-                        ctx.current_miner_snapshots.get(miner_uid) or miner_snapshot
-                    )
-                    ctx.agent_run_accumulators.setdefault(
-                        miner_uid, {"reward": 0.0, "score": 0.0, "execution_time": 0.0, "tasks": 0}
-                    )
+                    ctx.current_miner_snapshots[miner_uid] = ctx.current_miner_snapshots.get(miner_uid) or miner_snapshot
+                    ctx.agent_run_accumulators.setdefault(miner_uid, {"reward": 0.0, "score": 0.0, "execution_time": 0.0, "tasks": 0})
                     ctx._save_round_state()
                 except Exception:
                     pass
             else:
-                start_agent_run_error = (
-                    f"start_agent_run failed for miner_uid={miner_uid}, agent_run_id={agent_run_id}"
-                )
+                start_agent_run_error = f"start_agent_run failed for miner_uid={miner_uid}, agent_run_id={agent_run_id}"
                 log_iwap_phase(
                     "Phase 3",
                     start_agent_run_error,
@@ -457,23 +455,17 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                 )
                 continue
         except Exception:
-            start_agent_run_error = (
-                f"start_agent_run failed for miner_uid={miner_uid}, agent_run_id={agent_run_id}"
-            )
+            start_agent_run_error = f"start_agent_run failed for miner_uid={miner_uid}, agent_run_id={agent_run_id}"
             log_iwap_phase("Phase 3", start_agent_run_error, level="error", exc_info=False)
             continue
         else:
-            start_agent_run_success = (
-                f"start_agent_run completed for miner_uid={miner_uid}, agent_run_id={agent_run_id}"
-            )
+            start_agent_run_success = f"start_agent_run completed for miner_uid={miner_uid}, agent_run_id={agent_run_id}"
             log_iwap_phase("Phase 3", start_agent_run_success, level="success")
             # Update local state for crash-resume and bookkeeping
             try:
                 ctx.current_agent_runs[miner_uid] = agent_run
                 ctx.current_miner_snapshots[miner_uid] = miner_snapshot
-                ctx.agent_run_accumulators.setdefault(
-                    miner_uid, {"reward": 0.0, "score": 0.0, "execution_time": 0.0, "tasks": 0}
-                )
+                ctx.agent_run_accumulators.setdefault(miner_uid, {"reward": 0.0, "score": 0.0, "execution_time": 0.0, "tasks": 0})
                 ctx._save_round_state()
             except Exception:
                 pass
@@ -487,6 +479,18 @@ async def finish_round_flow(
     tasks_completed: int,
 ) -> bool:
     if not ctx.current_round_id:
+        return True
+
+    # If IWAP is offline, skip backend sync but still cleanup state
+    if getattr(ctx, "_iwap_offline_mode", False):
+        log_iwap_phase(
+            "Phase 5",
+            "⚠️ OFFLINE MODE: Skipping finish_round backend call - cleaning up local state",
+            level="warning",
+        )
+        ctx._reset_iwap_round_state()
+        ctx._remove_round_state()
+        bt.logging.info("✅ Round completed locally - weights were set on-chain successfully")
         return True
 
     ended_at = time.time()
@@ -543,9 +547,7 @@ async def finish_round_flow(
     )
 
     round_id = ctx.current_round_id
-    finish_round_message = (
-        f"Calling finish_round for round_id={round_id}, winners={len(winners)}, tasks_completed={tasks_completed}"
-    )
+    finish_round_message = f"Calling finish_round for round_id={round_id}, winners={len(winners)}, tasks_completed={tasks_completed}"
     log_iwap_phase("Phase 5", finish_round_message)
     success = False
     try:
@@ -554,9 +556,7 @@ async def finish_round_flow(
             finish_request=finish_request,
         )
     except Exception as exc:  # noqa: BLE001
-        error_msg = (
-            f"finish_round failed for round_id={round_id} ({type(exc).__name__}: {exc})"
-        )
+        error_msg = f"finish_round failed for round_id={round_id} ({type(exc).__name__}: {exc})"
         log_iwap_phase("Phase 5", error_msg, level="error", exc_info=False)
         bt.logging.error(f"IWAP finish_round failed for round_id={round_id}: {exc}")
         success = False
