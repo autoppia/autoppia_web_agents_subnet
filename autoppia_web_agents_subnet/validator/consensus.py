@@ -23,7 +23,7 @@ from autoppia_web_agents_subnet.utils.commitments import (
 from autoppia_web_agents_subnet.utils.ipfs_client import aadd_json, aget_json
 from autoppia_web_agents_subnet.utils.log_colors import ipfs_tag, consensus_tag
 from autoppia_web_agents_subnet.validator.dataset import RoundDatasetCollector
-from autoppia_web_agents_subnet.validator.eval import evaluate_task_solutions
+from autoppia_web_agents_subnet.validator.evaluation.eval import evaluate_task_solutions
 
 # IWA domain types
 from autoppia_iwa.src.data_generation.domain.classes import Task
@@ -705,7 +705,7 @@ async def _verify_payload_sample(
 
             # Evaluate subset
             exec_times = [0.0] * len(sols)
-            eval_scores, _trs, _ers, _penalty = await evaluate_task_solutions(
+            eval_scores, _trs, _ers = await evaluate_task_solutions(
                 web_project=project,
                 task=t,
                 task_solutions=sols,

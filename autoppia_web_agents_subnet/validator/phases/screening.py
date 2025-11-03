@@ -3,10 +3,10 @@ from __future__ import annotations
 from typing import List, Tuple
 
 from autoppia_web_agents_subnet.protocol import TaskSynapse
-from autoppia_web_agents_subnet.validator.synapse_handlers import (
+from autoppia_web_agents_subnet.validator.evaluation.synapse_handlers import (
     send_task_synapse_to_miners,
 )
-from autoppia_web_agents_subnet.validator.tasks import (
+from autoppia_web_agents_subnet.validator.evaluation.tasks import (
     collect_task_solutions_and_execution_times,
 )
 from autoppia_iwa.src.data_generation.domain.classes import Task as IWATask  # type: ignore

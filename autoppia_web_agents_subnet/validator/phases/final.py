@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import List, Tuple
 
 from autoppia_web_agents_subnet.protocol import TaskSynapse
-from autoppia_web_agents_subnet.validator.synapse_handlers import (
+from autoppia_web_agents_subnet.validator.evaluation.synapse_handlers import (
     send_task_synapse_to_http_endpoints,
     collect_task_solutions_and_execution_times_http,
 )

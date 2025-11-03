@@ -8,6 +8,10 @@ import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from rich.console import Console  # type: ignore
+from rich.table import Table  # type: ignore
+from rich import box  # type: ignore
+
 from bittensor import AsyncSubtensor  # type: ignore
 
 from autoppia_web_agents_subnet.utils.commitments import read_all_plain_commitments
@@ -133,6 +137,38 @@ async def _fetch_payload(
         return None, None, f"{type(exc).__name__}: {exc}"
 
 
+def _chunked(seq: Sequence[Any], n: int) -> List[List[Any]]:
+    if n <= 0:
+        n = 1
+    return [list(seq[i : i + n]) for i in range(0, len(seq), n)]
+
+
+def _print_scores_rich(
+    items: List[Tuple[str, List[Tuple[int, float]]]],
+    *,
+    cols: int = 4,
+) -> None:
+    if not items:
+        return
+    console = Console()
+    for label, parsed_scores in items:
+        cells = [f"{uid}: {score:.4f}" for uid, score in parsed_scores]
+        table = Table(
+            title=f"{label} miner scores ({len(parsed_scores)})",
+            show_header=False,
+            box=box.SIMPLE_HEAVY,
+            pad_edge=False,
+        )
+        for _ in range(max(1, cols)):
+            table.add_column(justify="left", style="cyan")
+        for row in _chunked(cells, max(1, cols)):
+            # pad row if short
+            if len(row) < cols:
+                row = row + [""] * (cols - len(row))
+            table.add_row(*row)
+        console.print(table)
+
+
 def _select_recent_rounds(
     commits: Dict[str, Any],
 ) -> Dict[int, List[Tuple[str, Dict[str, Any]]]]:
@@ -158,12 +194,10 @@ def _round_label(round_number: Optional[int], target_epoch: Optional[int]) -> st
     return "unknown round"
 
 
-def _score_summary(payload: Dict[str, Any], limit: int = 3) -> Tuple[int, str, List[Tuple[int, float]]]:
-    """Return score count, a short summary line, and sorted scores.
-
-    - limit > 0: summary shows the top-N.
-    - limit <= 0: summary indicates full listing is shown elsewhere.
-    """
+def _score_summary(
+    payload: Dict[str, Any],
+    limit: int = 3,
+) -> Tuple[int, str, List[Tuple[int, float]]]:
     scores = payload.get("scores")
     if not isinstance(scores, dict):
         return 0, "scores unavailable", []
@@ -175,13 +209,14 @@ def _score_summary(payload: Dict[str, Any], limit: int = 3) -> Tuple[int, str, L
         except Exception:
             continue
 
+    # sort descending by score
     parsed.sort(key=lambda item: item[1], reverse=True)
 
     count = len(parsed)
     if count == 0:
         return 0, "scores empty", []
 
-    if limit > 0:
+    if limit and limit > 0:
         top = parsed[:limit]
         top_str = ", ".join(f"{uid}:{score:.4f}" for uid, score in top)
         return count, f"top {top_str}", parsed
@@ -217,7 +252,8 @@ def _render_validator_table(
     *,
     total_weight: float,
     scores_limit: int = 3,
-) -> Tuple[str, List[str]]:
+    scores_cols: int = 4,
+) -> Tuple[str, List[str], List[Tuple[str, List[Tuple[int, float]]]]]:
     headers = [
         "validator",
         "uid",
@@ -236,6 +272,7 @@ def _render_validator_table(
 
     rows: List[List[str]] = []
     extra: List[str] = []
+    scores_tables: List[Tuple[str, List[Tuple[int, float]]]] = []
 
     for item in validators:
         weight_pct = (item.stake_tao / total_weight) * 100.0 if total_weight else 0.0
@@ -270,7 +307,9 @@ def _render_validator_table(
             extra.append(f"      {item.hotkey[:10]}… payload missing")
         else:
             payload = item.payload
-            scores_count, top_line, parsed_scores = _score_summary(payload, limit=scores_limit)
+            scores_count, top_line, parsed_scores = _score_summary(
+                payload, limit=scores_limit
+            )
             count_stats, mean, stddev, variance = _score_stats(payload.get("scores"))
             scores_count = count_stats
             tasks_val = payload.get("tasks_completed") or payload.get("n")
@@ -281,18 +320,19 @@ def _render_validator_table(
                 agents = str(agents_val)
             if top_line:
                 extra.append(f"      {item.hotkey[:10]}… {top_line}")
-            # When limit <= 0, print all miner scores for this validator
+            # When scores_limit <= 0, collect full miner scores for Rich table rendering
             if parsed_scores and scores_limit <= 0:
-                extra.append(
-                    f"      {item.hotkey[:10]}… scores ({len(parsed_scores)} miners):"
-                )
-                for uid, score in parsed_scores:
-                    extra.append(f"        - {uid}: {score:.4f}")
+                scores_tables.append((f"{item.hotkey[:10]}…", parsed_scores))
 
         mean_text = f"{mean:.4f}" if mean is not None else "-"
         std_text = f"{stddev:.4f}" if stddev is not None else "-"
         var_text = f"{variance:.4f}" if variance is not None else "-"
         scores_text = str(scores_count) if scores_count else "-"
+
+        if item.cid:
+            extra.append(f"      {item.hotkey[:10]}… cid={item.cid}")
+        if item.payload_hash:
+            extra.append(f"      {item.hotkey[:10]}… payload_sha256={item.payload_hash}")
 
         rows.append(
             [
@@ -313,7 +353,7 @@ def _render_validator_table(
         )
 
     if not rows:
-        return "", extra
+        return "", extra, scores_tables
 
     col_widths = [len(header) for header in headers]
     for row in rows:
@@ -330,7 +370,7 @@ def _render_validator_table(
         table_lines.append(_fmt_row(row))
     table_lines.append(divider)
 
-    return "\n".join(table_lines), extra
+    return "\n".join(table_lines), extra, scores_tables
 
 
 def _decode_weight_payload(raw: Any) -> Dict[int, int]:
@@ -478,6 +518,7 @@ async def inspect_rounds(
     ipfs_api: Optional[str],
     gateways: Optional[Sequence[str]],
     scores_limit: int,
+    scores_cols: int,
 ) -> None:
     if rounds <= 0:
         rounds = 1
@@ -558,6 +599,7 @@ async def inspect_rounds(
                 continue
 
             validators: List[ValidatorCommitment] = []
+            below_min_validators: List[ValidatorCommitment] = []
             reported_rounds: List[int] = []
             base_epochs: List[int] = []
 
@@ -574,23 +616,23 @@ async def inspect_rounds(
                 raw_cid = entry.get("c")
                 cid_text = str(raw_cid) if raw_cid else None
 
-                _, preview_stake = stake_for_hotkey(hotkey)
-                if not include_below and preview_stake < min_stake:
-                    continue
-
                 uid, stake_tao = stake_for_hotkey(hotkey)
 
-                validators.append(
-                    ValidatorCommitment(
-                        hotkey=hotkey,
-                        uid=uid,
-                        stake_tao=stake_tao,
-                        cid=cid_text,
-                        round_number=round_int,
-                        epoch=epoch_val,
-                        target_epoch=target_epoch,
-                    )
+                record = ValidatorCommitment(
+                    hotkey=hotkey,
+                    uid=uid,
+                    stake_tao=stake_tao,
+                    cid=cid_text,
+                    round_number=round_int,
+                    epoch=epoch_val,
+                    target_epoch=target_epoch,
                 )
+
+                if not include_below and stake_tao < min_stake:
+                    below_min_validators.append(record)
+                    continue
+
+                validators.append(record)
                 if round_int is not None:
                     reported_rounds.append(round_int)
                 if epoch_val is not None:
@@ -635,14 +677,10 @@ async def inspect_rounds(
             ):
                 print(f"  • derived_round_index≈{derived_round}")
 
-            if not validators:
-                print(
-                    f"  • No validators meet stake ≥ {min_stake:.2f} τ for this window"
-                )
-                continue
+            combined_commitments = validators + below_min_validators
 
             payload_tasks: List[Tuple[ValidatorCommitment, asyncio.Task]] = []
-            for item in validators:
+            for item in combined_commitments:
                 if not item.cid:
                     continue
                 task = asyncio.create_task(
@@ -659,21 +697,56 @@ async def inspect_rounds(
             validators.sort(key=lambda v: v.stake_tao, reverse=True)
             total_weight = sum(filter(None, (v.stake_tao for v in validators)))
 
-            table_text, extra_lines = _render_validator_table(
-                validators,
-                total_weight=total_weight,
-                scores_limit=scores_limit,
-            )
-            print(
-                f"  • validators_considered={len(validators)} "
-                f"(stake ≥ {min_stake:.2f} τ)"
-            )
-            if total_weight > 0:
-                print(f"  • total_stake={total_weight:,.2f} τ")
-            if table_text:
-                print(table_text)
-            for line in extra_lines:
-                print(line)
+            if not validators:
+                print(
+                    f"  • No validators meet stake ≥ {min_stake:.2f} τ for this window"
+                )
+            else:
+                table_text, extra_lines, scores_tables = _render_validator_table(
+                    validators,
+                    total_weight=total_weight,
+                    scores_limit=scores_limit,
+                    scores_cols=scores_cols,
+                )
+                print(
+                    f"  • validators_considered={len(validators)} "
+                    f"(stake ≥ {min_stake:.2f} τ)"
+                )
+                if total_weight > 0:
+                    print(f"  • total_stake={total_weight:,.2f} τ")
+                if table_text:
+                    print(table_text)
+                for line in extra_lines:
+                    print(line)
+                # When showing all miner scores, render them as Rich tables
+                if scores_tables:
+                    _print_scores_rich(scores_tables, cols=scores_cols)
+
+            if below_min_validators:
+                below_min_validators.sort(
+                    key=lambda v: v.stake_tao, reverse=True
+                )
+                below_total = sum(
+                    filter(None, (v.stake_tao for v in below_min_validators))
+                )
+                print(
+                    f"  • validators_below_min_stake={len(below_min_validators)} "
+                    f"(stake < {min_stake:.2f} τ)"
+                )
+                if below_total > 0:
+                    print(f"  • total_stake_below={below_total:,.2f} τ")
+                table_text, extra_lines, scores_tables = _render_validator_table(
+                    below_min_validators,
+                    total_weight=below_total,
+                    scores_limit=scores_limit,
+                    scores_cols=scores_cols,
+                )
+                if table_text:
+                    print(table_text)
+                for line in extra_lines:
+                    print(line)
+                if scores_tables:
+                    _print_scores_rich(scores_tables, cols=scores_cols)
 
             if target_block > current_block:
                 print("  • weights unavailable (round still active)")
@@ -780,10 +853,18 @@ def parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
     parser.add_argument(
         "--scores-limit",
         type=int,
-        default=3,
+        default=0,
         help=(
-            "Number of top miner scores to show per validator (default: 3). "
-            "Use 0 to show all miner scores."
+            "Number of top miner scores to show per validator (default: all). "
+            "Use 0 for all, or a positive N for top-N."
+        ),
+    )
+    parser.add_argument(
+        "--scores-cols",
+        type=int,
+        default=4,
+        help=(
+            "Number of columns to use when printing full miner scores (default: 4)."
         ),
     )
     return parser.parse_args(argv)
@@ -811,6 +892,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
                 ipfs_api=args.ipfs_api,
                 gateways=gateways,
                 scores_limit=args.scores_limit,
+                scores_cols=args.scores_cols,
             )
         )
     except KeyboardInterrupt:  # pragma: no cover - user abort

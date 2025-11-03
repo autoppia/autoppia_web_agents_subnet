@@ -19,6 +19,13 @@ import copy
 import bittensor as bt
 from abc import ABC, abstractmethod
 
+from autoppia_web_agents_subnet.base.mock import (
+    MockMetagraph,
+    MockNeuronContext,
+    MockSubtensor,
+    MockWallet,
+)
+
 # Sync calls set weights and also resyncs the metagraph.
 from autoppia_web_agents_subnet.base.utils.config import check_config, add_args, config
 from autoppia_web_agents_subnet.base.utils.misc import ttl_get_block
@@ -64,10 +71,16 @@ class BaseNeuron(ABC):
         base_config = copy.deepcopy(config or BaseNeuron.config())
         self.config = self.config()
         self.config.merge(base_config)
-        self.check_config(self.config) 
+        self.check_config(self.config)
 
-        # Version check
-        self.parse_versions()
+        self.is_mock = bool(getattr(self.config, "mock", False))
+        self._mock_context: MockNeuronContext | None = None
+        if self.is_mock:
+            self.version = __version__
+            self.least_acceptable_version = __least_acceptable_version__
+        else:
+            # Version check against remote manifest
+            self.parse_versions()
 
         # Set up logging with the provided configuration.
         bt.logging.set_config(config=self.config.logging)
@@ -132,37 +145,25 @@ class BaseNeuron(ABC):
         # Log the configuration for reference.
         bt.logging.info(self.config)
 
-        # Build Bittensor objects
-        # These are core Bittensor classes to interact with the network.
-        bt.logging.info("Setting up bittensor objects.")
-
-        # The wallet holds the cryptographic key pairs for the miner.
-
-        self.wallet = bt.wallet(config=self.config)
-        while True:
-            try:
-                bt.logging.info("Initializing subtensor and metagraph")
-                self.subtensor = bt.subtensor(config=self.config)
-                self.metagraph = self.subtensor.metagraph(self.config.netuid)
-                break
-            except Exception as e:
-                bt.logging.error(
-                    "Couldn't init subtensor and metagraph with error: {}".format(e)
-                )
-                bt.logging.error(
-                    "If you use public RPC endpoint try to move to local node"
-                )
-                time.sleep(5)
+        # Build Bittensor objects or their mock equivalents.
+        if self.is_mock:
+            bt.logging.warning("Mock mode enabled — using synthetic Bittensor components.")
+            self._setup_mock_environment()
+        else:
+            bt.logging.info("Setting up bittensor objects.")
+            self._setup_bittensor_environment()
 
         bt.logging.info(f"Wallet: {self.wallet}")
         bt.logging.info(f"Subtensor: {self.subtensor}")
         bt.logging.info(f"Metagraph: {self.metagraph}")
 
-        # Check if the miner is registered on the Bittensor network before proceeding further.
-        self.check_registered()
+        if not self.is_mock:
+            self.check_registered()
 
-        # Each miner gets a unique identity (UID) in the network for differentiation.
-        self.uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
+        try:
+            self.uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
+        except Exception:
+            self.uid = int(getattr(self.config, "mock_uid", 0))
         bt.logging.info(
             f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: {self.subtensor.chain_endpoint}"
         )
@@ -188,6 +189,56 @@ class BaseNeuron(ABC):
     def set_weights(self):
 
         pass
+
+    def _setup_bittensor_environment(self) -> None:
+        self.wallet = bt.wallet(config=self.config)
+        while True:
+            try:
+                bt.logging.info("Initializing subtensor and metagraph")
+                self.subtensor = bt.subtensor(config=self.config)
+                self.metagraph = self.subtensor.metagraph(self.config.netuid)
+                break
+            except Exception as e:
+                bt.logging.error("Couldn't init subtensor and metagraph with error: {}".format(e))
+                bt.logging.error("If you use public RPC endpoint try to move to local node")
+                time.sleep(5)
+
+    def _setup_mock_environment(self) -> None:
+        hotkey = getattr(self.config, 'mock_hotkey', '5MockHotkey1111111111111111111111111')
+        coldkey = getattr(self.config, 'mock_coldkey', '5MockColdkey111111111111111111111111')
+        uid = int(getattr(self.config, 'mock_uid', 0))
+        peers_raw = getattr(self.config, 'mock_peer_hotkeys', '') or ''
+        if peers_raw:
+            peer_hotkeys = [hk.strip() for hk in peers_raw.split(',') if hk.strip()]
+        else:
+            size = max(uid + 1, int(getattr(self.config, 'mock_metagraph_size', 8)))
+            peer_hotkeys = [f"5MockPeer{str(i).zfill(3)}" for i in range(size)]
+
+        if uid >= len(peer_hotkeys):
+            for i in range(len(peer_hotkeys), uid + 1):
+                peer_hotkeys.append(f"5MockPeer{str(i).zfill(3)}")
+
+        peer_hotkeys[uid] = hotkey
+
+        metagraph = MockMetagraph(hotkeys=peer_hotkeys)
+        wallet = MockWallet(
+            name=getattr(self.config.wallet, 'name', 'mock-wallet'),
+            hotkey_ss58=hotkey,
+            coldkey_ss58=coldkey,
+        )
+        subtensor = MockSubtensor(
+            metagraph=metagraph,
+            network=str(getattr(self.config.subtensor, 'network', 'mock')),
+        )
+        subtensor.register_hotkey(hotkey, uid)
+        self._mock_context = MockNeuronContext(wallet=wallet, subtensor=subtensor, metagraph=metagraph)
+        self.wallet = wallet
+        self.subtensor = subtensor
+        self.metagraph = metagraph
+        try:
+            self.mock_network = get_mock_network()  # type: ignore[attr-defined]
+        except Exception:
+            self.mock_network = None
 
     def sync(self):
         """
@@ -216,6 +267,8 @@ class BaseNeuron(ABC):
             time.sleep(5)
 
     def check_registered(self):
+        if getattr(self, 'is_mock', False):
+            return
         # --- Check for registration.
         if not self.subtensor.is_hotkey_registered(
             netuid=self.config.netuid,

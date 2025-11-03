@@ -94,6 +94,41 @@ def add_args(cls, parser):
     )
 
     parser.add_argument(
+        "--mock-hotkey",
+        type=str,
+        help="SS58 address to use for the mock hotkey when --mock is enabled.",
+        default="5MockHotkey1111111111111111111111111",
+    )
+
+    parser.add_argument(
+        "--mock-coldkey",
+        type=str,
+        help="SS58 address to use for the mock coldkey (public) when --mock is enabled.",
+        default="5MockColdkey111111111111111111111111",
+    )
+
+    parser.add_argument(
+        "--mock-uid",
+        type=int,
+        help="UID to assign to the mock neuron inside the synthetic metagraph.",
+        default=0,
+    )
+
+    parser.add_argument(
+        "--mock-metagraph-size",
+        type=int,
+        help="Size of the synthetic metagraph when running in mock mode.",
+        default=8,
+    )
+
+    parser.add_argument(
+        "--mock-peer-hotkeys",
+        type=str,
+        help="Comma separated list of peer hotkeys to seed the mock metagraph with.",
+        default="",
+    )
+
+    parser.add_argument(
         "--neuron.events_retention_size",
         type=str,
         help="Events retention size.",

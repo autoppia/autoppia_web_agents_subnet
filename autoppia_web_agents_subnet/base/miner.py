@@ -9,6 +9,7 @@ import typing
 
 import bittensor as bt
 
+from autoppia_web_agents_subnet.base.mock import MockAxon
 from autoppia_web_agents_subnet.base.neuron import BaseNeuron
 from autoppia_web_agents_subnet.protocol import (
     TaskSynapse,
@@ -43,10 +44,13 @@ class BaseMinerNeuron(BaseNeuron):
             )
 
         # The axon handles request processing, allowing validators to send this miner requests.
-        self.axon = bt.axon(
-            wallet=self.wallet,
-            config=self.config() if callable(self.config) else self.config,
-        )
+        if self.is_mock:
+            self.axon = MockAxon(wallet=self.wallet)
+        else:
+            self.axon = bt.axon(
+                wallet=self.wallet,
+                config=self.config if not callable(self.config) else self.config(),
+            )
 
         # Attach RPCs
         bt.logging.info("Attaching forward function to miner axon.")

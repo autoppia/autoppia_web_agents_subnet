@@ -16,8 +16,7 @@ except Exception:
 
 
 def _have_network():
-    # Simple heuristic: allow running; failures will skip gracefully
-    return True
+    return os.getenv("RUN_IPFS_TESTS") == "1"
 
 
 @pytest.mark.skipif(not _have_network(), reason="Network not available for IPFS test")

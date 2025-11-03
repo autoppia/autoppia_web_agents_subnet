@@ -306,9 +306,15 @@ class ValidatorPlatformMixin:
         - If an async subtensor is already attached (e.g., self.async_subtensor or cached), reuse it.
         - Otherwise, create one using safe constructor (without chain_endpoint), and initialize if needed.
         """
+        if getattr(self, 'is_mock', False):
+            ctx = getattr(self, '_mock_context', None)
+            if ctx is None:
+                raise RuntimeError('Mock context unavailable while requesting AsyncSubtensor')
+            return ctx.async_subtensor
+
         # Reuse if already present on the instance (external init)
         try:
-            existing = getattr(self, "async_subtensor", None) or getattr(self, "_async_subtensor", None)
+            existing = getattr(self, 'async_subtensor', None) or getattr(self, '_async_subtensor', None)
             if existing is not None:
                 return existing
         except Exception:
@@ -336,7 +342,7 @@ class ValidatorPlatformMixin:
 
         # Initialize if supported
         try:
-            init = getattr(st, "initialize", None)
+            init = getattr(st, 'initialize', None)
             if callable(init):
                 await init()
         except Exception:

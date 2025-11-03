@@ -26,6 +26,8 @@ import threading
 import bittensor as bt
 from typing import List, Sequence, Union
 from traceback import print_exception
+
+from autoppia_web_agents_subnet.base.mock import MockAxon, MockDendrite
 from autoppia_web_agents_subnet.base.neuron import BaseNeuron
 from autoppia_web_agents_subnet.base.utils.weight_utils import (
     process_weights_for_netuid,
@@ -52,7 +54,10 @@ class BaseValidatorNeuron(BaseNeuron):
         # Save a copy of the hotkeys to local memory.
         self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
 
-        self.dendrite = bt.dendrite(wallet=self.wallet)
+        if self.is_mock:
+            self.dendrite = MockDendrite(wallet=self.wallet)
+        else:
+            self.dendrite = bt.dendrite(wallet=self.wallet)
 
         bt.logging.info(f"Dendrite: {self.dendrite}")
 
@@ -81,6 +86,15 @@ class BaseValidatorNeuron(BaseNeuron):
     def serve_axon(self):
         """Serve axon to enable external connections."""
 
+        if self.is_mock:
+            bt.logging.info("Initializing mock axon (local only).")
+            self.axon = MockAxon(wallet=self.wallet)
+            try:
+                self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
+            except Exception as e:
+                bt.logging.error(f"Mock axon failed to register: {e}")
+            return
+
         bt.logging.info("serving ip to chain...")
         try:
             self.axon = bt.axon(wallet=self.wallet, config=self.config)
@@ -93,11 +107,9 @@ class BaseValidatorNeuron(BaseNeuron):
                 bt.logging.info(f"Running validator {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}")
             except Exception as e:
                 bt.logging.error(f"Failed to serve Axon with exception: {e}")
-                pass
 
         except Exception as e:
             bt.logging.error(f"Failed to create Axon initialize with exception: {e}")
-            pass
 
     async def concurrent_forward(self):
         coroutines = [self.forward() for _ in range(self.config.neuron.num_concurrent_forwards)]
