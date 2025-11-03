@@ -66,50 +66,42 @@ def _hotkey_to_uid_map(mg) -> Dict[str, int]:
     return mapping
 
 
-async def publish_round_snapshot(
-    *,
-    validator,
-    st: AsyncSubtensor,
-    round_number: Optional[int],
-    tasks_completed: int,
-) -> Optional[str]:
-    """
-    Publish a mid-round snapshot to IPFS and commit CID on-chain.
-
-    Returns the CID if successful, else None.
-    """
-    if not ENABLE_DISTRIBUTED_CONSENSUS:
-        bt.logging.warning(consensus_tag("Disabled - skipping publish"))
-    return None
-
-
-async def publish_scores_snapshot(
+async def _publish_snapshot(
     *,
     validator,
     st: AsyncSubtensor,
     round_number: Optional[int],
     tasks_completed: int,
     scores: Dict[int, float],
+    phase: str,
 ) -> Optional[str]:
-    """
-    Publish an explicit scores snapshot to IPFS and commit CID on-chain.
-
-    Same shape as publish_round_snapshot, but uses provided scores mapping.
-    """
+    """Shared implementation for mid-round and final consensus publishing."""
     if not ENABLE_DISTRIBUTED_CONSENSUS:
-        bt.logging.warning(consensus_tag("Disabled - skipping publish (custom scores)"))
+        bt.logging.warning(consensus_tag(f"Disabled - skipping publish ({phase})"))
         return None
 
     boundaries = validator.round_manager.get_current_boundaries()
-    start_epoch = boundaries["round_start_epoch"]
-    target_epoch = boundaries["target_epoch"]
+    start_epoch = float(boundaries["round_start_epoch"])
+    target_epoch = float(boundaries["target_epoch"])
+    start_block = int(boundaries["round_start_block"])
+    target_block = int(boundaries["target_block"])
+
+    try:
+        participants = len(
+            [u for u, arr in (validator.round_manager.round_rewards or {}).items() if arr]
+        )
+    except Exception:
+        participants = len(getattr(validator, "active_miner_uids", []) or [])
 
     payload = {
         "v": 1,
+        "phase": phase,
         "r": int(round_number) if round_number is not None else None,
         "round_number": int(round_number) if round_number is not None else None,
-        "es": float(start_epoch),
-        "et": float(target_epoch),
+        "es": start_epoch,
+        "et": target_epoch,
+        "round_start_block": start_block,
+        "target_block": target_block,
         "hk": validator.wallet.hotkey.ss58_address,
         "validator_hotkey": validator.wallet.hotkey.ss58_address,
         "uid": int(validator.uid),
@@ -119,80 +111,10 @@ async def publish_scores_snapshot(
         "validator_version": getattr(validator, "version", None),
         "n": int(tasks_completed),
         "tasks_completed": int(tasks_completed),
-        "agents": len(scores or {}),
-        "scores": {str(int(uid)): float(score) for uid, score in (scores or {}).items()},
-        "phase": "final",
-    }
-
-    try:
-        cid, sha_hex, byte_len = await aadd_json(
-            payload,
-            filename=f"autoppia_commit_r{payload['r'] or 'X'}_final.json",
-            api_url=IPFS_API_URL,
-            pin=True,
-            sort_keys=True,
-        )
-    except Exception as e:
-        bt.logging.error(ipfs_tag("UPLOAD", f"❌ FAILED | Error: {type(e).__name__}: {e}"))
-        return None
-
-    # Bind to epoch window
-    commit_v4 = {
-        "v": 4,
-        "e": int(target_epoch) - 1,
-        "pe": int(target_epoch),
-        "c": str(cid),
-        "r": int(round_number) if round_number is not None else None,
-    }
-
-    try:
-        ok = await write_plain_commitment_json(
-            st,
-            wallet=validator.wallet,
-            data=commit_v4,
-            netuid=validator.config.netuid,
-        )
-        if ok:
-            return str(cid)
-    except Exception as e:
-        bt.logging.error(ipfs_tag("BLOCKCHAIN", f"❌ Commitment failed | Error: {type(e).__name__}: {e}"))
-    return None
-
-    # Build payload: per-miner averages so far
-    boundaries = validator.round_manager.get_current_boundaries()
-    start_epoch = boundaries["round_start_epoch"]
-    target_epoch = boundaries["target_epoch"]
-    avg_rewards = validator.round_manager.get_average_rewards()
-
-    # Agents that actually received/produced scores (participated)
-    try:
-        participants = len([u for u, arr in (validator.round_manager.round_rewards or {}).items() if arr])
-    except Exception:
-        participants = len(getattr(validator, "active_miner_uids", []) or [])
-
-    payload = {
-        "v": 1,
-        # Round/window
-        "r": int(round_number) if round_number is not None else None,
-        "round_number": int(round_number) if round_number is not None else None,
-        "es": float(start_epoch),
-        "et": float(target_epoch),
-        # Validator identity fields
-        "hk": validator.wallet.hotkey.ss58_address,
-        "validator_hotkey": validator.wallet.hotkey.ss58_address,
-        "uid": int(validator.uid),  # compact legacy
-        "validator_uid": int(validator.uid),
-        "validator_id": str(validator.uid),
-        "validator_round_id": getattr(validator, "current_round_id", None),
-        "validator_version": getattr(validator, "version", None),
-        # Stats snapshot
-        "n": int(tasks_completed),  # tasks completed so far
-        "tasks_completed": int(tasks_completed),
         "agents": int(participants),
-        "scores": {str(int(uid)): float(score) for uid, score in (avg_rewards or {}).items()},
+        "scores": {str(int(uid)): float(score) for uid, score in (scores or {}).items()},
     }
 
-    # Optional: attach dataset (tasks + solutions + evals)
     data_cid = None
     data_sha = None
     data_size = None
@@ -246,24 +168,31 @@ async def publish_scores_snapshot(
     try:
         # 🔍 LOG: Show FULL payload being uploaded
         import json
-        payload_json = json.dumps(payload, indent=2, sort_keys=True)
-
         bt.logging.info("=" * 80)
-        bt.logging.info(ipfs_tag("UPLOAD", f"Round {payload['r']} | {len(payload.get('scores', {}))} miners | Validator UID {payload['uid']}"))
-        bt.logging.info(ipfs_tag("UPLOAD", f"Payload:\n{payload_json}"))
+        bt.logging.info(
+            ipfs_tag(
+                "UPLOAD",
+                f"Round {payload.get('r')} | {len(payload.get('scores', {}))} miners | "
+                f"Validator UID {payload['uid']} ({phase})",
+            )
+        )
+        bt.logging.info(
+            ipfs_tag(
+                "UPLOAD",
+                f"Payload:\n{json.dumps(payload, indent=2, sort_keys=True)}",
+            )
+        )
 
         cid, sha_hex, byte_len = await aadd_json(
             payload,
-            filename=f"autoppia_commit_r{payload['r'] or 'X'}.json",
+            filename=f"autoppia_commit_r{payload['r'] or 'X'}_{phase}.json",
             api_url=IPFS_API_URL,
             pin=True,
             sort_keys=True,
         )
 
-        # 🔍 LOG: IPFS upload success
         bt.logging.success(ipfs_tag("UPLOAD", f"✅ SUCCESS - CID: {cid}"))
         bt.logging.info(ipfs_tag("UPLOAD", f"Size: {byte_len} bytes | SHA256: {sha_hex[:16]}..."))
-        bt.logging.info(ipfs_tag("UPLOAD", f"Download: http://ipfs.metahash73.com:5001/api/v0/cat?arg={cid}"))
         bt.logging.info("=" * 80)
     except Exception as e:
         bt.logging.error("=" * 80)
@@ -274,19 +203,23 @@ async def publish_scores_snapshot(
         bt.logging.error("=" * 80)
         return None
 
-    # On-chain commitment: v4 (CID-only), bind to epoch window
     commit_v4 = {
         "v": 4,
         "e": int(target_epoch) - 1,
         "pe": int(target_epoch),
+        "sb": start_block,
+        "tb": target_block,
         "c": str(cid),
         "r": int(round_number) if round_number is not None else None,
+        "phase": phase,
     }
 
     try:
         bt.logging.info(
-            f"📮 CONSENSUS COMMIT START | e={commit_v4['e']}→pe={commit_v4['pe']} "
-            f"r={commit_v4.get('r')} cid={commit_v4['c']}"
+            "📮 CONSENSUS COMMIT START | "
+            f"blocks {start_block}→{target_block} | "
+            f"e={commit_v4['e']}→pe={commit_v4['pe']} "
+            f"r={commit_v4.get('r')} cid={commit_v4['c']} phase={phase}"
         )
         ok = False
         try:
@@ -322,9 +255,10 @@ async def publish_scores_snapshot(
 
             bt.logging.success(ipfs_tag("BLOCKCHAIN", f"✅ Commitment successful | CID: {cid}"))
             return str(cid)
-        else:
-            bt.logging.warning(ipfs_tag("BLOCKCHAIN", f"⚠️ Commitment failed - write returned false"))
-            return None
+        if ok:
+            return str(cid)
+        bt.logging.warning(ipfs_tag("BLOCKCHAIN", "⚠️ Commitment failed - write returned false"))
+        return None
     except Exception as e:
         bt.logging.error("=" * 80)
         bt.logging.error(ipfs_tag("BLOCKCHAIN", f"❌ Commitment failed | Error: {type(e).__name__}: {e}"))
@@ -334,12 +268,60 @@ async def publish_scores_snapshot(
         return None
 
 
+async def publish_round_snapshot(
+    *,
+    validator,
+    st: AsyncSubtensor,
+    round_number: Optional[int],
+    tasks_completed: int,
+) -> Optional[str]:
+    """
+    Publish a mid-round snapshot to IPFS and commit CID on-chain.
+
+    Returns the CID if successful, else None.
+    """
+    scores = validator.round_manager.get_average_rewards()
+    return await _publish_snapshot(
+        validator=validator,
+        st=st,
+        round_number=round_number,
+        tasks_completed=tasks_completed,
+        scores=scores,
+        phase="mid",
+    )
+
+
+async def publish_scores_snapshot(
+    *,
+    validator,
+    st: AsyncSubtensor,
+    round_number: Optional[int],
+    tasks_completed: int,
+    scores: Dict[int, float],
+) -> Optional[str]:
+    """
+    Publish an explicit scores snapshot to IPFS and commit CID on-chain.
+
+    Same shape as publish_round_snapshot, but uses provided scores mapping.
+    """
+    return await _publish_snapshot(
+        validator=validator,
+        st=st,
+        round_number=round_number,
+        tasks_completed=tasks_completed,
+        scores=scores,
+        phase="final",
+    )
+
+
 async def aggregate_scores_from_commitments(
     *,
     validator,
     st: AsyncSubtensor,
-    start_epoch: float,
-    target_epoch: float,
+    start_epoch: Optional[float] = None,
+    target_epoch: Optional[float] = None,
+    start_block: Optional[int] = None,
+    target_block: Optional[int] = None,
 ) -> tuple[Dict[int, float], Dict[str, Any]]:
     """
     Read all validators' commitments for this round window and compute stake-weighted
@@ -354,7 +336,19 @@ async def aggregate_scores_from_commitments(
           }
     """
     if not ENABLE_DISTRIBUTED_CONSENSUS:
-        return {}
+        return {}, {}
+
+    if start_epoch is None or target_epoch is None:
+        if start_block is None or target_block is None:
+            bounds = validator.round_manager.get_current_boundaries()
+            start_epoch = float(bounds["round_start_epoch"])
+            target_epoch = float(bounds["target_epoch"])
+        else:
+            start_epoch = validator.round_manager.block_to_epoch(int(start_block))
+            target_epoch = validator.round_manager.block_to_epoch(int(target_block))
+    else:
+        start_epoch = float(start_epoch)
+        target_epoch = float(target_epoch)
 
     # Build hotkey->uid and stake map
     hk_to_uid = _hotkey_to_uid_map(validator.metagraph)
@@ -561,6 +555,8 @@ async def aggregate_scores_from_commitments(
             "ipfs_fail": skipped_ipfs_list,
             "verify_fail": skipped_verify_list,
         },
+        "round_start_epoch": start_epoch,
+        "round_target_epoch": target_epoch,
     }
 
     return result, details

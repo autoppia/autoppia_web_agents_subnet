@@ -19,6 +19,7 @@ from autoppia_web_agents_subnet.validator.config import (
     DZ_STARTING_BLOCK,
     SCREENING_STOP_FRACTION,
     STOP_TASK_EVALUATION_AT_ROUND_FRACTION,
+    FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION,
 )
 from autoppia_web_agents_subnet.protocol import StartRoundSynapse
 from autoppia_web_agents_subnet.validator.round_manager import RoundManager, RoundPhase

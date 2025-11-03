@@ -4,11 +4,12 @@ import asyncio
 import copy
 import hashlib
 import itertools
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Tuple, Type
 
 import bittensor as bt  # type: ignore
+import numpy as np
 
 
 class MockKey:
@@ -58,8 +59,9 @@ class MockMetagraph:
             raise ValueError("MockMetagraph requires at least one hotkey")
 
         self.hotkeys: List[str] = keys
+        self.coldkeys: List[str] = [f"{hk}-cold" for hk in keys]
         self.axons: List[MockAxonEndpoint] = [MockAxonEndpoint(hotkey=hk) for hk in keys]
-        self.uids: List[int] = list(range(len(keys)))
+        self.uids = np.arange(len(keys), dtype=np.int64)
         self.n: int = len(keys)
         self.S: List[float] = [1.0 for _ in keys]
         self.stake: List[float] = list(self.S)
@@ -82,6 +84,7 @@ class MockSubtensor:
             hk: idx for idx, hk in enumerate(self._metagraph.hotkeys)
         }
         self._commit_store: Dict[str, str] = {}
+        self._last_set_weights: Dict[str, Dict[str, Any]] = {}
 
     def metagraph(self, netuid: int) -> MockMetagraph:  # noqa: ARG002
         return self._metagraph
@@ -99,6 +102,33 @@ class MockSubtensor:
 
     def serve_axon(self, *, netuid: int, axon: "MockAxon") -> bool:  # noqa: ARG002
         return True
+
+    def min_allowed_weights(self, *, netuid: int) -> int:  # noqa: ARG002
+        """Mirror bittensor min_allowed_weights behaviour."""
+        return max(1, min(self._metagraph.n, 3))
+
+    def max_weight_limit(self, *, netuid: int) -> float:  # noqa: ARG002
+        """Return deterministic max weight limit for tests."""
+        return 1.0
+
+    def set_weights(  # pragma: no cover - exercised indirectly
+        self,
+        *,
+        wallet: MockWallet,
+        netuid: int,  # noqa: ARG002
+        uids: List[int],
+        weights: List[int],
+        wait_for_finalization: bool = False,  # noqa: ARG002
+        wait_for_inclusion: bool = False,  # noqa: ARG002
+        version_key: Optional[int] = None,  # noqa: ARG002
+    ) -> Tuple[bool, str]:
+        """Store last weights broadcast by a wallet for inspection."""
+        self._last_set_weights[wallet.hotkey.ss58_address] = {
+            "uids": list(uids),
+            "weights": list(weights),
+            "version_key": version_key,
+        }
+        return True, "mock-ok"
 
     @property
     def commit_store(self) -> Dict[str, str]:
@@ -208,9 +238,12 @@ class MockAxon:
                     result = await result
                 if result is not None:
                     try:
-                        result.dendrite = SimpleNamespace(status_code=200, hotkey=self.wallet.hotkey.ss58_address)
+                        object.__setattr__(result, 'dendrite', SimpleNamespace(status_code=200, hotkey=self.wallet.hotkey.ss58_address))
                     except Exception:
-                        pass
+                        try:
+                            result.__dict__['dendrite'] = SimpleNamespace(status_code=200, hotkey=self.wallet.hotkey.ss58_address)
+                        except Exception:
+                            pass
                 return result
         raise RuntimeError(f"No handler registered for synapse type: {type(synapse)}")
 
@@ -228,6 +261,7 @@ class MockDendrite:
         deserialize: bool = True,  # noqa: ARG002
         timeout: Optional[int] = None,  # noqa: ARG002
         retries: int = 0,  # noqa: ARG002
+        retry: Optional[bool] = None,  # noqa: ARG002
     ) -> List[Any]:
         responses: List[Any] = []
         for axon in axons:
@@ -249,6 +283,7 @@ class MockNeuronContext:
     wallet: MockWallet
     subtensor: MockSubtensor
     metagraph: MockMetagraph
+    async_subtensor: MockAsyncSubtensor | None = field(init=False, default=None)
 
     def __post_init__(self):
         self.async_subtensor = MockAsyncSubtensor(subtensor=self.subtensor)
