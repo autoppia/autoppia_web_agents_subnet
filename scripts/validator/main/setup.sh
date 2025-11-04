@@ -42,6 +42,26 @@ upgrade_pip() {
   success_msg "pip and setuptools upgraded."
 }
 
+init_submodules() {
+  echo -e "\e[34m[INFO]\e[0m Initializing Git submodules (autoppia_iwa_module, etc.)..."
+  
+  # Go to repo root (parent of scripts/)
+  REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  cd "$REPO_ROOT" || handle_error "Failed to navigate to repo root"
+  
+  # Check if this is a git repository
+  if [ ! -d ".git" ]; then
+    echo -e "\e[34m[INFO]\e[0m Not a git repository. Skipping submodule initialization."
+    return 0
+  fi
+  
+  # Initialize and update submodules
+  git submodule update --init --recursive --remote \
+    || handle_error "Failed to initialize git submodules. Make sure git is installed and you have access to the submodule repos."
+  
+  success_msg "Git submodules initialized."
+}
+
 install_python_reqs() {
   echo -e "\e[34m[INFO]\e[0m Installing Python dependencies from requirements.txt..."
   [ -f "requirements.txt" ] || handle_error "requirements.txt not found"
@@ -95,6 +115,7 @@ main() {
   check_python
   create_activate_venv
   upgrade_pip
+  init_submodules
   install_python_reqs
   install_modules
   install_bittensor
