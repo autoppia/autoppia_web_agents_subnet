@@ -127,7 +127,12 @@ chmod +x scripts/miner/setup.sh
 # Configure your deployed agent
 AGENT_HOST="localhost"  # or your agent's host
 AGENT_PORT="5000"       # port where your agent is running
-AGENT_NAME="your_agent_name"
+MINER_AGENT_NAME=""
+MINER_AGENT_IMAGE=""  # you should send us your picture through discord nad we will provide the link
+MINER_GITHUB_URL=""
+MINER_AGENT_VERSION="1.0.0"
+MINER_HAS_RL="0"
+USE_APIFIED_AGENT="true"
 ```
 
 **Step 3: Deploy Miner**
