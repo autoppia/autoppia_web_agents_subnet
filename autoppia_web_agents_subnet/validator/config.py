@@ -33,7 +33,7 @@ if TESTING:
     SAFETY_BUFFER_EPOCHS = _env_float("TEST_SAFETY_BUFFER_EPOCHS", 0.02)
     AVG_TASK_DURATION_SECONDS = _env_int("TEST_AVG_TASK_DURATION_SECONDS", 300)
     PRE_GENERATED_TASKS = _env_int("TEST_PRE_GENERATED_TASKS", 3)
-    DZ_STARTING_BLOCK = _env_int("TEST_DZ_STARTING_BLOCK", 6831860)
+    DZ_STARTING_BLOCK = _env_int("TEST_DZ_STARTING_BLOCK", 6831860)  # Synced with PROD
 
     # ── Round Phase Timing (all absolute % of total round) ──────────────────
     # Stop task evaluation at 50% of round to allow time for consensus
