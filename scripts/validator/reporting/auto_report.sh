@@ -134,7 +134,7 @@ while true; do
         next_round=$((round + 1))
         next_log="$ROUNDS_DIR/round_${next_round}.log"
         
-        if [[ -f "$next_log" ]] || grep -q "Round completed: $round" "$round_log" 2>/dev/null; then
+        if [[ -f "$next_log" ]] || grep -q "✅ Round completed" "$round_log" 2>/dev/null || grep -q "Phase → complete" "$round_log" 2>/dev/null; then
             echo "[$(date)] 🎯 Round $round completed, sending report..."
             sleep 10  # Small delay to ensure all data is written
             

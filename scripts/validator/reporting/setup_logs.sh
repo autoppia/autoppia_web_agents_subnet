@@ -47,7 +47,7 @@ ROUNDS_DIR.mkdir(parents=True, exist_ok=True)
 current_round = None
 current_round_file = None
 
-ROUND_START_PATTERN = re.compile(r'Starting Round:\s*(\d+)')
+ROUND_START_PATTERN = re.compile(r'🚦 Starting Round:\s*(\d+)')
 
 def process_line(line: str):
     global current_round, current_round_file
