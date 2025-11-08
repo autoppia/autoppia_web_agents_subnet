@@ -110,17 +110,32 @@ class Validator(
 
         self.round_manager.log_calculation_summary()
 
-        start_result = await self._run_start_phase(current_block)
-        if not start_result.continue_forward:
-            return
+        try:
+            start_result = await self._run_start_phase(current_block)
+            if not start_result.continue_forward:
+                return
 
-        all_tasks = start_result.all_tasks
-        task_result = await self._run_task_phase(all_tasks)
+            all_tasks = start_result.all_tasks
+            task_result = await self._run_task_phase(all_tasks)
 
-        await self._run_settlement_phase(
-            tasks_completed=task_result.tasks_completed,
-            total_tasks=len(all_tasks),
-        )
+            await self._run_settlement_phase(
+                tasks_completed=task_result.tasks_completed,
+                total_tasks=len(all_tasks),
+            )
+        except Exception as forward_exc:
+            bt.logging.error(f"❌ CRITICAL ERROR in forward loop: {forward_exc}")
+            # Try to send emergency email with whatever data we have
+            try:
+                report = self.round_manager.current_round_report
+                if report:
+                    report.add_error(f"CRITICAL: Validator crashed during round: {forward_exc}")
+                    report.completed = False
+                    from autoppia_web_agents_subnet.validator.reporting.email_sender import send_round_report_email
+                    send_round_report_email(report, codex_analysis=None)
+                    bt.logging.warning("⚠️ Emergency email sent after crash")
+            except Exception as email_exc:
+                bt.logging.error(f"Could not send emergency email: {email_exc}")
+            raise  # Re-raise to let PM2 restart the validator
 
     # ═══════════════════════════════════════════════════════════════════════════════
     # TASK EXECUTION HELPERS
