@@ -41,6 +41,9 @@ class ReportingMixin:
             start_epoch=start_epoch,
             planned_tasks=planned_tasks,
         )
+        
+        # Mark tasks generated checkpoint
+        self.round_manager.current_round_report.checkpoint_tasks_generated = True
 
         bt.logging.info(f"📊 Round report initialized for round {round_number}")
 
@@ -49,6 +52,7 @@ class ReportingMixin:
         report = self.round_manager.current_round_report
         if report:
             report.handshake_sent_to = total_miners
+            report.checkpoint_handshake_sent = True
 
     def _report_handshake_response(
         self,
@@ -80,8 +84,9 @@ class ReportingMixin:
             miner = report.add_miner(uid, hotkey)
             if coldkey and not miner.coldkey:
                 miner.coldkey = coldkey
-
+            
             report.record_task_result(uid, success, execution_time, eval_score, reward, web_name)
+            report.checkpoint_tasks_evaluated = True
 
     def _report_consensus_validator(
         self,
@@ -111,12 +116,14 @@ class ReportingMixin:
         if report:
             report.consensus_published = True
             report.consensus_ipfs_cid = ipfs_cid
+            report.checkpoint_ipfs_published = True
 
     def _report_consensus_aggregated(self):
         """Record that consensus scores were aggregated."""
         report = self.round_manager.current_round_report
         if report:
             report.consensus_aggregated = True
+            report.checkpoint_ipfs_downloaded = True
 
     def _report_set_final_scores(self, final_scores: dict):
         """Set final scores after consensus for all miners."""
@@ -137,6 +144,8 @@ class ReportingMixin:
 
             if uid in report.miners:
                 report.miners[uid].is_winner = True
+            
+            report.checkpoint_winner_selected = True
 
     def _report_set_weights(self, weights: dict):
         """Record final weights for all miners."""

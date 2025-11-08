@@ -20,11 +20,11 @@ if env_file.exists():
     with open(env_file) as f:
         for line in f:
             line = line.strip()
-            if line and not line.startswith('#') and '=' in line:
-                key, value = line.split('=', 1)
+            if line and not line.startswith("#") and "=" in line:
+                key, value = line.split("=", 1)
                 key = key.strip()
                 value = value.strip().strip('"').strip("'")
-                if key and not key.startswith('#'):
+                if key and not key.startswith("#"):
                     os.environ.setdefault(key, value)
 
 from autoppia_web_agents_subnet.validator.reporting.mixin import ReportingMixin
