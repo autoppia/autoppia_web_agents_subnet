@@ -76,7 +76,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
             html += f"<li>UID {uid}: {hotkey[:12]}...{hotkey[-8:]}</li>"
         html += "</ul>"
     
-    # Miners Evaluated
+    # Miners Evaluated - Main Table
     if report.miners:
         html += f"""
             <h2>⚡ Miners Evaluated</h2>
@@ -85,12 +85,11 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                     <th>#</th>
                     <th>UID</th>
                     <th>Hotkey</th>
+                    <th>Coldkey</th>
                     <th>Tasks</th>
-                    <th>Success</th>
-                    <th>Failed</th>
+                    <th>Score %</th>
                     <th>Avg Time</th>
                     <th>Avg Reward</th>
-                    <th>Final Score</th>
                 </tr>
         """
         
@@ -100,21 +99,89 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
             row_style = "background: rgba(251,191,36,0.2);" if miner.is_winner else ""
             winner_badge = "🏆 " if miner.is_winner else ""
             
+            # Format: 77/156 (tasks_success/tasks_attempted)
+            tasks_display = f"{miner.tasks_success}/{miner.tasks_attempted}"
+            
             html += f"""
                 <tr style="{row_style}">
                     <td>{winner_badge}{miner.rank}</td>
                     <td>{miner.uid}</td>
-                    <td>{miner.hotkey[:12]}...{miner.hotkey[-8:]}</td>
-                    <td>{miner.tasks_attempted}</td>
-                    <td><span class="badge badge-success">{miner.tasks_success}</span></td>
-                    <td><span class="badge badge-error">{miner.tasks_failed}</span></td>
+                    <td>{miner.hotkey[:10]}...</td>
+                    <td>{miner.coldkey[:10] if miner.coldkey else 'N/A'}...</td>
+                    <td>{tasks_display}</td>
+                    <td><strong>{miner.score_percentage:.1f}%</strong></td>
                     <td>{miner.avg_time:.2f}s</td>
                     <td>{miner.avg_reward:.4f}</td>
-                    <td><strong>{miner.final_score_after_consensus or miner.avg_score:.4f}</strong></td>
                 </tr>
             """
         
         html += "</table>"
+        
+        # Per-Web Statistics for Each Miner
+        html += """
+            <h3>📊 Per-Web Statistics by Miner</h3>
+        """
+        
+        for miner in sorted_miners:
+            if not miner.per_web_stats:
+                continue
+            
+            html += f"""
+                <h4 style="color: #94a3b8; margin: 16px 0 8px 0;">Miner UID {miner.uid}</h4>
+                <table style="font-size: 13px;">
+                    <tr>
+                        <th>Web</th>
+                        <th>Attempted</th>
+                        <th>Success</th>
+                        <th>Failed</th>
+                        <th>Success Rate</th>
+                    </tr>
+            """
+            
+            # Sort webs by name
+            for web_name in sorted(miner.per_web_stats.keys()):
+                stats = miner.per_web_stats[web_name]
+                success_rate = (stats["success"] / stats["attempted"] * 100) if stats["attempted"] > 0 else 0
+                
+                html += f"""
+                    <tr>
+                        <td><strong>{web_name}</strong></td>
+                        <td>{stats["attempted"]}</td>
+                        <td><span class="badge badge-success">{stats["success"]}</span></td>
+                        <td><span class="badge badge-error">{stats["failed"]}</span></td>
+                        <td>{success_rate:.1f}%</td>
+                    </tr>
+                """
+            
+            html += "</table>"
+        
+        # Global Per-Web Summary
+        if report.per_web_global_stats:
+            html += """
+                <h3>🌐 Global Per-Web Summary (All Miners)</h3>
+                <table>
+                    <tr>
+                        <th>Web</th>
+                        <th>Total Sent</th>
+                        <th>Total Solved</th>
+                        <th>Success Rate</th>
+                    </tr>
+            """
+            
+            for web_name in sorted(report.per_web_global_stats.keys()):
+                stats = report.per_web_global_stats[web_name]
+                success_rate = (stats["solved"] / stats["sent"] * 100) if stats["sent"] > 0 else 0
+                
+                html += f"""
+                    <tr>
+                        <td><strong>{web_name}</strong></td>
+                        <td>{stats["sent"]}</td>
+                        <td><span class="badge badge-success">{stats["solved"]}</span></td>
+                        <td><strong>{success_rate:.1f}%</strong></td>
+                    </tr>
+                """
+            
+            html += "</table>"
     
     # Winner
     if report.final_winner_uid:

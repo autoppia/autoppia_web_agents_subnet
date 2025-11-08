@@ -69,17 +69,22 @@ class ReportingMixin:
         self,
         uid: int,
         hotkey: str,
+        coldkey: str,
         success: bool,
         execution_time: float,
         eval_score: float,
         reward: float,
+        web_name: Optional[str] = None,
     ):
         """Record a task execution result."""
         report = self.round_manager.current_round_report
         if report:
             # Ensure miner exists
-            report.add_miner(uid, hotkey)
-            report.record_task_result(uid, success, execution_time, eval_score, reward)
+            miner = report.add_miner(uid, hotkey)
+            if coldkey and not miner.coldkey:
+                miner.coldkey = coldkey
+            
+            report.record_task_result(uid, success, execution_time, eval_score, reward, web_name)
 
     def _report_consensus_validator(
         self,
@@ -161,7 +166,7 @@ class ReportingMixin:
 
         # Send email with Codex analysis (ALWAYS, even if errors)
         self._send_round_report_email(report)
-        
+
         # Clear from memory
         self.round_manager.current_round_report = None
         bt.logging.debug("Round report cleared from memory")
@@ -170,7 +175,7 @@ class ReportingMixin:
         """Save round report to pickle file for future retrieval."""
         try:
             import pickle
-            
+
             repo_root = Path(__file__).resolve().parents[4]
             reports_dir = repo_root / "data" / "reports" / "rounds"
             reports_dir.mkdir(parents=True, exist_ok=True)
@@ -188,7 +193,7 @@ class ReportingMixin:
     def _send_round_report_email(self, report: RoundReport):
         """
         Send round report via email with optional Codex analysis.
-        
+
         ALWAYS sends email, even if there were errors during the round.
         This ensures we're notified of any issues.
         """
@@ -217,61 +222,61 @@ class ReportingMixin:
         """Load a round report from pickle file."""
         try:
             import pickle
-            
+
             repo_root = Path(__file__).resolve().parents[4]
             report_file = repo_root / "data" / "reports" / "rounds" / f"round_{round_number}.pkl"
-            
+
             if not report_file.exists():
                 return None
-            
+
             with open(report_file, "rb") as f:
                 return pickle.load(f)
-                
+
         except Exception as e:
             bt.logging.error(f"Failed to load round report {round_number}: {e}")
             return None
-    
+
     @staticmethod
     def resend_round_report(round_number: int) -> bool:
         """Load and resend email for a past round."""
         report = ReportingMixin.load_round_report(round_number)
-        
+
         if not report:
             bt.logging.error(f"Round report {round_number} not found")
             return False
-        
+
         bt.logging.info(f"📧 Resending report for round {round_number}")
-        
+
         # Run Codex analysis
         try:
             codex_analysis = ReportingMixin._run_codex_analysis_static(round_number)
         except:
             codex_analysis = None
-        
+
         # Send email
         success = send_round_report_email(report, codex_analysis)
-        
+
         if success:
             bt.logging.success(f"✅ Report resent for round {round_number}")
         else:
             bt.logging.error(f"❌ Failed to resend report for round {round_number}")
-        
+
         return success
-    
+
     @staticmethod
     def _run_codex_analysis_static(round_number: int, timeout: int = 30) -> Optional[str]:
         """Static version of Codex analysis (for resending old reports)."""
         try:
             repo_root = Path(__file__).resolve().parents[4]
             codex_script = repo_root / "scripts" / "validator" / "reporting" / "run_codex.sh"
-            
+
             if not codex_script.exists():
                 return None
-            
+
             round_log = repo_root / "logs" / "rounds" / f"round_{round_number}.log"
             if not round_log.exists():
                 return None
-            
+
             result = subprocess.run(
                 [str(codex_script), "--round", str(round_number), "--status", "OK"],
                 stdin=open(round_log),
@@ -279,15 +284,15 @@ class ReportingMixin:
                 text=True,
                 timeout=timeout,
             )
-            
+
             if result.returncode == 0 and result.stdout:
                 return result.stdout.strip()
-            
+
             return None
-            
+
         except:
             return None
-    
+
     def _run_codex_analysis(self, round_number: int, timeout: int = 30) -> Optional[str]:
         """Run Codex analysis on round logs (optional)."""
         try:

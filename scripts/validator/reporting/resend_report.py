@@ -21,17 +21,17 @@ def main():
         print("Usage: python3 resend_report.py <round_number>")
         print("\nExample: python3 resend_report.py 77")
         sys.exit(1)
-    
+
     try:
         round_number = int(sys.argv[1])
     except ValueError:
         print(f"Error: '{sys.argv[1]}' is not a valid round number")
         sys.exit(1)
-    
+
     print(f"📊 Loading round {round_number} report from pickle...")
-    
+
     success = ReportingMixin.resend_round_report(round_number)
-    
+
     if success:
         print(f"✅ Email sent successfully for round {round_number}")
         sys.exit(0)
@@ -42,4 +42,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
