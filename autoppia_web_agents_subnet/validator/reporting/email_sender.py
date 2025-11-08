@@ -349,9 +349,9 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
         html += "</table>"
 
     # Errors and Warnings (NEW)
-    errors = getattr(report, 'errors', [])
-    warnings = getattr(report, 'warnings', [])
-    
+    errors = getattr(report, "errors", [])
+    warnings = getattr(report, "warnings", [])
+
     if errors or warnings:
         html += """
             <h2 style="color: #ef4444;">⚠️ Errors and Warnings Detected</h2>
@@ -371,7 +371,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
             if len(errors) > 15:
                 html += f"<p style='color: #94a3b8; font-size: 12px;'>... and {len(errors) - 15} more errors</p>"
             html += "</div>"
-        
+
         if warnings:
             html += f"""
                 <h3 style="color: #f97316; font-size: 16px;">⚠️ Warnings ({len(warnings)})</h3>
