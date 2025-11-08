@@ -325,22 +325,22 @@ class RoundStartMixin:
                         ColoredLogger.YELLOW,
                     )
 
-                # Record handshake in report (NEW)
-                self._report_handshake_sent(total_miners=len(all_axons))
-
-                for uid in self.active_miner_uids:
-                    hotkey = self.metagraph.hotkeys[uid] if uid < len(self.metagraph.hotkeys) else "unknown"
-                    payload = self.round_handshake_payloads.get(uid)
-
-                    agent_name = None
-                    agent_image = None
-                    if payload:
-                        agent_name = getattr(payload, "agent_name", None)
-                        agent_image = getattr(payload, "agent_image", None)
-
-                    self._report_handshake_response(uid, hotkey, agent_name, agent_image)
-
                 self._save_round_state()
+            
+            # Record handshake in report (NEW) - ALWAYS, even if resumed
+            self._report_handshake_sent(total_miners=len(all_axons))
+
+            for uid in self.active_miner_uids:
+                hotkey = self.metagraph.hotkeys[uid] if uid < len(self.metagraph.hotkeys) else "unknown"
+                payload = self.round_handshake_payloads.get(uid)
+
+                agent_name = None
+                agent_image = None
+                if payload:
+                    agent_name = getattr(payload, "agent_name", None)
+                    agent_image = getattr(payload, "agent_image", None)
+
+                self._report_handshake_response(uid, hotkey, agent_name, agent_image)
 
             self.round_manager.enter_phase(
                 RoundPhase.HANDSHAKE,
