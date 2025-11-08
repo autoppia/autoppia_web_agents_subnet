@@ -255,7 +255,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
     html += """
         <h2>🔗 Consensus Validators</h2>
     """
-    
+
     # Always show this validator first
     html += f"""
         <h3 style="color: #38bdf8; font-size: 18px; margin-top: 16px;">
@@ -266,7 +266,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
             • Status: <span class="badge badge-{'success' if report.consensus_published else 'warning'}">{'Published' if report.consensus_published else 'Not published'}</span>
         </p>
     """
-    
+
     # Show this validator's scores
     if report.consensus_published and report.miners:
         html += """
@@ -278,7 +278,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                     <th>Tasks</th>
                 </tr>
         """
-        
+
         sorted_by_score = sorted(report.miners.values(), key=lambda m: m.avg_score, reverse=True)
         for miner in sorted_by_score:
             html += f"""
@@ -289,15 +289,15 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                     <td>{miner.tasks_success}/{miner.tasks_attempted}</td>
                 </tr>
             """
-        
+
         html += "</table>"
-    
+
     # Show other validators if any
     if report.consensus_validators and len(report.consensus_validators) > 0:
         html += f"""
             <h3 style="color: #94a3b8; font-size: 16px; margin-top: 24px;">Other Validators ({len(report.consensus_validators)})</h3>
         """
-        
+
         for val in report.consensus_validators:
             html += f"""
                 <h4 style="color: #38bdf8; font-size: 16px; margin-top: 16px;">
@@ -308,7 +308,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                     IPFS CID: <code style="background: rgba(56,189,248,0.1); padding: 2px 6px; border-radius: 4px;">{val.ipfs_cid[:20] if val.ipfs_cid else 'N/A'}...</code>
                 </p>
             """
-            
+
             # Show their scores if available
             if val.miner_scores:
                 html += """
@@ -318,7 +318,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                             <th>Score Published</th>
                         </tr>
                 """
-                
+
                 sorted_scores = sorted(val.miner_scores.items(), key=lambda x: x[1], reverse=True)
                 for miner_uid, score in sorted_scores:
                     html += f"""
@@ -327,7 +327,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                             <td><strong style="color: #38bdf8;">{score:.4f}</strong></td>
                         </tr>
                     """
-                
+
                 html += "</table>"
     else:
         html += """
