@@ -132,7 +132,7 @@ class RoundStartMixin:
         bt.logging.info(f"✅ Task list ready: {len(all_tasks)} tasks in {pre_generation_elapsed:.1f}s (resumed={resumed})")
 
         self.round_manager.start_new_round(current_block)
-        
+
         # Initialize round report (NEW) - Always initialize, even if resumed
         round_number = await self.round_manager.calculate_round(current_block)
         self._init_round_report(

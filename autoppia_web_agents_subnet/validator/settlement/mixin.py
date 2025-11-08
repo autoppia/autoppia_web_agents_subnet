@@ -190,7 +190,7 @@ class SettlementMixin:
         try:
             current_block = self.subtensor.get_current_block()
             current_epoch = self.round_manager.block_to_epoch(current_block)
-            self._finalize_round_report(end_block=current_block, end_epoch=current_epoch)
+            self._finalize_round_report(end_block=current_block, end_epoch=current_epoch, tasks_completed=tasks_completed)
         except Exception as exc:
             bt.logging.error(f"Failed to finalize round report: {exc}")
 

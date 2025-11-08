@@ -146,7 +146,7 @@ class ReportingMixin:
                 if uid in report.miners:
                     report.miners[uid].final_weight = float(weight)
 
-    def _finalize_round_report(self, end_block: int, end_epoch: float):
+    def _finalize_round_report(self, end_block: int, end_epoch: float, tasks_completed: int = 0):
         """Finalize the round report and send email."""
         report = self.round_manager.current_round_report
         if not report:
@@ -154,6 +154,9 @@ class ReportingMixin:
             bt.logging.info("Skipping round report email for this round")
             return
 
+        # Update tasks completed
+        report.tasks_completed = tasks_completed
+        
         # Finalize report
         report.finalize_round(end_block, end_epoch)
 
