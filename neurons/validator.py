@@ -131,6 +131,7 @@ class Validator(
                     report.add_error(f"CRITICAL: Validator crashed during round: {forward_exc}")
                     report.completed = False
                     from autoppia_web_agents_subnet.validator.reporting.email_sender import send_round_report_email
+
                     send_round_report_email(report, codex_analysis=None)
                     bt.logging.warning("⚠️ Emergency email sent after crash")
             except Exception as email_exc:
