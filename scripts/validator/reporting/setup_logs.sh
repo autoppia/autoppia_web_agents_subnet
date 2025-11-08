@@ -95,9 +95,9 @@ echo "✅ Log splitter script created"
 echo ""
 
 # Start log splitter with PM2
-pm2 delete log-splitter 2>/dev/null || true
+pm2 delete report-log-splitter 2>/dev/null || true
 
-pm2 start bash --name "log-splitter" -- -c \
+pm2 start bash --name "report-log-splitter" -- -c \
     "pm2 logs validator-wta --nostream --raw --lines 0 | python3 $SPLITTER_SCRIPT"
 
 pm2 save
@@ -115,6 +115,6 @@ echo "  📁 $ROUNDS_DIR/round_73.log"
 echo "     → Per-round logs"
 echo ""
 echo "To verify:"
-echo "  pm2 logs log-splitter"
+echo "  pm2 logs report-log-splitter"
 echo "  ls -lh $ROUNDS_DIR/"
 echo ""
