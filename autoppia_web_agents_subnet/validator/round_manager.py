@@ -103,6 +103,9 @@ class RoundManager:
         # Track lifecycle phases for visibility
         self.current_phase: RoundPhase = RoundPhase.IDLE
         self.phase_history: List[PhaseTransition] = []
+        
+        # Round report (NEW - comprehensive statistics)
+        self.current_round_report: Optional[Any] = None  # RoundReport instance
 
     @classmethod
     def block_to_epoch(cls, block: int) -> float:
