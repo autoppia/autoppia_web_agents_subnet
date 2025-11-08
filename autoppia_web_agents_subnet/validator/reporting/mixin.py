@@ -8,15 +8,12 @@ import json
 import os
 import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import Optional, Any
 
 import bittensor as bt
 
 from .round_report import RoundReport, ConsensusValidatorReport
 from .email_sender import send_round_report_email
-
-if TYPE_CHECKING:
-    from autoppia_web_agents_subnet.validator.base_validator import BaseValidatorNeuron
 
 
 class ReportingMixin:

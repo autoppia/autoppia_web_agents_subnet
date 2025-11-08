@@ -57,7 +57,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                 <tr><td><strong>Validator Round ID</strong></td><td>{report.validator_round_id}</td></tr>
                 <tr><td><strong>Validator Hotkey</strong></td><td>{report.validator_hotkey[:12]}...{report.validator_hotkey[-8:]}</td></tr>
                 <tr><td><strong>Start Block</strong></td><td>{report.start_block:,}</td></tr>
-                <tr><td><strong>End Block</strong></td><td>{report.end_block:,} if report.end_block else 'In progress'}</td></tr>
+                <tr><td><strong>End Block</strong></td><td>{f"{report.end_block:,}" if report.end_block else "In progress"}</td></tr>
                 <tr><td><strong>Duration</strong></td><td>{duration}</td></tr>
                 <tr><td><strong>Tasks Completed</strong></td><td>{report.tasks_completed}/{report.planned_tasks}</td></tr>
                 <tr><td><strong>Status</strong></td><td><span class="badge badge-success">{'Completed' if report.completed else 'In Progress'}</span></td></tr>
@@ -287,7 +287,7 @@ Validator Round Report - Round {report.round_number}
 Round: {report.round_number}
 Validator UID: {report.validator_uid}
 Start Block: {report.start_block:,}
-End Block: {report.end_block:,} if report.end_block else 'In progress'}
+End Block: {f"{report.end_block:,}" if report.end_block else "In progress"}
 Tasks: {report.tasks_completed}/{report.planned_tasks}
 
 Handshake: {report.handshake_responses}/{report.handshake_sent_to} miners responded
