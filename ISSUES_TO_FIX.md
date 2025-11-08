@@ -18,6 +18,7 @@
 **Problema:** No muestra los miners que respondieron
 
 **Datos en pickle:**
+
 ```
 handshake_sent_to: 256 ✅
 handshake_responses: 2 ✅
@@ -36,6 +37,7 @@ handshake_response_hotkeys: [] ❌ (vacío)
 **Problema:** Dice "Tasks Completed: 0/6" pero debería ser "1/6"
 
 **Datos en pickle:**
+
 ```
 planned_tasks: 6 ✅
 tasks_completed: 0 ❌ (debería ser 1)
@@ -52,6 +54,7 @@ tasks_completed: 0 ❌ (debería ser 1)
 **Problema:** Solo muestra 1 task de "Autoppia Cinema" pero se enviaron 6 tasks
 
 **Datos en pickle:**
+
 ```
 Miner 80: attempted=1, success=1
 Miner 214: attempted=1, success=0
@@ -60,6 +63,7 @@ Miner 214: attempted=1, success=0
 **Causa:** Solo se registró 1 task por miner. Las otras 5 tasks no se registraron.
 
 **Posibles razones:**
+
 - Las tasks fallaron antes de la evaluación
 - No se llamó `_report_task_result()` para todas las tasks
 - Hubo un error en el loop de tasks
@@ -73,15 +77,15 @@ Miner 214: attempted=1, success=0
 **Problema:** Solo muestra hotkeys, no los scores
 
 **HTML generado:**
+
 ```html
-1. UID 80: (5FL1U8fvb24b...)
-2. UID 214: (5Gb3H9ZHv8Eb...)
+1. UID 80: (5FL1U8fvb24b...) 2. UID 214: (5Gb3H9ZHv8Eb...)
 ```
 
 **Debería ser:**
+
 ```html
-1. UID 80: 1.0000 (5FL1U8fvb24b...)
-2. UID 214: 0.0000 (5Gb3H9ZHv8Eb...)
+1. UID 80: 1.0000 (5FL1U8fvb24b...) 2. UID 214: 0.0000 (5Gb3H9ZHv8Eb...)
 ```
 
 **Causa:** Bug en el template HTML del Top 5
@@ -95,6 +99,7 @@ Miner 214: attempted=1, success=0
 **Problema:** No aparece la sección de consensus validators
 
 **Datos en pickle:**
+
 ```
 consensus_validators: [] ❌ (vacío)
 consensus_published: False ❌
@@ -104,6 +109,7 @@ consensus_ipfs_cid: None ❌
 **Causa:** No se está llamando `_report_consensus_*()` o el consensus no se ejecutó
 
 **Posibles razones:**
+
 - Round terminó muy rápido (burn forced)
 - Consensus se saltó
 - No se agregó el código en el lugar correcto
@@ -132,6 +138,7 @@ consensus_ipfs_cid: None ❌
 ## 📊 **Para la próxima round (90):**
 
 Esperar a que termine y verificar:
+
 1. ¿Se registran todas las tasks?
 2. ¿Aparecen los handshake UIDs?
 3. ¿Se ejecuta el consensus?
@@ -139,4 +146,3 @@ Esperar a que termine y verificar:
 ---
 
 **Siguiente acción:** Arreglar los bugs detectados y esperar a round 90 para verificar.
-

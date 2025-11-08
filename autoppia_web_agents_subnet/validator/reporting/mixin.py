@@ -156,7 +156,7 @@ class ReportingMixin:
 
         # Update tasks completed
         report.tasks_completed = tasks_completed
-        
+
         # Finalize report
         report.finalize_round(end_block, end_epoch)
 

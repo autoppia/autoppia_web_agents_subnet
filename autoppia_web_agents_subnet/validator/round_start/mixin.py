@@ -326,7 +326,7 @@ class RoundStartMixin:
                     )
 
                 self._save_round_state()
-            
+
             # Record handshake in report (NEW) - ALWAYS, even if resumed
             self._report_handshake_sent(total_miners=len(all_axons))
 
