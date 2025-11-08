@@ -76,13 +76,23 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                 <tr>
                     <th>UID</th>
                     <th>Hotkey</th>
+                    <th>Coldkey</th>
+                    <th>Miner Name</th>
+                    <th>Responded</th>
                 </tr>
         """
         for uid, hotkey in zip(report.handshake_response_uids, report.handshake_response_hotkeys):
+            miner = report.miners.get(uid)
+            coldkey = miner.coldkey[:10] if miner and miner.coldkey else "N/A"
+            agent_name = miner.agent_name if miner and miner.agent_name else "N/A"
+            
             html += f"""
                 <tr>
                     <td>{uid}</td>
-                    <td>{hotkey[:12]}...{hotkey[-8:]}</td>
+                    <td>{hotkey[:10]}...</td>
+                    <td>{coldkey}...</td>
+                    <td>{agent_name}</td>
+                    <td><span class="badge badge-success">✓ True</span></td>
                 </tr>
             """
         html += "</table>"
@@ -166,7 +176,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
             for web_name in sorted(miner.per_web_stats.keys()):
                 stats = miner.per_web_stats[web_name]
                 success_rate = (stats["success"] / stats["attempted"] * 100) if stats["attempted"] > 0 else 0
-                
+
                 # Color by success rate
                 if success_rate >= 75:
                     rate_color = "#22c55e"  # green
@@ -205,7 +215,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
             for web_name in sorted(report.per_web_global_stats.keys()):
                 stats = report.per_web_global_stats[web_name]
                 success_rate = (stats["solved"] / stats["sent"] * 100) if stats["sent"] > 0 else 0
-                
+
                 # Color by success rate
                 if success_rate >= 75:
                     rate_color = "#22c55e"  # green
@@ -245,7 +255,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
     html += """
         <h2>🔗 Consensus Validators</h2>
     """
-    
+
     if report.consensus_validators and len(report.consensus_validators) > 0:
         html += f"""
             <p><strong>{len(report.consensus_validators)}</strong> validators participated in consensus</p>
@@ -282,12 +292,27 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                     <th>Hotkey</th>
                     <th>IPFS CID</th>
                     <th>Status</th>
+                    <th>What Published</th>
                 </tr>
                 <tr>
                     <td>{report.validator_uid}</td>
-                    <td>{report.validator_hotkey[:12]}...{report.validator_hotkey[-8:]}</td>
+                    <td>{report.validator_hotkey[:10]}...</td>
                     <td>{report.consensus_ipfs_cid[:12] if report.consensus_ipfs_cid else 'Not published'}...</td>
                     <td><span class="badge badge-{'success' if report.consensus_published else 'warning'}">{'Published' if report.consensus_published else 'Not published'}</span></td>
+                    <td style="font-size: 12px; color: #94a3b8;">
+        """
+        
+        # Show what this validator published
+        if report.consensus_published and report.miners:
+            html += f"{len(report.miners)} miners, "
+            top_miner = max(report.miners.values(), key=lambda m: m.avg_score, default=None)
+            if top_miner:
+                html += f"top: UID {top_miner.uid} ({top_miner.avg_score:.4f})"
+        else:
+            html += "No data"
+        
+        html += """
+                    </td>
                 </tr>
             </table>
         """
@@ -310,7 +335,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
         for idx, miner in enumerate(top_5, start=1):
             score = miner.final_score_after_consensus if miner.final_score_after_consensus > 0 else miner.avg_score
             badge = "🏆" if idx == 1 else f"{idx}"
-            
+
             html += f"""
                 <tr>
                     <td><strong>{badge}</strong></td>
