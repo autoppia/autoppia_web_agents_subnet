@@ -190,6 +190,14 @@ class SettlementMixin:
             force=True,
         )
         self.round_manager.log_phase_history()
+        
+        # Finalize and send round report (NEW)
+        try:
+            current_block = self.subtensor.get_current_block()
+            current_epoch = self.round_manager.block_to_epoch(current_block)
+            self._finalize_round_report(end_block=current_block, end_epoch=current_epoch)
+        except Exception as exc:
+            bt.logging.error(f"Failed to finalize round report: {exc}")
 
     async def _wait_until_next_round_boundary(self) -> None:
         start_block_snapshot = self.subtensor.get_current_block()

@@ -31,6 +31,7 @@ from autoppia_web_agents_subnet.validator.round_state import (
 from autoppia_web_agents_subnet.validator.round_start import RoundStartMixin
 from autoppia_web_agents_subnet.validator.evaluation import EvaluationPhaseMixin
 from autoppia_web_agents_subnet.validator.settlement import SettlementMixin
+from autoppia_web_agents_subnet.validator.reporting.mixin import ReportingMixin
 from autoppia_iwa.src.bootstrap import AppBootstrap
 
 
@@ -40,6 +41,7 @@ class Validator(
     RoundStartMixin,
     EvaluationPhaseMixin,
     SettlementMixin,
+    ReportingMixin,
     ValidatorPlatformMixin,
     BaseValidatorNeuron,
 ):

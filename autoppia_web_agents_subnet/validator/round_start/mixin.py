@@ -147,6 +147,17 @@ class RoundStartMixin:
         )
 
         self.round_manager.start_new_round(current_block)
+        
+        # Initialize round report (NEW)
+        round_number = await self.round_manager.calculate_round(current_block)
+        self._init_round_report(
+            round_number=round_number,
+            validator_round_id=self.current_round_id,
+            start_block=self.round_manager.start_block,
+            start_epoch=self.round_manager.block_to_epoch(self.round_manager.start_block),
+            planned_tasks=len(all_tasks),
+        )
+        
         self.round_manager.enter_phase(
             RoundPhase.HANDSHAKE,
             block=current_block,
@@ -334,6 +345,18 @@ class RoundStartMixin:
                         f"⚠️ Handshake sent: 0/{len(all_axons)} miners responded",
                         ColoredLogger.YELLOW,
                     )
+                
+                # Record handshake in report (NEW)
+                self._report_handshake_sent(total_miners=len(all_axons))
+                
+                for uid in self.active_miner_uids:
+                    hotkey = self.metagraph.hotkeys[uid] if uid < len(self.metagraph.hotkeys) else "unknown"
+                    payload = self.round_handshake_payloads.get(uid, {})
+                    agent_name = payload.get("agent_name")
+                    agent_image = payload.get("agent_image")
+                    
+                    self._report_handshake_response(uid, hotkey, agent_name, agent_image)
+                
                 self._save_round_state()
 
             self.round_manager.enter_phase(
