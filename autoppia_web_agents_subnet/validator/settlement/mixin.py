@@ -180,13 +180,24 @@ class SettlementMixin:
         )
         self.round_manager.log_phase_history()
 
-        # Finalize and send round report (NEW)
+        # Finalize and send round report (NEW) - ALWAYS, even if there are errors
         try:
             current_block = self.subtensor.get_current_block()
             current_epoch = self.round_manager.block_to_epoch(current_block)
             self._finalize_round_report(end_block=current_block, end_epoch=current_epoch, tasks_completed=tasks_completed)
         except Exception as exc:
             bt.logging.error(f"Failed to finalize round report: {exc}")
+            # Try to send email anyway with whatever data we have
+            try:
+                report = self.round_manager.current_round_report
+                if report:
+                    report.add_error(f"Failed to finalize report: {exc}")
+                    report.completed = False
+                    from autoppia_web_agents_subnet.validator.reporting.email_sender import send_round_report_email
+                    send_round_report_email(report, codex_analysis=None)
+                    bt.logging.warning("⚠️ Sent partial report via email despite finalization error")
+            except Exception as email_exc:
+                bt.logging.error(f"Could not send emergency email: {email_exc}")
 
     async def _wait_until_next_round_boundary(self) -> None:
         start_block_snapshot = self.subtensor.get_current_block()

@@ -485,20 +485,23 @@ class EvaluationPhaseMixin:
                 self.round_manager.round_times.setdefault(uid, []).append(exec_time_value)
 
                 # Record in round report (NEW)
-                hotkey = self.metagraph.hotkeys[uid] if uid < len(self.metagraph.hotkeys) else "unknown"
-                coldkey = self.metagraph.coldkeys[uid] if uid < len(self.metagraph.coldkeys) else "unknown"
-                success = score_value > 0.0
+                try:
+                    hotkey = self.metagraph.hotkeys[uid] if uid < len(self.metagraph.hotkeys) else "unknown"
+                    coldkey = self.metagraph.coldkeys[uid] if uid < len(self.metagraph.coldkeys) else "unknown"
+                    success = score_value > 0.0
 
-                self._report_task_result(
-                    uid=uid,
-                    hotkey=hotkey,
-                    coldkey=coldkey,
-                    success=success,
-                    execution_time=exec_time_value,
-                    eval_score=score_value,
-                    reward=reward_value,
-                    web_name=web_project_name or "Unknown",
-                )
+                    self._report_task_result(
+                        uid=uid,
+                        hotkey=hotkey,
+                        coldkey=coldkey,
+                        success=success,
+                        execution_time=exec_time_value,
+                        eval_score=score_value,
+                        reward=reward_value,
+                        web_name=web_project_name or "Unknown",
+                    )
+                except Exception as report_exc:
+                    bt.logging.debug(f"Failed to record task result in report: {report_exc}")
 
             try:
                 await send_feedback_synapse_to_miners(
