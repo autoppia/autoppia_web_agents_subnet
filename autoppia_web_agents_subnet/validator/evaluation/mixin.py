@@ -55,27 +55,18 @@ class EvaluationPhaseMixin:
             wait_info = self.round_manager.get_wait_info(current_block)
 
             ColoredLogger.info(
-                (
-                    f"📍 Task {task_index + 1}/{len(all_tasks)} | epoch {current_epoch:.2f}/"
-                    f"{boundaries['target_epoch']} | remaining {wait_info['minutes_remaining']:.1f}m"
-                ),
+                (f"📍 Task {task_index + 1}/{len(all_tasks)} | epoch {current_epoch:.2f}/" f"{boundaries['target_epoch']} | remaining {wait_info['minutes_remaining']:.1f}m"),
                 ColoredLogger.CYAN,
             )
 
             tasks_by_id = self.current_round_tasks or {}
             target_task_id = next(
-                (
-                    task_id
-                    for task_id, payload in tasks_by_id.items()
-                    if getattr(payload, "sequence", None) == task_index
-                ),
+                (task_id for task_id, payload in tasks_by_id.items() if getattr(payload, "sequence", None) == task_index),
                 getattr(all_tasks[task_index].task, "id", None),
             )
 
             if target_task_id and self.active_miner_uids and self._completed_pairs:
-                all_done = all(
-                    (uid, target_task_id) in self._completed_pairs for uid in self.active_miner_uids
-                )
+                all_done = all((uid, target_task_id) in self._completed_pairs for uid in self.active_miner_uids)
                 if all_done:
                     ColoredLogger.info(
                         f"⏭️ Skipping task {task_index + 1}: already completed by all active miners",
@@ -100,10 +91,7 @@ class EvaluationPhaseMixin:
             bt_done = max(current_block - rsb, 0)
             progress_frac = min(max(bt_done / bt_total, 0.0), 1.0)
 
-            if (
-                not self._finalized_this_round
-                and progress_frac >= float(FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION)
-            ):
+            if not self._finalized_this_round and progress_frac >= float(FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION):
                 ColoredLogger.info(
                     f"⏳ Finalizing early at {FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION:.0%} to avoid boundary issues",
                     ColoredLogger.PURPLE,
@@ -117,12 +105,7 @@ class EvaluationPhaseMixin:
                 self._finalized_this_round = True
                 break
 
-            if (
-                ENABLE_DISTRIBUTED_CONSENSUS
-                and (not self._finalized_this_round)
-                and (not self._consensus_published)
-                and (progress_frac >= float(STOP_TASK_EVALUATION_AT_ROUND_FRACTION))
-            ):
+            if ENABLE_DISTRIBUTED_CONSENSUS and (not self._finalized_this_round) and (not self._consensus_published) and (progress_frac >= float(STOP_TASK_EVALUATION_AT_ROUND_FRACTION)):
                 ColoredLogger.error("\n" + "=" * 80, ColoredLogger.RED)
                 ColoredLogger.error(
                     f"🛑🛑🛑 STOP FRACTION REACHED: {STOP_TASK_EVALUATION_AT_ROUND_FRACTION:.0%} 🛑🛑🛑",
@@ -159,10 +142,7 @@ class EvaluationPhaseMixin:
                     ColoredLogger.YELLOW,
                 )
                 ColoredLogger.info(
-                    (
-                        f"   epoch={current_epoch:.2f}, remaining={wait_info['seconds_remaining']:.0f}s, "
-                        f"buffer={SAFETY_BUFFER_EPOCHS} epochs, tasks={tasks_completed}/{len(all_tasks)}"
-                    ),
+                    (f"   epoch={current_epoch:.2f}, remaining={wait_info['seconds_remaining']:.0f}s, " f"buffer={SAFETY_BUFFER_EPOCHS} epochs, tasks={tasks_completed}/{len(all_tasks)}"),
                     ColoredLogger.YELLOW,
                 )
                 bounds_ctx = self.round_manager.get_round_boundaries(current_block, log_debug=False)
@@ -170,17 +150,12 @@ class EvaluationPhaseMixin:
                 target_block_ctx = bounds_ctx["target_block"]
                 round_no_ctx = await self.round_manager.calculate_round(current_block)
                 ColoredLogger.info(
-                    (
-                        "   Waiting for end-of-round target epoch to set weights | "
-                        f"round={round_no_ctx} | target_epoch={target_epoch_ctx:.2f} | target_block={target_block_ctx}"
-                    ),
+                    ("   Waiting for end-of-round target epoch to set weights | " f"round={round_no_ctx} | target_epoch={target_epoch_ctx:.2f} | target_block={target_block_ctx}"),
                     ColoredLogger.YELLOW,
                 )
                 self.state_manager.save_checkpoint()
                 if ENABLE_DISTRIBUTED_CONSENSUS and (not self._consensus_published) and (not self._finalized_this_round):
-                    bt.logging.info(
-                        f"[CONSENSUS] Safety buffer reached - publishing to IPFS with {tasks_completed} tasks"
-                    )
+                    bt.logging.info(f"[CONSENSUS] Safety buffer reached - publishing to IPFS with {tasks_completed} tasks")
                     await self._publish_final_snapshot(
                         tasks_completed=tasks_completed,
                         total_tasks=len(all_tasks),
@@ -192,11 +167,7 @@ class EvaluationPhaseMixin:
                     self._finalized_this_round = True
                 break
 
-        if (
-            ENABLE_DISTRIBUTED_CONSENSUS
-            and (not self._consensus_published)
-            and (not self._finalized_this_round)
-        ):
+        if ENABLE_DISTRIBUTED_CONSENSUS and (not self._consensus_published) and (not self._finalized_this_round):
             await self._publish_final_snapshot(
                 tasks_completed=tasks_completed,
                 total_tasks=len(all_tasks),
@@ -323,9 +294,7 @@ class EvaluationPhaseMixin:
                         if hasattr(action, "text"):
                             action_str += f"|{action.text}"
                         if hasattr(action, "selector") and action.selector:
-                            selector_str = (
-                                f"{getattr(action.selector, 'type', '')}:{getattr(action.selector, 'value', '')}"
-                            )
+                            selector_str = f"{getattr(action.selector, 'type', '')}:{getattr(action.selector, 'value', '')}"
                             action_str += f"|{selector_str}"
                         actions_repr.append(action_str)
                     actions_str = "||".join(actions_repr)
@@ -361,12 +330,7 @@ class EvaluationPhaseMixin:
                     if solution and solution.actions:
                         seed_issues = 0
                         for action in solution.actions:
-                            if (
-                                hasattr(action, "url")
-                                and action.url
-                                and action.type == "NavigateAction"
-                                and seed is not None
-                            ):
+                            if hasattr(action, "url") and action.url and action.type == "NavigateAction" and seed is not None:
                                 if "seed=" not in action.url:
                                     seed_issues += 1
                                 else:
@@ -377,9 +341,7 @@ class EvaluationPhaseMixin:
                         status_emoji = "✅" if seed_issues == 0 else "⚠️"
                         uids_str = ", ".join([str(u) for u in group_uids])
                         actions_table = Table(
-                            title=(
-                                f"[bold cyan]{status_emoji} Group {group_idx} | UIDs: [{uids_str}] - Actions Submitted[/bold cyan]"
-                            ),
+                            title=(f"[bold cyan]{status_emoji} Group {group_idx} | UIDs: [{uids_str}] - Actions Submitted[/bold cyan]"),
                             box=box.ROUNDED,
                             show_header=True,
                             header_style="bold yellow",
@@ -417,19 +379,12 @@ class EvaluationPhaseMixin:
                         console.print(actions_table)
                     else:
                         uids_str = ", ".join([str(u) for u in group_uids])
-                        console.print(
-                            f"[yellow]📊 Group {group_idx} | UIDs: [{uids_str}] - NO ACTIONS SUBMITTED[/yellow]"
-                        )
+                        console.print(f"[yellow]📊 Group {group_idx} | UIDs: [{uids_str}] - NO ACTIONS SUBMITTED[/yellow]")
 
                     try:
-                        group_tests = [
-                            test_results_list[i] if i < len(test_results_list) else []
-                            for i in group_indices
-                        ]
+                        group_tests = [test_results_list[i] if i < len(test_results_list) else [] for i in group_indices]
                         tests_table = Table(
-                            title=(
-                                f"[bold green]🧪 Group {group_idx} | UIDs: [{', '.join([str(u) for u in group_uids])}] - Backend Tests[/bold green]"
-                            ),
+                            title=(f"[bold green]🧪 Group {group_idx} | UIDs: [{', '.join([str(u) for u in group_uids])}] - Backend Tests[/bold green]"),
                             box=box.SIMPLE,
                             show_header=True,
                             header_style="bold green",
@@ -458,9 +413,7 @@ class EvaluationPhaseMixin:
 
                     uids_str = ", ".join([str(u) for u in group_uids])
                     result_table = Table(
-                        title=(
-                            f"[bold magenta]📊 Group {group_idx} | UIDs: [{uids_str}] - Evaluation Results[/bold magenta]"
-                        ),
+                        title=(f"[bold magenta]📊 Group {group_idx} | UIDs: [{uids_str}] - Evaluation Results[/bold magenta]"),
                         box=box.SIMPLE,
                         show_header=True,
                         header_style="bold cyan",
@@ -472,9 +425,7 @@ class EvaluationPhaseMixin:
                     result_table.add_column("Status", justify="left", style="white", width=50)
                     result_table.add_column("Result", justify="center", style="bold", width=8)
 
-                    for uid, score, exec_time, error_msg in zip(
-                        group_uids, group_scores, group_times, group_errors
-                    ):
+                    for uid, score, exec_time, error_msg in zip(group_uids, group_scores, group_times, group_errors):
                         if score >= 0.8:
                             score_str = f"[bold green]{score:.4f}[/bold green]"
                             result_icon = "[bold green]✅[/bold green]"
@@ -488,9 +439,7 @@ class EvaluationPhaseMixin:
                         time_str = f"[blue]{exec_time:.2f}s[/blue]"
 
                         if error_msg:
-                            status_msg = (
-                                f"[red]{error_msg[:47]}...[/red]" if len(error_msg) > 50 else f"[red]{error_msg}[/red]"
-                            )
+                            status_msg = f"[red]{error_msg[:47]}...[/red]" if len(error_msg) > 50 else f"[red]{error_msg}[/red]"
                         elif score >= 0.8:
                             status_msg = "[green]All tests passed[/green]"
                         elif score > 0:
@@ -534,12 +483,12 @@ class EvaluationPhaseMixin:
                 self.round_manager.round_rewards.setdefault(uid, []).append(reward_value)
                 self.round_manager.round_eval_scores.setdefault(uid, []).append(score_value)
                 self.round_manager.round_times.setdefault(uid, []).append(exec_time_value)
-                
+
                 # Record in round report (NEW)
                 hotkey = self.metagraph.hotkeys[uid] if uid < len(self.metagraph.hotkeys) else "unknown"
                 coldkey = self.metagraph.coldkeys[uid] if uid < len(self.metagraph.coldkeys) else "unknown"
                 success = score_value > 0.0
-                
+
                 self._report_task_result(
                     uid=uid,
                     hotkey=hotkey,

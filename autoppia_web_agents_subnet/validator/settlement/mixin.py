@@ -105,11 +105,7 @@ class SettlementMixin:
         ColoredLogger.error("=" * 80 + "\n", ColoredLogger.RED)
 
         bt.logging.info("=" * 80)
-        bt.logging.info(
-            consensus_tag(
-                f"All tasks done ({tasks_completed}/{total_tasks}) - Publishing to IPFS now..."
-            )
-        )
+        bt.logging.info(consensus_tag(f"All tasks done ({tasks_completed}/{total_tasks}) - Publishing to IPFS now..."))
         bt.logging.info("=" * 80)
 
         self.round_manager.enter_phase(
@@ -132,18 +128,14 @@ class SettlementMixin:
             import traceback
 
             bt.logging.error("=" * 80)
-            bt.logging.error(
-                f"[CONSENSUS] ❌ IPFS publish failed | Error: {type(exc).__name__}: {exc}"
-            )
+            bt.logging.error(f"[CONSENSUS] ❌ IPFS publish failed | Error: {type(exc).__name__}: {exc}")
             bt.logging.error(f"[CONSENSUS] Traceback:\n{traceback.format_exc()}")
             bt.logging.error("=" * 80)
             raise
 
         self._consensus_published = bool(cid) or self._consensus_published
         if not cid:
-            bt.logging.warning(
-                "Consensus publish returned no CID; will retry later if window allows."
-            )
+            bt.logging.warning("Consensus publish returned no CID; will retry later if window allows.")
         else:
             # Record consensus published in report (NEW)
             self._report_consensus_published(ipfs_cid=cid)
@@ -193,7 +185,7 @@ class SettlementMixin:
             force=True,
         )
         self.round_manager.log_phase_history()
-        
+
         # Finalize and send round report (NEW)
         try:
             current_block = self.subtensor.get_current_block()
@@ -228,9 +220,7 @@ class SettlementMixin:
                 progress = min(max((done / total) * 100.0, 0.0), 100.0)
 
                 blocks_remaining = max(fixed_target_block - current_block, 0)
-                minutes_remaining = (
-                    blocks_remaining * self.round_manager.SECONDS_PER_BLOCK
-                ) / 60
+                minutes_remaining = (blocks_remaining * self.round_manager.SECONDS_PER_BLOCK) / 60
 
                 if time.time() - last_log_time >= 30:
                     current_epoch = self.round_manager.block_to_epoch(current_block)
@@ -288,9 +278,7 @@ class SettlementMixin:
         self.update_scores(rewards=weights, uids=all_uids)
         self.set_weights()
 
-        final_weights = {
-            uid: float(weights[uid]) for uid in range(len(weights)) if float(weights[uid]) > 0.0
-        }
+        final_weights = {uid: float(weights[uid]) for uid in range(len(weights)) if float(weights[uid]) > 0.0}
 
         finish_success = await self._finish_iwap_round(
             avg_rewards=avg_rewards or {},
@@ -304,9 +292,7 @@ class SettlementMixin:
             ColoredLogger.success(success_message, success_color)
             ColoredLogger.info(f"Tasks attempted: {tasks_completed}", success_color)
         else:
-            bt.logging.warning(
-                f"IWAP finish_round failed during burn-all ({reason}); continuing without remote acknowledgement."
-            )
+            bt.logging.warning(f"IWAP finish_round failed during burn-all ({reason}); continuing without remote acknowledgement.")
             ColoredLogger.warning(
                 "⚠️ IWAP finish_round did not complete; proceeding locally.",
                 ColoredLogger.YELLOW,
@@ -337,9 +323,7 @@ class SettlementMixin:
 
         bt.logging.info("=" * 80)
         bt.logging.info("[CONSENSUS] Phase: SetWeights - Calculating final weights")
-        bt.logging.info(
-            f"[CONSENSUS] Distributed consensus: {str(ENABLE_DISTRIBUTED_CONSENSUS).lower()}"
-        )
+        bt.logging.info(f"[CONSENSUS] Distributed consensus: {str(ENABLE_DISTRIBUTED_CONSENSUS).lower()}")
         bt.logging.info("=" * 80)
 
         avg_rewards: Dict[int, float] = {}
@@ -383,11 +367,7 @@ class SettlementMixin:
                 progress_now = min(max((current_block_now - rsb) / max(tb - rsb, 1), 0.0), 1.0)
 
                 bt.logging.info("=" * 80)
-                bt.logging.info(
-                    consensus_tag(
-                        f"📥 FETCH COMMITS @ {FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION:.0%}"
-                    )
-                )
+                bt.logging.info(consensus_tag(f"📥 FETCH COMMITS @ {FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION:.0%}"))
                 bt.logging.info(consensus_tag(f"Progress: {progress_now:.2f}"))
                 bt.logging.info(consensus_tag(f"Current Block: {current_block_now:,}"))
                 bt.logging.info(consensus_tag("Fetching commitments from IPFS to aggregate scores"))
@@ -409,7 +389,7 @@ class SettlementMixin:
                 )
                 avg_rewards = agg
                 self._consensus_last_details = agg_meta or {}
-                
+
                 # Record consensus validators in report (NEW)
                 validators_info = agg_meta.get("validators", []) if agg_meta else []
                 for val_info in validators_info:
@@ -421,7 +401,7 @@ class SettlementMixin:
                         miners_reported=len(val_info.get("scores", {})),
                         miner_scores=val_info.get("scores"),
                     )
-                
+
                 self._report_consensus_aggregated()
                 self._report_set_final_scores(agg)
             else:
@@ -470,14 +450,8 @@ class SettlementMixin:
         bt.logging.info("🎯 Final weights (WTA)")
         winner_uid = max(final_rewards_dict, key=final_rewards_dict.get) if final_rewards_dict else None
         if winner_uid is not None:
-            hotkey = (
-                self.metagraph.hotkeys[winner_uid]
-                if winner_uid < len(self.metagraph.hotkeys)
-                else "<unknown>"
-            )
-            bt.logging.info(
-                f"🏆 Winner uid={winner_uid}, hotkey={hotkey[:10]}..., weight={final_rewards_dict[winner_uid]:.4f}"
-            )
+            hotkey = self.metagraph.hotkeys[winner_uid] if winner_uid < len(self.metagraph.hotkeys) else "<unknown>"
+            bt.logging.info(f"🏆 Winner uid={winner_uid}, hotkey={hotkey[:10]}..., weight={final_rewards_dict[winner_uid]:.4f}")
         else:
             bt.logging.info("❌ No miners evaluated.")
 
@@ -487,12 +461,12 @@ class SettlementMixin:
         if winner_uid is not None and 0 <= int(winner_uid) < self.metagraph.n:
             wta_full[int(winner_uid)] = 1.0
         bt.logging.info(f"Updating scores for on-chain WTA winner uid={winner_uid}")
-        
+
         # Record winner and weights in report (NEW)
         if winner_uid is not None:
             self._report_set_winner(winner_uid, is_local=False)
         self._report_set_weights(final_rewards_dict)
-        
+
         self.update_scores(rewards=wta_full, uids=all_uids)
         self.set_weights()
 
@@ -505,9 +479,7 @@ class SettlementMixin:
         completion_reason = None
 
         if not finish_success:
-            bt.logging.warning(
-                "IWAP finish_round failed during final weight submission; continuing without remote acknowledgement."
-            )
+            bt.logging.warning("IWAP finish_round failed during final weight submission; continuing without remote acknowledgement.")
             completion_reason = "IWAP finish failed"
 
         self._log_round_completion(

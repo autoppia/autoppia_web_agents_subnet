@@ -39,10 +39,7 @@ class RoundStartMixin:
         minutes_to_target = (blocks_to_target * self.round_manager.SECONDS_PER_BLOCK) / 60
         epochs_to_target = max(boundaries_preview["target_epoch"] - current_epoch_preview, 0.0)
         bt.logging.info(
-            (
-                "Round status | round={round} | epoch {cur:.2f}/{target:.2f} | "
-                "epochs_to_next={ep:.2f} | minutes_to_next={mins:.1f}"
-            ).format(
+            ("Round status | round={round} | epoch {cur:.2f}/{target:.2f} | " "epochs_to_next={ep:.2f} | minutes_to_next={mins:.1f}").format(
                 round=round_number_preview,
                 cur=current_epoch_preview,
                 target=boundaries_preview["target_epoch"],
@@ -65,9 +62,7 @@ class RoundStartMixin:
             if all_tasks:
                 self.current_round_id = state["validator_round_id"]
                 resumed = True
-                bt.logging.info(
-                    f"♻️ Resumed {len(all_tasks)} tasks; validator_round_id={self.current_round_id}"
-                )
+                bt.logging.info(f"♻️ Resumed {len(all_tasks)} tasks; validator_round_id={self.current_round_id}")
             else:
                 bt.logging.warning("Resume checkpoint had 0 tasks; generating new tasks.")
 
@@ -91,10 +86,7 @@ class RoundStartMixin:
             if (not at_boundary) and (frac >= float(SKIP_ROUND_IF_STARTED_AFTER_FRACTION)):
                 minutes_remaining = (blocks_to_target * self.round_manager.SECONDS_PER_BLOCK) / 60
                 ColoredLogger.warning(
-                    (
-                        f"⏭️ Fresh start late in round: {frac * 100:.1f}% >= "
-                        f"{float(SKIP_ROUND_IF_STARTED_AFTER_FRACTION) * 100:.0f}% — skipping"
-                    ),
+                    (f"⏭️ Fresh start late in round: {frac * 100:.1f}% >= " f"{float(SKIP_ROUND_IF_STARTED_AFTER_FRACTION) * 100:.0f}% — skipping"),
                     ColoredLogger.YELLOW,
                 )
                 ColoredLogger.info(
@@ -118,19 +110,14 @@ class RoundStartMixin:
             tasks_generated = 0
             while tasks_generated < PRE_GENERATED_TASKS:
                 batch_start = time.time()
-                batch_tasks = await get_task_collection_interleaved(
-                    prompts_per_use_case=PROMPTS_PER_USECASE
-                )
+                batch_tasks = await get_task_collection_interleaved(prompts_per_use_case=PROMPTS_PER_USECASE)
                 remaining = PRE_GENERATED_TASKS - tasks_generated
                 tasks_to_add = batch_tasks[:remaining]
                 all_tasks.extend(tasks_to_add)
                 tasks_generated += len(tasks_to_add)
 
                 batch_elapsed = time.time() - batch_start
-                bt.logging.debug(
-                    f"Generated batch: {len(tasks_to_add)} in {batch_elapsed:.1f}s "
-                    f"(total {tasks_generated}/{PRE_GENERATED_TASKS})"
-                )
+                bt.logging.debug(f"Generated batch: {len(tasks_to_add)} in {batch_elapsed:.1f}s " f"(total {tasks_generated}/{PRE_GENERATED_TASKS})")
 
             self.current_round_id = self._generate_validator_round_id(current_block=current_block)
             self.round_start_timestamp = pre_generation_start
@@ -142,12 +129,10 @@ class RoundStartMixin:
         )
 
         pre_generation_elapsed = time.time() - pre_generation_start
-        bt.logging.info(
-            f"✅ Task list ready: {len(all_tasks)} tasks in {pre_generation_elapsed:.1f}s (resumed={resumed})"
-        )
+        bt.logging.info(f"✅ Task list ready: {len(all_tasks)} tasks in {pre_generation_elapsed:.1f}s (resumed={resumed})")
 
         self.round_manager.start_new_round(current_block)
-        
+
         # Initialize round report (NEW)
         round_number = await self.round_manager.calculate_round(current_block)
         self._init_round_report(
@@ -157,7 +142,7 @@ class RoundStartMixin:
             start_epoch=self.round_manager.block_to_epoch(self.round_manager.start_block),
             planned_tasks=len(all_tasks),
         )
-        
+
         self.round_manager.enter_phase(
             RoundPhase.HANDSHAKE,
             block=current_block,
@@ -237,9 +222,7 @@ class RoundStartMixin:
 
             def _truncate_agent_name(name: str) -> str:
                 if MAX_MINER_AGENT_NAME_LENGTH and len(name) > MAX_MINER_AGENT_NAME_LENGTH:
-                    bt.logging.debug(
-                        f"Truncating agent name '{name}' to {MAX_MINER_AGENT_NAME_LENGTH} characters."
-                    )
+                    bt.logging.debug(f"Truncating agent name '{name}' to {MAX_MINER_AGENT_NAME_LENGTH} characters.")
                     return name[:MAX_MINER_AGENT_NAME_LENGTH]
                 return name
 
@@ -255,9 +238,7 @@ class RoundStartMixin:
                     "success": False,
                     "agent_name": None,
                     "version": None,
-                    "hotkey": self.metagraph.hotkeys[mapped_uid][:12] + "..."
-                    if mapped_uid < len(self.metagraph.hotkeys)
-                    else "N/A",
+                    "hotkey": self.metagraph.hotkeys[mapped_uid][:12] + "..." if mapped_uid < len(self.metagraph.hotkeys) else "N/A",
                 }
 
                 if not response:
@@ -300,10 +281,7 @@ class RoundStartMixin:
             if miner_status_map:
                 console = Console()
                 table = Table(
-                    title=(
-                        f"[bold magenta]🤝 Handshake Results - {len(self.active_miner_uids)}/"
-                        f"{len(all_axons)} Miners Responded[/bold magenta]"
-                    ),
+                    title=(f"[bold magenta]🤝 Handshake Results - {len(self.active_miner_uids)}/" f"{len(all_axons)} Miners Responded[/bold magenta]"),
                     box=box.ROUNDED,
                     show_header=True,
                     header_style="bold cyan",
@@ -345,18 +323,18 @@ class RoundStartMixin:
                         f"⚠️ Handshake sent: 0/{len(all_axons)} miners responded",
                         ColoredLogger.YELLOW,
                     )
-                
+
                 # Record handshake in report (NEW)
                 self._report_handshake_sent(total_miners=len(all_axons))
-                
+
                 for uid in self.active_miner_uids:
                     hotkey = self.metagraph.hotkeys[uid] if uid < len(self.metagraph.hotkeys) else "unknown"
                     payload = self.round_handshake_payloads.get(uid, {})
                     agent_name = payload.get("agent_name")
                     agent_image = payload.get("agent_image")
-                    
+
                     self._report_handshake_response(uid, hotkey, agent_name, agent_image)
-                
+
                 self._save_round_state()
 
             self.round_manager.enter_phase(
@@ -382,16 +360,8 @@ class RoundStartMixin:
         bt.logging.info(round_details_tag(f"Duration: ~{minutes_remaining:.1f} minutes"))
         bt.logging.info(round_details_tag(f"Total Blocks: {total_blocks}"))
         bt.logging.info(round_details_tag(f"Tasks to Execute: {len(all_tasks)}"))
-        bt.logging.info(
-            round_details_tag(
-                f"Stop Evaluation at: {STOP_TASK_EVALUATION_AT_ROUND_FRACTION:.0%}"
-            )
-        )
-        bt.logging.info(
-            round_details_tag(
-                f"Fetch Commits at: {FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION:.0%}"
-            )
-        )
+        bt.logging.info(round_details_tag(f"Stop Evaluation at: {STOP_TASK_EVALUATION_AT_ROUND_FRACTION:.0%}"))
+        bt.logging.info(round_details_tag(f"Fetch Commits at: {FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION:.0%}"))
         bt.logging.info("=" * 100)
 
         if not self.active_miner_uids:
