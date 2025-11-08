@@ -101,7 +101,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
 
             # Format: 77/156 (tasks_success/tasks_attempted)
             tasks_display = f"{miner.tasks_success}/{miner.tasks_attempted}"
-            
+
             # Color by percentage: 0-25 red, 25-50 orange, 50-75 yellow, 75-100 green
             pct = miner.score_percentage
             if pct >= 75:
