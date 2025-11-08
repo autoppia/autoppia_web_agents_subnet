@@ -14,7 +14,11 @@ ROUNDS_DIR="$LOGS_DIR/rounds"
 STATE_FILE="$LOGS_DIR/last_reported_round.txt"
 
 # Load .env
-[[ -f "$REPO_ROOT/.env" ]] && source "$REPO_ROOT/.env"
+if [[ -f "$REPO_ROOT/.env" ]]; then
+    set -a
+    source "$REPO_ROOT/.env"
+    set +a
+fi
 
 echo "[$(date)] 🚀 Auto-reporter started"
 echo "[$(date)] 📁 Watching: $ROUNDS_DIR"
@@ -45,16 +49,19 @@ send_report() {
         return 1
     fi
     
-    # Add Codex analysis
+    # Add Codex analysis (with timeout)
     if [[ -f "$SCRIPT_DIR/run_codex.sh" ]]; then
-        echo "[$(date)] 🤖 Running Codex analysis..."
-        local codex_output=$("$SCRIPT_DIR/run_codex.sh" --round "$round" --status "OK" < "$report_file" 2>/dev/null || echo "")
+        echo "[$(date)] 🤖 Running Codex analysis (30s timeout)..."
+        local codex_output=$(timeout 30 "$SCRIPT_DIR/run_codex.sh" --round "$round" --status "OK" < "$report_file" 2>/dev/null || echo "")
         
         if [[ -n "$codex_output" ]]; then
             echo "" >> "$report_file"
             echo "==================== CODEX ANALYSIS ====================" >> "$report_file"
             echo "$codex_output" >> "$report_file"
             echo "========================================================" >> "$report_file"
+            echo "[$(date)] ✅ Codex analysis completed"
+        else
+            echo "[$(date)] ⚠️  Codex analysis skipped (timeout or not available)"
         fi
     fi
     

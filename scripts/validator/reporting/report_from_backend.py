@@ -222,7 +222,7 @@ def main() -> None:
     parser.add_argument("--round", type=int, required=True, help="Round number to generate report for")
 
     parser.add_argument(
-        "--backend", default=os.getenv("IWAP_API_BASE_URL", "https://api-dev-leaderboard.autoppia.com"), help="Backend API base URL (default: from IWAP_API_BASE_URL env or dev backend)"
+        "--backend", default=os.getenv("IWAP_API_BASE_URL", "https://dev-api-leaderboard.autoppia.com"), help="Backend API base URL (default: from IWAP_API_BASE_URL env or dev backend)"
     )
 
     parser.add_argument("--send-email", action="store_true", help="Send report via email (requires email configuration)")

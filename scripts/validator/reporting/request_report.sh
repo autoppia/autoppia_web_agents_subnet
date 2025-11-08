@@ -15,7 +15,11 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 LOGS_DIR="$REPO_ROOT/logs"
 ROUNDS_DIR="$LOGS_DIR/rounds"
 
-[[ -f "$REPO_ROOT/.env" ]] && source "$REPO_ROOT/.env"
+if [[ -f "$REPO_ROOT/.env" ]]; then
+    set -a
+    source "$REPO_ROOT/.env"
+    set +a
+fi
 
 if [[ $# -lt 1 ]]; then
     echo "Usage: $0 <round_number|current> [backend]"
@@ -47,65 +51,26 @@ fi
 if [[ "$SOURCE" == "backend" ]]; then
     echo "📊 Requesting round $ROUND from BACKEND..."
     
-    BACKEND="${IWAP_API_BASE_URL:-https://api-dev-leaderboard.autoppia.com}"
+    BACKEND="${IWAP_API_BASE_URL:-https://dev-api-leaderboard.autoppia.com}"
+    echo "🌐 Backend URL: $BACKEND"
+    
     REPORT_FILE="/tmp/report_backend_round_${ROUND}.txt"
     
     # Generate report from backend
+    echo "⏳ Fetching data from backend..."
     python3 "$SCRIPT_DIR/report_from_backend.py" --round "$ROUND" --backend "$BACKEND" > "$REPORT_FILE" 2>&1
     
     if [[ ! -s "$REPORT_FILE" ]]; then
         echo "❌ Failed to generate report from backend"
+        cat "$REPORT_FILE"
         exit 1
     fi
     
     echo "✅ Report generated from backend"
+    echo "📧 Sending HTML email..."
     
-    # Send email
-    python3 - "$ROUND" "$REPORT_FILE" <<'PYTHON_EMAIL'
-import sys, os
-from email.message import EmailMessage
-import smtplib
-
-round_num, report_file = sys.argv[1], sys.argv[2]
-
-with open(report_file) as f:
-    report = f.read()
-
-smtp_host = os.getenv('REPORT_MONITOR_SMTP_HOST')
-smtp_port = int(os.getenv('REPORT_MONITOR_SMTP_PORT', '587'))
-smtp_user = os.getenv('REPORT_MONITOR_SMTP_USERNAME')
-smtp_pass = os.getenv('REPORT_MONITOR_SMTP_PASSWORD')
-email_from = os.getenv('REPORT_MONITOR_EMAIL_FROM')
-email_to = os.getenv('REPORT_MONITOR_EMAIL_TO')
-use_ssl = os.getenv('REPORT_MONITOR_SMTP_SSL', 'false').lower() == 'true'
-
-if not smtp_host or not email_to:
-    print("❌ Email not configured in .env")
-    sys.exit(1)
-
-msg = EmailMessage()
-msg['Subject'] = f'[validator] Round {round_num} - Report from BACKEND'
-msg['From'] = email_from
-msg['To'] = email_to
-msg.set_content(report)
-
-try:
-    if use_ssl:
-        with smtplib.SMTP_SSL(smtp_host, smtp_port) as s:
-            if smtp_user and smtp_pass:
-                s.login(smtp_user, smtp_pass)
-            s.send_message(msg)
-    else:
-        with smtplib.SMTP(smtp_host, smtp_port) as s:
-            s.starttls()
-            if smtp_user and smtp_pass:
-                s.login(smtp_user, smtp_pass)
-            s.send_message(msg)
-    print(f"✅ Email sent to {email_to}")
-except Exception as e:
-    print(f"❌ Error: {e}")
-    sys.exit(1)
-PYTHON_EMAIL
+    # Send HTML email using monitor_rounds.py functions
+    python3 "$SCRIPT_DIR/send_html_email.py" "$ROUND" "$REPORT_FILE"
     
     rm -f "$REPORT_FILE"
     echo "✅ Done!"
@@ -136,10 +101,10 @@ fi
 
 echo "✅ Report generated from logs"
 
-# Add Codex analysis
+# Add Codex analysis (with timeout)
 if [[ -f "$SCRIPT_DIR/run_codex.sh" ]]; then
-    echo "🤖 Running Codex analysis..."
-    CODEX_OUTPUT=$("$SCRIPT_DIR/run_codex.sh" --round "$ROUND" --status "OK" < "$REPORT_FILE" 2>/dev/null || echo "")
+    echo "🤖 Running Codex analysis (30s timeout)..."
+    CODEX_OUTPUT=$(timeout 30 "$SCRIPT_DIR/run_codex.sh" --round "$ROUND" --status "OK" < "$REPORT_FILE" 2>/dev/null || echo "")
     
     if [[ -n "$CODEX_OUTPUT" ]]; then
         echo "" >> "$REPORT_FILE"
@@ -147,57 +112,15 @@ if [[ -f "$SCRIPT_DIR/run_codex.sh" ]]; then
         echo "$CODEX_OUTPUT" >> "$REPORT_FILE"
         echo "========================================================" >> "$REPORT_FILE"
         echo "✅ Codex analysis completed"
+    else
+        echo "⚠️  Codex analysis skipped (timeout or not available)"
     fi
 fi
 
-echo "Sending email..."
+echo "📧 Sending HTML email..."
 
-# Send email
-python3 - "$ROUND" "$REPORT_FILE" <<'PYTHON_EMAIL'
-import sys, os
-from email.message import EmailMessage
-import smtplib
-
-round_num, report_file = sys.argv[1], sys.argv[2]
-
-with open(report_file) as f:
-    report = f.read()
-
-smtp_host = os.getenv('REPORT_MONITOR_SMTP_HOST')
-smtp_port = int(os.getenv('REPORT_MONITOR_SMTP_PORT', '587'))
-smtp_user = os.getenv('REPORT_MONITOR_SMTP_USERNAME')
-smtp_pass = os.getenv('REPORT_MONITOR_SMTP_PASSWORD')
-email_from = os.getenv('REPORT_MONITOR_EMAIL_FROM')
-email_to = os.getenv('REPORT_MONITOR_EMAIL_TO')
-use_ssl = os.getenv('REPORT_MONITOR_SMTP_SSL', 'false').lower() == 'true'
-
-if not smtp_host or not email_to:
-    print("❌ Email not configured in .env")
-    sys.exit(1)
-
-msg = EmailMessage()
-msg['Subject'] = f'[validator] Round {round_num} - Report from LOGS + Codex'
-msg['From'] = email_from
-msg['To'] = email_to
-msg.set_content(report)
-
-try:
-    if use_ssl:
-        with smtplib.SMTP_SSL(smtp_host, smtp_port) as s:
-            if smtp_user and smtp_pass:
-                s.login(smtp_user, smtp_pass)
-            s.send_message(msg)
-    else:
-        with smtplib.SMTP(smtp_host, smtp_port) as s:
-            s.starttls()
-            if smtp_user and smtp_pass:
-                s.login(smtp_user, smtp_pass)
-            s.send_message(msg)
-    print(f"✅ Email sent to {email_to}")
-except Exception as e:
-    print(f"❌ Error: {e}")
-    sys.exit(1)
-PYTHON_EMAIL
+# Send HTML email using monitor_rounds.py functions
+python3 "$SCRIPT_DIR/send_html_email.py" "$ROUND" "$REPORT_FILE"
 
 rm -f "$REPORT_FILE"
 echo "✅ Done!"
