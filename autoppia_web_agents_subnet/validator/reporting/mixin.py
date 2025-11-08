@@ -83,7 +83,7 @@ class ReportingMixin:
             miner = report.add_miner(uid, hotkey)
             if coldkey and not miner.coldkey:
                 miner.coldkey = coldkey
-            
+
             report.record_task_result(uid, success, execution_time, eval_score, reward, web_name)
 
     def _report_consensus_validator(

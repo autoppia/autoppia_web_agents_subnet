@@ -15,30 +15,30 @@ from typing import Dict, List, Optional
 @dataclass
 class MinerReport:
     """Statistics for a single miner in a round."""
-    
+
     uid: int
     hotkey: str
     coldkey: str = ""
-    
+
     # Handshake
     responded_to_handshake: bool = False
     agent_name: Optional[str] = None
     agent_image: Optional[str] = None
-    
+
     # Task execution
     tasks_attempted: int = 0
     tasks_success: int = 0
     tasks_failed: int = 0
-    
+
     # Performance metrics
     execution_times: List[float] = field(default_factory=list)
     eval_scores: List[float] = field(default_factory=list)
     rewards: List[float] = field(default_factory=list)
-    
+
     # Per-web statistics (NEW)
     # web_name -> {"attempted": int, "success": int, "failed": int}
     per_web_stats: Dict[str, Dict[str, int]] = field(default_factory=dict)
-    
+
     # Final results
     avg_time: float = 0.0
     avg_score: float = 0.0
@@ -53,13 +53,13 @@ class MinerReport:
         """Calculate average metrics from collected data."""
         if self.execution_times:
             self.avg_time = sum(self.execution_times) / len(self.execution_times)
-        
+
         if self.eval_scores:
             self.avg_score = sum(self.eval_scores) / len(self.eval_scores)
-        
+
         if self.rewards:
             self.avg_reward = sum(self.rewards) / len(self.rewards)
-        
+
         # Calculate score percentage
         if self.tasks_attempted > 0:
             self.score_percentage = (self.tasks_success / self.tasks_attempted) * 100.0
@@ -110,22 +110,22 @@ class RoundReport:
 
     # Miners data
     miners: Dict[int, MinerReport] = field(default_factory=dict)
-    
+
     # Per-web global statistics (NEW)
     # web_name -> {"sent": int, "solved": int}
     per_web_global_stats: Dict[str, Dict[str, int]] = field(default_factory=dict)
-    
+
     # Consensus data
     consensus_enabled: bool = True
     consensus_published: bool = False
     consensus_ipfs_cid: Optional[str] = None
     consensus_validators: List[ConsensusValidatorReport] = field(default_factory=list)
     consensus_aggregated: bool = False
-    
+
     # Winners
     local_winner_uid: Optional[int] = None
     final_winner_uid: Optional[int] = None  # After consensus
-    
+
     # Status
     completed: bool = False
     error: Optional[str] = None
@@ -148,46 +148,38 @@ class RoundReport:
             self.handshake_response_hotkeys.append(hotkey)
             self.handshake_responses += 1
 
-    def record_task_result(
-        self, 
-        uid: int, 
-        success: bool, 
-        execution_time: float, 
-        eval_score: float, 
-        reward: float,
-        web_name: Optional[str] = None
-    ):
+    def record_task_result(self, uid: int, success: bool, execution_time: float, eval_score: float, reward: float, web_name: Optional[str] = None):
         """Record a task execution result for a miner."""
         if uid not in self.miners:
             return
-        
+
         miner = self.miners[uid]
         miner.tasks_attempted += 1
-        
+
         if success:
             miner.tasks_success += 1
         else:
             miner.tasks_failed += 1
-        
+
         miner.execution_times.append(execution_time)
         miner.eval_scores.append(eval_score)
         miner.rewards.append(reward)
-        
+
         # Record per-web statistics
         if web_name:
             if web_name not in miner.per_web_stats:
                 miner.per_web_stats[web_name] = {"attempted": 0, "success": 0, "failed": 0}
-            
+
             miner.per_web_stats[web_name]["attempted"] += 1
             if success:
                 miner.per_web_stats[web_name]["success"] += 1
             else:
                 miner.per_web_stats[web_name]["failed"] += 1
-            
+
             # Update global per-web stats
             if web_name not in self.per_web_global_stats:
                 self.per_web_global_stats[web_name] = {"sent": 0, "solved": 0}
-            
+
             self.per_web_global_stats[web_name]["sent"] += 1
             if success:
                 self.per_web_global_stats[web_name]["solved"] += 1
