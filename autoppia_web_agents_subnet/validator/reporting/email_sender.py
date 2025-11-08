@@ -348,6 +348,42 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
 
         html += "</table>"
 
+    # Errors and Warnings (NEW)
+    if report.errors or report.warnings:
+        html += """
+            <h2 style="color: #ef4444;">⚠️ Errors and Warnings Detected</h2>
+        """
+        
+        if report.errors:
+            html += f"""
+                <h3 style="color: #ef4444; font-size: 16px;">❌ Errors ({len(report.errors)})</h3>
+                <div style="background: rgba(239,68,68,0.1); border-left: 4px solid #ef4444; padding: 12px; border-radius: 8px; margin-bottom: 16px;">
+            """
+            for idx, error in enumerate(report.errors[:15], start=1):
+                html += f"""
+                    <p style="margin: 8px 0; color: #fca5a5; font-size: 13px; font-family: monospace;">
+                        {idx}. {error[:200]}{'...' if len(error) > 200 else ''}
+                    </p>
+                """
+            if len(report.errors) > 15:
+                html += f"<p style='color: #94a3b8; font-size: 12px;'>... and {len(report.errors) - 15} more errors</p>"
+            html += "</div>"
+        
+        if report.warnings:
+            html += f"""
+                <h3 style="color: #f97316; font-size: 16px;">⚠️ Warnings ({len(report.warnings)})</h3>
+                <div style="background: rgba(249,115,22,0.1); border-left: 4px solid #f97316; padding: 12px; border-radius: 8px; margin-bottom: 16px;">
+            """
+            for idx, warning in enumerate(report.warnings[:15], start=1):
+                html += f"""
+                    <p style="margin: 8px 0; color: #fdba74; font-size: 13px; font-family: monospace;">
+                        {idx}. {warning[:200]}{'...' if len(warning) > 200 else ''}
+                    </p>
+                """
+            if len(report.warnings) > 15:
+                html += f"<p style='color: #94a3b8; font-size: 12px;'>... and {len(report.warnings) - 15} more warnings</p>"
+            html += "</div>"
+    
     # Codex Analysis
     if codex_analysis:
         html += f"""

@@ -129,12 +129,26 @@ class RoundReport:
     # Status
     completed: bool = False
     error: Optional[str] = None
+    
+    # Errors and warnings during round (NEW)
+    errors: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
 
     def add_miner(self, uid: int, hotkey: str) -> MinerReport:
         """Add or get a miner report."""
         if uid not in self.miners:
             self.miners[uid] = MinerReport(uid=uid, hotkey=hotkey)
         return self.miners[uid]
+    
+    def add_error(self, error_message: str):
+        """Record an error that occurred during the round."""
+        if error_message and error_message not in self.errors:
+            self.errors.append(error_message)
+    
+    def add_warning(self, warning_message: str):
+        """Record a warning that occurred during the round."""
+        if warning_message and warning_message not in self.warnings:
+            self.warnings.append(warning_message)
 
     def record_handshake_response(self, uid: int, hotkey: str, agent_name: str = None, agent_image: str = None):
         """Record that a miner responded to handshake."""

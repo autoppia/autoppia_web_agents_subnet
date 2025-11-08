@@ -146,6 +146,18 @@ class ReportingMixin:
                 if uid in report.miners:
                     report.miners[uid].final_weight = float(weight)
 
+    def _report_error(self, error_message: str):
+        """Record an error that occurred during the round."""
+        report = self.round_manager.current_round_report
+        if report:
+            report.add_error(error_message)
+    
+    def _report_warning(self, warning_message: str):
+        """Record a warning that occurred during the round."""
+        report = self.round_manager.current_round_report
+        if report:
+            report.add_warning(warning_message)
+    
     def _finalize_round_report(self, end_block: int, end_epoch: float, tasks_completed: int = 0):
         """Finalize the round report and send email."""
         report = self.round_manager.current_round_report
@@ -156,7 +168,10 @@ class ReportingMixin:
 
         # Update tasks completed
         report.tasks_completed = tasks_completed
-
+        
+        # Extract errors/warnings from round logs
+        self._extract_errors_warnings_from_logs(report)
+        
         # Finalize report
         report.finalize_round(end_block, end_epoch)
 
@@ -172,6 +187,42 @@ class ReportingMixin:
         self.round_manager.current_round_report = None
         bt.logging.debug("Round report cleared from memory")
 
+    def _extract_errors_warnings_from_logs(self, report: RoundReport):
+        """Extract errors and warnings from round log file."""
+        try:
+            repo_root = Path(__file__).resolve().parents[4]
+            round_log = repo_root / "logs" / "rounds" / f"round_{report.round_number}.log"
+            
+            if not round_log.exists():
+                return
+            
+            # Read log file and extract ERROR and WARNING lines
+            with open(round_log, 'r') as f:
+                for line in f:
+                    line_clean = line.strip()
+                    
+                    # Skip IPFS upload messages (they use ERROR level but aren't real errors)
+                    if "📤📤📤" in line_clean or "ALL TASKS DONE" in line_clean:
+                        continue
+                    
+                    if "ERROR" in line and "ERROR" in line_clean:
+                        # Extract just the message part
+                        if "|" in line_clean:
+                            parts = line_clean.split("|")
+                            if len(parts) >= 3:
+                                message = parts[-1].strip()
+                                report.add_error(message)
+                    
+                    elif "WARNING" in line or "⚠️" in line:
+                        if "|" in line_clean:
+                            parts = line_clean.split("|")
+                            if len(parts) >= 3:
+                                message = parts[-1].strip()
+                                report.add_warning(message)
+        
+        except Exception as e:
+            bt.logging.debug(f"Failed to extract errors/warnings from logs: {e}")
+    
     def _save_round_report_pickle(self, report: RoundReport):
         """Save round report to pickle file for future retrieval."""
         try:
