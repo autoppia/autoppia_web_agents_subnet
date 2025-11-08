@@ -194,6 +194,7 @@ class SettlementMixin:
                     report.add_error(f"Failed to finalize report: {exc}")
                     report.completed = False
                     from autoppia_web_agents_subnet.validator.reporting.email_sender import send_round_report_email
+
                     send_round_report_email(report, codex_analysis=None)
                     bt.logging.warning("⚠️ Sent partial report via email despite finalization error")
             except Exception as email_exc:
