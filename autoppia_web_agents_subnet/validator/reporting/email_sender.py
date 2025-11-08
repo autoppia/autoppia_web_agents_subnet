@@ -85,7 +85,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
             miner = report.miners.get(uid)
             coldkey = miner.coldkey[:10] if miner and miner.coldkey else "N/A"
             agent_name = miner.agent_name if miner and miner.agent_name else "N/A"
-            
+
             html += f"""
                 <tr>
                     <td>{uid}</td>
@@ -301,7 +301,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                     <td><span class="badge badge-{'success' if report.consensus_published else 'warning'}">{'Published' if report.consensus_published else 'Not published'}</span></td>
                     <td style="font-size: 12px; color: #94a3b8;">
         """
-        
+
         # Show what this validator published
         if report.consensus_published and report.miners:
             html += f"{len(report.miners)} miners, "
@@ -310,7 +310,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                 html += f"top: UID {top_miner.uid} ({top_miner.avg_score:.4f})"
         else:
             html += "No data"
-        
+
         html += """
                     </td>
                 </tr>
