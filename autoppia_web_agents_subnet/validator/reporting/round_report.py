@@ -129,11 +129,11 @@ class RoundReport:
     # Status
     completed: bool = False
     error: Optional[str] = None
-    
+
     # Errors and warnings during round (NEW)
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
-    
+
     # Round progress checklist (NEW)
     checkpoint_tasks_generated: bool = False
     checkpoint_handshake_sent: bool = False

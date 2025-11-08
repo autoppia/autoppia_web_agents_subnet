@@ -38,7 +38,7 @@ from pathlib import Path
 from datetime import datetime
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-LOGS_DIR = REPO_ROOT / "logs"
+LOGS_DIR = REPO_ROOT / "data" / "logs"
 ROUNDS_DIR = LOGS_DIR / "rounds"
 ALL_LOG = LOGS_DIR / "validator_all.log"
 

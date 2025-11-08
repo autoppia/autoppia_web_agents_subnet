@@ -63,7 +63,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                 <tr><td><strong>Status</strong></td><td><span class="badge badge-success">{'Completed' if report.completed else 'In Progress'}</span></td></tr>
             </table>
     """
-    
+
     # Round Progress Checklist (NEW)
     html += """
         <h2>✅ Round Progress Checklist</h2>
@@ -73,29 +73,29 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                 <th style="width: 20%;">Status</th>
             </tr>
     """
-    
+
     checkpoints = [
-        ("Tasks Generated", getattr(report, 'checkpoint_tasks_generated', False)),
-        ("Handshake Sent", getattr(report, 'checkpoint_handshake_sent', False)),
-        ("Tasks Evaluated", getattr(report, 'checkpoint_tasks_evaluated', False)),
-        ("Publishing Results on IPFS", getattr(report, 'checkpoint_ipfs_published', False)),
-        ("Downloaded Results from IPFS", getattr(report, 'checkpoint_ipfs_downloaded', False)),
-        ("Select Winner of Round", getattr(report, 'checkpoint_winner_selected', False)),
+        ("Tasks Generated", getattr(report, "checkpoint_tasks_generated", False)),
+        ("Handshake Sent", getattr(report, "checkpoint_handshake_sent", False)),
+        ("Tasks Evaluated", getattr(report, "checkpoint_tasks_evaluated", False)),
+        ("Publishing Results on IPFS", getattr(report, "checkpoint_ipfs_published", False)),
+        ("Downloaded Results from IPFS", getattr(report, "checkpoint_ipfs_downloaded", False)),
+        ("Select Winner of Round", getattr(report, "checkpoint_winner_selected", False)),
     ]
-    
+
     for checkpoint_name, checkpoint_status in checkpoints:
         if checkpoint_status:
             badge = '<span class="badge badge-success">✓ Done</span>'
         else:
             badge = '<span class="badge badge-warning">⏸ Skipped</span>'
-        
+
         html += f"""
             <tr>
                 <td>{checkpoint_name}</td>
                 <td>{badge}</td>
             </tr>
         """
-    
+
     html += "</table>"
 
     # Handshake Results

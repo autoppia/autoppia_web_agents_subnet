@@ -41,7 +41,7 @@ class ReportingMixin:
             start_epoch=start_epoch,
             planned_tasks=planned_tasks,
         )
-        
+
         # Mark tasks generated checkpoint
         self.round_manager.current_round_report.checkpoint_tasks_generated = True
 
@@ -84,7 +84,7 @@ class ReportingMixin:
             miner = report.add_miner(uid, hotkey)
             if coldkey and not miner.coldkey:
                 miner.coldkey = coldkey
-            
+
             report.record_task_result(uid, success, execution_time, eval_score, reward, web_name)
             report.checkpoint_tasks_evaluated = True
 
@@ -144,7 +144,7 @@ class ReportingMixin:
 
             if uid in report.miners:
                 report.miners[uid].is_winner = True
-            
+
             report.checkpoint_winner_selected = True
 
     def _report_set_weights(self, weights: dict):
