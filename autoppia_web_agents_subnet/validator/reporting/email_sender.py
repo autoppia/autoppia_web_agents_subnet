@@ -70,11 +70,24 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
             <p><strong>{report.handshake_responses}/{report.handshake_sent_to}</strong> miners responded</p>
     """
 
-    if report.handshake_response_hotkeys:
-        html += "<p><strong>Responding miners:</strong></p><ul>"
+    if report.handshake_response_uids and len(report.handshake_response_uids) > 0:
+        html += """
+            <table style="margin-top: 12px;">
+                <tr>
+                    <th>UID</th>
+                    <th>Hotkey</th>
+                </tr>
+        """
         for uid, hotkey in zip(report.handshake_response_uids, report.handshake_response_hotkeys):
-            html += f"<li>UID {uid}: {hotkey[:12]}...{hotkey[-8:]}</li>"
-        html += "</ul>"
+            html += f"""
+                <tr>
+                    <td>{uid}</td>
+                    <td>{hotkey[:12]}...{hotkey[-8:]}</td>
+                </tr>
+            """
+        html += "</table>"
+    else:
+        html += "<p style='color: #94a3b8;'>No miners responded to handshake</p>"
 
     # Miners Evaluated - Main Table
     if report.miners:
@@ -153,6 +166,16 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
             for web_name in sorted(miner.per_web_stats.keys()):
                 stats = miner.per_web_stats[web_name]
                 success_rate = (stats["success"] / stats["attempted"] * 100) if stats["attempted"] > 0 else 0
+                
+                # Color by success rate
+                if success_rate >= 75:
+                    rate_color = "#22c55e"  # green
+                elif success_rate >= 50:
+                    rate_color = "#eab308"  # yellow
+                elif success_rate >= 25:
+                    rate_color = "#f97316"  # orange
+                else:
+                    rate_color = "#ef4444"  # red
 
                 html += f"""
                     <tr>
@@ -160,7 +183,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                         <td>{stats["attempted"]}</td>
                         <td><span class="badge badge-success">{stats["success"]}</span></td>
                         <td><span class="badge badge-error">{stats["failed"]}</span></td>
-                        <td>{success_rate:.1f}%</td>
+                        <td><strong style="color: {rate_color};">{success_rate:.1f}%</strong></td>
                     </tr>
                 """
 
@@ -182,13 +205,23 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
             for web_name in sorted(report.per_web_global_stats.keys()):
                 stats = report.per_web_global_stats[web_name]
                 success_rate = (stats["solved"] / stats["sent"] * 100) if stats["sent"] > 0 else 0
+                
+                # Color by success rate
+                if success_rate >= 75:
+                    rate_color = "#22c55e"  # green
+                elif success_rate >= 50:
+                    rate_color = "#eab308"  # yellow
+                elif success_rate >= 25:
+                    rate_color = "#f97316"  # orange
+                else:
+                    rate_color = "#ef4444"  # red
 
                 html += f"""
                     <tr>
                         <td><strong>{web_name}</strong></td>
                         <td>{stats["sent"]}</td>
                         <td><span class="badge badge-success">{stats["solved"]}</span></td>
-                        <td><strong>{success_rate:.1f}%</strong></td>
+                        <td><strong style="color: {rate_color};">{success_rate:.1f}%</strong></td>
                     </tr>
                 """
 
@@ -208,10 +241,13 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                 </div>
             """
 
-    # Consensus Validators
-    if report.consensus_validators:
+    # Consensus Validators - ALWAYS show, even if empty
+    html += """
+        <h2>🔗 Consensus Validators</h2>
+    """
+    
+    if report.consensus_validators and len(report.consensus_validators) > 0:
         html += f"""
-            <h2>🔗 Consensus Validators</h2>
             <p><strong>{len(report.consensus_validators)}</strong> validators participated in consensus</p>
             <table>
                 <tr>
@@ -235,25 +271,57 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
             """
 
         html += "</table>"
+    else:
+        # Show this validator's consensus info even if no other validators
+        html += f"""
+            <p style="color: #94a3b8;">No other validators participated in consensus for this round.</p>
+            <p><strong>This validator's consensus:</strong></p>
+            <table style="margin-top: 12px;">
+                <tr>
+                    <th>UID</th>
+                    <th>Hotkey</th>
+                    <th>IPFS CID</th>
+                    <th>Status</th>
+                </tr>
+                <tr>
+                    <td>{report.validator_uid}</td>
+                    <td>{report.validator_hotkey[:12]}...{report.validator_hotkey[-8:]}</td>
+                    <td>{report.consensus_ipfs_cid[:12] if report.consensus_ipfs_cid else 'Not published'}...</td>
+                    <td><span class="badge badge-{'success' if report.consensus_published else 'warning'}">{'Published' if report.consensus_published else 'Not published'}</span></td>
+                </tr>
+            </table>
+        """
 
-    # Top 5
+    # Top 5 - Table format
     top_5 = report.get_top_miners(5)
     if top_5:
         html += """
             <h2>🏅 Top 5 Miners</h2>
-            <ol style="font-size: 16px; line-height: 1.8;">
+            <table>
+                <tr>
+                    <th>Rank</th>
+                    <th>UID</th>
+                    <th>Hotkey</th>
+                    <th>Score</th>
+                    <th>Tasks</th>
+                </tr>
         """
 
-        for miner in top_5:
+        for idx, miner in enumerate(top_5, start=1):
             score = miner.final_score_after_consensus if miner.final_score_after_consensus > 0 else miner.avg_score
+            badge = "🏆" if idx == 1 else f"{idx}"
+            
             html += f"""
-                <li>
-                    <strong>UID {miner.uid}</strong>: <strong style="color: #38bdf8;">{score:.4f}</strong>
-                    <span style="color: #94a3b8;">({miner.hotkey[:12]}...)</span>
-                </li>
+                <tr>
+                    <td><strong>{badge}</strong></td>
+                    <td>{miner.uid}</td>
+                    <td>{miner.hotkey[:12]}...</td>
+                    <td><strong style="color: #38bdf8;">{score:.4f}</strong></td>
+                    <td>{miner.tasks_success}/{miner.tasks_attempted}</td>
+                </tr>
             """
 
-        html += "</ol>"
+        html += "</table>"
 
     # Codex Analysis
     if codex_analysis:
