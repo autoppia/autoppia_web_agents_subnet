@@ -329,9 +329,13 @@ class RoundStartMixin:
 
                 for uid in self.active_miner_uids:
                     hotkey = self.metagraph.hotkeys[uid] if uid < len(self.metagraph.hotkeys) else "unknown"
-                    payload = self.round_handshake_payloads.get(uid, {})
-                    agent_name = payload.get("agent_name")
-                    agent_image = payload.get("agent_image")
+                    payload = self.round_handshake_payloads.get(uid)
+
+                    agent_name = None
+                    agent_image = None
+                    if payload:
+                        agent_name = getattr(payload, "agent_name", None)
+                        agent_image = getattr(payload, "agent_image", None)
 
                     self._report_handshake_response(uid, hotkey, agent_name, agent_image)
 

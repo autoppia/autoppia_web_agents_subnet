@@ -13,16 +13,20 @@
 ### **Files Modified:**
 
 1. **`neurons/validator.py`**
+
    - Added `ReportingMixin` to validator class
 
 2. **`validator/round_start/mixin.py`**
+
    - Initialize `RoundReport` at round start
    - Record handshake sent and responses
 
 3. **`validator/evaluation/mixin.py`**
+
    - Record task results with web_name, coldkey, success/failed
 
 4. **`validator/settlement/mixin.py`**
+
    - Record consensus validators
    - Record consensus published (IPFS CID)
    - Record winner and weights
@@ -57,6 +61,7 @@ pm2 logs validator-wta
 ### **Step 2: Wait for Round to Complete**
 
 The validator will automatically:
+
 1. Collect all statistics during the round
 2. Save pickle to `data/reports/rounds/round_N.pkl`
 3. Send beautiful HTML email when round completes
@@ -66,6 +71,7 @@ The validator will automatically:
 You should receive an email with:
 
 #### **✅ Main Miner Table:**
+
 ```
 #  UID  Hotkey      Coldkey     Tasks    Score%  AvgTime  AvgReward
 🏆 1   80   5DUmbxsT... 5FHneW6u... 77/156   49.4%   12.34s   0.9234
@@ -73,6 +79,7 @@ You should receive an email with:
 ```
 
 #### **✅ Per-Web Stats by Miner:**
+
 ```
 Miner UID 80:
 Web    Attempted  Success  Failed  Rate
@@ -82,6 +89,7 @@ web2   10         8        2       80.0%
 ```
 
 #### **✅ Global Per-Web Summary:**
+
 ```
 Web    Total Sent  Total Solved  Success Rate
 web1   200         150           75.0%
@@ -90,6 +98,7 @@ web2   180         130           72.2%
 ```
 
 #### **✅ Plus:**
+
 - Handshake results (who responded)
 - Winner highlighted
 - Consensus validators (UID, hotkey, stake, IPFS CID)
@@ -107,6 +116,7 @@ pm2 logs validator-wta | grep "📊 Round report"
 ```
 
 You should see:
+
 ```
 📊 Round report initialized for round N
 📄 Round report saved to .../round_N.pkl
@@ -199,6 +209,7 @@ _finalize_round_report(end_block=..., end_epoch=...)
 ## 🧪 **Expected Behavior:**
 
 After deploying:
+
 - ✅ Round N starts → Log: "📊 Round report initialized"
 - ✅ Handshake → Log: "✅ Handshake sent: 2/256"
 - ✅ Tasks execute → Stats collected silently
@@ -228,6 +239,7 @@ python3 scripts/validator/reporting/resend_report.py <round_number>
 ### **Missing data in email:**
 
 Check validator logs to see if all `_report_*()` methods were called:
+
 - `📊 Round report initialized`
 - Handshake responses recorded
 - Task results recorded
@@ -241,4 +253,3 @@ Check validator logs to see if all `_report_*()` methods were called:
 All syntax checks pass. The system is ready for production testing.
 
 **Deploy to server and wait for next round to complete (~14 minutes).**
-

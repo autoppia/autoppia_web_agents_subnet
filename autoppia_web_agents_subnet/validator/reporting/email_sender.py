@@ -16,7 +16,7 @@ from .round_report import RoundReport
 
 def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = None) -> str:
     """Generate beautiful HTML email from RoundReport."""
-    
+
     # Header
     html = f"""
     <html>
@@ -43,13 +43,13 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
             <h1>🎯 Validator Round Report</h1>
             <p style="color: #94a3b8; margin: 8px 0 0 0;">Round {report.round_number} • Validator UID {report.validator_uid}</p>
     """
-    
+
     # Round Overview
     duration = "In progress"
     if report.end_time and report.start_time:
         duration_seconds = (report.end_time - report.start_time).total_seconds()
         duration = f"{duration_seconds / 60:.1f} minutes"
-    
+
     html += f"""
             <h2>📊 Round Overview</h2>
             <table>
@@ -63,19 +63,19 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                 <tr><td><strong>Status</strong></td><td><span class="badge badge-success">{'Completed' if report.completed else 'In Progress'}</span></td></tr>
             </table>
     """
-    
+
     # Handshake Results
     html += f"""
             <h2>🤝 Handshake Results</h2>
             <p><strong>{report.handshake_responses}/{report.handshake_sent_to}</strong> miners responded</p>
     """
-    
+
     if report.handshake_response_hotkeys:
         html += "<p><strong>Responding miners:</strong></p><ul>"
         for uid, hotkey in zip(report.handshake_response_uids, report.handshake_response_hotkeys):
             html += f"<li>UID {uid}: {hotkey[:12]}...{hotkey[-8:]}</li>"
         html += "</ul>"
-    
+
     # Miners Evaluated - Main Table
     if report.miners:
         html += f"""
@@ -92,16 +92,16 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                     <th>Avg Reward</th>
                 </tr>
         """
-        
+
         sorted_miners = sorted(report.miners.values(), key=lambda m: m.rank if m.rank else 999)
-        
+
         for miner in sorted_miners:
             row_style = "background: rgba(251,191,36,0.2);" if miner.is_winner else ""
             winner_badge = "🏆 " if miner.is_winner else ""
-            
+
             # Format: 77/156 (tasks_success/tasks_attempted)
             tasks_display = f"{miner.tasks_success}/{miner.tasks_attempted}"
-            
+
             html += f"""
                 <tr style="{row_style}">
                     <td>{winner_badge}{miner.rank}</td>
@@ -114,18 +114,18 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                     <td>{miner.avg_reward:.4f}</td>
                 </tr>
             """
-        
+
         html += "</table>"
-        
+
         # Per-Web Statistics for Each Miner
         html += """
             <h3>📊 Per-Web Statistics by Miner</h3>
         """
-        
+
         for miner in sorted_miners:
             if not miner.per_web_stats:
                 continue
-            
+
             html += f"""
                 <h4 style="color: #94a3b8; margin: 16px 0 8px 0;">Miner UID {miner.uid}</h4>
                 <table style="font-size: 13px;">
@@ -137,12 +137,12 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                         <th>Success Rate</th>
                     </tr>
             """
-            
+
             # Sort webs by name
             for web_name in sorted(miner.per_web_stats.keys()):
                 stats = miner.per_web_stats[web_name]
                 success_rate = (stats["success"] / stats["attempted"] * 100) if stats["attempted"] > 0 else 0
-                
+
                 html += f"""
                     <tr>
                         <td><strong>{web_name}</strong></td>
@@ -152,9 +152,9 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                         <td>{success_rate:.1f}%</td>
                     </tr>
                 """
-            
+
             html += "</table>"
-        
+
         # Global Per-Web Summary
         if report.per_web_global_stats:
             html += """
@@ -167,11 +167,11 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                         <th>Success Rate</th>
                     </tr>
             """
-            
+
             for web_name in sorted(report.per_web_global_stats.keys()):
                 stats = report.per_web_global_stats[web_name]
                 success_rate = (stats["solved"] / stats["sent"] * 100) if stats["sent"] > 0 else 0
-                
+
                 html += f"""
                     <tr>
                         <td><strong>{web_name}</strong></td>
@@ -180,9 +180,9 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                         <td><strong>{success_rate:.1f}%</strong></td>
                     </tr>
                 """
-            
+
             html += "</table>"
-    
+
     # Winner
     if report.final_winner_uid:
         winner = report.miners.get(report.final_winner_uid)
@@ -196,7 +196,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                     </p>
                 </div>
             """
-    
+
     # Consensus Validators
     if report.consensus_validators:
         html += f"""
@@ -211,7 +211,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                     <th>Miners</th>
                 </tr>
         """
-        
+
         for val in report.consensus_validators:
             html += f"""
                 <tr>
@@ -222,9 +222,9 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                     <td>{val.miners_reported}</td>
                 </tr>
             """
-        
+
         html += "</table>"
-    
+
     # Top 5
     top_5 = report.get_top_miners(5)
     if top_5:
@@ -232,7 +232,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
             <h2>🏅 Top 5 Miners</h2>
             <ol style="font-size: 16px; line-height: 1.8;">
         """
-        
+
         for miner in top_5:
             html += f"""
                 <li>
@@ -240,9 +240,9 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                     <span style="color: #94a3b8;">({miner.hotkey[:12]}...)</span>
                 </li>
             """
-        
+
         html += "</ol>"
-    
+
     # Codex Analysis
     if codex_analysis:
         html += f"""
@@ -251,35 +251,35 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                 <pre style="white-space: pre-wrap; color: #e2e8f0; margin: 0;">{codex_analysis}</pre>
             </div>
         """
-    
+
     html += """
         </div>
     </body>
     </html>
     """
-    
+
     return html
 
 
 def send_round_report_email(report: RoundReport, codex_analysis: Optional[str] = None) -> bool:
     """Send round report via email with beautiful HTML formatting."""
-    
+
     # Get email config from environment
-    smtp_host = os.getenv('REPORT_MONITOR_SMTP_HOST')
-    smtp_port = int(os.getenv('REPORT_MONITOR_SMTP_PORT', '587'))
-    smtp_user = os.getenv('REPORT_MONITOR_SMTP_USERNAME')
-    smtp_pass = os.getenv('REPORT_MONITOR_SMTP_PASSWORD')
-    email_from = os.getenv('REPORT_MONITOR_EMAIL_FROM')
-    email_to = os.getenv('REPORT_MONITOR_EMAIL_TO')
-    use_ssl = os.getenv('REPORT_MONITOR_SMTP_SSL', 'false').lower() == 'true'
-    
+    smtp_host = os.getenv("REPORT_MONITOR_SMTP_HOST")
+    smtp_port = int(os.getenv("REPORT_MONITOR_SMTP_PORT", "587"))
+    smtp_user = os.getenv("REPORT_MONITOR_SMTP_USERNAME")
+    smtp_pass = os.getenv("REPORT_MONITOR_SMTP_PASSWORD")
+    email_from = os.getenv("REPORT_MONITOR_EMAIL_FROM")
+    email_to = os.getenv("REPORT_MONITOR_EMAIL_TO")
+    use_ssl = os.getenv("REPORT_MONITOR_SMTP_SSL", "false").lower() == "true"
+
     if not smtp_host or not email_to:
         print("❌ Email not configured")
         return False
-    
+
     # Generate HTML
     html_body = generate_html_report(report, codex_analysis)
-    
+
     # Generate plain text version
     text_body = f"""
 Validator Round Report - Round {report.round_number}
@@ -294,23 +294,23 @@ Handshake: {report.handshake_responses}/{report.handshake_sent_to} miners respon
 
 Miners Evaluated: {len(report.miners)}
 """
-    
+
     if report.final_winner_uid:
         winner = report.miners.get(report.final_winner_uid)
         if winner:
             text_body += f"\nWinner: UID {winner.uid} (score: {winner.final_score_after_consensus or winner.avg_score:.4f})\n"
-    
+
     if codex_analysis:
         text_body += f"\n--- Codex Analysis ---\n{codex_analysis}\n"
-    
+
     # Create email
     msg = EmailMessage()
-    msg['Subject'] = f'[validator] Round {report.round_number} - Complete Report'
-    msg['From'] = email_from
-    msg['To'] = email_to
+    msg["Subject"] = f"[validator] Round {report.round_number} - Complete Report"
+    msg["From"] = email_from
+    msg["To"] = email_to
     msg.set_content(text_body)
-    msg.add_alternative(html_body, subtype='html')
-    
+    msg.add_alternative(html_body, subtype="html")
+
     # Send
     try:
         if use_ssl:
@@ -324,11 +324,10 @@ Miners Evaluated: {len(report.miners)}
                 if smtp_user and smtp_pass:
                     server.login(smtp_user, smtp_pass)
                 server.send_message(msg)
-        
+
         print(f"✅ Email sent to {email_to}")
         return True
-        
+
     except Exception as e:
         print(f"❌ Error sending email: {e}")
         return False
-
