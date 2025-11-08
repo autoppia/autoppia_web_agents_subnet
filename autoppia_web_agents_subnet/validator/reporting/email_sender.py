@@ -251,106 +251,30 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                 </div>
             """
 
-    # Consensus Validators - ALWAYS show, even if empty
+    # Consensus Validators - Show each validator with their data
     html += """
         <h2>🔗 Consensus Validators</h2>
     """
-
-    if report.consensus_validators and len(report.consensus_validators) > 0:
-        html += f"""
-            <p><strong>{len(report.consensus_validators)}</strong> validators participated in consensus</p>
-            <table>
-                <tr>
-                    <th>UID</th>
-                    <th>Hotkey</th>
-                    <th>Stake (τ)</th>
-                    <th>IPFS CID</th>
-                    <th>Miners</th>
-                </tr>
-        """
-
-        for val in report.consensus_validators:
-            html += f"""
-                <tr>
-                    <td>{val.uid if val.uid is not None else '?'}</td>
-                    <td>{val.hotkey[:12]}...{val.hotkey[-8:]}</td>
-                    <td>{val.stake_tao:,.0f}</td>
-                    <td>{val.ipfs_cid[:12] if val.ipfs_cid else 'N/A'}...</td>
-                    <td>{val.miners_reported}</td>
-                </tr>
-            """
-
-        html += "</table>"
-    else:
-        # Show this validator's consensus info even if no other validators
-        html += f"""
-            <p style="color: #94a3b8;">No other validators participated in consensus for this round.</p>
-            <p><strong>This validator's consensus:</strong></p>
-            <table style="margin-top: 12px;">
-                <tr>
-                    <th>UID</th>
-                    <th>Hotkey</th>
-                    <th>IPFS CID</th>
-                    <th>Status</th>
-                    <th>What Published</th>
-                </tr>
-                <tr>
-                    <td>{report.validator_uid}</td>
-                    <td>{report.validator_hotkey[:10]}...</td>
-                    <td>{report.consensus_ipfs_cid[:12] if report.consensus_ipfs_cid else 'Not published'}...</td>
-                    <td><span class="badge badge-{'success' if report.consensus_published else 'warning'}">{'Published' if report.consensus_published else 'Not published'}</span></td>
-                    <td style="font-size: 12px; color: #94a3b8;">
-        """
-
-        # Show what this validator published
-        if report.consensus_published and report.miners:
-            html += f"{len(report.miners)} miners"
-        else:
-            html += "No data"
-
-        html += """
-                    </td>
-                </tr>
-            </table>
-        """
-
-        # Show detailed scores published to IPFS
-        if report.consensus_published and report.miners:
-            html += """
-                <h3 style="color: #38bdf8; font-size: 16px; margin-top: 16px;">📊 Scores Published to IPFS</h3>
-                <p style="color: #94a3b8; font-size: 13px;">These are the scores this validator shared with the network:</p>
-                <table style="font-size: 13px; margin-top: 8px;">
-                    <tr>
-                        <th>Miner UID</th>
-                        <th>Hotkey</th>
-                        <th>Score Shared</th>
-                        <th>Tasks</th>
-                    </tr>
-            """
-
-            sorted_by_score = sorted(report.miners.values(), key=lambda m: m.avg_score, reverse=True)
-            for miner in sorted_by_score:
-                html += f"""
-                    <tr>
-                        <td>{miner.uid}</td>
-                        <td>{miner.hotkey[:10]}...</td>
-                        <td><strong style="color: #38bdf8;">{miner.avg_score:.4f}</strong></td>
-                        <td>{miner.tasks_success}/{miner.tasks_attempted}</td>
-                    </tr>
-                """
-
-            html += "</table>"
     
-    # Show detailed scores published to IPFS - ALWAYS (moved outside else block)
+    # Always show this validator first
+    html += f"""
+        <h3 style="color: #38bdf8; font-size: 18px; margin-top: 16px;">
+            Validator UID {report.validator_uid} • {report.validator_hotkey[:10]}...{report.validator_hotkey[-8:]}
+        </h3>
+        <p style="color: #94a3b8; font-size: 13px;">
+            IPFS CID: <code style="background: rgba(56,189,248,0.1); padding: 2px 6px; border-radius: 4px;">{report.consensus_ipfs_cid[:20] if report.consensus_ipfs_cid else 'Not published'}...</code>
+            • Status: <span class="badge badge-{'success' if report.consensus_published else 'warning'}">{'Published' if report.consensus_published else 'Not published'}</span>
+        </p>
+    """
+    
+    # Show this validator's scores
     if report.consensus_published and report.miners:
         html += """
-            <h3 style="color: #38bdf8; font-size: 16px; margin-top: 16px;">📊 Scores Published to IPFS</h3>
-            <p style="color: #94a3b8; font-size: 13px;">All scores this validator shared with the network for consensus:</p>
             <table style="font-size: 13px; margin-top: 8px;">
                 <tr>
                     <th>Miner UID</th>
                     <th>Hotkey</th>
-                    <th>Score Shared</th>
+                    <th>Score Published</th>
                     <th>Tasks</th>
                 </tr>
         """
@@ -367,6 +291,48 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
             """
         
         html += "</table>"
+    
+    # Show other validators if any
+    if report.consensus_validators and len(report.consensus_validators) > 0:
+        html += f"""
+            <h3 style="color: #94a3b8; font-size: 16px; margin-top: 24px;">Other Validators ({len(report.consensus_validators)})</h3>
+        """
+        
+        for val in report.consensus_validators:
+            html += f"""
+                <h4 style="color: #38bdf8; font-size: 16px; margin-top: 16px;">
+                    Validator UID {val.uid if val.uid is not None else '?'} • {val.hotkey[:10]}...{val.hotkey[-8:]}
+                </h4>
+                <p style="color: #94a3b8; font-size: 13px;">
+                    Stake: <strong>{val.stake_tao:,.0f} τ</strong> • 
+                    IPFS CID: <code style="background: rgba(56,189,248,0.1); padding: 2px 6px; border-radius: 4px;">{val.ipfs_cid[:20] if val.ipfs_cid else 'N/A'}...</code>
+                </p>
+            """
+            
+            # Show their scores if available
+            if val.miner_scores:
+                html += """
+                    <table style="font-size: 13px; margin-top: 8px;">
+                        <tr>
+                            <th>Miner UID</th>
+                            <th>Score Published</th>
+                        </tr>
+                """
+                
+                sorted_scores = sorted(val.miner_scores.items(), key=lambda x: x[1], reverse=True)
+                for miner_uid, score in sorted_scores:
+                    html += f"""
+                        <tr>
+                            <td>{miner_uid}</td>
+                            <td><strong style="color: #38bdf8;">{score:.4f}</strong></td>
+                        </tr>
+                    """
+                
+                html += "</table>"
+    else:
+        html += """
+            <p style="color: #94a3b8; margin-top: 12px;">No other validators participated in consensus for this round.</p>
+        """
 
     # Top 5 - Table format
     top_5 = report.get_top_miners(5)
