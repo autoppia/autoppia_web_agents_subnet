@@ -15,25 +15,25 @@ from typing import Dict, List, Optional
 @dataclass
 class MinerReport:
     """Statistics for a single miner in a round."""
-    
+
     uid: int
     hotkey: str
-    
+
     # Handshake
     responded_to_handshake: bool = False
     agent_name: Optional[str] = None
     agent_image: Optional[str] = None
-    
+
     # Task execution
     tasks_attempted: int = 0
     tasks_success: int = 0
     tasks_failed: int = 0
-    
+
     # Performance metrics
     execution_times: List[float] = field(default_factory=list)
     eval_scores: List[float] = field(default_factory=list)
     rewards: List[float] = field(default_factory=list)
-    
+
     # Final results
     avg_time: float = 0.0
     avg_score: float = 0.0
@@ -42,15 +42,15 @@ class MinerReport:
     final_weight: float = 0.0
     is_winner: bool = False
     rank: int = 0
-    
+
     def calculate_averages(self):
         """Calculate average metrics from collected data."""
         if self.execution_times:
             self.avg_time = sum(self.execution_times) / len(self.execution_times)
-        
+
         if self.eval_scores:
             self.avg_score = sum(self.eval_scores) / len(self.eval_scores)
-        
+
         if self.rewards:
             self.avg_reward = sum(self.rewards) / len(self.rewards)
 
@@ -58,13 +58,13 @@ class MinerReport:
 @dataclass
 class ConsensusValidatorReport:
     """Information about a validator participating in consensus."""
-    
+
     uid: Optional[int]
     hotkey: str
     stake_tao: float
     ipfs_cid: Optional[str] = None
     miners_reported: int = 0
-    
+
     # Their scores for miners (for comparison)
     miner_scores: Dict[int, float] = field(default_factory=dict)
 
@@ -72,13 +72,13 @@ class ConsensusValidatorReport:
 @dataclass
 class RoundReport:
     """Complete round report with all statistics."""
-    
+
     # Round identification
     round_number: int
     validator_round_id: str
     validator_uid: int
     validator_hotkey: str
-    
+
     # Timing
     start_block: int
     end_block: Optional[int] = None
@@ -86,101 +86,93 @@ class RoundReport:
     end_epoch: Optional[float] = None
     start_time: datetime = field(default_factory=datetime.utcnow)
     end_time: Optional[datetime] = None
-    
+
     # Round configuration
     total_blocks: int = 72
     planned_tasks: int = 0
     tasks_completed: int = 0
-    
+
     # Handshake phase
     handshake_sent_to: int = 0  # Total miners contacted
     handshake_responses: int = 0  # Miners that responded
     handshake_response_uids: List[int] = field(default_factory=list)
     handshake_response_hotkeys: List[str] = field(default_factory=list)
-    
+
     # Miners data
     miners: Dict[int, MinerReport] = field(default_factory=dict)
-    
+
     # Consensus data
     consensus_enabled: bool = True
     consensus_published: bool = False
     consensus_ipfs_cid: Optional[str] = None
     consensus_validators: List[ConsensusValidatorReport] = field(default_factory=list)
     consensus_aggregated: bool = False
-    
+
     # Winners
     local_winner_uid: Optional[int] = None
     final_winner_uid: Optional[int] = None  # After consensus
-    
+
     # Status
     completed: bool = False
     error: Optional[str] = None
-    
+
     def add_miner(self, uid: int, hotkey: str) -> MinerReport:
         """Add or get a miner report."""
         if uid not in self.miners:
             self.miners[uid] = MinerReport(uid=uid, hotkey=hotkey)
         return self.miners[uid]
-    
+
     def record_handshake_response(self, uid: int, hotkey: str, agent_name: str = None, agent_image: str = None):
         """Record that a miner responded to handshake."""
         miner = self.add_miner(uid, hotkey)
         miner.responded_to_handshake = True
         miner.agent_name = agent_name
         miner.agent_image = agent_image
-        
+
         if uid not in self.handshake_response_uids:
             self.handshake_response_uids.append(uid)
             self.handshake_response_hotkeys.append(hotkey)
             self.handshake_responses += 1
-    
+
     def record_task_result(self, uid: int, success: bool, execution_time: float, eval_score: float, reward: float):
         """Record a task execution result for a miner."""
         if uid not in self.miners:
             return
-        
+
         miner = self.miners[uid]
         miner.tasks_attempted += 1
-        
+
         if success:
             miner.tasks_success += 1
         else:
             miner.tasks_failed += 1
-        
+
         miner.execution_times.append(execution_time)
         miner.eval_scores.append(eval_score)
         miner.rewards.append(reward)
-    
+
     def finalize_round(self, end_block: int, end_epoch: float):
         """Finalize the round and calculate all averages."""
         self.end_block = end_block
         self.end_epoch = end_epoch
         self.end_time = datetime.utcnow()
         self.completed = True
-        
+
         # Calculate averages for all miners
         for miner in self.miners.values():
             miner.calculate_averages()
-        
+
         # Rank miners by final score
-        sorted_miners = sorted(
-            self.miners.values(),
-            key=lambda m: m.final_score_after_consensus or m.avg_score,
-            reverse=True
-        )
-        
+        sorted_miners = sorted(self.miners.values(), key=lambda m: m.final_score_after_consensus or m.avg_score, reverse=True)
+
         for rank, miner in enumerate(sorted_miners, start=1):
             miner.rank = rank
-    
+
     def get_top_miners(self, n: int = 5) -> List[MinerReport]:
         """Get top N miners by final score."""
-        sorted_miners = sorted(
-            self.miners.values(),
-            key=lambda m: m.final_score_after_consensus or m.avg_score,
-            reverse=True
-        )
+        sorted_miners = sorted(self.miners.values(), key=lambda m: m.final_score_after_consensus or m.avg_score, reverse=True)
         return sorted_miners[:n]
-    
+
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
         return {
@@ -237,4 +229,3 @@ class RoundReport:
             "completed": self.completed,
             "error": self.error,
         }
-

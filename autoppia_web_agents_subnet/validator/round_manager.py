@@ -103,7 +103,7 @@ class RoundManager:
         # Track lifecycle phases for visibility
         self.current_phase: RoundPhase = RoundPhase.IDLE
         self.phase_history: List[PhaseTransition] = []
-        
+
         # Round report (NEW - comprehensive statistics)
         self.current_round_report: Optional[Any] = None  # RoundReport instance
 
@@ -127,10 +127,7 @@ class RoundManager:
         if not self.can_start_round(current_block):
             blocks_remaining = self.blocks_until_allowed(current_block)
             next_block = self.minimum_start_block if self.minimum_start_block is not None else None
-            message = (
-                f"Round start blocked. Current block {current_block} has not reached minimum "
-                f"{self.minimum_start_block}."
-            )
+            message = f"Round start blocked. Current block {current_block} has not reached minimum " f"{self.minimum_start_block}."
             if next_block is not None:
                 message += f" Next allowed block: {next_block} (≈{blocks_remaining} blocks remaining)."
             ColoredLogger.warning(message, ColoredLogger.YELLOW)
@@ -138,7 +135,7 @@ class RoundManager:
 
         boundaries = self.get_round_boundaries(current_block, log_debug=False)
         # Fix start_block to the beginning of the computed window for stability
-        self.start_block = int(boundaries['round_start_block'])
+        self.start_block = int(boundaries["round_start_block"])
         self.reset_round()
         self.enter_phase(
             RoundPhase.PREPARING,
@@ -147,17 +144,16 @@ class RoundManager:
         )
 
         # Concise round start line
-        blocks_remaining = boundaries['target_block'] - current_block
+        blocks_remaining = boundaries["target_block"] - current_block
         estimated_minutes = (blocks_remaining * 12) / 60  # 12 seconds per block
         ColoredLogger.info(
             (
-                "🔄 Starting new round | start_block={start_block} start_epoch={start_epoch:.2f} "
-                "-> target_epoch={target_epoch:.2f} target_block={target_block} | ETA ~{eta:.1f}m (~{blocks} blocks)"
+                "🔄 Starting new round | start_block={start_block} start_epoch={start_epoch:.2f} " "-> target_epoch={target_epoch:.2f} target_block={target_block} | ETA ~{eta:.1f}m (~{blocks} blocks)"
             ).format(
                 start_block=self.start_block,
-                start_epoch=boundaries['round_start_epoch'],
-                target_epoch=boundaries['target_epoch'],
-                target_block=boundaries['target_block'],
+                start_epoch=boundaries["round_start_epoch"],
+                target_epoch=boundaries["target_epoch"],
+                target_block=boundaries["target_block"],
                 eta=estimated_minutes,
                 blocks=blocks_remaining,
             ),
@@ -168,9 +164,7 @@ class RoundManager:
         """Calculate round boundaries using integer block math to avoid float precision issues."""
         import bittensor as bt
 
-        rbl = int(self.ROUND_BLOCK_LENGTH) if self.ROUND_BLOCK_LENGTH else int(
-            self.BLOCKS_PER_EPOCH * max(self.round_size_epochs, 0.01)
-        )
+        rbl = int(self.ROUND_BLOCK_LENGTH) if self.ROUND_BLOCK_LENGTH else int(self.BLOCKS_PER_EPOCH * max(self.round_size_epochs, 0.01))
 
         base_block = int(self.minimum_start_block) if self.minimum_start_block is not None else 0
 
@@ -191,9 +185,7 @@ class RoundManager:
 
         if log_debug:
             bt.logging.debug(
-                (
-                    "🌐 Sync | block={blk:,} | start_epoch={start:.4f} (b{sb:,}) -> target_epoch={end:.4f} (b{tb:,}) | blocks={blocks:,}"
-                ).format(
+                ("🌐 Sync | block={blk:,} | start_epoch={start:.4f} (b{sb:,}) -> target_epoch={end:.4f} (b{tb:,}) | blocks={blocks:,}").format(
                     blk=current_block,
                     start=round_start_epoch,
                     sb=round_start_block,
@@ -204,10 +196,10 @@ class RoundManager:
             )
 
         return {
-            'round_start_epoch': round_start_epoch,
-            'target_epoch': target_epoch,
-            'round_start_block': round_start_block,
-            'target_block': target_block,
+            "round_start_epoch": round_start_epoch,
+            "target_epoch": target_epoch,
+            "round_start_block": round_start_block,
+            "target_block": target_block,
         }
 
     def get_current_boundaries(self) -> Dict[str, Any]:
@@ -232,8 +224,8 @@ class RoundManager:
         rely on internal state (e.g., `start_block`). Result is clamped to [0.0, 1.0].
         """
         bounds = self.get_round_boundaries(current_block, log_debug=False)
-        rsb = int(bounds['round_start_block'])
-        tb = int(bounds['target_block'])
+        rsb = int(bounds["round_start_block"])
+        tb = int(bounds["target_block"])
         total = max(tb - rsb, 1)
         done = max(current_block - rsb, 0)
         frac = done / total
@@ -263,7 +255,7 @@ class RoundManager:
         safety_buffer_blocks = self.safety_buffer_epochs * self.BLOCKS_PER_EPOCH
         # Global deadline: do not schedule tasks that would start beyond
         # the target round boundary minus the safety buffer.
-        absolute_limit_block = int(boundaries['target_block'] - safety_buffer_blocks)
+        absolute_limit_block = int(boundaries["target_block"] - safety_buffer_blocks)
 
         if current_block >= absolute_limit_block:
             return False
@@ -291,20 +283,20 @@ class RoundManager:
             raise ValueError("Round not started. Call start_new_round() first.")
 
         boundaries = self.get_round_boundaries(self.start_block, log_debug=False)
-        target_epoch = boundaries['target_epoch']
+        target_epoch = boundaries["target_epoch"]
         current_epoch = self.block_to_epoch(current_block)
 
-        blocks_remaining = boundaries['target_block'] - current_block
+        blocks_remaining = boundaries["target_block"] - current_block
         seconds_remaining = blocks_remaining * self.SECONDS_PER_BLOCK
         minutes_remaining = seconds_remaining / 60
 
         return {
-            'current_epoch': current_epoch,
-            'target_epoch': target_epoch,
-            'blocks_remaining': blocks_remaining,
-            'seconds_remaining': seconds_remaining,
-            'minutes_remaining': minutes_remaining,
-            'reached_target': current_epoch >= target_epoch
+            "current_epoch": current_epoch,
+            "target_epoch": target_epoch,
+            "blocks_remaining": blocks_remaining,
+            "seconds_remaining": seconds_remaining,
+            "minutes_remaining": minutes_remaining,
+            "reached_target": current_epoch >= target_epoch,
         }
 
     def log_calculation_summary(self):
@@ -320,7 +312,7 @@ class RoundManager:
 
     def can_start_round(self, current_block: int) -> bool:
         """Return True when the chain height has passed the minimum start block gate.
-        
+
         Respects DZ_STARTING_BLOCK in ALL modes (testing and production).
         This prevents crashes from negative round number calculations.
         """
@@ -345,10 +337,10 @@ class RoundManager:
         round_index = blocks_since_start // self.ROUND_BLOCK_LENGTH
         return int(round_index + 1)
 
-
     @staticmethod
     def _extract_round_entries(payload: Any) -> List[Dict[str, Any]]:
         """Normalize rounds API responses into a list of round dictionaries."""
+
         def _coerce(obj: Any) -> List[Dict[str, Any]]:
             if isinstance(obj, list):
                 return [item for item in obj if isinstance(item, dict)]
@@ -398,10 +390,7 @@ class RoundManager:
         Returns:
             Dict mapping miner_uid to average score
         """
-        return {
-            uid: (sum(rewards) / len(rewards)) if rewards else 0.0
-            for uid, rewards in self.round_rewards.items()
-        }
+        return {uid: (sum(rewards) / len(rewards)) if rewards else 0.0 for uid, rewards in self.round_rewards.items()}
 
     def reset_round(self):
         """Reset round state for new round."""
@@ -481,11 +470,7 @@ class RoundManager:
         for item in self.phase_history:
             block_info = f"block={item.started_at_block}" if item.started_at_block is not None else ""
             note_info = f"note={item.note}" if item.note else ""
-            epoch_info = (
-                f"epoch={item.started_at_epoch:.2f}"
-                if item.started_at_epoch is not None
-                else ""
-            )
+            epoch_info = f"epoch={item.started_at_epoch:.2f}" if item.started_at_epoch is not None else ""
             parts = [part for part in (block_info, epoch_info, note_info) if part]
             suffix = " | ".join(parts)
             lines.append(f"{item.phase.value}: {suffix}" if suffix else item.phase.value)

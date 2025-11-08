@@ -23,9 +23,29 @@ autoppia_web_agents_subnet/validator/
 
 ## 🎯 **How It Works:**
 
+### **Architecture:**
+
+```
+1. Round starts
+   → RoundReport created in memory (self.round_manager.current_round_report)
+
+2. During round
+   → Statistics collected via _report_*() methods
+
+3. Round ends
+   → Finalize report
+   → Save to pickle: data/reports/rounds/round_N.pkl
+   → Send email (ALWAYS, even if errors)
+   → Clear from memory
+
+4. Request old report
+   → Load from pickle
+   → Resend email
+```
+
 ### **1. RoundReport Class**
 
-Stores ALL round statistics in memory:
+Stores current round statistics in memory:
 
 ```python
 report = RoundReport(
@@ -109,7 +129,7 @@ for uid in active_miner_uids:
     payload = handshake_payloads.get(uid, {})
     agent_name = payload.get("agent_name")
     agent_image = payload.get("agent_image")
-    
+
     self._report_handshake_response(uid, hotkey, agent_name, agent_image)
 ```
 
@@ -122,12 +142,12 @@ for uid in active_miner_uids:
     hotkey = self.metagraph.hotkeys[uid]
     solution = solutions.get(uid)
     evaluation = evaluations.get(uid)
-    
+
     success = evaluation.score > 0 if evaluation else False
     execution_time = execution_times.get(uid, 0.0)
     eval_score = evaluation.score if evaluation else 0.0
     reward = rewards.get(uid, 0.0)
-    
+
     self._report_task_result(uid, hotkey, success, execution_time, eval_score, reward)
 ```
 
@@ -228,6 +248,7 @@ self._finalize_round_report(
 ## 🧪 **Testing:**
 
 After integration, the validator will automatically:
+
 - Collect all statistics during the round
 - Send a beautiful HTML email when the round completes
 - Save JSON report to `data/round_reports/round_N.json`
@@ -238,3 +259,58 @@ No need to parse logs or run external scripts!
 
 **This is the CORRECT approach** ✅
 
+---
+
+## 📧 **Requesting Past Round Reports:**
+
+### **From Python:**
+
+```python
+from autoppia_web_agents_subnet.validator.reporting.mixin import ReportingMixin
+
+# Load round report
+report = ReportingMixin.load_round_report(77)
+
+if report:
+    print(f"Round {report.round_number}")
+    print(f"Winner: UID {report.final_winner_uid}")
+    print(f"Miners: {len(report.miners)}")
+
+# Resend email for round 77
+ReportingMixin.resend_round_report(77)
+```
+
+### **From Command Line:**
+
+```bash
+cd ~/autoppia_web_agents_subnet/scripts/validator/reporting
+
+# Resend report for round 77
+python3 resend_report.py 77
+```
+
+This will:
+1. Load `data/reports/rounds/round_77.pkl`
+2. Run Codex analysis on `logs/rounds/round_77.log`
+3. Send beautiful HTML email
+
+---
+
+## 💾 **Data Storage:**
+
+```
+data/reports/rounds/
+├── round_77.pkl    ← Complete RoundReport object
+├── round_78.pkl
+└── round_79.pkl
+```
+
+**Benefits:**
+- ✅ Fast retrieval (no log parsing)
+- ✅ Complete data (all statistics)
+- ✅ Can resend emails anytime
+- ✅ Persistent (survives validator restarts)
+
+---
+
+**This is the CORRECT approach** ✅
