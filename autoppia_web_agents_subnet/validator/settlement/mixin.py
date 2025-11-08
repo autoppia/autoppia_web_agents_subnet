@@ -93,16 +93,10 @@ class SettlementMixin:
 
     async def _publish_final_snapshot(self, *, tasks_completed: int, total_tasks: int) -> None:
         """Emit final consensus snapshot once all tasks complete, then finalize weights."""
-        ColoredLogger.error("\n" + "=" * 80, ColoredLogger.RED)
-        ColoredLogger.error(
-            "📤📤📤 ALL TASKS DONE - PUBLISHING TO IPFS NOW 📤📤📤",
-            ColoredLogger.RED,
-        )
-        ColoredLogger.error(
-            f"📦 Tasks completed: {tasks_completed}/{total_tasks}",
-            ColoredLogger.RED,
-        )
-        ColoredLogger.error("=" * 80 + "\n", ColoredLogger.RED)
+        bt.logging.info("=" * 80)
+        bt.logging.info("📤 ALL TASKS DONE - PUBLISHING TO IPFS NOW 📤")
+        bt.logging.info(f"📦 Tasks completed: {tasks_completed}/{total_tasks}")
+        bt.logging.info("=" * 80)
 
         bt.logging.info("=" * 80)
         bt.logging.info(consensus_tag(f"All tasks done ({tasks_completed}/{total_tasks}) - Publishing to IPFS now..."))
