@@ -186,20 +186,19 @@ def build_email_payload(
         plain_lines.extend(["", "LLM summary:", llm_summary])
     plain_lines.extend(["", "Report excerpt:", report_text])
     if codex_transcript and codex_final and codex_transcript != codex_final:
-        plain_lines.extend([
-            "",
-            f"Full Codex transcript: {len(codex_transcript.splitlines())} lines (see monitor logs).",
-        ])
+        plain_lines.extend(
+            [
+                "",
+                f"Full Codex transcript: {len(codex_transcript.splitlines())} lines (see monitor logs).",
+            ]
+        )
     if codex_stderr:
         stderr_line_count = len([line for line in codex_stderr.splitlines() if line.strip()])
         plain_lines.extend(["", f"Codex stderr: {stderr_line_count} lines (see monitor logs)."])
     body_text = "\n".join(plain_lines)
 
     def _badge(color: str, text: str) -> str:
-        return (
-            f"<span style=\"display:inline-block;padding:4px 10px;border-radius:999px;"
-            f"background:{color};color:#0f172a;font-weight:600;font-size:12px;\">{html.escape(text)}</span>"
-        )
+        return f'<span style="display:inline-block;padding:4px 10px;border-radius:999px;' f'background:{color};color:#0f172a;font-weight:600;font-size:12px;">{html.escape(text)}</span>'
 
     info_rows = [
         ("Round", str(round_id)),
@@ -224,18 +223,18 @@ def build_email_payload(
         )
 
     info_html = "".join(
-        f"<tr><td style=\"padding:6px 12px;border-bottom:1px solid #1f2937;color:#a5b4fc;white-space:nowrap;\">{html.escape(label)}</td>"
-        f"<td style=\"padding:6px 12px;border-bottom:1px solid #1f2937;color:#f8fafc;\">{html.escape(value)}</td></tr>"
+        f'<tr><td style="padding:6px 12px;border-bottom:1px solid #1f2937;color:#a5b4fc;white-space:nowrap;">{html.escape(label)}</td>'
+        f'<td style="padding:6px 12px;border-bottom:1px solid #1f2937;color:#f8fafc;">{html.escape(value)}</td></tr>'
         for (label, value) in info_rows
     )
 
     codex_output_html = ""
     if codex_transcript and codex_final and codex_transcript != codex_final:
         codex_output_html = (
-            "<details style=\"margin-bottom:24px;\">"
-            "<summary style=\"cursor:pointer;color:#60a5fa;font-weight:600;\">Full Codex transcript "
+            '<details style="margin-bottom:24px;">'
+            '<summary style="cursor:pointer;color:#60a5fa;font-weight:600;">Full Codex transcript '
             f"({len(codex_transcript.splitlines())} lines)</summary>"
-            f"<pre style=\"margin-top:12px;background:#0f172a;color:#e2e8f0;padding:16px;border-radius:10px;"
+            f'<pre style="margin-top:12px;background:#0f172a;color:#e2e8f0;padding:16px;border-radius:10px;'
             f"font-family:'Fira Code',Monaco,monospace;font-size:13px;line-height:1.5;white-space:pre-wrap;\">"
             f"{html.escape(codex_transcript)}</pre>"
             "</details>"
@@ -245,26 +244,26 @@ def build_email_payload(
     if codex_stderr:
         stderr_line_count = len([line for line in codex_stderr.splitlines() if line.strip()])
         codex_stderr_html = (
-            "<details style=\"margin-bottom:24px;\">"
-            "<summary style=\"cursor:pointer;color:#f97316;font-weight:600;\">Codex stderr "
+            '<details style="margin-bottom:24px;">'
+            '<summary style="cursor:pointer;color:#f97316;font-weight:600;">Codex stderr '
             f"({stderr_line_count} lines)</summary>"
             f"<pre style=\"margin-top:12px;background:#7c2d12;color:#fff7ed;padding:16px;border-radius:10px;font-family:'Fira Code',Monaco,monospace;"
-            f"font-size:13px;line-height:1.5;white-space:pre-wrap;\">{html.escape(codex_stderr)}</pre>"
+            f'font-size:13px;line-height:1.5;white-space:pre-wrap;">{html.escape(codex_stderr)}</pre>'
             "</details>"
         )
 
     codex_final_html = (
-        "<div style=\"background:rgba(37,99,235,0.12);border:1px solid rgba(129,140,248,0.35);"
-        "padding:18px 20px;border-radius:14px;\">"
-        "<p style=\"margin:0;color:#e2e8f0;font-size:15px;line-height:1.7;\">Codex verdict unavailable.</p>"
+        '<div style="background:rgba(37,99,235,0.12);border:1px solid rgba(129,140,248,0.35);'
+        'padding:18px 20px;border-radius:14px;">'
+        '<p style="margin:0;color:#e2e8f0;font-size:15px;line-height:1.7;">Codex verdict unavailable.</p>'
         "</div>"
     )
     if codex_final:
         safe_codex_final = html.escape(codex_final).replace("\n", "<br>")
         codex_final_html = (
-            "<div style=\"background:rgba(37,99,235,0.12);border:1px solid rgba(129,140,248,0.35);"
-            "padding:18px 20px;border-radius:14px;\">"
-            "<p style=\"margin:0;color:#e2e8f0;font-size:15px;line-height:1.7;\">"
+            '<div style="background:rgba(37,99,235,0.12);border:1px solid rgba(129,140,248,0.35);'
+            'padding:18px 20px;border-radius:14px;">'
+            '<p style="margin:0;color:#e2e8f0;font-size:15px;line-height:1.7;">'
             f"{safe_codex_final}"
             "</p>"
             "</div>"
@@ -273,10 +272,10 @@ def build_email_payload(
     llm_html = ""
     if llm_summary:
         llm_html = (
-            "<details style=\"margin-bottom:28px;\">"
-            "<summary style=\"cursor:pointer;color:#38bdf8;font-weight:600;letter-spacing:0.01em;\">LLM summary</summary>"
+            '<details style="margin-bottom:28px;">'
+            '<summary style="cursor:pointer;color:#38bdf8;font-weight:600;letter-spacing:0.01em;">LLM summary</summary>'
             f"<pre style=\"margin-top:12px;background:#0f172a;color:#cbd5f5;padding:16px;border-radius:14px;font-family:'Fira Code',Monaco,monospace;"
-            f"font-size:13px;line-height:1.6;white-space:pre-wrap;\">{html.escape(llm_summary)}</pre>"
+            f'font-size:13px;line-height:1.6;white-space:pre-wrap;">{html.escape(llm_summary)}</pre>'
             "</details>"
         )
 
@@ -284,10 +283,10 @@ def build_email_payload(
     if log_tail:
         lines = log_tail.splitlines()
         log_tail_html = (
-            "<details style=\"margin-bottom:0;\">"
-            "<summary style=\"cursor:pointer;color:#38bdf8;font-weight:600;letter-spacing:0.01em;\">Recent log tail "
+            '<details style="margin-bottom:0;">'
+            '<summary style="cursor:pointer;color:#38bdf8;font-weight:600;letter-spacing:0.01em;">Recent log tail '
             f"({len(lines)} lines)</summary>"
-            f"<pre style=\"margin-top:12px;background:#0f172a;color:#cbd5f5;padding:16px;border-radius:14px;"
+            f'<pre style="margin-top:12px;background:#0f172a;color:#cbd5f5;padding:16px;border-radius:14px;'
             f"font-family:'Fira Code',Monaco,monospace;font-size:13px;line-height:1.6;white-space:pre-wrap;\">"
             f"{html.escape(log_tail)}</pre>"
             "</details>"
@@ -304,18 +303,18 @@ def build_email_payload(
         insights.append("No additional highlights extracted from the report.")
 
     report_html = (
-        "<details style=\"margin-bottom:28px;\">"
-        "<summary style=\"cursor:pointer;color:#38bdf8;font-weight:600;letter-spacing:0.01em;\">Full round report</summary>"
+        '<details style="margin-bottom:28px;">'
+        '<summary style="cursor:pointer;color:#38bdf8;font-weight:600;letter-spacing:0.01em;">Full round report</summary>'
         f"<pre style=\"margin-top:12px;background:#0f172a;color:#e2e8f0;padding:16px;border-radius:14px;font-family:'Fira Code',Monaco,monospace;"
-        f"font-size:13px;line-height:1.6;white-space:pre-wrap;\">{html.escape(report_text)}</pre>"
+        f'font-size:13px;line-height:1.6;white-space:pre-wrap;">{html.escape(report_text)}</pre>'
         "</details>"
     )
 
     header_tag = ""
     if codex_final_summary:
         header_tag = (
-            "<div style=\"margin-top:12px;display:inline-flex;align-items:center;padding:6px 14px;"
-            "border-radius:999px;background:#0ea5e9;color:#0b1120;font-weight:600;font-size:13px;\">"
+            '<div style="margin-top:12px;display:inline-flex;align-items:center;padding:6px 14px;'
+            'border-radius:999px;background:#0ea5e9;color:#0b1120;font-weight:600;font-size:13px;">'
             f"{html.escape(codex_final_summary)}"
             "</div>"
         )
@@ -428,9 +427,7 @@ def capture_report(report_script: Path, round_id: int, *, pm2_identifier: Option
 
     completed = subprocess.run(cmd, capture_output=True, text=True)
     if completed.returncode != 0:
-        raise RuntimeError(
-            f"report.sh exited with {completed.returncode}:\n{completed.stdout}\n{completed.stderr}"
-        )
+        raise RuntimeError(f"report.sh exited with {completed.returncode}:\n{completed.stdout}\n{completed.stderr}")
     return completed.stdout.strip()
 
 
@@ -653,6 +650,40 @@ def main() -> None:  # pragma: no cover - CLI entry
     codex_progress: dict[int, set[float]] = {}
 
     with log_path.open("r", encoding="utf-8", errors="replace") as stream:
+        # Read recent history to detect recently completed rounds
+        stream.seek(0, os.SEEK_END)
+        file_size = stream.tell()
+
+        # Look back up to 500KB to find recent round completions
+        lookback_bytes = min(500_000, file_size)
+        if lookback_bytes > 0:
+            stream.seek(max(0, file_size - lookback_bytes))
+            print(f"[monitor] Scanning last {lookback_bytes:,} bytes for recently completed rounds...")
+
+            recent_lines = stream.readlines()
+            recent_completions = []
+
+            for line in recent_lines:
+                finish_match = ROUND_FINISH_RE.search(line)
+                if finish_match:
+                    round_id = int(finish_match.group(1))
+                    recent_completions.append(round_id)
+
+            # Schedule reports for recently completed rounds (if not too old)
+            if recent_completions:
+                latest_round = max(recent_completions)
+                print(f"[monitor] Found {len(recent_completions)} completed round(s) in recent history")
+                print(f"[monitor] Latest completed round: {latest_round}")
+
+                # Only schedule the most recent round to avoid spam
+                if latest_round not in pending_rounds:
+                    pending_rounds[latest_round] = time.time() + seconds_to_wait
+                    pending_tasks.setdefault(latest_round, None)
+                    print(f"[monitor] Scheduling report for recently completed round {latest_round}")
+            else:
+                print(f"[monitor] No recently completed rounds found in history")
+
+        # Position at end for new events
         stream.seek(0, os.SEEK_END)
 
         while True:
@@ -755,9 +786,7 @@ def main() -> None:  # pragma: no cover - CLI entry
                 log_tail = "\n".join(context_buffer)
                 report_for_codex = report_output
                 if log_tail:
-                    report_for_codex = (
-                        f"{report_output}\n\nRecent log tail (last {len(context_buffer)} lines):\n{log_tail}"
-                    )
+                    report_for_codex = f"{report_output}\n\nRecent log tail (last {len(context_buffer)} lines):\n{log_tail}"
 
                 codex_success, codex_stdout, codex_stderr = invoke_codex(
                     report_script,
