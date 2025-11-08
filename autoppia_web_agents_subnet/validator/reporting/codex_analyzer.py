@@ -19,28 +19,28 @@ from .round_report import RoundReport
 def analyze_round_with_codex(report: RoundReport, timeout: int = 120) -> Optional[str]:
     """
     Analyze round report with Codex AI.
-    
+
     Provides intelligent insights beyond obvious facts:
     - Consensus discrepancies between validators
     - Web-specific failure patterns
     - Miner behavior anomalies
     - Critical errors requiring attention
     - Non-obvious issues
-    
+
     Args:
         report: RoundReport to analyze
         timeout: Timeout in seconds (default 120)
-    
+
     Returns:
         Codex analysis as string, or None if unavailable
     """
     try:
         # Build comprehensive context for Codex
         context = _build_codex_context(report)
-        
+
         # Build intelligent prompt
         prompt = _build_codex_prompt(report, context)
-        
+
         # Call Codex via subprocess
         result = subprocess.run(
             ["codex"],
@@ -49,14 +49,14 @@ def analyze_round_with_codex(report: RoundReport, timeout: int = 120) -> Optiona
             text=True,
             timeout=timeout,
         )
-        
+
         if result.returncode == 0 and result.stdout:
             analysis = result.stdout.strip()
             if analysis and len(analysis) > 50:
                 return analysis
-        
+
         return None
-        
+
     except subprocess.TimeoutExpired:
         bt.logging.warning(f"Codex analysis timed out after {timeout}s")
         return None
@@ -70,7 +70,7 @@ def analyze_round_with_codex(report: RoundReport, timeout: int = 120) -> Optiona
 
 def _build_codex_context(report: RoundReport) -> dict:
     """Build structured context from report."""
-    
+
     context = {
         "round_number": report.round_number,
         "validator_uid": report.validator_uid,
@@ -93,16 +93,18 @@ def _build_codex_context(report: RoundReport) -> dict:
         "errors_count": len(report.errors),
         "warnings_count": len(report.warnings),
     }
-    
+
     # Miner summaries
     for miner in report.miners.values():
-        context["miners"].append({
-            "uid": miner.uid,
-            "tasks": f"{miner.tasks_success}/{miner.tasks_attempted}",
-            "score_pct": f"{miner.score_percentage:.1f}%",
-            "avg_score": f"{miner.avg_score:.4f}",
-        })
-    
+        context["miners"].append(
+            {
+                "uid": miner.uid,
+                "tasks": f"{miner.tasks_success}/{miner.tasks_attempted}",
+                "score_pct": f"{miner.score_percentage:.1f}%",
+                "avg_score": f"{miner.avg_score:.4f}",
+            }
+        )
+
     # Per-web global stats
     for web_name, stats in report.per_web_global_stats.items():
         success_rate = (stats["solved"] / stats["sent"] * 100) if stats["sent"] > 0 else 0
@@ -111,13 +113,13 @@ def _build_codex_context(report: RoundReport) -> dict:
             "solved": stats["solved"],
             "rate": f"{success_rate:.1f}%",
         }
-    
+
     return context
 
 
 def _build_codex_prompt(report: RoundReport, context: dict) -> str:
     """Build intelligent prompt for Codex."""
-    
+
     prompt = f"""You are analyzing a Bittensor validator round. Provide INTELLIGENT INSIGHTS beyond obvious facts.
 
 === ROUND {report.round_number} - VALIDATOR UID {report.validator_uid} ===
@@ -144,19 +146,19 @@ WARNINGS: {context['warnings_count']}
         prompt += f"\n\nERRORS DETECTED ({len(report.errors)}):\n"
         for idx, error in enumerate(report.errors[:10], start=1):
             prompt += f"{idx}. {error[:150]}\n"
-    
+
     # Add warnings if any
     if report.warnings:
         prompt += f"\n\nWARNINGS DETECTED ({len(report.warnings)}):\n"
         for idx, warning in enumerate(report.warnings[:10], start=1):
             prompt += f"{idx}. {warning[:150]}\n"
-    
+
     # Add consensus validator comparison if available
     if report.consensus_validators:
         prompt += "\n\nOTHER VALIDATORS:\n"
         for val in report.consensus_validators:
             prompt += f"- Validator UID {val.uid}: {val.miners_reported} miners, stake {val.stake_tao:.0f}τ\n"
-    
+
     # Intelligent analysis instructions
     prompt += """
 
@@ -196,7 +198,7 @@ FORMAT:
 
 ANALYSIS:
 """
-    
+
     return prompt
 
 
@@ -210,17 +212,17 @@ def format_codex_analysis_for_email(analysis: Optional[str]) -> str:
     </p>
 </div>
 """
-    
+
     # Convert to HTML with proper formatting
     html = """
 <div style="background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.3); padding: 18px; border-radius: 12px;">
     <h3 style="margin: 0 0 12px 0; color: #38bdf8;">🤖 Codex AI Analysis</h3>
 """
-    
+
     # Convert markdown-style bullets to HTML
-    lines = analysis.split('\n')
+    lines = analysis.split("\n")
     in_list = False
-    
+
     for line in lines:
         line = line.strip()
         if not line:
@@ -228,8 +230,8 @@ def format_codex_analysis_for_email(analysis: Optional[str]) -> str:
                 html += "</ul>"
                 in_list = False
             continue
-        
-        if line.startswith('- ') or line.startswith('• '):
+
+        if line.startswith("- ") or line.startswith("• "):
             if not in_list:
                 html += "<ul style='margin: 8px 0; padding-left: 20px;'>"
                 in_list = True
@@ -240,11 +242,10 @@ def format_codex_analysis_for_email(analysis: Optional[str]) -> str:
                 html += "</ul>"
                 in_list = False
             html += f"<p style='color: #e2e8f0; margin: 8px 0;'>{line}</p>"
-    
+
     if in_list:
         html += "</ul>"
-    
-    html += "</div>"
-    
-    return html
 
+    html += "</div>"
+
+    return html

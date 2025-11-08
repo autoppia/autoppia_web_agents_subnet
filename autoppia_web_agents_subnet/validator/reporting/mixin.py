@@ -262,7 +262,7 @@ class ReportingMixin:
     def _send_round_report_email(self, report: RoundReport):
         """
         Send round report via email with Codex AI analysis.
-        
+
         ALWAYS sends email, even if there were errors during the round.
         This ensures we're notified of any issues.
         """

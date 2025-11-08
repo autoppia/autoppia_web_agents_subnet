@@ -448,17 +448,17 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
     html += """
         <h2>🤖 Codex AI Analysis</h2>
     """
-    
+
     if codex_analysis:
         # Format analysis with proper styling
         html += """
             <div style="background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.3); padding: 18px; border-radius: 12px;">
         """
-        
+
         # Convert markdown-style bullets to HTML
-        lines = codex_analysis.split('\n')
+        lines = codex_analysis.split("\n")
         in_list = False
-        
+
         for line in lines:
             line_stripped = line.strip()
             if not line_stripped:
@@ -466,8 +466,8 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                     html += "</ul>"
                     in_list = False
                 continue
-            
-            if line_stripped.startswith('- ') or line_stripped.startswith('• '):
+
+            if line_stripped.startswith("- ") or line_stripped.startswith("• "):
                 if not in_list:
                     html += "<ul style='margin: 8px 0; padding-left: 20px;'>"
                     in_list = True
@@ -479,10 +479,10 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                     in_list = False
                 if line_stripped:
                     html += f"<p style='color: #e2e8f0; margin: 8px 0; line-height: 1.6;'>{line_stripped}</p>"
-        
+
         if in_list:
             html += "</ul>"
-        
+
         html += "</div>"
     else:
         html += """
