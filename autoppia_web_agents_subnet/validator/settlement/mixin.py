@@ -144,6 +144,9 @@ class SettlementMixin:
             bt.logging.warning(
                 "Consensus publish returned no CID; will retry later if window allows."
             )
+        else:
+            # Record consensus published in report (NEW)
+            self._report_consensus_published(ipfs_cid=cid)
 
         if not self._finalized_this_round:
             bt.logging.info("[CONSENSUS] Finalizing immediately after all-tasks completion publish")
@@ -406,6 +409,21 @@ class SettlementMixin:
                 )
                 avg_rewards = agg
                 self._consensus_last_details = agg_meta or {}
+                
+                # Record consensus validators in report (NEW)
+                validators_info = agg_meta.get("validators", []) if agg_meta else []
+                for val_info in validators_info:
+                    self._report_consensus_validator(
+                        uid=val_info.get("uid"),
+                        hotkey=val_info.get("hotkey", ""),
+                        stake_tao=float(val_info.get("stake", 0.0)),
+                        ipfs_cid=val_info.get("cid"),
+                        miners_reported=len(val_info.get("scores", {})),
+                        miner_scores=val_info.get("scores"),
+                    )
+                
+                self._report_consensus_aggregated()
+                self._report_set_final_scores(agg)
             else:
                 ColoredLogger.warning(
                     "No aggregated scores available; using local averages.",
@@ -469,6 +487,12 @@ class SettlementMixin:
         if winner_uid is not None and 0 <= int(winner_uid) < self.metagraph.n:
             wta_full[int(winner_uid)] = 1.0
         bt.logging.info(f"Updating scores for on-chain WTA winner uid={winner_uid}")
+        
+        # Record winner and weights in report (NEW)
+        if winner_uid is not None:
+            self._report_set_winner(winner_uid, is_local=False)
+        self._report_set_weights(final_rewards_dict)
+        
         self.update_scores(rewards=wta_full, uids=all_uids)
         self.set_weights()
 
