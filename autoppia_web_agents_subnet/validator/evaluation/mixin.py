@@ -533,6 +533,15 @@ class EvaluationPhaseMixin:
                 bt.logging.warning(f"IWAP submission failed: {exc}")
 
             bt.logging.info(f"✅ Task {task_index + 1} completed")
+            
+            # Save incremental pickle after each task (NEW)
+            try:
+                report = self.round_manager.current_round_report
+                if report:
+                    self._save_round_report_pickle(report, incremental=True)
+            except Exception as save_exc:
+                bt.logging.debug(f"Incremental save failed: {save_exc}")
+            
             return True
 
         except Exception as exc:

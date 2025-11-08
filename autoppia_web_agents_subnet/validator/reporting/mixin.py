@@ -53,6 +53,8 @@ class ReportingMixin:
         if report:
             report.handshake_sent_to = total_miners
             report.checkpoint_handshake_sent = True
+            # Save incremental pickle after handshake
+            self._save_round_report_pickle(report, incremental=True)
 
     def _report_handshake_response(
         self,
@@ -228,8 +230,14 @@ class ReportingMixin:
         except Exception as e:
             bt.logging.debug(f"Failed to extract errors/warnings from logs: {e}")
 
-    def _save_round_report_pickle(self, report: RoundReport):
-        """Save round report to pickle file for future retrieval."""
+    def _save_round_report_pickle(self, report: RoundReport, incremental: bool = False):
+        """
+        Save round report to pickle file for future retrieval.
+        
+        Args:
+            report: RoundReport to save
+            incremental: If True, this is an incremental save (don't log as much)
+        """
         try:
             import pickle
 
@@ -242,7 +250,10 @@ class ReportingMixin:
             with open(report_file, "wb") as f:
                 pickle.dump(report, f)
 
-            bt.logging.success(f"📄 Round report saved to {report_file}")
+            if incremental:
+                bt.logging.debug(f"📄 Incremental save: round_{report.round_number}.pkl")
+            else:
+                bt.logging.success(f"📄 Round report saved to {report_file}")
 
         except Exception as e:
             bt.logging.error(f"Failed to save round report: {e}")
