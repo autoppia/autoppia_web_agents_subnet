@@ -191,7 +191,7 @@ class ReportingMixin:
         """Extract errors and warnings from round log file."""
         try:
             repo_root = Path(__file__).resolve().parents[4]
-            round_log = repo_root / "logs" / "rounds" / f"round_{report.round_number}.log"
+            round_log = repo_root / "data" / "logs" / "rounds" / f"round_{report.round_number}.log"
 
             if not round_log.exists():
                 return
@@ -321,7 +321,7 @@ class ReportingMixin:
             if not codex_script.exists():
                 return None
 
-            round_log = repo_root / "logs" / "rounds" / f"round_{round_number}.log"
+            round_log = repo_root / "data" / "logs" / "rounds" / f"round_{round_number}.log"
             if not round_log.exists():
                 return None
 
@@ -351,7 +351,7 @@ class ReportingMixin:
                 return None
 
             # Get round log file
-            round_log = repo_root / "logs" / "rounds" / f"round_{round_number}.log"
+            round_log = repo_root / "data" / "logs" / "rounds" / f"round_{round_number}.log"
             if not round_log.exists():
                 return None
 

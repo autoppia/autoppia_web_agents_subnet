@@ -11,7 +11,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
-LOGS_DIR="$REPO_ROOT/logs"
+LOGS_DIR="$REPO_ROOT/data/logs"
 ROUNDS_DIR="$LOGS_DIR/rounds"
 
 echo "=== Setting up validator logs ==="
