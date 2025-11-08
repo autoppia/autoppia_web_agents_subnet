@@ -365,15 +365,21 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
 
         html += "</table>"
 
-    # Errors and Warnings (NEW)
+    # Errors and Warnings - ALWAYS show section
     errors = getattr(report, "errors", [])
     warnings = getattr(report, "warnings", [])
 
-    if errors or warnings:
+    html += """
+        <h2>⚠️ Errors & Warnings</h2>
+    """
+    
+    if not errors and not warnings:
         html += """
-            <h2 style="color: #ef4444;">⚠️ Errors and Warnings Detected</h2>
+            <p style="color: #22c55e; font-size: 14px;">
+                ✅ No errors or warnings detected in this round
+            </p>
         """
-
+    else:
         if errors:
             html += f"""
                 <h3 style="color: #ef4444; font-size: 16px;">❌ Errors ({len(errors)})</h3>
