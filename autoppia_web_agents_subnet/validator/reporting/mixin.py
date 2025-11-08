@@ -14,6 +14,7 @@ import bittensor as bt
 
 from .round_report import RoundReport, ConsensusValidatorReport
 from .email_sender import send_round_report_email
+from .codex_analyzer import analyze_round_with_codex
 
 
 class ReportingMixin:
@@ -233,7 +234,7 @@ class ReportingMixin:
     def _save_round_report_pickle(self, report: RoundReport, incremental: bool = False):
         """
         Save round report to pickle file for future retrieval.
-        
+
         Args:
             report: RoundReport to save
             incremental: If True, this is an incremental save (don't log as much)
@@ -260,17 +261,22 @@ class ReportingMixin:
 
     def _send_round_report_email(self, report: RoundReport):
         """
-        Send round report via email with optional Codex analysis.
-
+        Send round report via email with Codex AI analysis.
+        
         ALWAYS sends email, even if there were errors during the round.
         This ensures we're notified of any issues.
         """
         try:
-            # Run Codex analysis on logs (optional, with timeout)
-            # Codex only analyzes logs for warnings/errors, not extracting data
+            # Run Codex analysis on pickle + errors/warnings (120s timeout)
+            # Codex analyzes structured data for intelligent insights
             codex_analysis = None
             try:
-                codex_analysis = self._run_codex_analysis(report.round_number)
+                bt.logging.info("🤖 Running Codex analysis on round data...")
+                codex_analysis = analyze_round_with_codex(report, timeout=120)
+                if codex_analysis:
+                    bt.logging.success("✅ Codex analysis completed")
+                else:
+                    bt.logging.info("ℹ️  Codex analysis not available")
             except Exception as e:
                 bt.logging.debug(f"Codex analysis failed: {e}")
 
