@@ -101,6 +101,17 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
 
             # Format: 77/156 (tasks_success/tasks_attempted)
             tasks_display = f"{miner.tasks_success}/{miner.tasks_attempted}"
+            
+            # Color by percentage: 0-25 red, 25-50 orange, 50-75 yellow, 75-100 green
+            pct = miner.score_percentage
+            if pct >= 75:
+                pct_color = "#22c55e"  # green
+            elif pct >= 50:
+                pct_color = "#eab308"  # yellow
+            elif pct >= 25:
+                pct_color = "#f97316"  # orange
+            else:
+                pct_color = "#ef4444"  # red
 
             html += f"""
                 <tr style="{row_style}">
@@ -109,7 +120,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                     <td>{miner.hotkey[:10]}...</td>
                     <td>{miner.coldkey[:10] if miner.coldkey else 'N/A'}...</td>
                     <td>{tasks_display}</td>
-                    <td><strong>{miner.score_percentage:.1f}%</strong></td>
+                    <td><strong style="color: {pct_color};">{miner.score_percentage:.1f}%</strong></td>
                     <td>{miner.avg_time:.2f}s</td>
                     <td>{miner.avg_reward:.4f}</td>
                 </tr>
@@ -234,9 +245,10 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
         """
 
         for miner in top_5:
+            score = miner.final_score_after_consensus if miner.final_score_after_consensus > 0 else miner.avg_score
             html += f"""
                 <li>
-                    <strong>UID {miner.uid}</strong>: {miner.final_score_after_consensus or miner.avg_score:.4f}
+                    <strong>UID {miner.uid}</strong>: <strong style="color: #38bdf8;">{score:.4f}</strong>
                     <span style="color: #94a3b8;">({miner.hotkey[:12]}...)</span>
                 </li>
             """
