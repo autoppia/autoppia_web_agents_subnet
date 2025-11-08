@@ -307,13 +307,13 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
             html += f"{len(report.miners)} miners"
         else:
             html += "No data"
-        
+
         html += """
                     </td>
                 </tr>
             </table>
         """
-        
+
         # Show detailed scores published to IPFS
         if report.consensus_published and report.miners:
             html += """
@@ -327,7 +327,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                         <th>Tasks</th>
                     </tr>
             """
-            
+
             sorted_by_score = sorted(report.miners.values(), key=lambda m: m.avg_score, reverse=True)
             for miner in sorted_by_score:
                 html += f"""
@@ -338,7 +338,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                         <td>{miner.tasks_success}/{miner.tasks_attempted}</td>
                     </tr>
                 """
-            
+
             html += "</table>"
 
     # Top 5 - Table format
