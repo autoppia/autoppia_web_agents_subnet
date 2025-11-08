@@ -340,6 +340,33 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
                 """
 
             html += "</table>"
+    
+    # Show detailed scores published to IPFS - ALWAYS (moved outside else block)
+    if report.consensus_published and report.miners:
+        html += """
+            <h3 style="color: #38bdf8; font-size: 16px; margin-top: 16px;">📊 Scores Published to IPFS</h3>
+            <p style="color: #94a3b8; font-size: 13px;">All scores this validator shared with the network for consensus:</p>
+            <table style="font-size: 13px; margin-top: 8px;">
+                <tr>
+                    <th>Miner UID</th>
+                    <th>Hotkey</th>
+                    <th>Score Shared</th>
+                    <th>Tasks</th>
+                </tr>
+        """
+        
+        sorted_by_score = sorted(report.miners.values(), key=lambda m: m.avg_score, reverse=True)
+        for miner in sorted_by_score:
+            html += f"""
+                <tr>
+                    <td>{miner.uid}</td>
+                    <td>{miner.hotkey[:10]}...</td>
+                    <td><strong style="color: #38bdf8;">{miner.avg_score:.4f}</strong></td>
+                    <td>{miner.tasks_success}/{miner.tasks_attempted}</td>
+                </tr>
+            """
+        
+        html += "</table>"
 
     # Top 5 - Table format
     top_5 = report.get_top_miners(5)
