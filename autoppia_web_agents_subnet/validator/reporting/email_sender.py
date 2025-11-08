@@ -372,7 +372,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
     html += """
         <h2>⚠️ Errors & Warnings</h2>
     """
-    
+
     if not errors and not warnings:
         html += """
             <p style="color: #22c55e; font-size: 14px;">
