@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import Optional, Any
@@ -224,6 +225,9 @@ class ReportingMixin:
                 # Don't fallback to PM2 logs - they mix multiple rounds and would give incorrect data
                 return
 
+            # Compile regex once for ANSI color code removal
+            ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+
             # Process all log sources
             for log_path in log_sources:
                 try:
@@ -240,16 +244,24 @@ class ReportingMixin:
                             if not line_clean:
                                 continue
 
+                            # Remove ANSI color codes (from loguru)
+                            line_clean = ansi_escape.sub('', line_clean)
+
                             # Check for ERROR patterns
                             if "ERROR" in line_clean or "Error" in line_clean or "error" in line_clean:
                                 # Extract message - try multiple formats
                                 message = None
 
-                                # Format 1: Bittensor logging with pipes (time|level|message)
+                                # Format 1: Loguru/Bittensor format: timestamp | level | module | message
                                 if "|" in line_clean:
                                     parts = line_clean.split("|")
-                                    if len(parts) >= 3 and ("ERROR" in parts[1] or "ERROR" in parts[0]):
-                                        message = "|".join(parts[2:]).strip()
+                                    if len(parts) >= 3:
+                                        # Check if ERROR is in the level part (usually index 1 or 2)
+                                        for i, part in enumerate(parts):
+                                            if "ERROR" in part.upper():
+                                                # Message is everything after this part
+                                                message = "|".join(parts[i+1:]).strip()
+                                                break
 
                                 # Format 2: PM2 format with timestamps
                                 elif line_clean.startswith("2|"):  # PM2 prefix
@@ -271,11 +283,16 @@ class ReportingMixin:
                             elif "WARNING" in line_clean or "⚠️" in line_clean or "Warning" in line_clean:
                                 message = None
 
-                                # Format 1: Bittensor logging with pipes
+                                # Format 1: Loguru/Bittensor format: timestamp | level | module | message
                                 if "|" in line_clean:
                                     parts = line_clean.split("|")
-                                    if len(parts) >= 3 and ("WARNING" in parts[1] or "WARNING" in parts[0]):
-                                        message = "|".join(parts[2:]).strip()
+                                    if len(parts) >= 3:
+                                        # Check if WARNING is in the level part
+                                        for i, part in enumerate(parts):
+                                            if "WARNING" in part.upper():
+                                                # Message is everything after this part
+                                                message = "|".join(parts[i+1:]).strip()
+                                                break
 
                                 # Format 2: PM2 format
                                 elif line_clean.startswith("2|"):
