@@ -16,7 +16,7 @@ from .round_report import RoundReport
 
 def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = None) -> str:
     """Generate beautiful HTML email from RoundReport."""
-    
+
     # Detect environment based on TESTING variable
     is_testing = os.getenv("TESTING", "false").lower() == "true"
     environment = "DEV" if is_testing else "PROD"
@@ -524,7 +524,7 @@ def send_round_report_email(report: RoundReport, codex_analysis: Optional[str] =
     email_from = os.getenv("REPORT_MONITOR_EMAIL_FROM")
     email_to = os.getenv("REPORT_MONITOR_EMAIL_TO")
     use_ssl = os.getenv("REPORT_MONITOR_SMTP_SSL", "false").lower() == "true"
-    
+
     # Detect environment based on TESTING variable
     is_testing = os.getenv("TESTING", "false").lower() == "true"
     environment = "DEV" if is_testing else "PROD"
