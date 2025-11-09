@@ -3,25 +3,18 @@
 Simple log splitter for validator rounds - reads directly from PM2 log file.
 """
 
+import argparse
 import re
 import time
 from pathlib import Path
 from datetime import datetime
 
-# Find repo root
-SCRIPT_PATH = Path(__file__).resolve()
-REPO_ROOT = SCRIPT_PATH.parents[3]
-LOGS_DIR = REPO_ROOT / "data" / "logs"
-ROUNDS_DIR = LOGS_DIR / "rounds"
-
-# PM2 log file
-PM2_LOG = Path.home() / ".pm2" / "logs" / "validator-wta-out.log"
-
-# Create directories
-ROUNDS_DIR.mkdir(parents=True, exist_ok=True)
-
 # Pattern to detect round start
 ROUND_START_PATTERN = re.compile(r"🚦\s+Starting\s+Round:\s*(\d+)", re.IGNORECASE)
+
+# Global variables (set in main)
+ROUNDS_DIR = None
+PM2_LOG = None
 
 # Current round tracking
 current_round = None
@@ -99,6 +92,33 @@ def tail_file(filepath: Path):
 
 def main():
     """Main loop - continuously tail PM2 log file."""
+    # Parse arguments
+    parser = argparse.ArgumentParser(description="Split validator logs by round")
+    parser.add_argument("--log-file", type=str, help="Path to PM2 log file to monitor")
+    parser.add_argument("--output-dir", type=str, help="Directory to write round logs")
+    args = parser.parse_args()
+    
+    # Determine paths
+    if args.log_file:
+        pm2_log = Path(args.log_file)
+    else:
+        pm2_log = Path.home() / ".pm2" / "logs" / "validator-wta-out.log"
+    
+    if args.output_dir:
+        rounds_dir = Path(args.output_dir)
+    else:
+        script_path = Path(__file__).resolve()
+        repo_root = script_path.parents[3]
+        rounds_dir = repo_root / "data" / "logs" / "rounds"
+    
+    # Create directories
+    rounds_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Store in global for process_line to use
+    global ROUNDS_DIR, PM2_LOG
+    ROUNDS_DIR = rounds_dir
+    PM2_LOG = pm2_log
+    
     print(f"[{datetime.now()}] Log splitter started", flush=True)
     print(f"[{datetime.now()}] Round logs directory: {ROUNDS_DIR}/", flush=True)
     print(f"[{datetime.now()}] PM2 log file: {PM2_LOG}", flush=True)
