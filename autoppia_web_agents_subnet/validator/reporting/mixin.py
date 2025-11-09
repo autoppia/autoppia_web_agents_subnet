@@ -247,66 +247,50 @@ class ReportingMixin:
                             # Remove ANSI color codes (from loguru)
                             line_clean = ansi_escape.sub("", line_clean)
 
-                            # Check for ERROR patterns
-                            if "ERROR" in line_clean or "Error" in line_clean or "error" in line_clean:
-                                # Extract message - try multiple formats
-                                message = None
-
-                                # Format 1: Loguru/Bittensor format: timestamp | level | module | message
-                                if "|" in line_clean:
-                                    parts = line_clean.split("|")
-                                    if len(parts) >= 3:
-                                        # Check if ERROR is in the level part (usually index 1 or 2)
-                                        for i, part in enumerate(parts):
-                                            if "ERROR" in part.upper():
-                                                # Message is everything after this part
-                                                message = "|".join(parts[i + 1 :]).strip()
-                                                break
-
-                                # Format 2: PM2 format with timestamps
-                                elif line_clean.startswith("2|"):  # PM2 prefix
-                                    # Extract after PM2 prefix and timestamp
-                                    if "ERROR" in line_clean:
-                                        # Find ERROR keyword and take everything after it
-                                        idx = line_clean.find("ERROR")
-                                        if idx > 0:
-                                            message = line_clean[idx:].strip()
-
-                                # Format 3: Simple error message
-                                else:
-                                    message = line_clean
-
-                                if message and len(message) > 10:  # Only meaningful messages
-                                    report.add_error(message)
-
-                            # Check for WARNING patterns
-                            elif "WARNING" in line_clean or "⚠️" in line_clean or "Warning" in line_clean:
-                                message = None
-
-                                # Format 1: Loguru/Bittensor format: timestamp | level | module | message
-                                if "|" in line_clean:
-                                    parts = line_clean.split("|")
-                                    if len(parts) >= 3:
-                                        # Check if WARNING is in the level part
-                                        for i, part in enumerate(parts):
-                                            if "WARNING" in part.upper():
-                                                # Message is everything after this part
-                                                message = "|".join(parts[i + 1 :]).strip()
-                                                break
-
-                                # Format 2: PM2 format
-                                elif line_clean.startswith("2|"):
-                                    if "WARNING" in line_clean or "⚠️" in line_clean:
-                                        idx = max(line_clean.find("WARNING") if "WARNING" in line_clean else -1, line_clean.find("⚠️") if "⚠️" in line_clean else -1)
-                                        if idx > 0:
-                                            message = line_clean[idx:].strip()
-
-                                # Format 3: Simple warning
-                                else:
-                                    message = line_clean
-
-                                if message and len(message) > 10:
-                                    report.add_warning(message)
+                            # Parse log line format: "YYYY-MM-DD HH:MM:SS | LEVEL | message" or "YYYY-MM-DD HH:MM:SS.MS | LEVEL | module | message"
+                            # We need to check if the LOG LEVEL is ERROR or WARNING, not just if the word appears in the message
+                            
+                            if "|" in line_clean:
+                                parts = line_clean.split("|")
+                                if len(parts) >= 3:
+                                    # parts[0] = timestamp
+                                    # parts[1] = level (may have extra spaces)
+                                    # parts[2+] = module/message
+                                    
+                                    level = parts[1].strip().upper()
+                                    
+                                    # Check if this is an ERROR level log
+                                    if level == "ERROR":
+                                        # Message is everything after level
+                                        message = "|".join(parts[2:]).strip()
+                                        if message and len(message) > 10:
+                                            report.add_error(message)
+                                    
+                                    # Check if this is a WARNING level log
+                                    elif level == "WARNING":
+                                        # Message is everything after level
+                                        message = "|".join(parts[2:]).strip()
+                                        if message and len(message) > 10:
+                                            report.add_warning(message)
+                            
+                            # PM2 format: "2|validator | timestamp | level | message"
+                            elif line_clean.startswith("2|"):
+                                # Try to find level indicator
+                                if "| ERROR" in line_clean or "|ERROR" in line_clean:
+                                    # Extract message after ERROR
+                                    idx = line_clean.find("ERROR")
+                                    if idx > 0:
+                                        message = line_clean[idx + 5:].strip()  # Skip "ERROR"
+                                        if message and len(message) > 10:
+                                            report.add_error(message)
+                                
+                                elif "| WARNING" in line_clean or "|WARNING" in line_clean:
+                                    # Extract message after WARNING
+                                    idx = line_clean.find("WARNING")
+                                    if idx > 0:
+                                        message = line_clean[idx + 7:].strip()  # Skip "WARNING"
+                                        if message and len(message) > 10:
+                                            report.add_warning(message)
 
                 except Exception as log_exc:
                     bt.logging.debug(f"Failed to parse log file {log_path}: {log_exc}")
