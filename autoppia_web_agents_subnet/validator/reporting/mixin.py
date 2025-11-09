@@ -226,7 +226,7 @@ class ReportingMixin:
                 return
 
             # Compile regex once for ANSI color code removal
-            ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+            ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
             # Process all log sources
             for log_path in log_sources:
@@ -245,7 +245,7 @@ class ReportingMixin:
                                 continue
 
                             # Remove ANSI color codes (from loguru)
-                            line_clean = ansi_escape.sub('', line_clean)
+                            line_clean = ansi_escape.sub("", line_clean)
 
                             # Check for ERROR patterns
                             if "ERROR" in line_clean or "Error" in line_clean or "error" in line_clean:
@@ -260,7 +260,7 @@ class ReportingMixin:
                                         for i, part in enumerate(parts):
                                             if "ERROR" in part.upper():
                                                 # Message is everything after this part
-                                                message = "|".join(parts[i+1:]).strip()
+                                                message = "|".join(parts[i + 1 :]).strip()
                                                 break
 
                                 # Format 2: PM2 format with timestamps
@@ -291,7 +291,7 @@ class ReportingMixin:
                                         for i, part in enumerate(parts):
                                             if "WARNING" in part.upper():
                                                 # Message is everything after this part
-                                                message = "|".join(parts[i+1:]).strip()
+                                                message = "|".join(parts[i + 1 :]).strip()
                                                 break
 
                                 # Format 2: PM2 format
