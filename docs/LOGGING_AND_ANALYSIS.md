@@ -107,41 +107,47 @@ El sistema ya NO depende de un comando externo `codex`. Ahora tiene análisis in
 ### ✅ Detecciones Automáticas
 
 1. **Errores de set_weights**
+
    ```
-   ⚠️ CRITICAL: Weights could not be set on-chain. 
+   ⚠️ CRITICAL: Weights could not be set on-chain.
    This is likely due to insufficient stake or blockchain connection issues.
    ```
 
 2. **Transacciones inválidas**
+
    ```
    ⚠️ Blockchain transaction failed - check validator stake and connection status.
    ```
 
 3. **Checkpoints no completados**
+
    ```
-   • Weights were NOT set on-chain - Validator likely lacks minimum stake 
+   • Weights were NOT set on-chain - Validator likely lacks minimum stake
      (10,000 τ required in production).
    ```
 
 4. **Ganador del round**
+
    ```
    • Winner: Miner UID 2 with 100.0% success rate.
    ```
 
 5. **Proyectos con problemas**
+
    ```
-   • Web projects with 0% success: photoshare, quickbite - 
+   • Web projects with 0% success: photoshare, quickbite -
      these projects may be down or misconfigured.
    ```
 
 6. **Proyectos con bajo rendimiento**
+
    ```
    • Low success rate on: autorepair (15.0%), chatapp (22.5%)
    ```
 
 7. **Problemas de consensus**
    ```
-   • No other validators participated in consensus - 
+   • No other validators participated in consensus -
      validator may be isolated or in testing mode.
    ```
 
@@ -195,11 +201,13 @@ cat /home/admin/autoppia_web_agents_subnet/data/logs/rounds/round_169.log | grep
 ### Problema: "Errors & Warnings" está vacío en el email
 
 **Causas posibles**:
+
 1. El round realmente no tuvo errores (poco probable)
 2. Los logs por round no existen (splitter inactivo)
 3. Los errores no se están capturando en memoria durante ejecución
 
 **Solución**:
+
 1. Verificar que `_report_error()` se llama cuando ocurren errores
 2. Activar el log splitter (ver arriba)
 3. Esperar al siguiente round para verificar
@@ -223,6 +231,7 @@ El email ahora incluye estos checkpoints:
 - ✅ **Set Weights** ← NUEVO
 
 Estados posibles:
+
 - ✓ Done (verde) - Checkpoint completado exitosamente
 - ✗ Error (rojo) - Checkpoint falló pero el round terminó
 - ⏸ Pending (amarillo) - Round aún en progreso
@@ -254,17 +263,17 @@ Errors & Warnings
 5. set_weights failed: Subtensor returned: Invalid Transaction
 
 🤖 Codex AI Analysis
-⚠️ CRITICAL: Weights could not be set on-chain. This is likely due to 
+⚠️ CRITICAL: Weights could not be set on-chain. This is likely due to
 insufficient stake or blockchain connection issues.
 
-• Weights were NOT set on-chain - Validator likely lacks minimum stake 
+• Weights were NOT set on-chain - Validator likely lacks minimum stake
   (10,000 τ required in production).
-  
+
 • Winner: Miner UID 2 with 100.0% success rate.
 
 • Only aurocinema has good success rate - other projects need attention.
 
-• No other validators participated in consensus - validator may be isolated 
+• No other validators participated in consensus - validator may be isolated
   or in testing mode.
 ```
 
@@ -275,5 +284,3 @@ insufficient stake or blockchain connection issues.
 3. **Codex AI ahora funciona sin dependencias externas**
 4. **Checkpoints ahora son Done/Error/Pending** - no más "Skipped"
 5. **Todos los errores importantes se capturan automáticamente**
-
-

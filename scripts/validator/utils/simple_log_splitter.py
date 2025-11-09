@@ -21,14 +21,15 @@ ROUNDS_DIR.mkdir(parents=True, exist_ok=True)
 # Pattern to detect round start
 # Matches: "🚦 Starting Round: 169" or "[ROUND] Starting round 169"
 ROUND_START_PATTERNS = [
-    re.compile(r'🚦\s+Starting\s+Round:\s*(\d+)', re.IGNORECASE),
-    re.compile(r'\[ROUND\]\s+Starting\s+round\s*(\d+)', re.IGNORECASE),
-    re.compile(r'Starting\s+validator\s+round\s*(\d+)', re.IGNORECASE),
+    re.compile(r"🚦\s+Starting\s+Round:\s*(\d+)", re.IGNORECASE),
+    re.compile(r"\[ROUND\]\s+Starting\s+round\s*(\d+)", re.IGNORECASE),
+    re.compile(r"Starting\s+validator\s+round\s*(\d+)", re.IGNORECASE),
 ]
 
 # Current round tracking
 current_round = None
 current_round_file = None
+
 
 def detect_round_start(line: str):
     """Detect if line indicates a new round starting."""
@@ -38,10 +39,11 @@ def detect_round_start(line: str):
             return int(match.group(1))
     return None
 
+
 def process_line(line: str):
     """Process a single log line."""
     global current_round, current_round_file
-    
+
     # Check if new round starts
     new_round = detect_round_start(line)
     if new_round:
@@ -49,13 +51,13 @@ def process_line(line: str):
         if current_round_file:
             current_round_file.close()
             print(f"[{datetime.now()}] Closed round {current_round} log", file=sys.stderr, flush=True)
-        
+
         # Open new round file
         current_round = new_round
         round_log = ROUNDS_DIR / f"round_{current_round}.log"
-        current_round_file = open(round_log, 'a', encoding='utf-8')
+        current_round_file = open(round_log, "a", encoding="utf-8")
         print(f"[{datetime.now()}] Started logging round {current_round} → {round_log}", file=sys.stderr, flush=True)
-    
+
     # Write to current round file
     if current_round_file:
         try:
@@ -64,12 +66,13 @@ def process_line(line: str):
         except Exception as e:
             print(f"[{datetime.now()}] Write error: {e}", file=sys.stderr, flush=True)
 
+
 def main():
     """Main loop - read from stdin and process lines."""
     print(f"[{datetime.now()}] Log splitter started", file=sys.stderr, flush=True)
     print(f"[{datetime.now()}] Round logs directory: {ROUNDS_DIR}/", file=sys.stderr, flush=True)
     print(f"[{datetime.now()}] Waiting for log input...", file=sys.stderr, flush=True)
-    
+
     try:
         for line in sys.stdin:
             try:
@@ -83,6 +86,6 @@ def main():
             current_round_file.close()
             print(f"[{datetime.now()}] Closed round {current_round} log", file=sys.stderr, flush=True)
 
+
 if __name__ == "__main__":
     main()
-

@@ -64,6 +64,55 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
             </table>
     """
 
+    # Codex AI Analysis - RIGHT AFTER Overview for maximum visibility
+    html += """
+        <h2>🤖 Codex AI Analysis</h2>
+    """
+
+    if codex_analysis:
+        # Format analysis with proper styling
+        html += """
+            <div style="background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.3); padding: 18px; border-radius: 12px;">
+        """
+
+        # Convert markdown-style bullets to HTML
+        lines = codex_analysis.split("\n")
+        in_list = False
+
+        for line in lines:
+            line_stripped = line.strip()
+            if not line_stripped:
+                if in_list:
+                    html += "</ul>"
+                    in_list = False
+                continue
+
+            if line_stripped.startswith("- ") or line_stripped.startswith("• "):
+                if not in_list:
+                    html += "<ul style='margin: 8px 0; padding-left: 20px;'>"
+                    in_list = True
+                content = line_stripped[2:].strip()
+                html += f"<li style='color: #e2e8f0; margin: 6px 0; line-height: 1.6;'>{content}</li>"
+            else:
+                if in_list:
+                    html += "</ul>"
+                    in_list = False
+                if line_stripped:
+                    html += f"<p style='color: #e2e8f0; margin: 8px 0; line-height: 1.6;'>{line_stripped}</p>"
+
+        if in_list:
+            html += "</ul>"
+
+        html += "</div>"
+    else:
+        html += """
+            <div style="background: rgba(148,163,184,0.1); border: 1px solid rgba(148,163,184,0.3); padding: 16px; border-radius: 12px;">
+                <p style="color: #94a3b8; margin: 0;">
+                    🤖 Codex analysis not available for this round
+                </p>
+            </div>
+        """
+
     # Round Progress Checklist (NEW)
     html += """
         <h2>✅ Round Progress Checklist</h2>
@@ -448,55 +497,6 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
             if len(warnings) > 15:
                 html += f"<p style='color: #94a3b8; font-size: 12px;'>... and {len(warnings) - 15} more warnings</p>"
             html += "</div>"
-
-    # Codex Analysis - ALWAYS show section
-    html += """
-        <h2>🤖 Codex AI Analysis</h2>
-    """
-
-    if codex_analysis:
-        # Format analysis with proper styling
-        html += """
-            <div style="background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.3); padding: 18px; border-radius: 12px;">
-        """
-
-        # Convert markdown-style bullets to HTML
-        lines = codex_analysis.split("\n")
-        in_list = False
-
-        for line in lines:
-            line_stripped = line.strip()
-            if not line_stripped:
-                if in_list:
-                    html += "</ul>"
-                    in_list = False
-                continue
-
-            if line_stripped.startswith("- ") or line_stripped.startswith("• "):
-                if not in_list:
-                    html += "<ul style='margin: 8px 0; padding-left: 20px;'>"
-                    in_list = True
-                content = line_stripped[2:].strip()
-                html += f"<li style='color: #e2e8f0; margin: 6px 0; line-height: 1.6;'>{content}</li>"
-            else:
-                if in_list:
-                    html += "</ul>"
-                    in_list = False
-                if line_stripped:
-                    html += f"<p style='color: #e2e8f0; margin: 8px 0; line-height: 1.6;'>{line_stripped}</p>"
-
-        if in_list:
-            html += "</ul>"
-
-        html += "</div>"
-    else:
-        html += """
-            <div style="background: rgba(148,163,184,0.1); border: 1px solid rgba(148,163,184,0.3); padding: 16px; border-radius: 12px;">
-                <p style="color: #94a3b8; margin: 0;">
-                    🤖 Codex analysis not available for this round
-                </p>
-            </div>
-        """
 
     html += """
         </div>

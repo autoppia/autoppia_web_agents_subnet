@@ -211,7 +211,7 @@ class ReportingMixin:
             # ONLY use round-specific log file if it exists
             # This prevents mixing logs from different rounds
             log_sources = []
-            
+
             # 1. Round-specific log file (preferred and isolated)
             repo_root = Path(__file__).resolve().parents[4]
             round_log = repo_root / "data" / "logs" / "rounds" / f"round_{report.round_number}.log"
