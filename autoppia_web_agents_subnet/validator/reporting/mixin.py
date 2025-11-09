@@ -214,7 +214,7 @@ class ReportingMixin:
             log_sources = []
 
             # 1. Round-specific log file (preferred and isolated)
-            repo_root = Path(__file__).resolve().parents[4]
+            repo_root = Path(__file__).resolve().parents[3]
             round_log = repo_root / "data" / "logs" / "rounds" / f"round_{report.round_number}.log"
             if round_log.exists():
                 log_sources.append(round_log)
@@ -249,30 +249,30 @@ class ReportingMixin:
 
                             # Parse log line format: "YYYY-MM-DD HH:MM:SS | LEVEL | message" or "YYYY-MM-DD HH:MM:SS.MS | LEVEL | module | message"
                             # We need to check if the LOG LEVEL is ERROR or WARNING, not just if the word appears in the message
-                            
+
                             if "|" in line_clean:
                                 parts = line_clean.split("|")
                                 if len(parts) >= 3:
                                     # parts[0] = timestamp
                                     # parts[1] = level (may have extra spaces)
                                     # parts[2+] = module/message
-                                    
+
                                     level = parts[1].strip().upper()
-                                    
+
                                     # Check if this is an ERROR level log
                                     if level == "ERROR":
                                         # Message is everything after level
                                         message = "|".join(parts[2:]).strip()
                                         if message and len(message) > 10:
                                             report.add_error(message)
-                                    
+
                                     # Check if this is a WARNING level log
                                     elif level == "WARNING":
                                         # Message is everything after level
                                         message = "|".join(parts[2:]).strip()
                                         if message and len(message) > 10:
                                             report.add_warning(message)
-                            
+
                             # PM2 format: "2|validator | timestamp | level | message"
                             elif line_clean.startswith("2|"):
                                 # Try to find level indicator
@@ -280,15 +280,15 @@ class ReportingMixin:
                                     # Extract message after ERROR
                                     idx = line_clean.find("ERROR")
                                     if idx > 0:
-                                        message = line_clean[idx + 5:].strip()  # Skip "ERROR"
+                                        message = line_clean[idx + 5 :].strip()  # Skip "ERROR"
                                         if message and len(message) > 10:
                                             report.add_error(message)
-                                
+
                                 elif "| WARNING" in line_clean or "|WARNING" in line_clean:
                                     # Extract message after WARNING
                                     idx = line_clean.find("WARNING")
                                     if idx > 0:
-                                        message = line_clean[idx + 7:].strip()  # Skip "WARNING"
+                                        message = line_clean[idx + 7 :].strip()  # Skip "WARNING"
                                         if message and len(message) > 10:
                                             report.add_warning(message)
 
@@ -309,7 +309,7 @@ class ReportingMixin:
         try:
             import pickle
 
-            repo_root = Path(__file__).resolve().parents[4]
+            repo_root = Path(__file__).resolve().parents[3]
             reports_dir = repo_root / "data" / "reports" / "rounds"
             reports_dir.mkdir(parents=True, exist_ok=True)
 
@@ -364,7 +364,7 @@ class ReportingMixin:
         try:
             import pickle
 
-            repo_root = Path(__file__).resolve().parents[4]
+            repo_root = Path(__file__).resolve().parents[3]
             report_file = repo_root / "data" / "reports" / "rounds" / f"round_{round_number}.pkl"
 
             if not report_file.exists():
@@ -408,7 +408,7 @@ class ReportingMixin:
     def _run_codex_analysis_static(round_number: int, timeout: int = 30) -> Optional[str]:
         """Static version of Codex analysis (for resending old reports)."""
         try:
-            repo_root = Path(__file__).resolve().parents[4]
+            repo_root = Path(__file__).resolve().parents[3]
             codex_script = repo_root / "scripts" / "validator" / "reporting" / "run_codex.sh"
 
             if not codex_script.exists():
@@ -437,7 +437,7 @@ class ReportingMixin:
     def _run_codex_analysis(self, round_number: int, timeout: int = 30) -> Optional[str]:
         """Run Codex analysis on round logs (optional)."""
         try:
-            repo_root = Path(__file__).resolve().parents[4]
+            repo_root = Path(__file__).resolve().parents[3]
             codex_script = repo_root / "scripts" / "validator" / "reporting" / "run_codex.sh"
 
             if not codex_script.exists():
