@@ -158,6 +158,12 @@ class ReportingMixin:
                 if uid in report.miners:
                     report.miners[uid].final_weight = float(weight)
 
+    def _report_weights_set(self, success: bool = True):
+        """Record that weights were set on chain (or attempted)."""
+        report = self.round_manager.current_round_report
+        if report:
+            report.checkpoint_weights_set = success
+
     def _report_error(self, error_message: str):
         """Record an error that occurred during the round."""
         report = self.round_manager.current_round_report
@@ -200,33 +206,93 @@ class ReportingMixin:
         bt.logging.debug("Round report cleared from memory")
 
     def _extract_errors_warnings_from_logs(self, report: RoundReport):
-        """Extract errors and warnings from round log file."""
+        """Extract errors and warnings from round-specific log file only."""
         try:
+            # ONLY use round-specific log file if it exists
+            # This prevents mixing logs from different rounds
+            log_sources = []
+            
+            # 1. Round-specific log file (preferred and isolated)
             repo_root = Path(__file__).resolve().parents[4]
             round_log = repo_root / "data" / "logs" / "rounds" / f"round_{report.round_number}.log"
-
-            if not round_log.exists():
+            if round_log.exists():
+                log_sources.append(round_log)
+                bt.logging.debug(f"Using round-specific log: {round_log}")
+            else:
+                bt.logging.warning(f"Round-specific log not found: {round_log}")
+                bt.logging.warning("Errors/warnings will only come from in-memory captures during round execution")
+                # Don't fallback to PM2 logs - they mix multiple rounds and would give incorrect data
                 return
 
-            # Read log file and extract ERROR and WARNING lines
-            with open(round_log, "r") as f:
-                for line in f:
-                    line_clean = line.strip()
+            # Process all log sources
+            for log_path in log_sources:
+                try:
+                    # For large log files, only read the last part relevant to this round
+                    with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+                        # Read last 10000 lines max to avoid memory issues
+                        lines = f.readlines()
+                        lines_to_process = lines[-10000:] if len(lines) > 10000 else lines
 
-                    if "ERROR" in line and "ERROR" in line_clean:
-                        # Extract just the message part
-                        if "|" in line_clean:
-                            parts = line_clean.split("|")
-                            if len(parts) >= 3:
-                                message = parts[-1].strip()
-                                report.add_error(message)
+                        for line in lines_to_process:
+                            line_clean = line.strip()
 
-                    elif "WARNING" in line or "⚠️" in line:
-                        if "|" in line_clean:
-                            parts = line_clean.split("|")
-                            if len(parts) >= 3:
-                                message = parts[-1].strip()
-                                report.add_warning(message)
+                            # Skip empty lines
+                            if not line_clean:
+                                continue
+
+                            # Check for ERROR patterns
+                            if "ERROR" in line_clean or "Error" in line_clean or "error" in line_clean:
+                                # Extract message - try multiple formats
+                                message = None
+
+                                # Format 1: Bittensor logging with pipes (time|level|message)
+                                if "|" in line_clean:
+                                    parts = line_clean.split("|")
+                                    if len(parts) >= 3 and ("ERROR" in parts[1] or "ERROR" in parts[0]):
+                                        message = "|".join(parts[2:]).strip()
+
+                                # Format 2: PM2 format with timestamps
+                                elif line_clean.startswith("2|"):  # PM2 prefix
+                                    # Extract after PM2 prefix and timestamp
+                                    if "ERROR" in line_clean:
+                                        # Find ERROR keyword and take everything after it
+                                        idx = line_clean.find("ERROR")
+                                        if idx > 0:
+                                            message = line_clean[idx:].strip()
+
+                                # Format 3: Simple error message
+                                else:
+                                    message = line_clean
+
+                                if message and len(message) > 10:  # Only meaningful messages
+                                    report.add_error(message)
+
+                            # Check for WARNING patterns
+                            elif "WARNING" in line_clean or "⚠️" in line_clean or "Warning" in line_clean:
+                                message = None
+
+                                # Format 1: Bittensor logging with pipes
+                                if "|" in line_clean:
+                                    parts = line_clean.split("|")
+                                    if len(parts) >= 3 and ("WARNING" in parts[1] or "WARNING" in parts[0]):
+                                        message = "|".join(parts[2:]).strip()
+
+                                # Format 2: PM2 format
+                                elif line_clean.startswith("2|"):
+                                    if "WARNING" in line_clean or "⚠️" in line_clean:
+                                        idx = max(line_clean.find("WARNING") if "WARNING" in line_clean else -1, line_clean.find("⚠️") if "⚠️" in line_clean else -1)
+                                        if idx > 0:
+                                            message = line_clean[idx:].strip()
+
+                                # Format 3: Simple warning
+                                else:
+                                    message = line_clean
+
+                                if message and len(message) > 10:
+                                    report.add_warning(message)
+
+                except Exception as log_exc:
+                    bt.logging.debug(f"Failed to parse log file {log_path}: {log_exc}")
 
         except Exception as e:
             bt.logging.debug(f"Failed to extract errors/warnings from logs: {e}")

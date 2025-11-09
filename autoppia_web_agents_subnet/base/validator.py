@@ -284,8 +284,16 @@ class BaseValidatorNeuron(BaseNeuron):
         )
         if result is True:
             bt.logging.info("set_weights on chain successfully!")
+            # Record successful weight setting in report if method exists
+            if hasattr(self, "_report_weights_set"):
+                self._report_weights_set(success=True)
         else:
             bt.logging.error("set_weights failed", msg)
+            # Record failed weight setting in report if method exists
+            if hasattr(self, "_report_weights_set"):
+                self._report_weights_set(success=False)
+            if hasattr(self, "_report_error"):
+                self._report_error(f"set_weights failed: {msg}")
 
     def resync_metagraph(self):
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""

@@ -141,6 +141,7 @@ class RoundReport:
     checkpoint_ipfs_published: bool = False
     checkpoint_ipfs_downloaded: bool = False
     checkpoint_winner_selected: bool = False
+    checkpoint_weights_set: bool = False
 
     def add_miner(self, uid: int, hotkey: str) -> MinerReport:
         """Add or get a miner report."""
@@ -158,7 +159,7 @@ class RoundReport:
         if warning_message and warning_message not in self.warnings:
             self.warnings.append(warning_message)
 
-    def record_handshake_response(self, uid: int, hotkey: str, agent_name: str = None, agent_image: str = None):
+    def record_handshake_response(self, uid: int, hotkey: str, agent_name: Optional[str] = None, agent_image: Optional[str] = None):
         """Record that a miner responded to handshake."""
         miner = self.add_miner(uid, hotkey)
         miner.responded_to_handshake = True

@@ -81,13 +81,18 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
         ("Publishing Results on IPFS", getattr(report, "checkpoint_ipfs_published", False)),
         ("Downloaded Results from IPFS", getattr(report, "checkpoint_ipfs_downloaded", False)),
         ("Select Winner of Round", getattr(report, "checkpoint_winner_selected", False)),
+        ("Set Weights", getattr(report, "checkpoint_weights_set", False)),
     ]
 
     for checkpoint_name, checkpoint_status in checkpoints:
         if checkpoint_status:
             badge = '<span class="badge badge-success">✓ Done</span>'
         else:
-            badge = '<span class="badge badge-warning">⏸ Skipped</span>'
+            # If round is completed but checkpoint wasn't done, it's an error
+            if report.completed:
+                badge = '<span class="badge badge-error">✗ Error</span>'
+            else:
+                badge = '<span class="badge badge-warning">⏸ Pending</span>'
 
         html += f"""
             <tr>
