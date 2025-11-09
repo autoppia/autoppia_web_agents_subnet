@@ -16,6 +16,11 @@ from .round_report import RoundReport
 
 def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = None) -> str:
     """Generate beautiful HTML email from RoundReport."""
+    
+    # Detect environment (DEV or PROD)
+    environment = os.getenv("VALIDATOR_ENVIRONMENT", "DEV").upper()
+    env_color = "#f59e0b" if environment == "DEV" else "#22c55e"  # Orange for DEV, Green for PROD
+    env_badge = f'<span style="background: {env_color}; color: #0f172a; padding: 4px 12px; border-radius: 999px; font-weight: 600; font-size: 14px; margin-left: 12px;">{environment}</span>'
 
     # Header
     html = f"""
@@ -40,7 +45,7 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
     </head>
     <body>
         <div class="container">
-            <h1>🎯 Validator Round Report</h1>
+            <h1>🎯 Validator Round Report {env_badge}</h1>
             <p style="color: #94a3b8; margin: 8px 0 0 0;">Round {report.round_number} • Validator UID {report.validator_uid}</p>
     """
 
@@ -518,6 +523,9 @@ def send_round_report_email(report: RoundReport, codex_analysis: Optional[str] =
     email_from = os.getenv("REPORT_MONITOR_EMAIL_FROM")
     email_to = os.getenv("REPORT_MONITOR_EMAIL_TO")
     use_ssl = os.getenv("REPORT_MONITOR_SMTP_SSL", "false").lower() == "true"
+    
+    # Detect environment
+    environment = os.getenv("VALIDATOR_ENVIRONMENT", "DEV").upper()
 
     if not smtp_host or not email_to:
         print("❌ Email not configured")
@@ -528,8 +536,9 @@ def send_round_report_email(report: RoundReport, codex_analysis: Optional[str] =
 
     # Generate plain text version
     text_body = f"""
-Validator Round Report - Round {report.round_number}
+Validator Round Report [{environment}] - Round {report.round_number}
 
+Environment: {environment}
 Round: {report.round_number}
 Validator UID: {report.validator_uid}
 Start Block: {report.start_block:,}
@@ -549,9 +558,9 @@ Miners Evaluated: {len(report.miners)}
     if codex_analysis:
         text_body += f"\n--- Codex Analysis ---\n{codex_analysis}\n"
 
-    # Create email
+    # Create email with environment tag in subject
     msg = EmailMessage()
-    msg["Subject"] = f"[validator] Round {report.round_number} - Complete Report"
+    msg["Subject"] = f"[{environment}] Validator Round {report.round_number} - Complete Report"
     msg["From"] = email_from
     msg["To"] = email_to
     msg.set_content(text_body)
