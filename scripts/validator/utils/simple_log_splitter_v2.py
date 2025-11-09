@@ -97,28 +97,28 @@ def main():
     parser.add_argument("--log-file", type=str, help="Path to PM2 log file to monitor")
     parser.add_argument("--output-dir", type=str, help="Directory to write round logs")
     args = parser.parse_args()
-    
+
     # Determine paths
     if args.log_file:
         pm2_log = Path(args.log_file)
     else:
         pm2_log = Path.home() / ".pm2" / "logs" / "validator-wta-out.log"
-    
+
     if args.output_dir:
         rounds_dir = Path(args.output_dir)
     else:
         script_path = Path(__file__).resolve()
         repo_root = script_path.parents[3]
         rounds_dir = repo_root / "data" / "logs" / "rounds"
-    
+
     # Create directories
     rounds_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Store in global for process_line to use
     global ROUNDS_DIR, PM2_LOG
     ROUNDS_DIR = rounds_dir
     PM2_LOG = pm2_log
-    
+
     print(f"[{datetime.now()}] Log splitter started", flush=True)
     print(f"[{datetime.now()}] Round logs directory: {ROUNDS_DIR}/", flush=True)
     print(f"[{datetime.now()}] PM2 log file: {PM2_LOG}", flush=True)

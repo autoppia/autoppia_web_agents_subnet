@@ -17,9 +17,10 @@ from .round_report import RoundReport
 def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = None) -> str:
     """Generate beautiful HTML email from RoundReport."""
     
-    # Detect environment (DEV or PROD)
-    environment = os.getenv("VALIDATOR_ENVIRONMENT", "DEV").upper()
-    env_color = "#f59e0b" if environment == "DEV" else "#22c55e"  # Orange for DEV, Green for PROD
+    # Detect environment based on TESTING variable
+    is_testing = os.getenv("TESTING", "false").lower() == "true"
+    environment = "DEV" if is_testing else "PROD"
+    env_color = "#f59e0b" if is_testing else "#22c55e"  # Orange for DEV, Green for PROD
     env_badge = f'<span style="background: {env_color}; color: #0f172a; padding: 4px 12px; border-radius: 999px; font-weight: 600; font-size: 14px; margin-left: 12px;">{environment}</span>'
 
     # Header
@@ -524,8 +525,9 @@ def send_round_report_email(report: RoundReport, codex_analysis: Optional[str] =
     email_to = os.getenv("REPORT_MONITOR_EMAIL_TO")
     use_ssl = os.getenv("REPORT_MONITOR_SMTP_SSL", "false").lower() == "true"
     
-    # Detect environment
-    environment = os.getenv("VALIDATOR_ENVIRONMENT", "DEV").upper()
+    # Detect environment based on TESTING variable
+    is_testing = os.getenv("TESTING", "false").lower() == "true"
+    environment = "DEV" if is_testing else "PROD"
 
     if not smtp_host or not email_to:
         print("❌ Email not configured")
