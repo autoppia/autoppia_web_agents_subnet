@@ -94,13 +94,21 @@ async def test_validator_forward_end_to_end(monkeypatch):
     validator_config.ENABLE_DISTRIBUTED_CONSENSUS = False
     validator_config.SHOULD_RECORD_GIF = False
     validator_config.CONSENSUS_VERIFICATION_ENABLED = False
-    validator_config.PRE_GENERATED_TASKS = 1
-    validator_config.VALIDATOR_NAME = "Mock Validator"
-    validator_config.VALIDATOR_IMAGE = "https://example.com/avatar.png"
+    monkeypatch.setattr(validator_config, 'PRE_GENERATED_TASKS', 1, raising=False)
+    monkeypatch.setattr(validator_config, 'VALIDATOR_NAME', 'Mock Validator', raising=False)
+    monkeypatch.setattr(validator_config, 'VALIDATOR_IMAGE', 'https://example.com/avatar.png', raising=False)
+    monkeypatch.setattr(validator_config, 'DZ_STARTING_BLOCK', 0, raising=False)
 
     import neurons.validator as validator_module
-    validator_module.VALIDATOR_NAME = "Mock Validator"
-    validator_module.VALIDATOR_IMAGE = "https://example.com/avatar.png"
+    monkeypatch.setattr(validator_module, 'VALIDATOR_NAME', 'Mock Validator', raising=False)
+    monkeypatch.setattr(validator_module, 'VALIDATOR_IMAGE', 'https://example.com/avatar.png', raising=False)
+    monkeypatch.setattr(validator_module, 'DZ_STARTING_BLOCK', 0, raising=False)
+    monkeypatch.setattr(validator_module, 'PRE_GENERATED_TASKS', 1, raising=False)
+
+    from autoppia_web_agents_subnet.validator.round_start import mixin as round_start_mixin
+    monkeypatch.setattr(round_start_mixin, 'PRE_GENERATED_TASKS', 1, raising=False)
+    from autoppia_web_agents_subnet.validator.settlement import mixin as settlement_mixin
+    monkeypatch.setattr(settlement_mixin, 'ENABLE_DISTRIBUTED_CONSENSUS', False, raising=False)
 
     # Provide deterministic task generation & evaluation
     from autoppia_web_agents_subnet.validator.evaluation import tasks as tasks_module
@@ -112,12 +120,12 @@ async def test_validator_forward_end_to_end(monkeypatch):
     project = demo_web_projects[0]
 
     async def fake_get_tasks(*_, **__):
-        return [
-            TaskWithProject(
-                project=project,
-                task=Task(url="https://demo", prompt="Click button", tests=[]),
-            )
-        ]
+        task = Task()
+        task.url = "https://demo"
+        task.prompt = "Click button"
+        task.tests = []
+        task.id = "task-1"
+        return [TaskWithProject(project=project, task=task)]
 
     class DummyEvaluator:
         def __init__(self, *_, **__):
@@ -137,7 +145,40 @@ async def test_validator_forward_end_to_end(monkeypatch):
             ]
 
     monkeypatch.setattr(tasks_module, "get_task_collection_interleaved", fake_get_tasks)
+    monkeypatch.setattr(round_start_mixin, "get_task_collection_interleaved", fake_get_tasks)
     monkeypatch.setattr(eval_module, "ConcurrentEvaluator", DummyEvaluator)
+
+    from autoppia_web_agents_subnet.validator.evaluation import synapse_handlers as syn_handlers
+    from autoppia_web_agents_subnet.validator.evaluation import mixin as evaluation_mixin
+
+    async def direct_start_round(*, validator, miner_axons, start_synapse, timeout=60):
+        results = []
+        for axon in miner_axons:
+            response_list = await validator.dendrite(
+                axons=[axon],
+                synapse=start_synapse,
+                deserialize=True,
+                timeout=timeout,
+            )
+            results.append(response_list[0] if response_list else None)
+        return results
+
+    async def direct_task_send(*, validator, miner_axons, task_synapse, timeout=60):
+        results = []
+        for axon in miner_axons:
+            response_list = await validator.dendrite(
+                axons=[axon],
+                synapse=task_synapse,
+                deserialize=True,
+                timeout=timeout,
+            )
+            results.append(response_list[0] if response_list else None)
+        return results
+
+    monkeypatch.setattr(syn_handlers, "send_start_round_synapse_to_miners", direct_start_round)
+    monkeypatch.setattr(syn_handlers, "send_task_synapse_to_miners", direct_task_send)
+    monkeypatch.setattr(round_start_mixin, "send_start_round_synapse_to_miners", direct_start_round)
+    monkeypatch.setattr(evaluation_mixin, "send_task_synapse_to_miners", direct_task_send)
 
     # Boot mock miner and register on mock network
     miner = MockMiner(config=_mk_miner_config())
@@ -146,9 +187,23 @@ async def test_validator_forward_end_to_end(monkeypatch):
 
     validator = Validator(config=_mk_validator_config())
     validator.iwap_client = DummyIWAPClient()
+    validator.state_manager.save_checkpoint = lambda *args, **kwargs: None
+    validator.state_manager.cleanup = lambda *args, **kwargs: None
+    async def _no_wait_boundary():
+        return None
+
+    validator._wait_until_next_round_boundary = _no_wait_boundary  # type: ignore[assignment]
 
     try:
-        await validator.forward()
+        current_block = validator.block
+        start_result = await validator._run_start_phase(current_block)
+        assert start_result.continue_forward
+        tasks = start_result.all_tasks
+        task_result = await validator._run_task_phase(tasks)
+        await validator._run_settlement_phase(
+            tasks_completed=task_result.tasks_completed,
+            total_tasks=len(tasks),
+        )
 
         assert validator.round_manager.current_phase == RoundPhase.COMPLETE
         assert validator._finalized_this_round is True
