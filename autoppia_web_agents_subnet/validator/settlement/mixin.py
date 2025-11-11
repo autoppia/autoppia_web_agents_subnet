@@ -27,7 +27,7 @@ from autoppia_web_agents_subnet.validator.settlement.consensus import (
 from autoppia_web_agents_subnet.validator.settlement.rewards import wta_rewards
 
 
-class SettlementMixin:
+class ValidatorSettlementMixin:
     """Consensus and weight-finalization helpers shared across phases."""
 
     def _reset_consensus_state(self) -> None:
@@ -190,6 +190,58 @@ class SettlementMixin:
             force=True,
         )
         self.round_manager.log_phase_history()
+
+    async def _wait_until_final_phase(self) -> None:
+        start_block_snapshot = self.subtensor.get_current_block()
+        initial_bounds = self.round_manager.get_round_boundaries(
+            start_block_snapshot,
+            log_debug=False,
+        )
+        fixed_start_block = int(initial_bounds["round_start_block"])
+        fixed_target_block = int(initial_bounds["final_start_block"])
+        fixed_target_epoch = float(initial_bounds["final_start_epoch"])
+
+        last_log_time = time.time()
+        while True:
+            try:
+                current_block = self.subtensor.get_current_block()
+                if current_block >= fixed_target_block:
+                    ColoredLogger.success(
+                        f"🎯 Final phase started at epoch {fixed_target_epoch}",
+                        ColoredLogger.GREEN,
+                    )
+                    break
+
+                total = max(fixed_target_block - fixed_start_block, 1)
+                done = max(current_block - fixed_start_block, 0)
+                progress = min(max((done / total) * 100.0, 0.0), 100.0)
+
+                blocks_remaining = max(fixed_target_block - current_block, 0)
+                minutes_remaining = (
+                    blocks_remaining * self.round_manager.SECONDS_PER_BLOCK
+                ) / 60
+
+                if time.time() - last_log_time >= 30:
+                    current_epoch = self.round_manager.block_to_epoch(current_block)
+                    ColoredLogger.info(
+                        (
+                            "Waiting — final phase (global) — epoch {cur:.3f}/{target:.3f} "
+                            "({pct:.2f}%) | ~{mins:.1f}m left — holding until block {target_blk} "
+                            "before starting final phase"
+                        ).format(
+                            cur=current_epoch,
+                            target=fixed_target_epoch,
+                            pct=progress,
+                            mins=minutes_remaining,
+                            target_blk=fixed_target_block,
+                        ),
+                        ColoredLogger.BLUE,
+                    )
+                    last_log_time = time.time()
+            except Exception as exc:
+                bt.logging.debug(f"Failed to read current block during final phase wait: {exc}")
+
+            await asyncio.sleep(12)
 
     async def _wait_until_next_round_boundary(self) -> None:
         start_block_snapshot = self.subtensor.get_current_block()

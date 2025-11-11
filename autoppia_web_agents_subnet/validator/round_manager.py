@@ -18,13 +18,16 @@ class RoundPhase(Enum):
     """Named phases in the validator round lifecycle."""
 
     IDLE = "idle"
-    PREPARING = "preparing"
-    HANDSHAKE = "handshake"
-    TASK_EXECUTION = "task_execution"
-    CONSENSUS = "consensus"
-    WAITING = "waiting"
-    FINALIZING = "finalizing"
+    START = "start"
+    SCREENING = "screening"
+    SCREENING_HANDSHAKE = "screening_handshake"
+    SCREENING_TASK_EXECUTION = "screening_task_execution"
+    SCREENING_CONSENSUS = "screening_consensus"
+    FINAL = "final"
+    FINAL_TASK_EXECUTION = "final_task_execution"
+    FINAL_CONSENSUS = "final_consensus"
     COMPLETE = "complete"
+    WAITING = "waiting"
     ERROR = "error"
 
 
@@ -68,11 +71,13 @@ class RoundManager:
     def __init__(
         self,
         round_size_epochs: float,
+        final_start_fraction: float,
         avg_task_duration_seconds: float,
         safety_buffer_epochs: float,
         minimum_start_block: Optional[int] = None,
     ):
         self.round_size_epochs = round_size_epochs
+        self.final_start_fraction = final_start_fraction
         self.avg_task_duration_seconds = avg_task_duration_seconds
         self.safety_buffer_epochs = safety_buffer_epochs
         self.minimum_start_block = minimum_start_block
@@ -153,21 +158,24 @@ class RoundManager:
     def get_round_boundaries(self, current_block: int, *, log_debug: bool = True) -> Dict[str, Any]:
         import bittensor as bt
 
-        rbl = int(self.ROUND_BLOCK_LENGTH)
+        round_block_length = int(self.ROUND_BLOCK_LENGTH)
         base_block = int(self.minimum_start_block) if self.minimum_start_block is not None else 0
         effective_block = max(current_block, base_block)
 
         if self.minimum_start_block is not None:
             blocks_since_base = effective_block - base_block
-            window_index = blocks_since_base // rbl
-            round_start_block = int(base_block + window_index * rbl)
+            window_index = blocks_since_base // round_block_length
+            round_start_block = int(base_block + window_index * round_block_length)
         else:
-            window_index = effective_block // rbl
-            round_start_block = int(window_index * rbl)
+            window_index = effective_block // round_block_length
+            round_start_block = int(window_index * round_block_length)
 
-        target_block = int(round_start_block + rbl)
+        target_block = int(round_start_block + round_block_length)
         round_start_epoch = round_start_block / self.BLOCKS_PER_EPOCH
         target_epoch = target_block / self.BLOCKS_PER_EPOCH
+
+        final_start_block = round_start_block + int(round_block_length * self.final_start_fraction) if self.final_start_fraction is not None else None
+        final_start_epoch = final_start_block / self.BLOCKS_PER_EPOCH if final_start_block is not None else None
 
         if log_debug:
             bt.logging.debug(
@@ -185,8 +193,10 @@ class RoundManager:
 
         return {
             "round_start_epoch": round_start_epoch,
+            "final_start_epoch": final_start_epoch,
             "target_epoch": target_epoch,
             "round_start_block": round_start_block,
+            "final_start_block": final_start_block,
             "target_block": target_block,
         }
 

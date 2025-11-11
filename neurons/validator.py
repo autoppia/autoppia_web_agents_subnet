@@ -14,25 +14,22 @@ from autoppia_web_agents_subnet.validator.config import (
     ROUND_SIZE_EPOCHS,
     AVG_TASK_DURATION_SECONDS,
     SAFETY_BUFFER_EPOCHS,
-    VALIDATOR_NAME,
-    VALIDATOR_IMAGE,
     DZ_STARTING_BLOCK,
     SCREENING_STOP_FRACTION,
     STOP_TASK_EVALUATION_AT_ROUND_FRACTION,
+    FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION,
 )
 from autoppia_web_agents_subnet.protocol import StartRoundSynapse
-from autoppia_web_agents_subnet.validator.round_manager import RoundManager, RoundPhase
+from autoppia_web_agents_subnet.validator.round.round_manager import RoundManager, RoundPhase
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.platform.validator_mixin import ValidatorPlatformMixin
 from autoppia_web_agents_subnet.validator.round_state import (
     RoundStateValidatorMixin,
     RoundPhaseValidatorMixin,
 )
-from autoppia_web_agents_subnet.validator.round_start import RoundStartMixin
+from autoppia_web_agents_subnet.validator.round.round_start_mixin import RoundStartMixin
 from autoppia_web_agents_subnet.validator.evaluation import EvaluationPhaseMixin
 from autoppia_web_agents_subnet.validator.settlement import SettlementMixin
-from autoppia_web_agents_subnet.validator.phases.screening import ScreeningPhase
-from autoppia_web_agents_subnet.validator.phases.final import FinalPhase
 from autoppia_web_agents_subnet.validator.consensus_manager import ConsensusManager
 from autoppia_web_agents_subnet.validator.dataset import RoundDatasetCollector
 from autoppia_iwa.src.bootstrap import AppBootstrap
@@ -48,12 +45,6 @@ class Validator(
     BaseValidatorNeuron,
 ):
     def __init__(self, config=None):
-        if not VALIDATOR_NAME or not VALIDATOR_IMAGE:
-            bt.logging.error(
-                "VALIDATOR_NAME and VALIDATOR_IMAGE must be set in the environment before starting the validator."
-            )
-            raise SystemExit(1)
-
         super().__init__(config=config)
 
         # Configure IWA (loguru) logging level based on CLI flag
@@ -91,8 +82,6 @@ class Validator(
         self._final_top_s_uids: list[int] = []
         self._final_endpoints: dict[int, str] = {}
         self._last_round_winner_uid: int | None = None
-        self._screening_phase = ScreeningPhase()
-        self._final_phase = FinalPhase()
         self._consensus = ConsensusManager()
         self.dataset_collector: RoundDatasetCollector | None = None
 
@@ -108,48 +97,20 @@ class Validator(
         self.load_state()
 
     async def forward(self) -> None:
-        """High-level round orchestration stitched together from phase engines."""
-        # Sanity: ensure screening < stop fraction
-        try:
-            if float(SCREENING_STOP_FRACTION) >= float(STOP_TASK_EVALUATION_AT_ROUND_FRACTION):
-                import sys
-
-                bt.logging.error("Invalid validator configuration detected. Aborting startup.")
-                bt.logging.error(
-                    (
-                        "SCREENING_STOP_FRACTION (currently {scr:.3f}) must be STRICTLY LESS than "
-                        "STOP_TASK_EVALUATION_AT_ROUND_FRACTION (currently {stp:.3f})."
-                    ).format(scr=float(SCREENING_STOP_FRACTION), stp=float(STOP_TASK_EVALUATION_AT_ROUND_FRACTION))
-                )
-                bt.logging.error(
-                    (
-                        "Fix: adjust environment variables so screening ends earlier than the stop window."
-                    )
-                )
-                sys.exit(1)
-        except Exception:
-            pass
-
+        """
+        Forward pass for the validator.
+        """
         current_block = self.block
         self.round_manager.enter_phase(
             RoundPhase.PREPARING,
             block=current_block,
             note="Starting forward pass",
         )
-
-        resume_status = getattr(self, "_last_resume_info", {}).get("status")
-        stored_round_number = getattr(self, "_current_round_number", None)
-        if resume_status == "loaded" and stored_round_number is not None:
-            try:
-                current_round_number = int(stored_round_number)
-            except Exception:
-                current_round_number = await self.round_manager.calculate_round(current_block)
-        else:
-            current_round_number = await self.round_manager.calculate_round(current_block)
-            try:
-                setattr(self, "_current_round_number", int(current_round_number))
-            except Exception:
-                pass
+        current_round_number = await self.round_manager.calculate_round(current_block)
+        try:
+            setattr(self, "_current_round_number", int(current_round_number))
+        except Exception:
+            pass
         bt.logging.info(f"🚀 Starting round-based forward (round {current_round_number})")
         ColoredLogger.info(f"🚦 Starting Round: {int(current_round_number)}", ColoredLogger.GREEN)
 
