@@ -265,7 +265,6 @@ class EvaluationPhaseMixin:
                 version=self.version,
                 prompt=task.prompt,
                 url=task_url,
-                screenshot=None,
                 seed=seed,
                 web_project_name=web_project_name,
             )

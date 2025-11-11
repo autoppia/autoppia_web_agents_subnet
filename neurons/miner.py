@@ -42,11 +42,7 @@ class Miner(BaseMinerNeuron):
         super(Miner, self).__init__(config=config)
 
         # Choose agent implementation
-        self.agent = (
-            ApifiedWebAgent(name=AGENT_NAME, host=AGENT_HOST, port=AGENT_PORT)
-            if USE_APIFIED_AGENT
-            else RandomClickerWebAgent(is_random=False)
-        )
+        self.agent = ApifiedWebAgent(name=AGENT_NAME, host=AGENT_HOST, port=AGENT_PORT) if USE_APIFIED_AGENT else RandomClickerWebAgent(is_random=False)
 
         self.miner_stats = MinerStats()
         self.load_state()
@@ -193,7 +189,6 @@ class Miner(BaseMinerNeuron):
             task = Task(
                 prompt=synapse.prompt,
                 url=url,
-                screenshot=synapse.screenshot,
             )
 
             if seed is not None:
@@ -207,9 +202,7 @@ class Miner(BaseMinerNeuron):
 
             task_for_agent = task.prepare_for_agent(str(self.uid))
 
-            ColoredLogger.debug(
-                f"Task Prompt: {task_for_agent.prompt}", ColoredLogger.BLUE
-            )
+            ColoredLogger.debug(f"Task Prompt: {task_for_agent.prompt}", ColoredLogger.BLUE)
             bt.logging.info("Generating actions...")
 
             # Process the task
@@ -232,9 +225,7 @@ class Miner(BaseMinerNeuron):
         return synapse
 
     # ─────────────────────────── Feedback ───────────────────────────
-    async def forward_feedback(
-        self, synapse: TaskFeedbackSynapse
-    ) -> TaskFeedbackSynapse:
+    async def forward_feedback(self, synapse: TaskFeedbackSynapse) -> TaskFeedbackSynapse:
         """
         Endpoint for feedback requests from the validator.
         Logs the feedback, updates MinerStats, and prints a summary.
@@ -254,8 +245,8 @@ class Miner(BaseMinerNeuron):
         eval_result_display = None
         if synapse.evaluation_result:
             eval_result_display = synapse.evaluation_result.copy()
-            if 'gif_recording' in eval_result_display and eval_result_display['gif_recording']:
-                eval_result_display['gif_recording'] = f"<length: {len(eval_result_display['gif_recording'])}>"
+            if "gif_recording" in eval_result_display and eval_result_display["gif_recording"]:
+                eval_result_display["gif_recording"] = f"<length: {len(eval_result_display['gif_recording'])}>"
 
         ColoredLogger.info(f"  - evaluation_result: {eval_result_display}", ColoredLogger.GRAY)
 

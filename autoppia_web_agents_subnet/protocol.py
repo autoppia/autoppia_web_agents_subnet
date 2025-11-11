@@ -19,10 +19,10 @@ class TaskSynapse(Synapse):
     """
     Synapse carrying the Task prompt & data from validator to miners.
     """
+
     version: str = ""
     prompt: str
     url: str
-    screenshot: Optional[str] = None
     seed: Optional[int] = Field(
         default=None,
         description="Seed assigned to the task URL (when applicable).",
@@ -49,6 +49,7 @@ class TaskFeedbackSynapse(Synapse):
     Feedback from validator back to miner: tests, scores, eval data.
     (Data-only; keep IO/printing elsewhere.)
     """
+
     version: str = ""
     validator_id: str
     miner_id: str
@@ -90,6 +91,7 @@ class StartRoundSynapse(Synapse):
       - github_url: repository with miner/agent code.
       - agent_version / capabilities: optional details.
     """
+
     # Request (validator -> miner)
     version: str = ""
     round_id: str
