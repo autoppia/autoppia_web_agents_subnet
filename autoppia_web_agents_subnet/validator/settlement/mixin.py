@@ -10,7 +10,7 @@ import numpy as np
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.utils.log_colors import consensus_tag
 from autoppia_web_agents_subnet.validator.config import (
-    BURN_ALL,
+    BURN_AMOUNT_PERCENTAGE,
     BURN_UID,
     ENABLE_DISTRIBUTED_CONSENSUS,
     FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION,
@@ -340,12 +340,12 @@ class SettlementMixin:
             burn_reason = "burn (no active miners)"
         else:
             avg_rewards = self.round_manager.get_average_rewards()
-            if BURN_ALL:
+            if BURN_AMOUNT_PERCENTAGE >= 1.0:
                 ColoredLogger.warning(
-                    "🔥 BURN_ALL enabled: forcing burn and skipping consensus",
+                    f"🔥 BURN_AMOUNT_PERCENTAGE={BURN_AMOUNT_PERCENTAGE:.2f} (≥1.0): forcing full burn and skipping consensus",
                     ColoredLogger.RED,
                 )
-                burn_reason = "burn (forced)"
+                burn_reason = "burn (forced by BURN_AMOUNT_PERCENTAGE=1.0)"
 
         if burn_reason:
             await self._burn_all(
@@ -464,9 +464,28 @@ class SettlementMixin:
         winner_uid = max(final_rewards_dict, key=final_rewards_dict.get) if final_rewards_dict else None
         all_uids = list(range(self.metagraph.n))
         wta_full = np.zeros(self.metagraph.n, dtype=np.float32)
+
         if winner_uid is not None and 0 <= int(winner_uid) < self.metagraph.n:
-            wta_full[int(winner_uid)] = 1.0
-        bt.logging.info(f"Updating scores for on-chain WTA winner uid={winner_uid}")
+            # Validar y clampar el porcentaje de burn
+            burn_percentage = float(max(0.0, min(1.0, BURN_AMOUNT_PERCENTAGE)))
+            winner_percentage = 1.0 - burn_percentage
+
+            burn_idx = int(BURN_UID) if 0 <= int(BURN_UID) < self.metagraph.n else min(5, self.metagraph.n - 1)
+
+            # Asignar pesos según el split configurado
+            wta_full[int(winner_uid)] = winner_percentage
+            if burn_percentage > 0.0:
+                wta_full[burn_idx] = burn_percentage
+
+            bt.logging.info("=" * 80)
+            bt.logging.info("🎯 WEIGHT DISTRIBUTION (on-chain)")
+            bt.logging.info(f"   Winner UID {winner_uid}: {winner_percentage:.1%} ({winner_percentage:.6f})")
+            bt.logging.info(f"   Burn UID {burn_idx}: {burn_percentage:.1%} ({burn_percentage:.6f})")
+            bt.logging.info(f"   Total: {winner_percentage + burn_percentage:.6f}")
+            bt.logging.info(f"   Config: BURN_AMOUNT_PERCENTAGE={BURN_AMOUNT_PERCENTAGE}")
+            bt.logging.info("=" * 80)
+        else:
+            bt.logging.warning("❌ No valid winner found, weights remain zero")
 
         # Record winner and weights in report (NEW)
         if winner_uid is not None:
