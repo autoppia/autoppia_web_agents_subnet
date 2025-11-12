@@ -8,6 +8,7 @@ import json
 import os
 import re
 import subprocess
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, Any
 
@@ -167,9 +168,17 @@ class ReportingMixin:
 
     def _report_error(self, error_message: str):
         """Record an error that occurred during the round."""
+        if not error_message:
+            bt.logging.warning("_report_error called with empty message")
+            return
+
         report = self.round_manager.current_round_report
         if report:
+            bt.logging.debug(f"Adding error to report: {error_message[:100]}")
             report.add_error(error_message)
+            bt.logging.debug(f"Report now has {len(report.errors)} total errors")
+        else:
+            bt.logging.warning(f"Could not report error (no active round report): {error_message[:100]}")
 
     def _report_warning(self, warning_message: str):
         """Record a warning that occurred during the round."""
@@ -191,6 +200,14 @@ class ReportingMixin:
         # Extract errors/warnings from round logs
         self._extract_errors_warnings_from_logs(report)
 
+        # Log errors/warnings before finalizing
+        bt.logging.info(f"📊 Finalizing round report for round {report.round_number}")
+        bt.logging.info(f"   Errors captured: {len(report.errors)}")
+        bt.logging.info(f"   Warnings captured: {len(report.warnings)}")
+        if report.errors:
+            for idx, err in enumerate(report.errors[:5], 1):
+                bt.logging.info(f"   Error {idx}: {err[:150]}")
+
         # Finalize report
         report.finalize_round(end_block, end_epoch)
 
@@ -207,35 +224,60 @@ class ReportingMixin:
         bt.logging.debug("Round report cleared from memory")
 
     def _extract_errors_warnings_from_logs(self, report: RoundReport):
-        """Extract errors and warnings from round-specific log file only."""
+        """Extract errors and warnings from log files (round-specific or PM2 fallback)."""
         try:
-            # ONLY use round-specific log file if it exists
-            # This prevents mixing logs from different rounds
             log_sources = []
 
-            # 1. Round-specific log file (preferred and isolated)
+            # 1. Try round-specific log file first (preferred and isolated)
             repo_root = Path(__file__).resolve().parents[3]
             round_log = repo_root / "data" / "logs" / "rounds" / f"round_{report.round_number}.log"
             if round_log.exists():
-                log_sources.append(round_log)
+                log_sources.append(("round", round_log))
                 bt.logging.debug(f"Using round-specific log: {round_log}")
             else:
                 bt.logging.warning(f"Round-specific log not found: {round_log}")
-                bt.logging.warning("Errors/warnings will only come from in-memory captures during round execution")
-                # Don't fallback to PM2 logs - they mix multiple rounds and would give incorrect data
-                return
+                bt.logging.info("Will attempt to extract errors from PM2 logs using timestamp filtering")
 
-            # Compile regex once for ANSI color code removal
+                # Fallback to PM2 logs with timestamp filtering
+                # Try common PM2 log locations
+                home = Path.home()
+                pm2_logs = [
+                    home / ".pm2/logs/validator-wta-out.log",
+                    home / ".pm2/logs/validator-out.log",
+                ]
+
+                for pm2_log in pm2_logs:
+                    if pm2_log.exists():
+                        log_sources.append(("pm2", pm2_log))
+                        bt.logging.info(f"Using PM2 log as fallback: {pm2_log}")
+                        break
+
+                if not log_sources:
+                    bt.logging.warning("No log sources available; errors/warnings will only come from in-memory captures")
+                    return
+
+            # Compile regex patterns once
             ansi_escape = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
+            # Calculate round time window for PM2 log filtering
+            # Format: 2025-11-12 10:52:18.546
+            round_start_time = report.start_time
+            round_end_time = report.end_time if report.end_time else None
+
+            bt.logging.debug(f"Round time window: {round_start_time} to {round_end_time}")
+
             # Process all log sources
-            for log_path in log_sources:
+            for log_type, log_path in log_sources:
                 try:
                     # For large log files, only read the last part relevant to this round
+                    # For PM2 logs, read more lines to ensure we capture the full round
                     with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
-                        # Read last 10000 lines max to avoid memory issues
                         lines = f.readlines()
-                        lines_to_process = lines[-10000:] if len(lines) > 10000 else lines
+                        max_lines = 20000 if log_type == "pm2" else 10000
+                        lines_to_process = lines[-max_lines:] if len(lines) > max_lines else lines
+
+                        errors_found = 0
+                        warnings_found = 0
 
                         for line in lines_to_process:
                             line_clean = line.strip()
@@ -244,53 +286,96 @@ class ReportingMixin:
                             if not line_clean:
                                 continue
 
-                            # Remove ANSI color codes (from loguru)
+                            # Remove ANSI color codes (from loguru and bittensor)
                             line_clean = ansi_escape.sub("", line_clean)
 
-                            # Parse log line format: "YYYY-MM-DD HH:MM:SS | LEVEL | message" or "YYYY-MM-DD HH:MM:SS.MS | LEVEL | module | message"
-                            # We need to check if the LOG LEVEL is ERROR or WARNING, not just if the word appears in the message
+                            # For PM2 logs, filter by timestamp
+                            if log_type == "pm2":
+                                # Try to extract timestamp from various formats
+                                timestamp_str = None
 
-                            if "|" in line_clean:
+                                # PM2 format: "2|validato | [34m2025-11-12 10:52:18.546[39m | ..."
+                                # or IWA format: "2025-11-12 10:49:57 | ERROR | ..."
+                                if line_clean.startswith("2|"):
+                                    # Find timestamp pattern after "2|validato | "
+                                    match = re.search(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", line_clean)
+                                    if match:
+                                        timestamp_str = match.group(1)
+                                elif re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}", line_clean):
+                                    # Direct format from IWA module
+                                    timestamp_str = line_clean[:19]  # "2025-11-12 10:49:57"
+
+                                # Filter by round time window
+                                if timestamp_str and round_start_time:
+                                    try:
+                                        line_time = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+
+                                        # Skip lines before round start
+                                        if line_time < round_start_time.replace(microsecond=0):
+                                            continue
+
+                                        # Skip lines after round end (if round is completed)
+                                        if round_end_time and line_time > round_end_time.replace(microsecond=0):
+                                            continue
+                                    except Exception:
+                                        pass  # If timestamp parsing fails, include the line anyway
+
+                            # Parse different log formats
+
+                            # Format 1: IWA module format "YYYY-MM-DD HH:MM:SS | LEVEL | message"
+                            if "|" in line_clean and not line_clean.startswith("2|"):
                                 parts = line_clean.split("|")
                                 if len(parts) >= 3:
-                                    # parts[0] = timestamp
-                                    # parts[1] = level (may have extra spaces)
-                                    # parts[2+] = module/message
-
                                     level = parts[1].strip().upper()
 
-                                    # Check if this is an ERROR level log
                                     if level == "ERROR":
-                                        # Message is everything after level
                                         message = "|".join(parts[2:]).strip()
                                         if message and len(message) > 10:
                                             report.add_error(message)
+                                            errors_found += 1
 
-                                    # Check if this is a WARNING level log
                                     elif level == "WARNING":
-                                        # Message is everything after level
                                         message = "|".join(parts[2:]).strip()
                                         if message and len(message) > 10:
                                             report.add_warning(message)
+                                            warnings_found += 1
 
-                            # PM2 format: "2|validator | timestamp | level | message"
+                            # Format 2: PM2 bittensor format "2|validato | [timestamp] | [level] | module | message"
                             elif line_clean.startswith("2|"):
-                                # Try to find level indicator
-                                if "| ERROR" in line_clean or "|ERROR" in line_clean:
-                                    # Extract message after ERROR
+                                # Extract the level and message after removing PM2 prefix and timestamp
+                                # Look for ERROR or WARNING markers
+
+                                if "ERROR" in line_clean:
+                                    # Find where ERROR appears (it might be styled or plain)
                                     idx = line_clean.find("ERROR")
                                     if idx > 0:
-                                        message = line_clean[idx + 5 :].strip()  # Skip "ERROR"
-                                        if message and len(message) > 10:
-                                            report.add_error(message)
+                                        # Get everything after ERROR, split by | to find message
+                                        after_error = line_clean[idx + 5 :].strip()
+                                        # Skip the first | which is usually module separator
+                                        parts = after_error.split("|", 1)
+                                        message = parts[1].strip() if len(parts) > 1 else after_error.strip()
 
-                                elif "| WARNING" in line_clean or "|WARNING" in line_clean:
-                                    # Extract message after WARNING
+                                        if message and len(message) > 10:
+                                            # Clean up common artifacts
+                                            message = message.replace("[39m[49m[0m", "").replace("[0m", "").strip()
+                                            if message:
+                                                report.add_error(message)
+                                                errors_found += 1
+
+                                elif "WARNING" in line_clean:
                                     idx = line_clean.find("WARNING")
                                     if idx > 0:
-                                        message = line_clean[idx + 7 :].strip()  # Skip "WARNING"
+                                        after_warning = line_clean[idx + 7 :].strip()
+                                        parts = after_warning.split("|", 1)
+                                        message = parts[1].strip() if len(parts) > 1 else after_warning.strip()
+
                                         if message and len(message) > 10:
-                                            report.add_warning(message)
+                                            message = message.replace("[39m[49m[0m", "").replace("[0m", "").strip()
+                                            if message:
+                                                report.add_warning(message)
+                                                warnings_found += 1
+
+                        bt.logging.info(f"Extracted {errors_found} errors and {warnings_found} warnings from {log_type} log")
 
                 except Exception as log_exc:
                     bt.logging.debug(f"Failed to parse log file {log_path}: {log_exc}")
@@ -346,6 +431,15 @@ class ReportingMixin:
                     bt.logging.info("ℹ️  Codex analysis not available")
             except Exception as e:
                 bt.logging.debug(f"Codex analysis failed: {e}")
+
+            # Log errors/warnings before sending email (for debugging)
+            bt.logging.info(f"📧 Preparing to send email for round {report.round_number}")
+            bt.logging.info(f"   Report errors count: {len(report.errors)}")
+            bt.logging.info(f"   Report warnings count: {len(report.warnings)}")
+            if report.errors:
+                bt.logging.info("   Errors to include in email:")
+                for idx, err in enumerate(report.errors[:10], 1):
+                    bt.logging.info(f"      {idx}. {err[:200]}")
 
             # Send email (ALWAYS, even if round had errors)
             success = send_round_report_email(report, codex_analysis)

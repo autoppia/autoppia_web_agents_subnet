@@ -463,6 +463,21 @@ def generate_html_report(report: RoundReport, codex_analysis: Optional[str] = No
     errors = getattr(report, "errors", [])
     warnings = getattr(report, "warnings", [])
 
+    # Ensure errors and warnings are lists (defensive programming)
+    if not isinstance(errors, list):
+        errors = []
+    if not isinstance(warnings, list):
+        warnings = []
+
+    # Filter out empty strings
+    errors = [e for e in errors if e and str(e).strip()]
+    warnings = [w for w in warnings if w and str(w).strip()]
+
+    # Log for debugging
+    print(f"[EMAIL] Report has {len(errors)} errors and {len(warnings)} warnings")
+    if errors:
+        print(f"[EMAIL] First 3 errors: {errors[:3]}")
+
     html += """
         <h2>⚠️ Errors & Warnings</h2>
     """

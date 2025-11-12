@@ -151,7 +151,15 @@ class RoundReport:
 
     def add_error(self, error_message: str):
         """Record an error that occurred during the round."""
-        if error_message and error_message not in self.errors:
+        if not error_message:
+            return
+        # Normalize the error message (strip whitespace)
+        error_message = error_message.strip()
+        if not error_message:
+            return
+        # Allow similar errors (don't filter exact duplicates only)
+        # This ensures we capture all error instances, even if they're similar
+        if error_message not in self.errors:
             self.errors.append(error_message)
 
     def add_warning(self, warning_message: str):

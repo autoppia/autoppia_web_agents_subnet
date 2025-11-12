@@ -288,12 +288,20 @@ class BaseValidatorNeuron(BaseNeuron):
             if hasattr(self, "_report_weights_set"):
                 self._report_weights_set(success=True)
         else:
-            bt.logging.error("set_weights failed", msg)
+            # Convert msg to string safely
+            error_msg = str(msg) if msg else "Unknown error"
+            bt.logging.error(f"set_weights failed: {error_msg}")
             # Record failed weight setting in report if method exists
             if hasattr(self, "_report_weights_set"):
                 self._report_weights_set(success=False)
             if hasattr(self, "_report_error"):
-                self._report_error(f"set_weights failed: {msg}")
+                error_to_report = f"set_weights failed: {error_msg}"
+                bt.logging.debug(f"Reporting error to round report: {error_to_report}")
+                self._report_error(error_to_report)
+                # Verify error was added
+                if hasattr(self, "round_manager") and self.round_manager.current_round_report:
+                    report = self.round_manager.current_round_report
+                    bt.logging.debug(f"Report now has {len(report.errors)} errors")
 
     def resync_metagraph(self):
         """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
