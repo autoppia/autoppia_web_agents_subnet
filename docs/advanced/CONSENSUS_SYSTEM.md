@@ -580,7 +580,7 @@ TESTING = true
 # Round Structure
 ROUND_SIZE_EPOCHS = 0.2                              # 14.4 minutes
 PRE_GENERATED_TASKS = 5                              # 5 tasks
-DZ_STARTING_BLOCK = 6832060
+DZ_STARTING_BLOCK = 6873314
 
 # Phase Timing (absolute % of round)
 STOP_TASK_EVALUATION_AT_ROUND_FRACTION = 0.50        # Stop at 50%
@@ -602,7 +602,7 @@ TESTING = false
 # Round Structure
 ROUND_SIZE_EPOCHS = 4.0                              # 4.8 hours (changed from 20.0)
 PRE_GENERATED_TASKS = 75                             # 75 tasks
-DZ_STARTING_BLOCK = 6832060
+DZ_STARTING_BLOCK = 6873314
 
 # Phase Timing (absolute % of round)
 STOP_TASK_EVALUATION_AT_ROUND_FRACTION = 0.75        # Stop at 75%
