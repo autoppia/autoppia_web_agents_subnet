@@ -30,11 +30,11 @@ BURN_AMOUNT_PERCENTAGE = _env_float("BURN_AMOUNT_PERCENTAGE", 1)
 if TESTING:
     # ── Round Structure ──────────────────────────────────────────────────────
     # Short rounds for rapid testing (~14.4 minutes per round)
-    ROUND_SIZE_EPOCHS = _env_float("TEST_ROUND_SIZE_EPOCHS", 0.2)
+    ROUND_SIZE_EPOCHS = _env_float("TEST_ROUND_SIZE_EPOCHS", 3.0)
     SAFETY_BUFFER_EPOCHS = _env_float("TEST_SAFETY_BUFFER_EPOCHS", 0.02)
     AVG_TASK_DURATION_SECONDS = _env_int("TEST_AVG_TASK_DURATION_SECONDS", 300)
     PRE_GENERATED_TASKS = _env_int("TEST_PRE_GENERATED_TASKS", 3)
-    DZ_STARTING_BLOCK = _env_int("TEST_DZ_STARTING_BLOCK", 6870000)  # Synced with PROD
+    DZ_STARTING_BLOCK = _env_int("TEST_DZ_STARTING_BLOCK", 6872820)  # Synced with PROD
 
     # ── Round Phase Timing (all absolute % of total round) ──────────────────
     # Stop task evaluation at 50% of round to allow time for consensus
@@ -58,15 +58,15 @@ if TESTING:
 # ═══════════════════════════════════════════════════════════════════════════
 else:
     # ── Round Structure ──────────────────────────────────────────────────────
-    # Production rounds (~4.8 hours) - Changed from 20 epochs to 4 for faster iterations
-    ROUND_SIZE_EPOCHS = _env_float("ROUND_SIZE_EPOCHS", 2.0)
+    # Production rounds (~3.6 hours) - 3 epochs for optimal balance
+    ROUND_SIZE_EPOCHS = _env_float("ROUND_SIZE_EPOCHS", 3.0)
     SAFETY_BUFFER_EPOCHS = _env_float("SAFETY_BUFFER_EPOCHS", 0.5)
     AVG_TASK_DURATION_SECONDS = _env_int("AVG_TASK_DURATION_SECONDS", 150)
     # Increased default tasks for production to extend execution closer to the
     # reserved consensus window. Previous default was 75; 2.5x -> ~188.
     # Environment variable PRE_GENERATED_TASKS still takes precedence.
     PRE_GENERATED_TASKS = _env_int("PRE_GENERATED_TASKS", 75)
-    DZ_STARTING_BLOCK = _env_int("DZ_STARTING_BLOCK", 6870000)
+    DZ_STARTING_BLOCK = _env_int("DZ_STARTING_BLOCK", 6872820)
 
     # ── Round Phase Timing (all absolute % of total round) ──────────────────
     # Stop task evaluation at 90% of round to reserve time for consensus
