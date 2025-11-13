@@ -72,7 +72,7 @@ class IWAPClient:
         self,
         base_url: Optional[str] = None,
         *,
-        timeout: float = 30.0,
+        timeout: float = 90.0,
         client: Optional[httpx.AsyncClient] = None,
         backup_dir: Optional[Path] = None,
         auth_provider: Optional[Callable[[], Dict[str, str]]] = None,
