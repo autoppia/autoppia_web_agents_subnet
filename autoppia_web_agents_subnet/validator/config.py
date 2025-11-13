@@ -21,7 +21,7 @@ TESTING = _str_to_bool(os.getenv("TESTING", "false"))
 # ── Burn Mechanism ───────────────────────────────────────────────────────────
 BURN_UID = _env_int("BURN_UID", 5)
 # Default 0.925 = 92.5% burn, 7.5% to winner
-BURN_AMOUNT_PERCENTAGE = _env_float("BURN_AMOUNT_PERCENTAGE", 1)
+BURN_AMOUNT_PERCENTAGE = _env_float("BURN_AMOUNT_PERCENTAGE", 0.925)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
