@@ -3,15 +3,9 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
-
-import httpx
+from typing import Any, Dict, List, Optional
 
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
-from autoppia_web_agents_subnet.validator.config import (
-    IWAP_API_BASE_URL,
-    TESTING,
-)
 
 
 class RoundPhase(Enum):
@@ -19,11 +13,10 @@ class RoundPhase(Enum):
 
     IDLE = "idle"
     START = "start"
-    SCREENING = "screening"
     SCREENING_HANDSHAKE = "screening_handshake"
     SCREENING_TASK_EXECUTION = "screening_task_execution"
     SCREENING_CONSENSUS = "screening_consensus"
-    FINAL = "final"
+    FINAL_DEPLOY = "final_deploy"
     FINAL_TASK_EXECUTION = "final_task_execution"
     FINAL_CONSENSUS = "final_consensus"
     COMPLETE = "complete"
@@ -71,35 +64,44 @@ class RoundManager:
     def __init__(
         self,
         round_size_epochs: float,
+        minimum_start_block: int,
+        screening_stop_fraction: float,
         final_start_fraction: float,
-        avg_task_duration_seconds: float,
-        safety_buffer_epochs: float,
-        minimum_start_block: Optional[int] = None,
+        final_stop_fraction: float,
     ):
         self.round_size_epochs = round_size_epochs
-        self.final_start_fraction = final_start_fraction
-        self.avg_task_duration_seconds = avg_task_duration_seconds
-        self.safety_buffer_epochs = safety_buffer_epochs
         self.minimum_start_block = minimum_start_block
+        self.screening_stop_fraction = screening_stop_fraction
+        self.final_start_fraction = final_start_fraction
+        self.final_stop_fraction = final_stop_fraction
 
-        self.ROUND_BLOCK_LENGTH = int(self.BLOCKS_PER_EPOCH * max(self.round_size_epochs, 0.01))
+        self.round_block_length = int(self.BLOCKS_PER_EPOCH * max(self.round_size_epochs, 0.01))
+
+        # Round boundaries
+        self.round_number: int | None = None
+
+        self.start_block: int | None = None
+        self.final_block: int | None = None
+        self.target_block: int | None = None
+
+        self.start_epoch: float | None = None
+        self.final_epoch: float | None = None
+        self.target_epoch: float | None = None
 
         # Screening statistics
-        self.round_rewards: Dict[int, List[float]] = {}
-        self.round_eval_scores: Dict[int, List[float]] = {}
-        self.round_times: Dict[int, List[float]] = {}
-        self.round_task_attempts: Dict[int, int] = {}
+        self.screening_rewards: Dict[int, List[float]] = {}
+        self.screening_eval_scores: Dict[int, List[float]] = {}
+        self.screening_times: Dict[int, List[float]] = {}
+        self.screening_aggregated_rewards: Dict[int, float] = {}
 
         # Final-phase statistics
-        self.final_round_rewards: Dict[int, List[float]] = {}
-        self.final_round_eval_scores: Dict[int, List[float]] = {}
-        self.final_round_times: Dict[int, List[float]] = {}
-
+        self.final_rewards: Dict[int, List[float]] = {}
+        self.final_eval_scores: Dict[int, List[float]] = {}
+        self.final_times: Dict[int, List[float]] = {}
+        self.final_aggregated_rewards: Dict[int, float] = {}
+        
         # Duplicate-solution bookkeeping
         self.round_duplicate_counts: Dict[int, int] = {}
-
-        # Round start block
-        self.start_block: int | None = None
 
         # Phase tracking
         self.current_phase: RoundPhase = RoundPhase.IDLE
@@ -116,19 +118,30 @@ class RoundManager:
     def epoch_to_block(cls, epoch: float) -> int:
         return int(epoch * cls.BLOCKS_PER_EPOCH)
 
-    def start_new_round(self, current_block: int):
-        if not self.can_start_round(current_block):
-            blocks_remaining = self.blocks_until_allowed(current_block)
-            next_block = self.minimum_start_block if self.minimum_start_block is not None else None
-            message = (
-                f"Round start blocked. Current block {current_block} has not reached minimum "
-                f"{self.minimum_start_block}."
-            )
-            if next_block is not None:
-                message += f" Next allowed block: {next_block} (≈{blocks_remaining} blocks remaining)."
-            ColoredLogger.warning(message, ColoredLogger.YELLOW)
-            raise RuntimeError("Round cannot start before minimum start block is reached")
+    def sync_boundaries(self, current_block: int) -> None:
+        base_block = int(self.minimum_start_block)
+        effective_block = max(current_block, base_block)
+        
+        blocks_since_base = effective_block - base_block
+        round_index = blocks_since_base // self.round_block_length
 
+        start_block = int(base_block + round_index * self.round_block_length)
+        final_block = int(start_block + int(self.round_block_length * self.final_start_fraction))
+        target_block = int(start_block + self.round_block_length)
+
+        start_epoch = self.block_to_epoch(start_block)
+        final_epoch = self.block_to_epoch(final_block)
+        target_epoch = self.block_to_epoch(target_block)
+
+        self.round_number = round_index + 1
+        self.start_block = start_block
+        self.final_block = final_block
+        self.target_block = target_block
+        self.start_epoch = start_epoch
+        self.final_epoch = final_epoch
+        self.target_epoch = target_epoch
+
+    def start_new_round(self, current_block: int):
         boundaries = self.get_round_boundaries(current_block, log_debug=False)
         self.start_block = int(boundaries["round_start_block"])
         self.reset_round()
@@ -155,232 +168,55 @@ class RoundManager:
             ColoredLogger.CYAN,
         )
 
-    def get_round_boundaries(self, current_block: int, *, log_debug: bool = True) -> Dict[str, Any]:
-        import bittensor as bt
-
-        round_block_length = int(self.ROUND_BLOCK_LENGTH)
-        base_block = int(self.minimum_start_block) if self.minimum_start_block is not None else 0
-        effective_block = max(current_block, base_block)
-
-        if self.minimum_start_block is not None:
-            blocks_since_base = effective_block - base_block
-            window_index = blocks_since_base // round_block_length
-            round_start_block = int(base_block + window_index * round_block_length)
-        else:
-            window_index = effective_block // round_block_length
-            round_start_block = int(window_index * round_block_length)
-
-        target_block = int(round_start_block + round_block_length)
-        round_start_epoch = round_start_block / self.BLOCKS_PER_EPOCH
-        target_epoch = target_block / self.BLOCKS_PER_EPOCH
-
-        final_start_block = round_start_block + int(round_block_length * self.final_start_fraction) if self.final_start_fraction is not None else None
-        final_start_epoch = final_start_block / self.BLOCKS_PER_EPOCH if final_start_block is not None else None
-
-        if log_debug:
-            bt.logging.debug(
-                (
-                    "🌐 Sync | block={blk:,} | start_epoch={start:.4f} (b{sb:,}) -> target_epoch={end:.4f} (b{tb:,}) | blocks={blocks:,}"
-                ).format(
-                    blk=current_block,
-                    start=round_start_epoch,
-                    sb=round_start_block,
-                    end=target_epoch,
-                    tb=target_block,
-                    blocks=(target_block - round_start_block),
-                )
-            )
+    def get_round_boundaries(self, current_block: int) -> Dict[str, Any]:
+        if self.round_number is None:
+            self.sync_boundaries(current_block)
 
         return {
-            "round_start_epoch": round_start_epoch,
-            "final_start_epoch": final_start_epoch,
-            "target_epoch": target_epoch,
-            "round_start_block": round_start_block,
-            "final_start_block": final_start_block,
-            "target_block": target_block,
+            "round_start_block": self.start_block,
+            "round_final_block": self.final_block,
+            "round_target_block": self.target_block,
+            "round_start_epoch": self.start_epoch,
+            "round_final_epoch": self.final_epoch,
+            "round_target_epoch": self.target_epoch,
         }
-
-    def get_current_boundaries(self) -> Dict[str, Any]:
-        if self.start_block is None:
-            raise ValueError("Round not started. Call start_new_round() first.")
-        return self.get_round_boundaries(self.start_block, log_debug=False)
-
-    def fraction_elapsed(self, current_block: int) -> float:
-        bounds = self.get_round_boundaries(current_block, log_debug=False)
-        rsb = int(bounds["round_start_block"])
-        tb = int(bounds["target_block"])
-        total = max(tb - rsb, 1)
-        done = max(current_block - rsb, 0)
-        frac = done / total
-        return max(0.0, min(1.0, frac))
-
-    def should_send_next_task(self, current_block: int) -> bool:
-        if self.start_block is None:
-            raise ValueError("Round not started. Call start_new_round() first.")
-
-        boundaries = self.get_round_boundaries(self.start_block, log_debug=False)
-        safety_buffer_blocks = self.safety_buffer_epochs * self.BLOCKS_PER_EPOCH
-        absolute_limit_block = int(boundaries["target_block"] - safety_buffer_blocks)
-
-        if current_block >= absolute_limit_block:
-            return False
-
-        blocks_until_limit = absolute_limit_block - current_block
-        seconds_until_limit = blocks_until_limit * self.SECONDS_PER_BLOCK
-        return seconds_until_limit >= self.avg_task_duration_seconds
 
     def get_wait_info(self, current_block: int) -> Dict[str, Any]:
-        if self.start_block is None:
-            raise ValueError("Round not started. Call start_new_round() first.")
+        if self.round_number is None:
+            self.sync_boundaries(current_block)
 
-        boundaries = self.get_round_boundaries(self.start_block, log_debug=False)
-        target_epoch = boundaries["target_epoch"]
-        current_epoch = self.block_to_epoch(current_block)
-
-        blocks_remaining = boundaries["target_block"] - current_block
-        seconds_remaining = blocks_remaining * self.SECONDS_PER_BLOCK
-        minutes_remaining = seconds_remaining / 60
+        blocks_to_final = max(self.final_block - current_block, 0)
+        minutes_to_final = blocks_to_final * self.SECONDS_PER_BLOCK / 60
+        blocks_to_target = max(self.target_block - current_block, 0)
+        minutes_to_target = blocks_to_target * self.SECONDS_PER_BLOCK / 60
 
         return {
-            "current_epoch": current_epoch,
-            "target_epoch": target_epoch,
-            "blocks_remaining": blocks_remaining,
-            "seconds_remaining": seconds_remaining,
-            "minutes_remaining": minutes_remaining,
-            "reached_target": current_epoch >= target_epoch,
+            "blocks_to_final": blocks_to_final,
+            "minutes_to_final": minutes_to_final,
+            "blocks_to_target": blocks_to_target,
+            "minutes_to_target": minutes_to_target,
         }
 
-    def log_calculation_summary(self) -> None:
-        base = (
-            f"📊 Round config | size={self.round_size_epochs} epochs | buffer={self.safety_buffer_epochs} epochs | "
-            f"avg_task={self.avg_task_duration_seconds}s | b/epoch={self.BLOCKS_PER_EPOCH} | s/block={self.SECONDS_PER_BLOCK}s | "
-            f"round_blocks={self.ROUND_BLOCK_LENGTH}"
-        )
-        if self.minimum_start_block is not None:
-            base += f" | min_start_block>{self.minimum_start_block}"
-        ColoredLogger.info(base, ColoredLogger.CYAN)
+    def fraction_elapsed(self, current_block: int) -> float:
+        if self.round_number is None:
+            self.sync_boundaries(current_block)
+        return float((current_block - self.start_block) / self.round_block_length)
 
-    def can_start_round(self, current_block: int) -> bool:
-        if TESTING:
-            return True
-        if self.minimum_start_block is None:
-            return True
-        return current_block >= self.minimum_start_block
+    def should_send_next_task(self, current_block: int) -> bool:
+        if self.current_phase == RoundPhase.SCREENING_TASK_EXECUTION:
+            return self.fraction_elapsed(current_block) < self.screening_stop_fraction
+        elif self.current_phase == RoundPhase.FINAL_TASK_EXECUTION:
+            return self.fraction_elapsed(current_block) < self.final_stop_fraction
+        else:
+            return False
 
     def blocks_until_allowed(self, current_block: int) -> int:
-        if self.minimum_start_block is None:
-            return 0
         return max(self.minimum_start_block - current_block, 0)
-
-    async def calculate_round(self, current_block: int) -> int:
-        base_block = self.minimum_start_block or 0
-        if current_block < base_block:
-            return 0
-
-        blocks_since_start = current_block - base_block
-        round_index = blocks_since_start // self.ROUND_BLOCK_LENGTH
-        round_number = int(round_index + 1)
-
-        if TESTING:
-            try:
-                backend_round = await self._calculate_round_from_backend()
-                if backend_round is not None:
-                    return backend_round
-            except Exception:
-                pass
-        return round_number
-
-    async def _calculate_round_from_backend(self) -> Optional[int]:
-        base_url = (IWAP_API_BASE_URL or "").rstrip("/")
-        if not base_url:
-            return None
-
-        url = f"{base_url}/api/v1/rounds"
-        params = {
-            "limit": 1,
-            "page": 1,
-            "sortBy": "round",
-            "sortOrder": "desc",
-        }
-
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(url, params=params)
-            response.raise_for_status()
-        except httpx.HTTPError as exc:
-            ColoredLogger.warning(
-                f"Unable to fetch rounds from backend ({url}): {exc}",
-                ColoredLogger.YELLOW,
-            )
-            return None
-        except Exception as exc:  # noqa: BLE001
-            ColoredLogger.warning(
-                f"Unexpected error when fetching rounds from backend ({url}): {exc}",
-                ColoredLogger.YELLOW,
-            )
-            return None
-
-        try:
-            payload = response.json()
-        except ValueError:
-            ColoredLogger.warning(
-                f"Received non-JSON response from backend rounds endpoint ({url})",
-                ColoredLogger.YELLOW,
-            )
-            return None
-
-        entries = self._extract_round_entries(payload)
-        if not entries:
-            return 1
-
-        latest_entry = entries[0]
-        round_value = self._extract_round_value(latest_entry)
-        if round_value is None:
-            return None
-        return round_value + 1
-
-    @staticmethod
-    def _extract_round_entries(payload: Any) -> List[Dict[str, Any]]:
-        def _coerce(obj: Any) -> List[Dict[str, Any]]:
-            if isinstance(obj, list):
-                return [item for item in obj if isinstance(item, dict)]
-            if isinstance(obj, dict):
-                candidates = []
-                for key in ("rounds", "data", "entries"):
-                    if key in obj:
-                        nested = _coerce(obj[key])
-                        if nested:
-                            candidates.extend(nested)
-                if candidates:
-                    return candidates
-                if {"round", "roundNumber", "round_number", "id"}.intersection(obj.keys()):
-                    return [obj]
-            return []
-
-        extracted = _coerce(payload)
-        return extracted
-
-    @staticmethod
-    def _extract_round_value(entry: Dict[str, Any]) -> Optional[int]:
-        for key in ("round", "roundNumber", "round_number", "id"):
-            value = entry.get(key)
-            if isinstance(value, bool):
-                continue
-            if isinstance(value, (int, float)):
-                return int(value)
-            if isinstance(value, str):
-                digits = "".join(ch for ch in value if ch.isdigit())
-                if digits:
-                    try:
-                        return int(digits)
-                    except ValueError:
-                        continue
-        return None
 
     # ──────────────────────────────────────────────────────────────────────────
     # Score accumulation
     # ──────────────────────────────────────────────────────────────────────────
-    def accumulate_rewards(
+    def accumulate_screening_rewards(
         self,
         miner_uids: List[int],
         rewards: List[float],
@@ -389,10 +225,9 @@ class RoundManager:
     ) -> None:
         for i, uid in enumerate(miner_uids):
             uid = int(uid)
-            self.round_rewards.setdefault(uid, []).append(rewards[i])
-            self.round_eval_scores.setdefault(uid, []).append(eval_scores[i])
-            self.round_times.setdefault(uid, []).append(execution_times[i])
-            self.round_task_attempts[uid] = int(self.round_task_attempts.get(uid, 0)) + 1
+            self.screening_rewards.setdefault(uid, []).append(rewards[i])
+            self.screening_eval_scores.setdefault(uid, []).append(eval_scores[i])
+            self.screening_times.setdefault(uid, []).append(execution_times[i])
 
     def accumulate_final_rewards(
         self,
@@ -403,9 +238,9 @@ class RoundManager:
     ) -> None:
         for i, uid in enumerate(miner_uids):
             uid = int(uid)
-            self.final_round_rewards.setdefault(uid, []).append(rewards[i])
-            self.final_round_eval_scores.setdefault(uid, []).append(eval_scores[i])
-            self.final_round_times.setdefault(uid, []).append(execution_times[i])
+            self.final_rewards.setdefault(uid, []).append(rewards[i])
+            self.final_eval_scores.setdefault(uid, []).append(eval_scores[i])
+            self.final_times.setdefault(uid, []).append(execution_times[i])
 
     def record_duplicate_penalties(self, miner_uids: List[int], groups: List[List[int]]):
         try:
@@ -417,16 +252,16 @@ class RoundManager:
         except Exception:
             pass
 
-    def get_average_rewards(self) -> Dict[int, float]:
+    def get_screening_average_rewards(self) -> Dict[int, float]:
         return {
             uid: (sum(rewards) / len(rewards)) if rewards else 0.0
-            for uid, rewards in self.round_rewards.items()
+            for uid, rewards in self.screening_rewards.items()
         }
 
     def get_final_average_rewards(self) -> Dict[int, float]:
         return {
             uid: (sum(rewards) / len(rewards)) if rewards else 0.0
-            for uid, rewards in self.final_round_rewards.items()
+            for uid, rewards in self.final_rewards.items()
         }
 
     def get_round_stats(self) -> Dict[str, Any]:

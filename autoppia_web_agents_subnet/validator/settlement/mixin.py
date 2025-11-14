@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import time
 from typing import Dict, Optional
 
 import bittensor as bt
@@ -12,143 +11,148 @@ from autoppia_web_agents_subnet.utils.log_colors import consensus_tag
 from autoppia_web_agents_subnet.validator.config import (
     BURN_ALL,
     BURN_UID,
+    MINIMUM_START_BLOCK,
     ENABLE_DISTRIBUTED_CONSENSUS,
-    FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION,
-    PROPAGATION_BLOCKS_SLEEP,
+    FINAL_TOP_K,
 )
 from autoppia_web_agents_subnet.validator.round_manager import RoundPhase
 from autoppia_web_agents_subnet.validator.visualization.round_table import (
     render_round_summary_table,
 )
 from autoppia_web_agents_subnet.validator.settlement.consensus import (
+    publish_phase_snapshot,
     aggregate_scores_from_commitments,
-    publish_round_snapshot,
 )
 from autoppia_web_agents_subnet.validator.settlement.rewards import wta_rewards
 
 
 class ValidatorSettlementMixin:
     """Consensus and weight-finalization helpers shared across phases."""
+    
+    async def _wait_for_minimum_start_block(self) -> bool:
+        """
+        Block until the chain height reaches the configured launch gate.
 
-    def _reset_consensus_state(self) -> None:
-        """Clear cached consensus state so a fresh round can publish again."""
-        self._consensus_published = False
-        self._consensus_mid_fetched = False
-        self._agg_scores_cache = None
-        for attr in ("_consensus_commit_block", "_consensus_commit_cid"):
-            if hasattr(self, attr):
-                setattr(self, attr, None)
+        Returns True when a wait occurred so callers can short-circuit their flow.
+        """
+        rm = getattr(self, "round_manager", None)
+        if rm is None:
+            raise RuntimeError("Round manager not initialized; cannot enforce minimum start block")
 
-    async def _wait_for_commit_propagation(self) -> None:
-        """Wait for the most recent commitment to settle a few blocks deep."""
-        if not ENABLE_DISTRIBUTED_CONSENSUS:
-            return
-        blocks_to_wait = max(int(PROPAGATION_BLOCKS_SLEEP or 0), 0)
-        if blocks_to_wait <= 0:
-            return
-        commit_block = getattr(self, "_consensus_commit_block", None)
-        if commit_block is None:
-            return
+        current_block = self.block
+        if rm.can_start_round(current_block):
+            return False
+        
+        blocks_remaining = rm.blocks_until_allowed(current_block)
+        seconds_remaining = blocks_remaining * rm.SECONDS_PER_BLOCK
+        minutes_remaining = seconds_remaining / 60
+        hours_remaining = minutes_remaining / 60
 
-        target_block = int(commit_block) + blocks_to_wait
-        seconds_per_block = getattr(self.round_manager, "SECONDS_PER_BLOCK", 12)
-        wait_logged = False
-        consecutive_failures = 0
+        current_epoch = rm.block_to_epoch(current_block)
+        target_epoch = rm.block_to_epoch(MINIMUM_START_BLOCK)
 
-        while True:
-            try:
-                current_block = int(self.subtensor.get_current_block())
-                consecutive_failures = 0
-            except Exception:
-                consecutive_failures += 1
-                current_block = None
+        eta = f"~{hours_remaining:.1f}h" if hours_remaining >= 1 else f"~{minutes_remaining:.0f}m"
+        bt.logging.warning(
+            f"🔒 Locked until block {MINIMUM_START_BLOCK:,} (epoch {target_epoch:.2f}) | "
+            f"now {current_block:,} (epoch {current_epoch:.2f}) | ETA {eta}"
+        )
 
-            if current_block is not None:
-                if current_block >= target_block:
-                    if wait_logged:
-                        ColoredLogger.info(
-                            f"✅ Commitment propagation window satisfied at block {current_block}",
-                            ColoredLogger.CYAN,
-                        )
-                    return
-                remaining = max(target_block - current_block, 0)
-            else:
-                remaining = max(blocks_to_wait, 0)
+        wait_seconds = min(max(seconds_remaining, 30), 600)
+        rm.enter_phase(
+            RoundPhase.WAITING,
+            block=current_block,
+            note=f"Waiting for minimum start block {MINIMUM_START_BLOCK}",
+        )
+        bt.logging.warning(f"💤 Rechecking in {wait_seconds:.0f}s...")
 
-            if consecutive_failures >= 3:
-                ColoredLogger.warning(
-                    "Propagation wait aborted: unable to read current block height",
-                    ColoredLogger.YELLOW,
-                )
-                return
+        await asyncio.sleep(wait_seconds)
+        return True
 
-            if not wait_logged:
-                ColoredLogger.info(
-                    f"⏳ Waiting ~{remaining} blocks for commitment propagation",
-                    ColoredLogger.CYAN,
-                )
-                wait_logged = True
-
-            await asyncio.sleep(seconds_per_block)
-
-    async def _publish_final_snapshot(self, *, tasks_completed: int, total_tasks: int) -> None:
-        """Emit final consensus snapshot once all tasks complete, then finalize weights."""
-        ColoredLogger.error("\n" + "=" * 80, ColoredLogger.RED)
+    async def _publish_screening_snapshot(self, *, tasks_completed: int) -> None:
+        """Publish screening consensus snapshot to IPFS."""
         ColoredLogger.error(
-            "📤📤📤 ALL TASKS DONE - PUBLISHING TO IPFS NOW 📤📤📤",
+            "📤📤📤 PUBLISHING SCREENING CONSENSUS SNAPSHOT TO IPFS NOW 📤📤📤",
             ColoredLogger.RED,
         )
         ColoredLogger.error(
-            f"📦 Tasks completed: {tasks_completed}/{total_tasks}",
+            f"📦 Screening tasks completed: {tasks_completed}/{len(self.screening_tasks)}",
+            ColoredLogger.RED,
+        )
+
+        st = await self._get_async_subtensor()
+        avg_rewards = self.round_manager.get_screening_average_rewards()
+        await publish_phase_snapshot(
+            self,
+            st=st,
+            phase=RoundPhase.SCREENING_CONSENSUS,
+            tasks_completed=tasks_completed,
+            scores=avg_rewards,
+        )
+
+    async def _publish_final_snapshot(self, *, tasks_completed: int) -> None:
+        """Publish final consensus snapshot to IPFS."""
+        ColoredLogger.error(
+            "📤📤📤 PUBLISHING FINAL CONSENSUS SNAPSHOT TO IPFS NOW 📤📤📤",
+            ColoredLogger.RED,
+        )
+        ColoredLogger.error(
+            f"📦 Final tasks completed: {tasks_completed}/{len(self.final_tasks)}",
+            ColoredLogger.RED,
+        )
+
+        st = await self._get_async_subtensor()
+        avg_rewards = self.round_manager.get_final_average_rewards()
+        await publish_phase_snapshot(
+            self,
+            st=st,
+            phase=RoundPhase.FINAL_CONSENSUS,
+            tasks_completed=tasks_completed,
+            scores=avg_rewards,
+        )
+
+    async def _aggregate_screening_scores(self) -> None:
+        """Aggregate screening scores from all miners."""
+        ColoredLogger.error("\n" + "=" * 80, ColoredLogger.RED)
+        ColoredLogger.error(
+            f"📦 Aggregating screening scores from IPFS commitments",
             ColoredLogger.RED,
         )
         ColoredLogger.error("=" * 80 + "\n", ColoredLogger.RED)
-
-        bt.logging.info("=" * 80)
-        bt.logging.info(
-            consensus_tag(
-                f"All tasks done ({tasks_completed}/{total_tasks}) - Publishing to IPFS now..."
-            )
+        st = await self._get_async_subtensor()
+        scores, _ = await aggregate_scores_from_commitments(
+            self,
+            st=st, 
+            phase=RoundPhase.SCREENING_CONSENSUS
         )
-        bt.logging.info("=" * 80)
+        self.round_manager.screening_aggregated_rewards = scores
 
-        self.round_manager.enter_phase(
-            RoundPhase.CONSENSUS,
-            block=self.block,
-            note="All tasks completed; publishing snapshot",
+    async def _aggregate_final_scores(self) -> None:
+        """Aggregate final scores from all miners."""
+        ColoredLogger.error("\n" + "=" * 80, ColoredLogger.RED)
+        ColoredLogger.error(
+            f"📦 Aggregating final scores from IPFS commitments",
+            ColoredLogger.RED,
         )
+        ColoredLogger.error("=" * 80 + "\n", ColoredLogger.RED)
+        st = await self._get_async_subtensor()
+        scores, _ = await aggregate_scores_from_commitments(
+            self,
+            st=st, 
+            phase=RoundPhase.FINAL_CONSENSUS
+        )
+        self.round_manager.final_aggregated_rewards = scores
 
-        current_block = self.block
-        try:
-            round_number = await self.round_manager.calculate_round(current_block)
-            st = await self._get_async_subtensor()
-            cid = await publish_round_snapshot(
-                validator=self,
-                st=st,
-                round_number=round_number,
-                tasks_completed=tasks_completed,
-            )
-        except Exception as exc:  # noqa: BLE001
-            import traceback
-
-            bt.logging.error("=" * 80)
-            bt.logging.error(
-                f"[CONSENSUS] ❌ IPFS publish failed | Error: {type(exc).__name__}: {exc}"
-            )
-            bt.logging.error(f"[CONSENSUS] Traceback:\n{traceback.format_exc()}")
-            bt.logging.error("=" * 80)
-            raise
-
-        self._consensus_published = bool(cid) or self._consensus_published
-        if not cid:
-            bt.logging.warning(
-                "Consensus publish returned no CID; will retry later if window allows."
-            )
-
-        if not self._finalized_this_round:
-            bt.logging.info("[CONSENSUS] Finalizing immediately after all-tasks completion publish")
-            await self._calculate_final_weights(tasks_completed)
-            self._finalized_this_round = True
+    async def _select_final_top_k_uids(self) -> None:
+        """Select top K UIDs from screening and final scores."""
+        screening_scores = self.round_manager.screening_aggregated_rewards
+        screening_uids = list(screening_scores.keys())
+        sorted_miner_uids = sorted(screening_uids, key=lambda x: screening_scores[x], reverse=True)
+        final_uid_limit = max(FINAL_TOP_K, len(sorted_miner_uids))
+        self.final_top_k_uids = sorted_miner_uids[:final_uid_limit]
+        ColoredLogger.info(
+            f"🏁 Selected final top {final_uid_limit} UIDs: {self.final_top_k_uids}",
+            ColoredLogger.GREEN,
+        )
 
     async def _run_settlement_phase(self, *, tasks_completed: int, total_tasks: int) -> None:
         """
@@ -189,111 +193,7 @@ class ValidatorSettlementMixin:
             note=f"Round finalized with {tasks_completed} tasks",
             force=True,
         )
-        self.round_manager.log_phase_history()
-
-    async def _wait_until_final_phase(self) -> None:
-        start_block_snapshot = self.subtensor.get_current_block()
-        initial_bounds = self.round_manager.get_round_boundaries(
-            start_block_snapshot,
-            log_debug=False,
-        )
-        fixed_start_block = int(initial_bounds["round_start_block"])
-        fixed_target_block = int(initial_bounds["final_start_block"])
-        fixed_target_epoch = float(initial_bounds["final_start_epoch"])
-
-        last_log_time = time.time()
-        while True:
-            try:
-                current_block = self.subtensor.get_current_block()
-                if current_block >= fixed_target_block:
-                    ColoredLogger.success(
-                        f"🎯 Final phase started at epoch {fixed_target_epoch}",
-                        ColoredLogger.GREEN,
-                    )
-                    break
-
-                total = max(fixed_target_block - fixed_start_block, 1)
-                done = max(current_block - fixed_start_block, 0)
-                progress = min(max((done / total) * 100.0, 0.0), 100.0)
-
-                blocks_remaining = max(fixed_target_block - current_block, 0)
-                minutes_remaining = (
-                    blocks_remaining * self.round_manager.SECONDS_PER_BLOCK
-                ) / 60
-
-                if time.time() - last_log_time >= 30:
-                    current_epoch = self.round_manager.block_to_epoch(current_block)
-                    ColoredLogger.info(
-                        (
-                            "Waiting — final phase (global) — epoch {cur:.3f}/{target:.3f} "
-                            "({pct:.2f}%) | ~{mins:.1f}m left — holding until block {target_blk} "
-                            "before starting final phase"
-                        ).format(
-                            cur=current_epoch,
-                            target=fixed_target_epoch,
-                            pct=progress,
-                            mins=minutes_remaining,
-                            target_blk=fixed_target_block,
-                        ),
-                        ColoredLogger.BLUE,
-                    )
-                    last_log_time = time.time()
-            except Exception as exc:
-                bt.logging.debug(f"Failed to read current block during final phase wait: {exc}")
-
-            await asyncio.sleep(12)
-
-    async def _wait_until_next_round_boundary(self) -> None:
-        start_block_snapshot = self.subtensor.get_current_block()
-        initial_bounds = self.round_manager.get_round_boundaries(
-            start_block_snapshot,
-            log_debug=False,
-        )
-        fixed_start_block = int(initial_bounds["round_start_block"])
-        fixed_target_block = int(initial_bounds["target_block"])
-        fixed_target_epoch = float(initial_bounds["target_epoch"])
-
-        last_log_time = time.time()
-        while True:
-            try:
-                current_block = self.subtensor.get_current_block()
-                if current_block >= fixed_target_block:
-                    ColoredLogger.success(
-                        f"🎯 Next round boundary reached at epoch {fixed_target_epoch}",
-                        ColoredLogger.GREEN,
-                    )
-                    break
-
-                total = max(fixed_target_block - fixed_start_block, 1)
-                done = max(current_block - fixed_start_block, 0)
-                progress = min(max((done / total) * 100.0, 0.0), 100.0)
-
-                blocks_remaining = max(fixed_target_block - current_block, 0)
-                minutes_remaining = (
-                    blocks_remaining * self.round_manager.SECONDS_PER_BLOCK
-                ) / 60
-
-                if time.time() - last_log_time >= 30:
-                    current_epoch = self.round_manager.block_to_epoch(current_block)
-                    ColoredLogger.info(
-                        (
-                            "Waiting — next round boundary (global) — epoch {cur:.3f}/{target:.3f} "
-                            "({pct:.2f}%) | ~{mins:.1f}m left — holding until block {target_blk} "
-                            "before carrying scores forward"
-                        ).format(
-                            cur=current_epoch,
-                            target=fixed_target_epoch,
-                            pct=progress,
-                            mins=minutes_remaining,
-                            target_blk=fixed_target_block,
-                        ),
-                        ColoredLogger.BLUE,
-                    )
-                    last_log_time = time.time()
-            except Exception as exc:
-                bt.logging.debug(f"Failed to read current block during finalize wait: {exc}")
-
-            await asyncio.sleep(12)
+        self.round_manager.log_phase_history()    
 
     async def _burn_all(
         self,

@@ -12,36 +12,25 @@ from autoppia_web_agents_subnet.base.validator import BaseValidatorNeuron
 from autoppia_web_agents_subnet.bittensor_config import config
 from autoppia_web_agents_subnet.validator.config import (
     ROUND_SIZE_EPOCHS,
-    AVG_TASK_DURATION_SECONDS,
-    SAFETY_BUFFER_EPOCHS,
-    DZ_STARTING_BLOCK,
+    MINIMUM_START_BLOCK,
+    SCREENING_START_FRACTION,
     SCREENING_STOP_FRACTION,
-    STOP_TASK_EVALUATION_AT_ROUND_FRACTION,
-    FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION,
+    FINAL_START_FRACTION,
+    FINAL_STOP_FRACTION,
 )
 from autoppia_web_agents_subnet.protocol import StartRoundSynapse
-from autoppia_web_agents_subnet.validator.round.round_manager import RoundManager, RoundPhase
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
-from autoppia_web_agents_subnet.platform.validator_mixin import ValidatorPlatformMixin
-from autoppia_web_agents_subnet.validator.round_state import (
-    RoundStateValidatorMixin,
-    RoundPhaseValidatorMixin,
-)
-from autoppia_web_agents_subnet.validator.round.round_start_mixin import RoundStartMixin
-from autoppia_web_agents_subnet.validator.evaluation import EvaluationPhaseMixin
-from autoppia_web_agents_subnet.validator.settlement import SettlementMixin
-from autoppia_web_agents_subnet.validator.consensus_manager import ConsensusManager
+from autoppia_web_agents_subnet.validator.round_manager import RoundManager, RoundPhase
 from autoppia_web_agents_subnet.validator.dataset import RoundDatasetCollector
+
+from autoppia_web_agents_subnet.platform.validator_mixin import ValidatorPlatformMixin
+from autoppia_web_agents_subnet.validator.round_start.mixin import ValidatorRoundStartMixin
+
 from autoppia_iwa.src.bootstrap import AppBootstrap
 
 
 class Validator(
-    RoundStateValidatorMixin,
-    RoundPhaseValidatorMixin,
-    RoundStartMixin,
-    EvaluationPhaseMixin,
-    SettlementMixin,
-    ValidatorPlatformMixin,
+    ValidatorRoundStartMixin,
     BaseValidatorNeuron,
 ):
     def __init__(self, config=None):
@@ -60,37 +49,26 @@ class Validator(
         except Exception:
             pass
 
-        self.forward_count = 0
-        self.last_rewards: np.ndarray | None = None
-        self.last_round_responses: Dict[int, StartRoundSynapse] = {}
         self.version: str = __version__
-
-        # Active miners (those who responded to StartRoundSynapse handshake)
+        
+        # Active miners and final top K UIDs
         self.active_miner_uids: list[int] = []
-
+        self.final_top_k_uids: list[int] = [] 
+        self.final_endpoints: list[str] = []
+        
         # Burn-on-round-1 guard to avoid repeated chain sets
         self._burn_applied: bool = False
-        # Consensus sharing
-        self._consensus_published: bool = False
-        self._consensus_mid_fetched: bool = False
-        self._agg_scores_cache: dict[int, float] | None = None
-        # Track if final weights + IWAP finish_round were already sent this round
-        self._finalized_this_round: bool = False
 
-        # Two-phase evaluation state / topK helpers
-        self._final_started: bool = False
-        self._final_top_s_uids: list[int] = []
-        self._final_endpoints: dict[int, str] = {}
-        self._last_round_winner_uid: int | None = None
-        self._consensus = ConsensusManager()
+        # Dataset collector for consensus
         self.dataset_collector: RoundDatasetCollector | None = None
 
         # ⭐ Round system components
         self.round_manager = RoundManager(
             round_size_epochs=ROUND_SIZE_EPOCHS,
-            avg_task_duration_seconds=AVG_TASK_DURATION_SECONDS,
-            safety_buffer_epochs=SAFETY_BUFFER_EPOCHS,
-            minimum_start_block=DZ_STARTING_BLOCK,
+            minimum_start_block=MINIMUM_START_BLOCK,
+            screening_stop_fraction=SCREENING_STOP_FRACTION,
+            final_start_fraction=FINAL_START_FRACTION,
+            final_stop_fraction=FINAL_STOP_FRACTION,
         )
 
         bt.logging.info("load_state()")
@@ -100,49 +78,34 @@ class Validator(
         """
         Forward pass for the validator.
         """
-        current_block = self.block
-        self.round_manager.enter_phase(
-            RoundPhase.PREPARING,
-            block=current_block,
-            note="Starting forward pass",
-        )
-        current_round_number = await self.round_manager.calculate_round(current_block)
-        try:
-            setattr(self, "_current_round_number", int(current_round_number))
-        except Exception:
-            pass
-        bt.logging.info(f"🚀 Starting round-based forward (round {current_round_number})")
-        ColoredLogger.info(f"🚦 Starting Round: {int(current_round_number)}", ColoredLogger.GREEN)
-
-        if await self._wait_for_minimum_start_block(current_block):
+        bt.logging.info(f"🚀 Starting round-based forward (epochs per round: {ROUND_SIZE_EPOCHS:.1f})")
+        if await self._wait_for_minimum_start_block():
             return
 
-        self.round_manager.log_calculation_summary()
+        start_result = await self._start_round()
+
         try:
-            self._log_phase_plan(current_block)
+            self._log_phase_plan()
         except Exception as exc:
             bt.logging.debug(f"Phase plan logging failed: {exc}")
 
-        start_result = await self._run_start_phase(current_block)
-        if not start_result.continue_forward:
+        if start_result.starting_phase == RoundPhase.SCREENING:
+            await self._run_screening_phase()
+            await self._run_final_phase()
+        elif start_result.starting_phase == RoundPhase.FINAL:
+            await self._run_final_phase()
+        else:
             return
 
-        all_tasks = start_result.all_tasks
-        task_result = await self._run_task_phase(all_tasks)
-
-        await self._run_settlement_phase(
-            tasks_completed=task_result.tasks_completed,
-            total_tasks=len(all_tasks),
-        )
-
-    def _log_phase_plan(self, current_block: int) -> None:
+    def _log_phase_plan(self) -> None:
         """
         Print a concise Phase Plan:
           Phase name — fraction — target block — ETA minutes
         """
-        bounds = self.round_manager.get_round_boundaries(current_block, log_debug=False)
+        current_block = self.block
+        bounds = self.round_manager.get_round_boundaries(current_block)
         start_block = int(bounds["round_start_block"])
-        target_block = int(bounds["target_block"])
+        target_block = int(bounds["round_target_block"])
         total_blocks = max(target_block - start_block, 1)
         spb = self.round_manager.SECONDS_PER_BLOCK
 
@@ -160,18 +123,12 @@ class Validator(
             bt.logging.info(f"• Now: {now_frac:.0%} — block {current_block} — ~{end_eta_min:.1f}m to end")
         except Exception:
             pass
+        bt.logging.info(_line("Round start", 0.0))
+        bt.logging.info(_line("Screening start", SCREENING_START_FRACTION))
         bt.logging.info(_line("Screening end", SCREENING_STOP_FRACTION))
-        bt.logging.info(_line("Stop tasks eval", STOP_TASK_EVALUATION_AT_ROUND_FRACTION))
-        bt.logging.info(_line("Final fetch", FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION))
+        bt.logging.info(_line("Final start", FINAL_START_FRACTION))
+        bt.logging.info(_line("Final end", FINAL_STOP_FRACTION))
         bt.logging.info(_line("Round end", 1.0))
-
-    def _deploy_local_for_miner(self, *, uid: int, github_url: str | None) -> str:
-        """
-        Placeholder for optional local deployment resolver.
-        Override to integrate custom HTTP endpoint provisioning.
-        """
-        _ = (uid, github_url)
-        return ""
 
 
 if __name__ == "__main__":

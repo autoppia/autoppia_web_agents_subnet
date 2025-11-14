@@ -26,7 +26,7 @@ from autoppia_web_agents_subnet.validator.evaluation.tasks import (
 )
 
 
-async def _execute_single_screening_task(
+async def _execute_single_final_task(
     self,
     task_item: TaskWithProject,
     task_index: int,
@@ -66,7 +66,7 @@ async def _execute_single_screening_task(
         try:
             console = Console()
             task_table = Table(
-                title=f"[bold cyan]📋 Task {task_index + 1}/{len(self.screening_tasks)}[/bold cyan]",
+                title=f"[bold cyan]📋 Task {task_index + 1}/{len(self.final_tasks)}[/bold cyan]",
                 box=box.DOUBLE,
                 show_header=True,
                 header_style="bold yellow",
@@ -154,7 +154,7 @@ async def _execute_single_screening_task(
             time_weight=TIME_WEIGHT,
         )
 
-        self.round_manager.accumulate_screening_rewards(
+        self.round_manager.accumulate_final_rewards(
             miner_uids=list(self.active_miner_uids),
             rewards=rewards.tolist(),
             eval_scores=eval_scores.tolist(),
@@ -172,25 +172,6 @@ async def _execute_single_screening_task(
                 )
             except Exception:
                 pass
-
-        for uid, task_id in zip(self.active_miner_uids, [task.id] * len(self.active_miner_uids)):
-            self._completed_pairs.add((uid, task_id))
-
-        try:
-            await send_feedback_synapse_to_miners(
-                validator=self,
-                miner_axons=active_axons,
-                miner_uids=list(self.active_miner_uids),
-                task=task,
-                rewards=rewards.tolist(),
-                execution_times=execution_times,
-                task_solutions=task_solutions,
-                test_results_list=test_results_list,
-                evaluation_results=evaluation_results,
-                web_project_name=web_project_name or "Unknown",
-            )
-        except Exception as exc:
-            bt.logging.warning(f"Feedback failed: {exc}")
 
         try:
             await self._iwap_submit_task_results(
