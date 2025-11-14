@@ -1,4 +1,3 @@
-"""Synapse handling utilities for validator."""
 from __future__ import annotations
 
 import asyncio
@@ -14,7 +13,6 @@ from autoppia_web_agents_subnet.protocol import (
     TaskSynapse,
 )
 from autoppia_web_agents_subnet.utils.dendrite import dendrite_with_retries
-from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.validator.config import FEEDBACK_TIMEOUT
 
 
