@@ -143,7 +143,6 @@ async def _execute_single_screening_task(
             web_project=project,
             task=task,
             task_solutions=task_solutions,
-            execution_times=execution_times,
         )
 
         rewards = calculate_rewards_for_task(

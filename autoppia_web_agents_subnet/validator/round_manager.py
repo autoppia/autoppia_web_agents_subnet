@@ -6,6 +6,15 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+from autoppia_web_agents_subnet.validator.config import (
+    ROUND_SIZE_EPOCHS,
+    MINIMUM_START_BLOCK,
+    SCREENING_START_FRACTION,
+    SCREENING_STOP_FRACTION,
+    FINAL_START_FRACTION,
+    FINAL_STOP_FRACTION,
+    SETTLEMENT_FRACTION,
+)
 
 
 class RoundPhase(Enum):
@@ -61,19 +70,13 @@ class RoundManager:
     BLOCKS_PER_EPOCH = 360
     SECONDS_PER_BLOCK = 12
 
-    def __init__(
-        self,
-        round_size_epochs: float,
-        minimum_start_block: int,
-        screening_stop_fraction: float,
-        final_start_fraction: float,
-        final_stop_fraction: float,
-    ):
-        self.round_size_epochs = round_size_epochs
-        self.minimum_start_block = minimum_start_block
-        self.screening_stop_fraction = screening_stop_fraction
-        self.final_start_fraction = final_start_fraction
-        self.final_stop_fraction = final_stop_fraction
+    def __init__(self):
+        self.round_size_epochs = ROUND_SIZE_EPOCHS
+        self.minimum_start_block = MINIMUM_START_BLOCK
+        self.screening_stop_fraction = SCREENING_STOP_FRACTION
+        self.final_start_fraction = FINAL_START_FRACTION
+        self.final_stop_fraction = FINAL_STOP_FRACTION
+        self.settlement_fraction = SETTLEMENT_FRACTION
 
         self.round_block_length = int(self.BLOCKS_PER_EPOCH * max(self.round_size_epochs, 0.01))
 
@@ -82,10 +85,12 @@ class RoundManager:
 
         self.start_block: int | None = None
         self.final_block: int | None = None
+        self.settlement_block: int | None = None
         self.target_block: int | None = None
 
         self.start_epoch: float | None = None
         self.final_epoch: float | None = None
+        self.settlement_epoch: float | None = None
         self.target_epoch: float | None = None
 
         # Screening statistics
@@ -127,45 +132,33 @@ class RoundManager:
 
         start_block = int(base_block + round_index * self.round_block_length)
         final_block = int(start_block + int(self.round_block_length * self.final_start_fraction))
+        settlement_block = int(start_block + int(self.round_block_length * self.settlement_fraction))
         target_block = int(start_block + self.round_block_length)
 
         start_epoch = self.block_to_epoch(start_block)
         final_epoch = self.block_to_epoch(final_block)
+        settlement_epoch = self.block_to_epoch(settlement_block)
         target_epoch = self.block_to_epoch(target_block)
 
         self.round_number = round_index + 1
         self.start_block = start_block
         self.final_block = final_block
+        self.settlement_block = settlement_block
         self.target_block = target_block
         self.start_epoch = start_epoch
         self.final_epoch = final_epoch
+        self.settlement_epoch = settlement_epoch
         self.target_epoch = target_epoch
 
     def start_new_round(self, current_block: int):
-        boundaries = self.get_round_boundaries(current_block, log_debug=False)
-        self.start_block = int(boundaries["round_start_block"])
+        if self.round_number is None:
+            self.sync_boundaries(current_block)
+
         self.reset_round()
         self.enter_phase(
-            RoundPhase.PREPARING,
-            block=self.start_block,
-            note="Round window established",
-        )
-
-        blocks_remaining = boundaries["target_block"] - current_block
-        estimated_minutes = (blocks_remaining * self.SECONDS_PER_BLOCK) / 60
-        ColoredLogger.info(
-            (
-                "🔄 Starting new round | start_block={start_block} start_epoch={start_epoch:.2f} "
-                "-> target_epoch={target_epoch:.2f} target_block={target_block} | ETA ~{eta:.1f}m (~{blocks} blocks)"
-            ).format(
-                start_block=self.start_block,
-                start_epoch=boundaries["round_start_epoch"],
-                target_epoch=boundaries["target_epoch"],
-                target_block=boundaries["target_block"],
-                eta=estimated_minutes,
-                blocks=blocks_remaining,
-            ),
-            ColoredLogger.CYAN,
+            RoundPhase.START,
+            block=current_block,
+            note="Starting new round",
         )
 
     def get_round_boundaries(self, current_block: int) -> Dict[str, Any]:
@@ -187,12 +180,16 @@ class RoundManager:
 
         blocks_to_final = max(self.final_block - current_block, 0)
         minutes_to_final = blocks_to_final * self.SECONDS_PER_BLOCK / 60
+        blocks_to_settlement = max(self.settlement_block - current_block, 0)
+        minutes_to_settlement = blocks_to_settlement * self.SECONDS_PER_BLOCK / 60
         blocks_to_target = max(self.target_block - current_block, 0)
         minutes_to_target = blocks_to_target * self.SECONDS_PER_BLOCK / 60
 
         return {
             "blocks_to_final": blocks_to_final,
             "minutes_to_final": minutes_to_final,
+            "blocks_to_settlement": blocks_to_settlement,
+            "minutes_to_settlement": minutes_to_settlement,
             "blocks_to_target": blocks_to_target,
             "minutes_to_target": minutes_to_target,
         }
@@ -253,28 +250,18 @@ class RoundManager:
             pass
 
     def get_screening_average_rewards(self) -> Dict[int, float]:
-        return {
+        self.screening_aggregated_rewards = {
             uid: (sum(rewards) / len(rewards)) if rewards else 0.0
             for uid, rewards in self.screening_rewards.items()
         }
+        return self.screening_aggregated_rewards
 
     def get_final_average_rewards(self) -> Dict[int, float]:
-        return {
+        self.final_aggregated_rewards = {
             uid: (sum(rewards) / len(rewards)) if rewards else 0.0
             for uid, rewards in self.final_rewards.items()
         }
-
-    def get_round_stats(self) -> Dict[str, Any]:
-        total_miners = len(self.round_rewards)
-        total_tasks = sum(len(reward) for reward in self.round_rewards.values())
-        return {
-            "total_miners": total_miners,
-            "total_tasks": total_tasks,
-            "miners_with_rewards": len([uid for uid, rewards in self.round_rewards.items() if rewards]),
-            "round_rewards": self.round_rewards,
-            "round_times": self.round_times,
-            "round_eval_scores": self.round_eval_scores,
-        }
+        return self.final_aggregated_rewards
 
     def reset_round(self) -> None:
         self.round_rewards = {}
@@ -286,23 +273,6 @@ class RoundManager:
         self.final_round_times = {}
         self.round_duplicate_counts = {}
         self.reset_phase_tracking()
-
-    def log_round_summary(self) -> None:
-        stats = self.get_round_stats()
-        ColoredLogger.debug(
-            f"Round stats | miners={stats['total_miners']} | tasks={stats['total_tasks']}",
-            ColoredLogger.PURPLE,
-        )
-        if self.round_task_attempts:
-            parts = []
-            for uid, attempts in self.round_task_attempts.items():
-                evals_used = len(self.round_rewards.get(uid, []))
-                parts.append(f"{uid}:{evals_used}/{attempts}")
-            summary = ", ".join(parts)
-            ColoredLogger.info(
-                f"Evaluation counts (evaluated/attempted per miner): {summary}",
-                ColoredLogger.CYAN,
-            )
 
     # ──────────────────────────────────────────────────────────────────────────
     # Phase tracking utilities

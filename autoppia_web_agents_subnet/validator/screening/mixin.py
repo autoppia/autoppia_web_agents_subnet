@@ -78,5 +78,9 @@ class ValidatorScreeningMixin:
 
                 ColoredLogger.error("=" * 80 + "\n", ColoredLogger.RED)
                 break
+        
+        self._wait_until_specific_block(
+            target_block=self.round_manager.final_block,
+            target_discription="final start block",
+        )
                 
-

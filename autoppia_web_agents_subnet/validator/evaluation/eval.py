@@ -35,7 +35,6 @@ async def evaluate_task_solutions(
     web_project: WebProject,
     task: Task,
     task_solutions: List[Optional[TaskSolution]],
-    execution_times: List[float],
     normalize_scores: bool = True,
 ) -> tuple[
     NDArray[np.float32],

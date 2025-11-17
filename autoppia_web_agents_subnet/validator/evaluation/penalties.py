@@ -99,13 +99,12 @@ def detect_same_solution_groups(solutions: List[Any]) -> List[List[int]]:
 
 def apply_same_solution_penalty_with_meta(
     solutions: List[Any],
-    eval_scores: Sequence[float],
+    scores_arr: np.ndarray,
 ) -> tuple[np.ndarray, List[List[int]]]:
     """
     Like apply_same_solution_penalty but also returns the penalized groups
     (index lists) for visibility/logging.
     """
-    scores_arr = np.asarray(eval_scores, dtype=np.float32).ravel().copy()
     if SAME_SOLUTION_PENALTY >= 1.0 or len(solutions) < 2:
         return scores_arr, []
 

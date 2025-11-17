@@ -18,8 +18,7 @@ from autoppia_web_agents_subnet.validator.models import TaskWithProject
 from autoppia_web_agents_subnet.validator.evaluation.eval import evaluate_task_solutions
 from autoppia_web_agents_subnet.validator.evaluation.rewards import calculate_rewards_for_task
 from autoppia_web_agents_subnet.validator.evaluation.synapse_handlers import (
-    send_feedback_synapse_to_miners,
-    send_task_synapse_to_miners,
+    send_task_synapse_to_http_endpoints,
 )
 from autoppia_web_agents_subnet.validator.evaluation.tasks import (
     collect_task_solutions_and_execution_times,
@@ -42,14 +41,12 @@ async def _execute_single_final_task(
         collector = None
 
     try:
-        if not self.active_miner_uids:
+        if not self.final_endpoints:
             ColoredLogger.warning(
-                "⚠️ No active miners responded to handshake; skipping task send.",
+                "⚠️ No final endpoints deployed; skipping task send.",
                 ColoredLogger.YELLOW,
             )
             return False
-
-        active_axons = [self.metagraph.axons[uid] for uid in self.active_miner_uids]
 
         seed: int | None = getattr(task, "_seed_value", None)
         if seed is None and isinstance(getattr(task, "url", None), str):
@@ -125,9 +122,8 @@ async def _execute_single_final_task(
             web_project_name=web_project_name,
         )
 
-        responses = await send_task_synapse_to_miners(
-            validator=self,
-            miner_axons=active_axons,
+        responses = await send_task_synapse_to_http_endpoints(
+            endpoints=self.final_endpoints.values(),
             task_synapse=task_synapse,
             timeout=120,
         )
@@ -135,7 +131,7 @@ async def _execute_single_final_task(
         task_solutions, execution_times = collect_task_solutions_and_execution_times(
             task=task,
             responses=responses,
-            miner_uids=list(self.active_miner_uids),
+            miner_uids=list(self.final_endpoints.keys()),
         )
 
         ColoredLogger.debug("🔍 STARTING EVALUATION...", ColoredLogger.CYAN)
@@ -143,19 +139,18 @@ async def _execute_single_final_task(
             web_project=project,
             task=task,
             task_solutions=task_solutions,
-            execution_times=execution_times,
         )
 
         rewards = calculate_rewards_for_task(
             eval_scores=eval_scores,
             execution_times=execution_times,
-            n_miners=len(self.active_miner_uids),
+            n_miners=len(self.final_endpoints.keys()),
             eval_score_weight=EVAL_SCORE_WEIGHT,
             time_weight=TIME_WEIGHT,
         )
 
         self.round_manager.accumulate_final_rewards(
-            miner_uids=list(self.active_miner_uids),
+            miner_uids=list(self.final_endpoints.keys()),
             rewards=rewards.tolist(),
             eval_scores=eval_scores.tolist(),
             execution_times=execution_times,
@@ -168,7 +163,7 @@ async def _execute_single_final_task(
                     task_solutions=task_solutions,
                     eval_scores=eval_scores.tolist(),
                     execution_times=execution_times,
-                    miner_uids=list(self.active_miner_uids),
+                    miner_uids=list(self.final_endpoints.keys()),
                 )
             except Exception:
                 pass

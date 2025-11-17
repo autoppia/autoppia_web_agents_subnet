@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 import asyncio
 from typing import Dict, Optional
 
@@ -28,45 +29,43 @@ from autoppia_web_agents_subnet.validator.settlement.rewards import wta_rewards
 
 class ValidatorSettlementMixin:
     """Consensus and weight-finalization helpers shared across phases."""
-    
-    async def _wait_for_minimum_start_block(self) -> bool:
-        """
-        Block until the chain height reaches the configured launch gate.
 
-        Returns True when a wait occurred so callers can short-circuit their flow.
-        """
-        rm = getattr(self, "round_manager", None)
-        if rm is None:
-            raise RuntimeError("Round manager not initialized; cannot enforce minimum start block")
-
+    async def _wait_until_specific_block(self, target_block: int, target_discription: str) -> None:
         current_block = self.block
-        if rm.can_start_round(current_block):
-            return False
-        
-        blocks_remaining = rm.blocks_until_allowed(current_block)
-        seconds_remaining = blocks_remaining * rm.SECONDS_PER_BLOCK
-        minutes_remaining = seconds_remaining / 60
-        hours_remaining = minutes_remaining / 60
+        if current_block >= target_block:
+            return
 
-        current_epoch = rm.block_to_epoch(current_block)
-        target_epoch = rm.block_to_epoch(MINIMUM_START_BLOCK)
-
-        eta = f"~{hours_remaining:.1f}h" if hours_remaining >= 1 else f"~{minutes_remaining:.0f}m"
-        bt.logging.warning(
-            f"🔒 Locked until block {MINIMUM_START_BLOCK:,} (epoch {target_epoch:.2f}) | "
-            f"now {current_block:,} (epoch {current_epoch:.2f}) | ETA {eta}"
-        )
-
-        wait_seconds = min(max(seconds_remaining, 30), 600)
-        rm.enter_phase(
+        self.round_manager.enter_phase(
             RoundPhase.WAITING,
             block=current_block,
-            note=f"Waiting for minimum start block {MINIMUM_START_BLOCK}",
+            note=f"Waiting for target {target_discription} to reach block {target_block}",
         )
-        bt.logging.warning(f"💤 Rechecking in {wait_seconds:.0f}s...")
+        last_log_time = time.time()
+        while True:
+            try:
+                current_block = self.subtensor.get_current_block()
+                if current_block >= target_block:
+                    ColoredLogger.success(
+                        f"🎯 Target {target_discription} reached at block {target_block}",
+                        ColoredLogger.GREEN,
+                    )
+                    break
 
-        await asyncio.sleep(wait_seconds)
-        return True
+                blocks_remaining = max(target_block - current_block, 0)
+                minutes_remaining = (blocks_remaining * self.round_manager.SECONDS_PER_BLOCK) / 60
+
+                if time.time() - last_log_time >= 12:
+                    ColoredLogger.info(
+                        (
+                            f"Waiting — {target_discription} — ~{minutes_remaining:.1f}m left — holding until block {target_block}"
+                        ),
+                        ColoredLogger.BLUE,
+                    )
+                    last_log_time = time.time()
+            except Exception as exc:
+                bt.logging.debug(f"Failed to read current block during finalize wait: {exc}")
+
+            await asyncio.sleep(12)
 
     async def _publish_screening_snapshot(self, *, tasks_completed: int) -> None:
         """Publish screening consensus snapshot to IPFS."""
@@ -111,7 +110,11 @@ class ValidatorSettlementMixin:
         )
 
     async def _aggregate_screening_scores(self) -> None:
-        """Aggregate screening scores from all miners."""
+        """Aggregate screening scores from all commitments."""
+        if not ENABLE_DISTRIBUTED_CONSENSUS:
+            self.round_manager.get_screening_average_rewards()
+            return
+
         ColoredLogger.error("\n" + "=" * 80, ColoredLogger.RED)
         ColoredLogger.error(
             f"📦 Aggregating screening scores from IPFS commitments",
@@ -127,7 +130,11 @@ class ValidatorSettlementMixin:
         self.round_manager.screening_aggregated_rewards = scores
 
     async def _aggregate_final_scores(self) -> None:
-        """Aggregate final scores from all miners."""
+        """Aggregate final scores from all commitments."""
+        if not ENABLE_DISTRIBUTED_CONSENSUS:
+            self.round_manager.get_final_average_rewards()
+            return
+
         ColoredLogger.error("\n" + "=" * 80, ColoredLogger.RED)
         ColoredLogger.error(
             f"📦 Aggregating final scores from IPFS commitments",
@@ -154,27 +161,20 @@ class ValidatorSettlementMixin:
             ColoredLogger.GREEN,
         )
 
-    async def _run_settlement_phase(self, *, tasks_completed: int, total_tasks: int) -> None:
+    async def _run_settlement_phase(self, *, tasks_completed: int) -> None:
         """
         Complete the round:
         - Publish consensus snapshot if pending.
         - Calculate and broadcast final weights (if not already done).
         - Wait for the next round boundary before exiting to the scheduler loop.
         """
-        try:
-            self.state_manager.save_checkpoint()
-        except Exception as exc:
-            bt.logging.warning(f"Checkpoint save before settlement finalization failed: {exc}")
-
-        if ENABLE_DISTRIBUTED_CONSENSUS and (not self._consensus_published):
-            await self._publish_final_snapshot(
-                tasks_completed=tasks_completed,
-                total_tasks=total_tasks,
-            )
-
-        if not self._finalized_this_round:
-            await self._calculate_final_weights(tasks_completed)
-            self._finalized_this_round = True
+        self.round_manager.enter_phase(
+            RoundPhase.FINAL_CONSENSUS,
+            block=self.block,
+            note="Starting final consensus phase",
+        )
+        await self._aggregate_final_scores()
+        await self._calculate_final_weights()
 
         self.round_manager.enter_phase(
             RoundPhase.WAITING,
@@ -193,12 +193,16 @@ class ValidatorSettlementMixin:
             note=f"Round finalized with {tasks_completed} tasks",
             force=True,
         )
-        self.round_manager.log_phase_history()    
+        self.round_manager.log_phase_history()   
+
+        self._wait_until_specific_block(
+            target_block=self.round_manager.target_block,
+            target_discription="round boundary block",
+        )
 
     async def _burn_all(
         self,
         *,
-        avg_rewards: Dict[int, float] | None,
         tasks_completed: int,
         reason: str,
         weights: Optional[np.ndarray] = None,
@@ -234,7 +238,7 @@ class ValidatorSettlementMixin:
         }
 
         finish_success = await self._finish_iwap_round(
-            avg_rewards=avg_rewards or {},
+            avg_rewards=self.round_manager.final_aggregated_rewards or {},
             final_weights=final_weights,
             tasks_completed=tasks_completed,
         )
@@ -270,27 +274,12 @@ class ValidatorSettlementMixin:
         else:
             ColoredLogger.info("🏁 Finishing current round", ColoredLogger.GOLD)
 
-        self.round_manager.enter_phase(
-            RoundPhase.FINALIZING,
-            block=self.block,
-            note=f"Calculating final weights (tasks_completed={tasks_completed})",
-        )
-
-        bt.logging.info("=" * 80)
-        bt.logging.info("[CONSENSUS] Phase: SetWeights - Calculating final weights")
-        bt.logging.info(
-            f"[CONSENSUS] Distributed consensus: {str(ENABLE_DISTRIBUTED_CONSENSUS).lower()}"
-        )
-        bt.logging.info("=" * 80)
-
-        avg_rewards: Dict[int, float] = {}
         burn_reason: Optional[str] = None
 
-        if not self.active_miner_uids:
-            ColoredLogger.error("🔥 No active miners: burning all weights", ColoredLogger.RED)
-            burn_reason = "burn (no active miners)"
+        if not self.final_top_k_uids:
+            ColoredLogger.error("🔥 No final top K UIDs: burning all weights", ColoredLogger.RED)
+            burn_reason = "burn (no final top K UIDs)"
         else:
-            avg_rewards = self.round_manager.get_average_rewards()
             if BURN_ALL:
                 ColoredLogger.warning(
                     "🔥 BURN_ALL enabled: forcing burn and skipping consensus",
@@ -300,68 +289,21 @@ class ValidatorSettlementMixin:
 
         if burn_reason:
             await self._burn_all(
-                avg_rewards=avg_rewards,
                 tasks_completed=tasks_completed,
                 reason=burn_reason,
             )
             return
 
-        if ENABLE_DISTRIBUTED_CONSENSUS:
-            await self._wait_for_commit_propagation()
-            boundaries = self.round_manager.get_current_boundaries()
-            bt.logging.info("[CONSENSUS] Aggregating scores from other validators...")
-            agg = self._agg_scores_cache or {}
-            agg_meta = None
-            if not agg:
-                block_tensor = getattr(self.metagraph, "block", None)
-                current_block_now = int(block_tensor.item()) if block_tensor is not None else 0
-                bounds_now = self.round_manager.get_round_boundaries(
-                    current_block_now,
-                    log_debug=False,
-                )
-                rsb = bounds_now["round_start_block"]
-                tb = bounds_now["target_block"]
-                progress_now = min(max((current_block_now - rsb) / max(tb - rsb, 1), 0.0), 1.0)
-
-                bt.logging.info("=" * 80)
-                bt.logging.info(
-                    consensus_tag(
-                        f"📥 FETCH COMMITS @ {FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION:.0%}"
-                    )
-                )
-                bt.logging.info(consensus_tag(f"Progress: {progress_now:.2f}"))
-                bt.logging.info(consensus_tag(f"Current Block: {current_block_now:,}"))
-                bt.logging.info(consensus_tag("Fetching commitments from IPFS to aggregate scores"))
-                bt.logging.info("=" * 80)
-
-                st = await self._get_async_subtensor()
-                agg, agg_meta = await aggregate_scores_from_commitments(
-                    validator=self,
-                    st=st,
-                    start_block=boundaries["round_start_block"],
-                    target_block=boundaries["target_block"],
-                )
-                self._agg_scores_cache = agg
-
-            if agg:
-                ColoredLogger.info(
-                    f"🤝 Using aggregated scores from commitments ({len(agg)} miners)",
-                    ColoredLogger.CYAN,
-                )
-                avg_rewards = agg
-                self._consensus_last_details = agg_meta or {}
-
-        if not avg_rewards:
+        if not self.round_manager.final_aggregated_rewards:
             ColoredLogger.warning("No rewards to apply; burning weights", ColoredLogger.YELLOW)
             await self._burn_all(
-                avg_rewards=avg_rewards,
                 tasks_completed=tasks_completed,
                 reason="burn (no rewards)",
             )
             return
 
         avg_rewards_array = np.zeros(self.metagraph.n, dtype=np.float32)
-        for uid, score in avg_rewards.items():
+        for uid, score in self.round_manager.final_aggregated_rewards.items():
             if 0 <= int(uid) < self.metagraph.n:
                 avg_rewards_array[int(uid)] = float(score)
 
@@ -383,7 +325,7 @@ class ValidatorSettlementMixin:
         self.set_weights()
 
         finish_success = await self._finish_iwap_round(
-            avg_rewards=avg_rewards,
+            avg_rewards=self.round_manager.final_aggregated_rewards or {},
             final_weights={
                 uid: float(final_rewards_array[uid])
                 for uid in range(len(final_rewards_array))

@@ -62,6 +62,12 @@ FINAL_PRE_GENERATED_TASKS = _env_int("FINAL_PRE_GENERATED_TASKS", 10)
 FINAL_TOP_K = _env_int("FINAL_TOP_K", 3)
 
 # ═══════════════════════════════════════════════════════════════════════════
+# SETTLEMENT CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════
+
+SETTLEMENT_FRACTION = _env_float("SETTLEMENT_FRACTION", 0.95)
+
+# ═══════════════════════════════════════════════════════════════════════════
 # CONSENSUS CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
 

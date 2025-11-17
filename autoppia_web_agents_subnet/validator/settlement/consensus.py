@@ -247,9 +247,6 @@ async def aggregate_scores_from_commitments(
             "scores_by_validator": { hotkey: { uid: score } }
           }
     """
-    if not ENABLE_DISTRIBUTED_CONSENSUS:
-        return {}
-
     # Build hotkey->uid and stake map
     hk_to_uid = _hotkey_to_uid_map(self.metagraph)
     stake_list = getattr(self.metagraph, "stake", None)
@@ -571,12 +568,10 @@ async def _verify_payload_sample(
                 sols.append(TaskSolution(task_id=str(tid), actions=actions, web_agent_id=str(uid)))
 
             # Evaluate subset
-            exec_times = [0.0] * len(sols)
             eval_scores, _trs, _ers = await evaluate_task_solutions(
                 web_project=project,
                 task=t,
                 task_solutions=sols,
-                execution_times=exec_times,
                 normalize_scores=True,
             )
 

@@ -112,7 +112,7 @@ async def _run_screening_handshake_phase(self, total_prompts: int) -> None:
         if agent_version is not None:
             response.agent_version = agent_version
 
-        self.round_handshake_payloads[mapped_uid] = response
+        self.handshake_payloads[mapped_uid] = response
         self.active_miner_uids.append(mapped_uid)
 
         miner_status_map[mapped_uid].update(

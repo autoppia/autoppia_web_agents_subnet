@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 import bittensor as bt
 from bittensor import AxonInfo
@@ -138,32 +138,28 @@ async def send_task_synapse_to_http_endpoints(
     endpoints: List[str],
     task_synapse: TaskSynapse,
     timeout: int,
-) -> Tuple[List[TaskSynapse | None], List[float]]:
+) -> List[TaskSynapse | None]:
     """Send TaskSynapse payloads over HTTP to miner endpoints."""
     import asyncio
     import httpx
 
     responses: List[TaskSynapse | None] = []
-    elapsed_times: List[float] = []
 
     payload = {
         "prompt": task_synapse.prompt,
         "url": task_synapse.url,
         "html": task_synapse.html or "",
         "screenshot": task_synapse.screenshot or "",
-        "actions": task_synapse.actions or [],
-        "version": getattr(task_synapse, "version", ""),
     }
 
     async with httpx.AsyncClient(timeout=timeout) as client:
         for base in endpoints:
             base = (base or "").rstrip("/")
-            url = f"{base}/api/task"
+            url = f"{base}/solve_task"
             start = asyncio.get_event_loop().time()
             try:
                 response = await client.post(url, json=payload)
                 elapsed = asyncio.get_event_loop().time() - start
-                elapsed_times.append(float(elapsed))
                 if response.status_code == 200:
                     data = response.json()
                     responses.append(
@@ -173,67 +169,12 @@ async def send_task_synapse_to_http_endpoints(
                             html=payload["html"],
                             screenshot=payload["screenshot"],
                             actions=data.get("actions", []) or [],
-                            version=payload.get("version", ""),
+                            execution_time=float(elapsed),
                         )
                     )
                 else:
                     responses.append(None)
             except Exception:
-                elapsed = asyncio.get_event_loop().time() - start
-                elapsed_times.append(float(elapsed))
                 responses.append(None)
 
-    if len(elapsed_times) < len(endpoints):
-        elapsed_times.extend([float(timeout)] * (len(endpoints) - len(elapsed_times)))
-
-    return responses, elapsed_times
-
-
-def collect_task_solutions_and_execution_times_http(
-    *,
-    task: IWATask,
-    http_responses: List[TaskSynapse | None],
-    measured_times: List[float],
-    miner_uids: List[int],
-) -> Tuple[List[TaskSolution], List[float]]:
-    """Convert HTTP responses into TaskSolutions and align timing info."""
-    task_solutions: List[TaskSolution] = []
-    execution_times: List[float] = []
-
-    for miner_uid, response, measured in zip(miner_uids, http_responses, measured_times):
-        try:
-            if response is not None:
-                task_solutions.append(
-                    get_task_solution_from_synapse(
-                        task_id=task.id,
-                        synapse=response,
-                        web_agent_id=str(miner_uid),
-                    )
-                )
-            else:
-                task_solutions.append(
-                    TaskSolution(task_id=task.id, actions=[], web_agent_id=str(miner_uid))
-                )
-        except Exception:
-            task_solutions.append(TaskSolution(task_id=task.id, actions=[], web_agent_id=str(miner_uid)))
-
-        try:
-            execution_times.append(float(measured))
-        except Exception:
-            execution_times.append(float(TIMEOUT))
-
-    if len(task_solutions) < len(miner_uids):
-        for uid in miner_uids[len(task_solutions):]:
-            task_solutions.append(TaskSolution(task_id=task.id, actions=[], web_agent_id=str(uid)))
-            execution_times.append(float(TIMEOUT))
-
-    return task_solutions, execution_times
-
-
-__all__ = [
-    "send_start_round_synapse_to_miners",
-    "send_task_synapse_to_miners",
-    "send_feedback_synapse_to_miners",
-    "send_task_synapse_to_http_endpoints",
-    "collect_task_solutions_and_execution_times_http",
-]
+    return responses

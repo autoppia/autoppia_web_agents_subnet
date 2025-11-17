@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import time
-from typing import Dict
 
 import bittensor as bt
-import numpy as np
 from loguru import logger
 
 from autoppia_web_agents_subnet import __version__
@@ -12,25 +10,29 @@ from autoppia_web_agents_subnet.base.validator import BaseValidatorNeuron
 from autoppia_web_agents_subnet.bittensor_config import config
 from autoppia_web_agents_subnet.validator.config import (
     ROUND_SIZE_EPOCHS,
-    MINIMUM_START_BLOCK,
     SCREENING_START_FRACTION,
     SCREENING_STOP_FRACTION,
     FINAL_START_FRACTION,
     FINAL_STOP_FRACTION,
+    SETTLEMENT_FRACTION,
 )
 from autoppia_web_agents_subnet.protocol import StartRoundSynapse
-from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.validator.round_manager import RoundManager, RoundPhase
 from autoppia_web_agents_subnet.validator.dataset import RoundDatasetCollector
 
-from autoppia_web_agents_subnet.platform.validator_mixin import ValidatorPlatformMixin
 from autoppia_web_agents_subnet.validator.round_start.mixin import ValidatorRoundStartMixin
+from autoppia_web_agents_subnet.validator.screening.mixin import ValidatorScreeningMixin
+from autoppia_web_agents_subnet.validator.final.mixin import ValidatorFinalMixin
+from autoppia_web_agents_subnet.validator.settlement.mixin import ValidatorSettlementMixin
 
 from autoppia_iwa.src.bootstrap import AppBootstrap
 
 
 class Validator(
     ValidatorRoundStartMixin,
+    ValidatorScreeningMixin,
+    ValidatorFinalMixin,
+    ValidatorSettlementMixin,
     BaseValidatorNeuron,
 ):
     def __init__(self, config=None):
@@ -54,22 +56,15 @@ class Validator(
         # Active miners and final top K UIDs
         self.active_miner_uids: list[int] = []
         self.final_top_k_uids: list[int] = [] 
-        self.final_endpoints: list[str] = []
-        
-        # Burn-on-round-1 guard to avoid repeated chain sets
-        self._burn_applied: bool = False
+        self.final_endpoints: dict[int, str] = {}
+
+        self.handshake_payloads: dict[int, StartRoundSynapse] = {}
 
         # Dataset collector for consensus
         self.dataset_collector: RoundDatasetCollector | None = None
 
         # ⭐ Round system components
-        self.round_manager = RoundManager(
-            round_size_epochs=ROUND_SIZE_EPOCHS,
-            minimum_start_block=MINIMUM_START_BLOCK,
-            screening_stop_fraction=SCREENING_STOP_FRACTION,
-            final_start_fraction=FINAL_START_FRACTION,
-            final_stop_fraction=FINAL_STOP_FRACTION,
-        )
+        self.round_manager = RoundManager()
 
         bt.logging.info("load_state()")
         self.load_state()
@@ -79,9 +74,6 @@ class Validator(
         Forward pass for the validator.
         """
         bt.logging.info(f"🚀 Starting round-based forward (epochs per round: {ROUND_SIZE_EPOCHS:.1f})")
-        if await self._wait_for_minimum_start_block():
-            return
-
         start_result = await self._start_round()
 
         try:
@@ -96,6 +88,8 @@ class Validator(
             await self._run_final_phase()
         else:
             return
+
+        await self._run_settlement_phase()
 
     def _log_phase_plan(self) -> None:
         """
@@ -123,11 +117,13 @@ class Validator(
             bt.logging.info(f"• Now: {now_frac:.0%} — block {current_block} — ~{end_eta_min:.1f}m to end")
         except Exception:
             pass
+
         bt.logging.info(_line("Round start", 0.0))
         bt.logging.info(_line("Screening start", SCREENING_START_FRACTION))
         bt.logging.info(_line("Screening end", SCREENING_STOP_FRACTION))
         bt.logging.info(_line("Final start", FINAL_START_FRACTION))
         bt.logging.info(_line("Final end", FINAL_STOP_FRACTION))
+        bt.logging.info(_line("Settlement", SETTLEMENT_FRACTION))
         bt.logging.info(_line("Round end", 1.0))
 
 

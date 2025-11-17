@@ -11,15 +11,26 @@ from autoppia_web_agents_subnet.validator.round_manager import RoundPhase
 from autoppia_web_agents_subnet.validator.evaluation.tasks import generate_tasks
 
 from autoppia_web_agents_subnet.validator.final.execute import _execute_single_final_task
-
+from autoppia_web_agents_subnet.validator.final.opensource import deploy_all_agents
 
 class ValidatorFinalMixin:
     """Handles task dispatch, evaluation, and mid-round consensus triggers."""
 
     async def _run_final_phase(self) -> None:
-        await self._aggregate_final_scores()
+        self.round_manager.enter_phase(
+            RoundPhase.SCREENING_CONSENSUS,
+            block=self.block,
+            note="Starting screening consensus phase",
+        )
+        await self._aggregate_screening_scores()
         await self._select_final_top_k_uids()
-        await self._deploy_final_agents()
+        github_urls = {
+            uid: getattr(self.handshake_payloads[uid], "github_url", None) 
+            for uid in self.final_top_k_uids 
+            if uid in self.handshake_payloads 
+            and getattr(self.handshake_payloads[uid], "github_url", None) is not None
+        }
+        self.final_endpoints = await deploy_all_agents(github_urls)
 
         all_tasks = await generate_tasks(FINAL_PRE_GENERATED_TASKS)
         self.final_tasks = all_tasks
@@ -72,5 +83,9 @@ class ValidatorFinalMixin:
 
                 ColoredLogger.error("=" * 80 + "\n", ColoredLogger.RED)
                 break
-                
+        
+        self._wait_until_specific_block(
+            target_block=self.round_manager.settlement_block,
+            target_discription="settlement block",
+        )
 
