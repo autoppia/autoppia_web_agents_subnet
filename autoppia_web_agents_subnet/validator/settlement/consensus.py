@@ -1,15 +1,588 @@
 from __future__ import annotations
 
-"""
-Backward-compatible facade for legacy imports.
+from typing import Any, Dict, Optional, List
 
-The consensus implementation now lives in ``autoppia_web_agents_subnet.validator.consensus``.
-Re-export the public helpers so existing call-sites under ``validator.settlement`` continue to work.
-"""
+from autoppia_web_agents_subnet.validator.dataset import RoundDatasetCollector
+import bittensor as bt
+from bittensor import AsyncSubtensor  # type: ignore
 
-from autoppia_web_agents_subnet.validator.consensus import (  # noqa: F401
-    aggregate_scores_from_commitments,
-    publish_round_snapshot,
-    publish_scores_snapshot,
+from autoppia_web_agents_subnet.validator.config import (
+    ENABLE_DISTRIBUTED_CONSENSUS,
+    MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO,
+    IPFS_API_URL,
+    CONSENSUS_VERIFY_ENABLED,
+    CONSENSUS_VERIFY_SAMPLE_SIZE,
+    CONSENSUS_VERIFY_SAMPLE_TOLERANCE,
 )
-from autoppia_web_agents_subnet.utils.commitments import read_all_plain_commitments  # noqa: F401
+from autoppia_web_agents_subnet.utils.commitments import (
+    read_all_plain_commitments,
+    write_plain_commitment_json,
+)
+from autoppia_web_agents_subnet.utils.ipfs_client import add_json_async, get_json_async
+from autoppia_web_agents_subnet.utils.log_colors import ipfs_tag, consensus_tag
+from autoppia_web_agents_subnet.validator.round_manager import RoundPhase
+from autoppia_web_agents_subnet.validator.evaluation.eval import evaluate_task_solutions
+
+# IWA domain types
+from autoppia_iwa.src.data_generation.domain.classes import Task
+from autoppia_iwa.src.demo_webs.config import demo_web_projects
+from autoppia_iwa.src.web_agents.classes import TaskSolution
+from autoppia_iwa.src.execution.actions.base import BaseAction
+
+
+def _stake_to_float(stake_val: Any) -> float:
+    """Convert various stake representations to a float TAO value."""
+    try:
+        from bittensor.utils.balance import Balance  # type: ignore
+
+        if isinstance(stake_val, Balance):
+            return float(stake_val.tao)
+    except Exception:
+        pass
+    try:
+        return float(stake_val)
+    except Exception:
+        return 0.0
+
+
+def _hotkey_to_uid_map(metagraph) -> Dict[str, int]:
+    mapping: Dict[str, int] = {}
+    try:
+        for i, ax in enumerate(getattr(metagraph, "axons", []) or []):
+            hk = getattr(ax, "hotkey", None)
+            if hk:
+                mapping[hk] = i
+    except Exception:
+        pass
+    try:
+        for i, hk in enumerate(getattr(metagraph, "hotkeys", []) or []):
+            mapping.setdefault(hk, i)
+    except Exception:
+        pass
+    return mapping
+
+
+async def publish_phase_snapshot(
+    self,
+    *,
+    st: AsyncSubtensor,
+    phase: RoundPhase,
+    tasks_completed: int,
+    scores: Dict[int, float],
+) -> Optional[str]:
+    """
+    Publish a mid-round snapshot to IPFS and commit CID on-chain.
+
+    Returns the CID if successful, else None.
+    """
+    if not ENABLE_DISTRIBUTED_CONSENSUS:
+        bt.logging.warning(consensus_tag("Disabled - skipping publish"))
+        return None
+
+    if phase not in [RoundPhase.SCREENING_CONSENSUS, RoundPhase.FINAL_CONSENSUS]:
+        bt.logging.warning(consensus_tag("Invalid phase - skipping publish"))
+        return None
+
+    self.round_manager.enter_phase(
+        phase,
+        block=self.block,
+        note=f"Publishing {phase.value} consensus snapshot to IPFS",
+    )
+
+    current_block = self.block
+    round_number = await self.round_manager.calculate_round(current_block)
+    boundaries = self.round_manager.get_current_boundaries()
+    start_epoch = int(boundaries["round_start_epoch"])
+    target_epoch = int(boundaries["target_epoch"])    
+    
+    payload = {
+        "v": 2,
+        "r": int(round_number),
+        "es": start_epoch,
+        "et": target_epoch,
+        "phase": phase.value,
+        "uid": int(self.uid),
+        "validator_uid": int(self.uid),
+        "hk": self.wallet.hotkey.ss58_address,
+        "validator_hotkey": self.wallet.hotkey.ss58_address,
+        "validator_round_id": getattr(self, "current_round_id", None),
+        "validator_version": getattr(self, "version", None),
+        "tasks_completed": int(tasks_completed),
+        "agents": len(scores or {}),
+        "scores": {str(int(uid)): float(score) for uid, score in (scores or {}).items()},
+    }
+
+    try:
+        collector: RoundDatasetCollector | None = getattr(self, "dataset_collector", None)
+        if isinstance(collector, RoundDatasetCollector):
+            try:
+                round_meta = {
+                    "r": payload["r"],
+                    "epoch_start": payload["es"],
+                    "epoch_end": payload["et"],
+                }
+                validator_meta = {
+                    "uid": payload["uid"],
+                    "hotkey": payload["hk"],
+                    "version": payload.get("validator_version"),
+                    "validator_round_id": payload.get("validator_round_id"),
+                }
+                dataset = collector.build_dataset(round_meta=round_meta, validator_meta=validator_meta)
+            except Exception as e:  # pragma: no cover - defensive
+                dataset = None
+                bt.logging.warning(consensus_tag(f"Dataset build failed: {e}"))
+
+            if isinstance(dataset, dict):
+                try:
+                    data_cid, data_sha, data_size = await add_json_async(
+                        dataset,
+                        filename=f"autoppia_dataset_r{payload['r'] or 'X'}_{phase.value}.json",
+                        api_url=IPFS_API_URL,
+                        pin=True,
+                        sort_keys=True,
+                    )
+                    bt.logging.success(ipfs_tag("UPLOAD", f"✅ DATASET - CID: {data_cid} size={data_size} bytes"))
+                    
+                    payload["data_cid"] = data_cid
+                    payload["data_sha256"] = data_sha
+                    payload["data_size"] = int(data_size or 0)
+
+                except Exception as e:  # pragma: no cover - IPFS upload failure should not abort
+                    bt.logging.error(ipfs_tag("UPLOAD", f"❌ DATASET upload failed: {type(e).__name__}: {e}"))
+        else:
+            bt.logging.info(consensus_tag("No dataset collector attached; publishing scores-only payload"))
+    except Exception as e:
+        bt.logging.debug(consensus_tag(f"Dataset attach failed: {e}"))
+
+    try:
+        import json
+
+        payload_json = json.dumps(payload, indent=2, sort_keys=True)
+
+        bt.logging.info("=" * 80)
+        bt.logging.info(ipfs_tag("UPLOAD", f"Round {payload.get('r')} | {payload.get('agents')} miners"))
+        bt.logging.info(ipfs_tag("UPLOAD", f"Payload:\n{payload_json}"))
+
+        cid, sha_hex, byte_len = await add_json_async(
+            payload,
+            filename=f"autoppia_commit_r{payload['r'] or 'X'}_{phase.value}.json",
+            api_url=IPFS_API_URL,
+            pin=True,
+            sort_keys=True,
+        )
+
+        bt.logging.success(ipfs_tag("UPLOAD", f"✅ SUCCESS - CID: {cid}"))
+        bt.logging.info(ipfs_tag("UPLOAD", f"Size: {byte_len} bytes | SHA256: {sha_hex[:16]}..."))
+        bt.logging.info("=" * 80)
+    except Exception as exc:
+        bt.logging.error("=" * 80)
+        bt.logging.error(ipfs_tag("UPLOAD", f"❌ FAILED | Error: {type(exc).__name__}: {exc}"))
+        bt.logging.error(ipfs_tag("UPLOAD", f"API URL: {IPFS_API_URL}"))
+        import traceback
+
+        bt.logging.error(ipfs_tag("UPLOAD", f"Traceback:\n{traceback.format_exc()}"))
+        bt.logging.error("=" * 80)
+        return None
+
+    commit_v5 = {
+        "v": 5,
+        "r": int(round_number),
+        "se": start_epoch,
+        "te": target_epoch,
+        "p": 1 if phase == RoundPhase.SCREENING_CONSENSUS else 2,
+        "c": str(cid),
+    }
+
+    try:
+        bt.logging.info(
+            f"📮 CONSENSUS COMMIT START | round {commit_v5['r']} | phase {commit_v5['p']} | "
+            f"start_epoch {commit_v5['se']} | target_epoch {commit_v5['te']} | cid={commit_v5['c']}"
+        )
+        ok = await write_plain_commitment_json(
+            st,
+            wallet=self.wallet,
+            data=commit_v5,
+            netuid=self.config.netuid,
+        )
+        if ok:
+            try:
+                commit_block = self.subtensor.get_current_block()
+            except Exception:
+                commit_block = None
+            else:
+                try:
+                    self._consensus_commit_block = commit_block
+                    self._consensus_commit_cid = str(cid)
+                except Exception:
+                    pass
+            bt.logging.success(ipfs_tag("BLOCKCHAIN", f"✅ Commitment successful | CID: {cid}"))
+            return str(cid)
+        bt.logging.warning(ipfs_tag("BLOCKCHAIN", "⚠️ Commitment failed - write returned false"))
+        return None
+    except Exception as exc:
+        bt.logging.error("=" * 80)
+        bt.logging.error(ipfs_tag("BLOCKCHAIN", f"❌ Commitment failed | Error: {type(exc).__name__}: {exc}"))
+        import traceback
+
+        bt.logging.error(ipfs_tag("BLOCKCHAIN", f"Traceback:\n{traceback.format_exc()}"))
+        bt.logging.error("=" * 80)
+        return None
+
+
+async def aggregate_scores_from_commitments(
+    self,
+    *,
+    st: AsyncSubtensor,    
+    phase: RoundPhase,
+) -> tuple[Dict[int, float], Dict[str, Any]]:
+    """
+    Read all validators' commitments for this round window and compute stake-weighted
+    average scores per miner UID.
+
+    Returns a tuple: (final_scores, details)
+      - final_scores: Dict[uid -> aggregated score]
+      - details:
+          {
+            "validators": [ {"hotkey": str, "uid": int|"?", "stake": float, "cid": str} ],
+            "scores_by_validator": { hotkey: { uid: score } }
+          }
+    """
+    # Build hotkey->uid and stake map
+    hk_to_uid = _hotkey_to_uid_map(self.metagraph)
+    stake_list = getattr(self.metagraph, "stake", None)
+
+    def stake_for_hk(hk: str) -> float:
+        try:
+            uid = hk_to_uid.get(hk)
+            if uid is None:
+                return 0.0
+            return _stake_to_float(stake_list[uid]) if stake_list is not None else 0.0  # type: ignore[index]
+        except Exception:
+            return 0.0
+
+    current_block = self.block
+    round_number = await self.round_manager.calculate_round(current_block)
+
+    # Fetch all plain commitments and select those for this round (v5 with CID)
+    try:
+        commits = await read_all_plain_commitments(st, netuid=self.config.netuid, block=None)
+        bt.logging.info(
+            consensus_tag(f"Aggregate | Expected round {round_number} | phase {phase.value} | Commitments found: {len(commits or {})}")
+        )
+        if commits:
+            bt.logging.info(consensus_tag(f"Found {len(commits)} validator commitments:"))
+            for hk, entry in list(commits.items())[:5]:
+                bt.logging.info(
+                    consensus_tag(f"  - {hk[:12]}... | Round {entry.get('r')} | Phase {entry.get('p')} | CID {str(entry.get('c', 'N/A'))[:24]}...")
+                )
+    except Exception as e:
+        bt.logging.error(f"❌ Failed to read commitments from blockchain: {e}")
+        commits = {}
+
+    bt.logging.info(f"[CONSENSUS] Filtering commitments for current round and phase: {round_number} | {phase.value}")
+
+    weighted_sum: Dict[int, float] = {}
+    weight_total: Dict[int, float] = {}
+
+    included = 0
+    skipped_wrong_round_or_phase = 0
+    skipped_missing_cid = 0
+    skipped_low_stake = 0
+    skipped_ipfs = 0
+    skipped_verification_fail = 0
+    skipped_wrong_round_or_phase_list: list[tuple[str, int, int]] = []  # (hk, round_number, phase)
+    skipped_missing_cid_list: list[str] = []
+    skipped_low_stake_list: list[tuple[str, float]] = []  # (hk, stake)
+    skipped_ipfs_list: list[tuple[str, str]] = []  # (hk, cid)
+    skipped_verification_fail_list: list[tuple[str, str]] = []  # (hk, reason)
+
+    fetched: list[tuple[str, str, float]] = []
+    scores_by_validator: Dict[str, Dict[int, float]] = {}
+
+    for hk, entry in (commits or {}).items():
+        if not isinstance(entry, dict):
+            bt.logging.info(f"[CONSENSUS] Skip {hk[:12]}... | Reason: entry is not dict")
+            continue
+
+        entry_round_number = int(entry.get("r", -1))
+        entry_phase = int(entry.get("p", -1))
+        if entry_round_number != round_number or entry_phase != phase.value:
+            skipped_wrong_round_or_phase += 1
+            skipped_wrong_round_or_phase_list.append((hk, entry_round_number, entry_phase))
+            bt.logging.debug(
+                f"⏭️ Skip {hk[:10]}…: wrong round or phase (has r={entry_round_number} p={entry_phase}, need r={round_number} p={phase.value})"
+            )
+            continue
+
+        cid = entry.get("c")
+        if not isinstance(cid, str) or not cid:
+            skipped_missing_cid += 1
+            skipped_missing_cid_list.append(hk)
+            bt.logging.debug(f"⏭️ Skip {hk[:10]}…: missing or invalid CID")
+            continue
+
+        st_val = stake_for_hk(hk)
+        validator_uid = hk_to_uid.get(hk, "?")
+
+        if st_val < float(MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO):
+            skipped_low_stake += 1
+            skipped_low_stake_list.append((hk, st_val))
+            bt.logging.debug(
+                f"⏭️ Skip {hk[:10]}…: low stake ({st_val:.1f}τ < {float(MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO):.1f}τ)"
+            )
+            continue
+
+        try:
+            payload, _norm, _h = await get_json_async(cid, api_url=IPFS_API_URL)
+            import json
+
+            payload_json = json.dumps(payload, indent=2, sort_keys=True)
+
+            bt.logging.info("=" * 80)
+            bt.logging.info(f"[IPFS] [DOWNLOAD] Validator {hk[:12]}... (UID {validator_uid}) | CID: {cid}")
+            bt.logging.info(f"[IPFS] [DOWNLOAD] URL: http://ipfs.metahash73.com:5001/api/v0/cat?arg={cid}")
+            bt.logging.info(f"[IPFS] [DOWNLOAD] Payload:\n{payload_json}")
+            bt.logging.success(f"[IPFS] [DOWNLOAD] ✅ SUCCESS - Round {payload.get('r')} | {len(payload.get('scores', {}))} miners | Stake: {st_val:.2f}τ")
+            bt.logging.info("=" * 80)
+        except Exception as e:
+            skipped_ipfs += 1
+            skipped_ipfs_list.append((hk, str(cid)))
+            bt.logging.error(f"❌ IPFS DOWNLOAD FAILED | cid={str(cid)[:20]} error={type(e).__name__}: {e}")
+            continue
+        if not isinstance(payload, dict):
+            bt.logging.info(f"[CONSENSUS] Skip {hk[:12]}... | Reason: payload is not dict")
+            continue
+
+        scores = payload.get("scores")
+        if not isinstance(scores, dict):
+            continue
+
+        # Verification step always runs for logging/debug; only enforced if enabled.
+        verified_ok, vreason = await _verify_payload_sample(
+            payload=payload,
+            sample_size=int(CONSENSUS_VERIFY_SAMPLE_SIZE),
+            tolerance=float(CONSENSUS_VERIFY_SAMPLE_TOLERANCE),
+        )
+        if not verified_ok:
+            # Always log
+            bt.logging.warning(consensus_tag(f"🔎 Verification failed for {hk[:10]}… ({vreason})"))
+            # Enforce exclusion only if enabled
+            if bool(CONSENSUS_VERIFY_ENABLED):
+                skipped_verification_fail += 1
+                skipped_verification_fail_list.append((hk, vreason or "mismatch"))
+                bt.logging.warning(consensus_tag(f"⏭️ Excluding validator {hk[:10]}… by verification policy"))
+                continue
+        else:
+            bt.logging.info(consensus_tag(f"🔎 Verification OK for {hk[:10]}…"))
+
+        # Record per-validator scores (converted to int uid)
+        per_val_map: Dict[int, float] = {}
+        for uid_s, sc in scores.items():
+            try:
+                uid = int(uid_s)
+                val = float(sc)
+            except Exception:
+                continue
+            effective_weight = st_val if st_val > 0.0 else 1.0
+            weighted_sum[uid] = weighted_sum.get(uid, 0.0) + effective_weight * val
+            weight_total[uid] = weight_total.get(uid, 0.0) + effective_weight
+            per_val_map[uid] = val
+        included += 1
+        fetched.append((hk, cid, st_val))
+        scores_by_validator[hk] = per_val_map
+
+    result: Dict[int, float] = {}
+    for uid, wsum in weighted_sum.items():
+        denom = weight_total.get(uid, 0.0)
+        if denom > 0:
+            result[uid] = float(wsum / denom)
+
+    if included > 0:
+        all_stakes_zero = all(stake == 0.0 for _, _, stake in fetched)
+        consensus_mode = "simple average (all 0τ)" if all_stakes_zero else "stake-weighted"
+
+        bt.logging.success(
+            f"[CONSENSUS] ✅ Aggregation complete | Validators: {included} | Miners: {len(result)} | Mode: {consensus_mode}"
+        )
+        bt.logging.info(
+            f"[CONSENSUS] Skipped | Wrong round or phase: {skipped_wrong_round_or_phase} | Missing CID: {skipped_missing_cid} | Low stake: {skipped_low_stake} | IPFS fail: {skipped_ipfs} | Verify fail: {skipped_verification_fail}"
+        )
+        # Extra verbose logs to diagnose stake/epoch filtering
+        try:
+            if skipped_low_stake_list:
+                low_str = ", ".join([f"{hk[:10]}…({stake:.0f}τ)" for hk, stake in skipped_low_stake_list])
+                bt.logging.debug(f"   ⏭️ Low-stake excluded: {low_str}")
+            if skipped_wrong_round_or_phase_list:
+                wrong_str = ", ".join([f"{hk[:10]}…(r={rr},p={pp})" for hk, rr, pp in skipped_wrong_round_or_phase_list])
+                bt.logging.debug(f"   ⏭️ Wrong-round-or-phase excluded: {wrong_str}")
+            if skipped_missing_cid_list:
+                miss_str = ", ".join([f"{hk[:10]}…" for hk in skipped_missing_cid_list])
+                bt.logging.debug(f"   ⏭️ Missing-CID excluded: {miss_str}")
+            if skipped_ipfs_list:
+                ipfs_str = ", ".join([f"{hk[:10]}…:{cid[:10]}…" for hk, cid in skipped_ipfs_list])
+                bt.logging.debug(f"   ⏭️ IPFS-failed: {ipfs_str}")
+        except Exception:
+            pass
+        if len(result) > 0:
+            bt.logging.info(f"[CONSENSUS] Aggregated scores ({len(result)} miners):")
+            top_sample = list(sorted(result.items(), key=lambda x: x[1], reverse=True))[:10]
+            for uid, score in top_sample:
+                bt.logging.info(f"[CONSENSUS]   UID {uid}: {score:.4f}")
+        else:
+            bt.logging.warning(f"[CONSENSUS] ⚠️ No miners aggregated (all scores were <= 0 or no common miners)")
+    else:
+        bt.logging.warning(f"[CONSENSUS] ⚠️ No validators included in aggregation")
+        bt.logging.info(
+            f"[CONSENSUS] Reasons | Wrong round or phase: {skipped_wrong_round_or_phase} | Missing CID: {skipped_missing_cid} | Low stake: {skipped_low_stake} | IPFS fail: {skipped_ipfs} | Verify fail: {skipped_verification_fail} | Total commits: {len(commits or {})}"
+        )
+
+    # Build details structure for reporting/visualization
+    validators_info = [
+        {"hotkey": hk, "uid": hk_to_uid.get(hk, "?"), "stake": stake, "cid": cid}
+        for hk, cid, stake in fetched
+    ]
+    details = {
+        "validators": validators_info,
+        "scores_by_validator": scores_by_validator,
+        "skips": {
+            "wrong_round_or_phase": skipped_wrong_round_or_phase_list,
+            "missing_cid": skipped_missing_cid_list,
+            "low_stake": skipped_low_stake_list,
+            "ipfs_fail": skipped_ipfs_list,
+            "verify_fail": skipped_verification_fail_list,
+        },
+    }
+
+    return result, details
+
+
+async def _verify_payload_sample(
+    *,
+    payload: Dict[str, Any],
+    sample_size: int,
+    tolerance: float,
+) -> tuple[bool, Optional[str]]:
+    """
+    Download dataset for a validator payload and re-evaluate a random sample of solutions.
+
+    Returns (ok, reason). If dataset is missing or invalid and CONSENSUS_VERIFY_ENABLED is true,
+    returns (False, reason).
+    """
+    try:
+        # Obtain dataset manifest
+        ds_ref = None
+        if isinstance(payload.get("data_cid"), str):
+            ds_ref = {"cid": payload.get("data_cid"), "sha256": payload.get("data_sha256")}
+
+        if not ds_ref or not isinstance(ds_ref.get("cid"), str):
+            # Return ok if dataset is missing and enforcement disabled
+            return (False, "no_dataset") if CONSENSUS_VERIFY_ENABLED else (True, None)
+
+        cid = str(ds_ref.get("cid"))
+        expected_sha256 = ds_ref.get("sha256")
+        dataset, _norm, _h = await get_json_async(cid, api_url=IPFS_API_URL, expected_sha256_hex=expected_sha256)
+
+        if not isinstance(dataset, dict):
+            return False, "invalid_dataset"
+
+        tasks_list = dataset.get("tasks") or []
+        solutions_list = dataset.get("solutions") or []
+        evals_list = dataset.get("evals") or []
+        if not isinstance(tasks_list, list) or not isinstance(solutions_list, list) or not isinstance(evals_list, list):
+            return False, "bad_schema"
+
+        # Build task map {task_id: Task}
+        task_map: Dict[str, Task] = {}
+        task_project_map: Dict[str, Any] = {getattr(p, "id", None): p for p in demo_web_projects if getattr(p, "id", None)}
+        for tj in tasks_list:
+            try:
+                tid = str(tj.get("id"))
+                t = Task.deserialize(tj)
+                task_map[tid] = t
+            except Exception:
+                # Skip malformed task
+                continue
+
+        # Map solutions by {task_id: {miner_uid: solution}}
+        solution_map: Dict[str, Dict[int, Dict[str, Any]]] = {}
+        for s in solutions_list:
+            try:
+                tid = str(s.get("task_id"))
+                uid = int(s.get("miner_uid"))
+                solution_map.setdefault(tid, {})
+                solution_map[tid][uid] = s
+            except Exception:
+                continue
+
+        # Build eval index {task_id: {miner_uid: eval_score}}
+        expected_scores: Dict[str, Dict[int, float]] = {}
+        for e in evals_list:
+            try:
+                tid = str(e.get("task_id"))
+                uid = int(e.get("miner_uid"))
+                expected_scores.setdefault(tid, {})
+                expected_scores[tid][uid] = float(e.get("eval_score", 0.0))
+            except Exception:
+                continue
+
+        total = len(expected_scores)
+        if total <= 0:
+            # Nothing to verify; treat as failure when dataset is required
+            return (False, "no_evals") if CONSENSUS_VERIFY_ENABLED else (True, None)
+
+        # Sample tasks deterministically
+        import random, hashlib
+        seed_src = f"{payload.get('validator_hotkey') or payload.get('hk')}|{payload.get('r')}|{payload.get('phase')}"
+        seed_hex = hashlib.md5(seed_src.encode()).hexdigest()
+        rng = random.Random(int(seed_hex[:8], 16))
+        sample_task_ids = rng.sample(list(task_map.keys()), sample_size)
+
+        # Verify per task
+        for tid in sample_task_ids:
+            t = task_map.get(tid)
+            if t is None:
+                return False, "missing_task"
+
+            # WebProject lookup (may be used by evaluator)
+            proj_id = t.get("web_project_id", None)
+            project = task_project_map.get(proj_id) if proj_id is not None else demo_web_projects[0]
+
+            # Rebuild TaskSolution list
+            sols: List[TaskSolution] = []
+            for uid in solution_map.get(tid, {}).keys():
+                sj = solution_map.get(tid, {}).get(uid)
+                if not sj:
+                    return False, "missing_solution"
+                actions_json = sj.get("actions") or []
+                actions = []
+                try:
+                    for a in actions_json:
+                        try:
+                            act = BaseAction.create_action(a)
+                        except Exception:
+                            act = None
+                        if act is not None:
+                            actions.append(act)
+                except Exception:
+                    actions = []
+                sols.append(TaskSolution(task_id=str(tid), actions=actions, web_agent_id=str(uid)))
+
+            # Evaluate subset
+            eval_scores, _trs, _ers = await evaluate_task_solutions(
+                web_project=project,
+                task=t,
+                task_solutions=sols,
+                normalize_scores=True,
+            )
+
+            # Compare
+            for i, uid in enumerate(solution_map.get(tid, {}).keys()):
+                ref = float(expected_scores.get(tid, {}).get(uid, 0.0))
+                got = float(eval_scores[i]) if i < len(eval_scores) else 0.0
+                if abs(ref - got) > tolerance:
+                    return False, f"diff@{tid}:{uid}:{ref:.6f}!={got:.6f}"
+
+        return True, None
+    except Exception as e:
+        bt.logging.warning(consensus_tag(f"Verification exception: {type(e).__name__}: {e}"))
+        return (False, "exception") if CONSENSUS_VERIFY_ENABLED else (True, None)

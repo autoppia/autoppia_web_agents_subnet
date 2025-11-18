@@ -5,6 +5,7 @@ Handles both task generation and task data processing.
 from __future__ import annotations
 
 import math
+import time
 import random
 from typing import List, Tuple
 
@@ -13,7 +14,7 @@ import bittensor as bt
 from autoppia_web_agents_subnet.validator.models import TaskWithProject, ProjectTasks
 from autoppia_web_agents_subnet.utils.random import split_tasks_evenly
 from autoppia_web_agents_subnet.protocol import TaskSynapse
-from autoppia_web_agents_subnet.validator.config import MAX_ACTIONS_LENGTH, TIMEOUT, ENABLE_DYNAMIC_HTML
+from autoppia_web_agents_subnet.validator.config import MAX_ACTIONS_LENGTH, TIMEOUT, ENABLE_DYNAMIC_HTML, PROMPTS_PER_USE_CASE
 
 # IWA (module-wrapped) imports
 from autoppia_iwa.src.demo_webs.config import demo_web_projects
@@ -27,7 +28,7 @@ from autoppia_iwa.src.web_agents.classes import TaskSolution
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TASK GENERATION - Generate tasks for miners
+# TASK GENERATION - Generate tasks for agents
 # ═══════════════════════════════════════════════════════════════════════════════
 
 async def _generate_tasks_limited_use_cases(
@@ -49,7 +50,7 @@ async def _generate_tasks_limited_use_cases(
     return await pipeline.generate()
 
 
-async def get_task_collection_interleaved(
+async def _get_task_collection_interleaved(
     *,
     prompts_per_use_case: int,
 ) -> List[TaskWithProject]:
@@ -146,6 +147,34 @@ async def get_task_collection_interleaved(
         bt.logging.debug(f"[tasks] Seeds assigned to {len(interleaved_tasks)} tasks")
 
     return interleaved_tasks
+
+async def generate_tasks(pre_generated_tasks: int) -> List[TaskWithProject]:
+    pre_generation_start = time.time()
+    all_tasks: List[TaskWithProject] = []
+
+    tasks_generated = 0
+    while tasks_generated < pre_generated_tasks:
+        batch_start = time.time()
+        batch_tasks = await _get_task_collection_interleaved(
+            prompts_per_use_case=PROMPTS_PER_USE_CASE
+        )
+        remaining = pre_generated_tasks - tasks_generated
+        tasks_to_add = batch_tasks[:remaining]
+        all_tasks.extend(tasks_to_add)
+        tasks_generated += len(tasks_to_add)
+
+        batch_elapsed = time.time() - batch_start
+        bt.logging.debug(
+            f"Generated batch: {len(tasks_to_add)} in {batch_elapsed:.1f}s "
+            f"(total {tasks_generated}/{pre_generated_tasks})"
+        )
+
+    pre_generation_elapsed = time.time() - pre_generation_start
+    bt.logging.info(
+        f"✅ Task list ready: {len(all_tasks)} tasks in {pre_generation_elapsed:.1f}s"
+    )
+
+    return all_tasks
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
