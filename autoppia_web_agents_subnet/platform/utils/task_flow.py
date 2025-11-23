@@ -117,7 +117,6 @@ async def submit_task_results(
             validator_hotkey=validator_hotkey,
             miner_uid=miner_uid,
             miner_hotkey=miner_hotkey,
-            miner_agent_key=None,
             actions=actions_payload,
             web_agent_id=getattr(solution, "web_agent_id", None),
             recording=getattr(solution, "recording", None),

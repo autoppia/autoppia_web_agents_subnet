@@ -199,7 +199,6 @@ class IWAPClient:
                 "validator_hotkey": task_solution.validator_hotkey,
                 "miner_uid": evaluation_result.miner_uid,
                 "miner_hotkey": task_solution.miner_hotkey,
-                "miner_agent_key": task_solution.miner_agent_key,
                 "final_score": evaluation_result.final_score,
                 "raw_score": evaluation_result.raw_score or evaluation_result.final_score,
                 "evaluation_time": evaluation_result.evaluation_time,
