@@ -305,24 +305,14 @@ def build_iwap_tasks(*, validator_round_id: str, tasks: List[TaskWithProject]) -
         task_model = iwa_models.TaskIWAP(
             task_id=task_id,
             validator_round_id=validator_round_id,
-            sequence=index,
-            scope="local",
             is_web_real=bool(getattr(task, "is_web_real", False)),
             web_project_id=getattr(project, "id", None),
             url=getattr(task, "url", getattr(project, "frontend_url", "")),
             prompt=getattr(task, "prompt", ""),
-            html=getattr(task, "html", "") or "",
-            clean_html=getattr(task, "clean_html", "") or "",
             specifications=specifications,
             tests=tests,
             relevant_data=relevant_data,
             use_case=use_case_payload,
-            should_record=bool(getattr(task, "should_record", False)),
-            interactive_elements=None,
-            screenshot=getattr(task, "screenshot", None),
-            screenshot_description=getattr(task, "screenshot_description", None),
-            milestones=None,
-            success_criteria=getattr(task, "success_criteria", None),
         )
         task_map[task_id] = task_model
     return task_map

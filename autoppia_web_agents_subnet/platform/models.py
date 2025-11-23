@@ -112,19 +112,12 @@ class TaskIWAP:
     is_web_real: bool
     url: str
     prompt: str
-    html: str
-    clean_html: str
     specifications: Dict[str, Any]
     tests: List[Dict[str, Any]]
     relevant_data: Dict[str, Any]
     use_case: Dict[str, Any]
     should_record: bool = False
-    sequence: Optional[int] = None
     web_project_id: Optional[str] = None
-    interactive_elements: Optional[str] = None
-    screenshot: Optional[str] = None
-    screenshot_description: Optional[str] = None
-    milestones: Optional[List[Dict[str, Any]]] = None
     success_criteria: Optional[str] = None
 
     def to_payload(self) -> Dict[str, Any]:
@@ -147,10 +140,20 @@ class TaskIWAP:
         data["tests"] = make_json_serializable(self.tests or [])
         data["relevant_data"] = make_json_serializable(self.relevant_data or {})
         data["use_case"] = make_json_serializable(self.use_case or {})
-        if self.milestones is None:
-            data["milestones"] = None
-        else:
-            data["milestones"] = make_json_serializable(self.milestones)
+        # Strip unused/heavy legacy fields before sending to IWAP
+        for legacy_key in [
+            "html",
+            "clean_html",
+            "interactive_elements",
+            "screenshot",
+            "screenshot_description",
+            "milestones",
+            "scope",
+            "sequence",
+            "should_record",
+            "success_criteria",
+        ]:
+            data.pop(legacy_key, None)
         return _drop_nones(data)
 
 
