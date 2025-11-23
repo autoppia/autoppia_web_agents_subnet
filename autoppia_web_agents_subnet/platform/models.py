@@ -108,7 +108,6 @@ class MinerSnapshotIWAP:
 class TaskIWAP:
     task_id: str
     validator_round_id: str
-    scope: str
     is_web_real: bool
     url: str
     prompt: str
@@ -116,9 +115,7 @@ class TaskIWAP:
     tests: List[Dict[str, Any]]
     relevant_data: Dict[str, Any]
     use_case: Dict[str, Any]
-    should_record: bool = False
     web_project_id: Optional[str] = None
-    success_criteria: Optional[str] = None
 
     def to_payload(self) -> Dict[str, Any]:
         from datetime import datetime, date, time as datetime_time
@@ -140,20 +137,7 @@ class TaskIWAP:
         data["tests"] = make_json_serializable(self.tests or [])
         data["relevant_data"] = make_json_serializable(self.relevant_data or {})
         data["use_case"] = make_json_serializable(self.use_case or {})
-        # Strip unused/heavy legacy fields before sending to IWAP
-        for legacy_key in [
-            "html",
-            "clean_html",
-            "interactive_elements",
-            "screenshot",
-            "screenshot_description",
-            "milestones",
-            "scope",
-            "sequence",
-            "should_record",
-            "success_criteria",
-        ]:
-            data.pop(legacy_key, None)
+        # All fields are now clean, just serialize and return
         return _drop_nones(data)
 
 
@@ -165,7 +149,6 @@ class AgentRunIWAP:
     validator_hotkey: str
     miner_uid: Optional[int]
     miner_hotkey: Optional[str]
-    miner_agent_key: Optional[str]
     is_sota: bool
     version: Optional[str]
     started_at: float
@@ -198,7 +181,6 @@ class TaskSolutionIWAP:
     validator_hotkey: str
     miner_uid: Optional[int]
     miner_hotkey: Optional[str]
-    miner_agent_key: Optional[str]
     actions: List[Dict[str, Any]]
     web_agent_id: Optional[str] = None
     recording: Optional[Any] = None
