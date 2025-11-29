@@ -522,18 +522,139 @@ async def finish_round_flow(
         "active_miners": len(avg_rewards),
     }
 
-    rank_map = {uid: rank for rank, (uid, _score) in enumerate(sorted_miners, start=1)}
+    # Get local scores (pre-consensus) if they were saved during IPFS publish
+    # If not available, use current avg_rewards (backward compatible)
+    local_avg_rewards = getattr(ctx, "_local_avg_rewards_at_publish", None) or avg_rewards
+
+    # Build agent_run summaries with complete information
+    # Calculate ranks with FINAL scores (for weights/consensus)
+    rank_map_final = {uid: rank for rank, (uid, _score) in enumerate(sorted_miners, start=1)}
+
+    # Calculate ranks with LOCAL scores (for local_evaluation consistency)
+    sorted_miners_local = sorted(local_avg_rewards.items(), key=lambda item: item[1], reverse=True)
+    rank_map_local = {uid: rank for rank, (uid, _score) in enumerate(sorted_miners_local, start=1)}
+
     agent_run_summaries: List[iwa_models.FinishRoundAgentRunIWAP] = []
+
     for miner_uid, agent_run in ctx.current_agent_runs.items():
-        rank_value = rank_map.get(miner_uid)
+        # Use LOCAL rank for local_evaluation (consistent with local scores)
+        rank_value = rank_map_local.get(miner_uid)
         weight_value = final_weights.get(miner_uid)
+        # Use LOCAL score (pre-consensus) for local_evaluation
+        score_value = local_avg_rewards.get(miner_uid, 0.0)
+
+        # Calculate tasks completed/failed (safe access)
+        round_rewards = getattr(ctx.round_manager, "round_rewards", {}) or {}
+        miner_rewards = round_rewards.get(miner_uid, []) or []
+        miner_tasks_attempted = len(miner_rewards)
+        miner_tasks_completed = len([r for r in miner_rewards if r >= 0.5])
+        miner_tasks_failed = miner_tasks_attempted - miner_tasks_completed
+
+        # Calculate avg evaluation time (safe access)
+        round_times = getattr(ctx.round_manager, "round_times", {}) or {}
+        times = round_times.get(miner_uid, []) or []
+        avg_time = sum(times) / len(times) if times else 0.0
+
+        # Get miner name from agent_run
+        miner_name = getattr(agent_run, "agent_name", None) or f"Miner {miner_uid}"
+
         agent_run_summaries.append(
             iwa_models.FinishRoundAgentRunIWAP(
                 agent_run_id=agent_run.agent_run_id,
                 rank=rank_value,
                 weight=float(weight_value) if weight_value is not None else None,
+                miner_name=miner_name,
+                score=float(score_value),
+                avg_evaluation_time=float(avg_time),
+                tasks_attempted=miner_tasks_attempted,
+                tasks_completed=miner_tasks_completed,
+                tasks_failed=miner_tasks_failed,
             )
         )
+
+    # Build round metadata (safe access to all fields)
+    try:
+        boundaries = ctx.round_manager.get_current_boundaries() if hasattr(ctx, "round_manager") else {}
+    except Exception:
+        boundaries = {}
+
+    round_metadata = iwa_models.RoundMetadataIWAP(
+        round_number=int(getattr(ctx, "current_round_number", 0) or 0),
+        started_at=float(getattr(ctx, "round_start_time", ended_at - 3600) or (ended_at - 3600)),
+        ended_at=float(ended_at),
+        start_block=int(boundaries.get("round_start_block", 0) or 0),
+        end_block=int(boundaries.get("target_block", 0) or 0),
+        start_epoch=float(boundaries.get("round_start_epoch", 0.0) or 0.0),
+        end_epoch=float(boundaries.get("target_epoch", 0.0) or 0.0),
+        tasks_total=int(tasks_completed or 0),
+        tasks_completed=int(tasks_completed or 0),
+        miners_responded_handshake=len(getattr(ctx, "active_miner_uids", []) or []),
+        miners_active=len(avg_rewards or {}),
+    )
+
+    # Build local_evaluation (what THIS validator evaluated)
+    local_evaluation = {"timestamp": ended_at, "miners": [run.to_payload() for run in agent_run_summaries]}
+
+    # FASE 2: IPFS uploaded data (what THIS validator published)
+    ipfs_uploaded = None
+    consensus_cid = getattr(ctx, "_consensus_commit_cid", None)
+    if consensus_cid:
+        # Use the ACTUAL payload that was uploaded to IPFS (saved when published)
+        ipfs_payload = getattr(ctx, "_ipfs_uploaded_payload", None)
+
+        # Fallback: if payload wasn't saved, don't include it (just CID)
+        if not ipfs_payload:
+            ipfs_payload = {"note": "Payload not available"}
+
+        ipfs_uploaded = {
+            "cid": consensus_cid,
+            "published_at": getattr(ctx, "_consensus_publish_timestamp", ended_at - 100),
+            "reveal_round": getattr(ctx, "_consensus_reveal_round", 0),
+            "commit_version": 4,
+            "payload": ipfs_payload,
+        }
+
+    # FASE 3: IPFS downloaded data (what was downloaded from ALL validators)
+    ipfs_downloaded = None
+    agg_meta = getattr(ctx, "_agg_meta_cache", None)
+    if agg_meta and isinstance(agg_meta, dict):
+        # Extract validators data from consensus metadata
+        validators_list = agg_meta.get("validators", [])
+        scores_by_validator = agg_meta.get("scores_by_validator", {})
+
+        # Build structured ipfs_downloaded
+        validators_data = []
+        total_stake = 0.0
+
+        for val_info in validators_list:
+            validator_hk = val_info.get("hotkey", "")
+            validator_uid = val_info.get("uid", "?")
+            validator_stake = float(val_info.get("stake", 0))
+            validator_cid = val_info.get("cid", "")
+
+            # Get scores from this validator
+            validator_scores = scores_by_validator.get(validator_hk, {})
+
+            # Try to get validator name (if available in metagraph or cached)
+            validator_name = None
+            if isinstance(validator_uid, int):
+                # Could look up in metagraph, but for now just use UID
+                validator_name = f"Validator {validator_uid}"
+
+            validators_data.append(
+                {
+                    "validator_uid": validator_uid,
+                    "validator_hotkey": validator_hk,
+                    "validator_name": validator_name,
+                    "stake": validator_stake,
+                    "ipfs_cid": validator_cid,
+                    "scores": {int(uid): float(score) for uid, score in validator_scores.items()},
+                }
+            )
+
+            total_stake += validator_stake
+
+        ipfs_downloaded = {"timestamp": ended_at, "validators_participated": len(validators_data), "total_stake": total_stake, "validators": validators_data}
 
     finish_request = iwa_models.FinishRoundIWAP(
         status="completed",
@@ -543,6 +664,10 @@ async def finish_round_flow(
         ended_at=ended_at,
         summary=summary,
         agent_runs=agent_run_summaries,
+        round_metadata=round_metadata,
+        local_evaluation=local_evaluation,
+        ipfs_uploaded=ipfs_uploaded,
+        ipfs_downloaded=ipfs_downloaded,
     )
 
     round_id = ctx.current_round_id

@@ -35,7 +35,9 @@ class SettlementMixin:
         self._consensus_published = False
         self._consensus_mid_fetched = False
         self._agg_scores_cache = None
-        for attr in ("_consensus_commit_block", "_consensus_commit_cid"):
+        # FASE 2/3: Also clear IPFS payload data to avoid stale data between rounds
+        for attr in ("_consensus_commit_block", "_consensus_commit_cid", 
+                     "_local_avg_rewards_at_publish", "_ipfs_uploaded_payload", "_agg_meta_cache"):
             if hasattr(self, attr):
                 setattr(self, attr, None)
 
@@ -387,6 +389,7 @@ class SettlementMixin:
                     target_block=boundaries["target_block"],
                 )
                 self._agg_scores_cache = agg
+                self._agg_meta_cache = agg_meta  # FASE 3: Save consensus metadata
 
             if agg:
                 ColoredLogger.info(

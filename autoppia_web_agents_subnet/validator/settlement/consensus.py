@@ -128,6 +128,12 @@ async def publish_round_snapshot(
         bt.logging.info(ipfs_tag("UPLOAD", f"Size: {byte_len} bytes | SHA256: {sha_hex[:16]}..."))
         bt.logging.info(ipfs_tag("UPLOAD", f"Download: http://ipfs.metahash73.com:5001/api/v0/cat?arg={cid}"))
         bt.logging.info("=" * 80)
+        
+        # FASE 2: Save the actual payload that was uploaded (for finish_round)
+        validator._ipfs_uploaded_payload = payload
+        
+        # FASE 3: Save local scores at publish time (before consensus can change them)
+        validator._local_avg_rewards_at_publish = dict(avg_rewards)
     except Exception as e:
         bt.logging.error("=" * 80)
         bt.logging.error(ipfs_tag("UPLOAD", f"❌ FAILED | Error: {type(e).__name__}: {e}"))

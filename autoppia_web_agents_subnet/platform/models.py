@@ -234,9 +234,36 @@ class FinishRoundAgentRunIWAP:
     agent_run_id: str
     rank: Optional[int] = None
     weight: Optional[float] = None
+    # FASE 1: Nuevos campos
+    miner_name: Optional[str] = None
+    score: Optional[float] = None
+    avg_evaluation_time: Optional[float] = None
+    tasks_attempted: Optional[int] = None
+    tasks_completed: Optional[int] = None
+    tasks_failed: Optional[int] = None
 
     def to_payload(self) -> Dict[str, Any]:
         return _drop_nones(asdict(self))
+
+
+@dataclass
+class RoundMetadataIWAP:
+    """Round timing and metadata."""
+
+    round_number: int
+    started_at: float
+    ended_at: float
+    start_block: int
+    end_block: int
+    start_epoch: float
+    end_epoch: float
+    tasks_total: int
+    tasks_completed: int
+    miners_responded_handshake: int
+    miners_active: int
+
+    def to_payload(self) -> Dict[str, Any]:
+        return asdict(self)
 
 
 @dataclass
@@ -248,9 +275,15 @@ class FinishRoundIWAP:
     ended_at: float
     summary: Optional[Dict[str, int]] = None
     agent_runs: List[FinishRoundAgentRunIWAP] = field(default_factory=list)
+    # FASE 1: Nuevos campos opcionales (backward compatible)
+    round_metadata: Optional[RoundMetadataIWAP] = None
+    local_evaluation: Optional[Dict[str, Any]] = None
+    # FASE 2: IPFS data
+    ipfs_uploaded: Optional[Dict[str, Any]] = None
+    ipfs_downloaded: Optional[Dict[str, Any]] = None
 
     def to_payload(self) -> Dict[str, Any]:
-        return {
+        payload = {
             "status": self.status,
             "winners": [winner.to_payload() for winner in self.winners],
             "winner_scores": self.winner_scores,
@@ -259,3 +292,15 @@ class FinishRoundIWAP:
             "summary": self.summary or {},
             "agent_runs": [run.to_payload() for run in self.agent_runs],
         }
+        
+        # Add new fields if present (backward compatible)
+        if self.round_metadata:
+            payload["round"] = self.round_metadata.to_payload()
+        if self.local_evaluation:
+            payload["local_evaluation"] = self.local_evaluation
+        if self.ipfs_uploaded:
+            payload["ipfs_uploaded"] = self.ipfs_uploaded
+        if self.ipfs_downloaded:
+            payload["ipfs_downloaded"] = self.ipfs_downloaded
+            
+        return payload
