@@ -529,7 +529,7 @@ async def finish_round_flow(
     # Build agent_run summaries with complete information
     # Calculate ranks with FINAL scores (for weights/consensus)
     rank_map_final = {uid: rank for rank, (uid, _score) in enumerate(sorted_miners, start=1)}
-    
+
     # Calculate ranks with LOCAL scores + time as tiebreaker
     # Build list of (uid, score, avg_time) for each miner
     miners_with_time = []
@@ -538,12 +538,9 @@ async def finish_round_flow(
         times = round_times.get(uid, []) or []
         avg_time = sum(times) / len(times) if times else 999999.0  # High time if no data
         miners_with_time.append((uid, score, avg_time))
-    
+
     # Sort by score (desc), then by time (asc) for tiebreaker
-    sorted_miners_local = sorted(
-        miners_with_time,
-        key=lambda x: (-x[1], x[2])  # -score (desc), time (asc)
-    )
+    sorted_miners_local = sorted(miners_with_time, key=lambda x: (-x[1], x[2]))  # -score (desc), time (asc)
     rank_map_local = {uid: rank for rank, (uid, _score, _time) in enumerate(sorted_miners_local, start=1)}
 
     agent_run_summaries: List[iwa_models.FinishRoundAgentRunIWAP] = []
