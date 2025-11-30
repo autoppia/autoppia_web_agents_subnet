@@ -578,8 +578,16 @@ async def finish_round_flow(
     except Exception:
         boundaries = {}
 
+    # Get round number (try both with and without underscore)
+    round_num = getattr(ctx, "_current_round_number", None) or getattr(ctx, "current_round_number", None)
+    if round_num is None and hasattr(ctx, 'round_manager'):
+        try:
+            round_num = ctx.round_manager.calculate_round(ctx.block) if hasattr(ctx, 'block') else 0
+        except:
+            round_num = 0
+    
     round_metadata = iwa_models.RoundMetadataIWAP(
-        round_number=int(getattr(ctx, "current_round_number", 0) or 0),
+        round_number=int(round_num or 0),
         started_at=float(getattr(ctx, "round_start_time", ended_at - 3600) or (ended_at - 3600)),
         ended_at=float(ended_at),
         start_block=int(boundaries.get("round_start_block", 0) or 0),
