@@ -162,10 +162,6 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
             if vrid != ctx.current_round_id:
                 ctx.current_round_id = vrid
             ctx._phases["p1_done"] = True
-            try:
-                ctx._save_round_state()
-            except Exception as exc:  # noqa: BLE001
-                raise RuntimeError("Failed to persist round state after start_round verification") from exc
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code if exc.response is not None else None
             if status in (409, 500):
@@ -176,10 +172,6 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                     f"start_round returned {status} (already exists); continuing idempotently",
                     level="warning",
                 )
-                try:
-                    ctx._save_round_state()
-                except Exception as save_exc:  # noqa: BLE001
-                    raise RuntimeError("Failed to persist round state after start_round verification") from save_exc
             else:
                 mismatch = _parse_round_mismatch(exc)
                 if mismatch is not None:
@@ -214,10 +206,6 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                     level="warning",
                 )
                 ctx._phases["p1_done"] = True
-                try:
-                    ctx._save_round_state()
-                except Exception as save_exc:  # noqa: BLE001
-                    raise RuntimeError("Failed to persist round state after start_round") from save_exc
             else:
                 mismatch = _parse_round_mismatch(exc)
                 if mismatch is not None:
@@ -247,10 +235,6 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                 level="success",
             )
             ctx._phases["p1_done"] = True
-            try:
-                ctx._save_round_state()
-            except Exception as exc:  # noqa: BLE001
-                raise RuntimeError("Failed to persist round state after start_round") from exc
 
     task_count = len(ctx.current_round_tasks)
     set_tasks_message = f"Calling set_tasks with tasks={task_count} for round_id={ctx.current_round_id}"
@@ -271,11 +255,6 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                 exc_info=False,
             )
             return
-        finally:
-            try:
-                ctx._save_round_state()
-            except Exception:
-                pass
     else:
         log_iwap_phase("Phase 2", set_tasks_message)
 
@@ -316,11 +295,6 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                 level="success",
             )
             ctx._phases["p2_done"] = True
-        finally:
-            try:
-                ctx._save_round_state()
-            except Exception:
-                pass
 
     coldkeys = getattr(ctx.metagraph, "coldkeys", [])
     now_ts = time.time()
@@ -381,10 +355,6 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                 ctx.current_agent_runs[miner_uid] = existing_run
                 ctx.current_miner_snapshots[miner_uid] = ctx.current_miner_snapshots.get(miner_uid) or miner_snapshot
                 ctx.agent_run_accumulators.setdefault(miner_uid, {"reward": 0.0, "score": 0.0, "execution_time": 0.0, "tasks": 0})
-                try:
-                    ctx._save_round_state()
-                except Exception:
-                    pass
                 continue
             start_agent_run_message = f"Calling start_agent_run for miner_uid={miner_uid}, agent_run_id={agent_run_id}"
             log_iwap_phase("Phase 3", start_agent_run_message)
@@ -437,13 +407,9 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                     f"start_agent_run returned {status} for miner_uid={miner_uid} (already exists); continuing",
                     level="warning",
                 )
-                try:
-                    ctx.current_agent_runs[miner_uid] = agent_run
-                    ctx.current_miner_snapshots[miner_uid] = ctx.current_miner_snapshots.get(miner_uid) or miner_snapshot
-                    ctx.agent_run_accumulators.setdefault(miner_uid, {"reward": 0.0, "score": 0.0, "execution_time": 0.0, "tasks": 0})
-                    ctx._save_round_state()
-                except Exception:
-                    pass
+                ctx.current_agent_runs[miner_uid] = agent_run
+                ctx.current_miner_snapshots[miner_uid] = ctx.current_miner_snapshots.get(miner_uid) or miner_snapshot
+                ctx.agent_run_accumulators.setdefault(miner_uid, {"reward": 0.0, "score": 0.0, "execution_time": 0.0, "tasks": 0})
             else:
                 start_agent_run_error = f"start_agent_run failed for miner_uid={miner_uid}, agent_run_id={agent_run_id}"
                 log_iwap_phase(
@@ -461,13 +427,9 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
             start_agent_run_success = f"start_agent_run completed for miner_uid={miner_uid}, agent_run_id={agent_run_id}"
             log_iwap_phase("Phase 3", start_agent_run_success, level="success")
             # Update local state for crash-resume and bookkeeping
-            try:
-                ctx.current_agent_runs[miner_uid] = agent_run
-                ctx.current_miner_snapshots[miner_uid] = miner_snapshot
-                ctx.agent_run_accumulators.setdefault(miner_uid, {"reward": 0.0, "score": 0.0, "execution_time": 0.0, "tasks": 0})
-                ctx._save_round_state()
-            except Exception:
-                pass
+            ctx.current_agent_runs[miner_uid] = agent_run
+            ctx.current_miner_snapshots[miner_uid] = miner_snapshot
+            ctx.agent_run_accumulators.setdefault(miner_uid, {"reward": 0.0, "score": 0.0, "execution_time": 0.0, "tasks": 0})
 
 
 async def finish_round_flow(
@@ -488,7 +450,6 @@ async def finish_round_flow(
             level="warning",
         )
         ctx._reset_iwap_round_state()
-        ctx._remove_round_state()
         bt.logging.info("✅ Round completed locally - weights were set on-chain successfully")
         return True
 
@@ -765,5 +726,4 @@ async def finish_round_flow(
         success = True
     finally:
         ctx._reset_iwap_round_state()
-        ctx._remove_round_state()
     return success

@@ -53,75 +53,53 @@ class RoundStartMixin:
         pre_generation_start = time.time()
         all_tasks: List[TaskWithProject] = []
 
-        resumed = False
-        state = self._load_round_state(current_block=current_block)
-        if state and state.get("validator_round_id"):
-            cached = list(getattr(self, "_all_tasks_cache", []) or [])
-            if cached:
-                all_tasks.extend(cached)
-            if all_tasks:
-                self.current_round_id = state["validator_round_id"]
-                resumed = True
-                bt.logging.info(f"♻️ Resumed {len(all_tasks)} tasks; validator_round_id={self.current_round_id}")
-            else:
-                bt.logging.warning("Resume checkpoint had 0 tasks; generating new tasks.")
+        # Siempre arranque fresco (sin reanudar estado)
+        self._reset_iwap_round_state()
+        reset_consensus = getattr(self, "_reset_consensus_state", None)
+        if callable(reset_consensus):
+            reset_consensus()
 
-        info = getattr(self, "_last_resume_info", None) or {"status": "unknown"}
-        if resumed:
-            bt.logging.info(f"Resume decision: used prior state ({info})")
-        else:
-            bt.logging.info(f"Resume decision: fresh start ({info})")
+        frac = float(self.round_manager.fraction_elapsed(current_block))
+        bounds = self.round_manager.get_round_boundaries(current_block, log_debug=False)
+        blocks_to_target = max(bounds["target_block"] - current_block, 0)
+        at_boundary = blocks_to_target == 0
+        if (not at_boundary) and (frac >= float(SKIP_ROUND_IF_STARTED_AFTER_FRACTION)):
+            minutes_remaining = (blocks_to_target * self.round_manager.SECONDS_PER_BLOCK) / 60
+            ColoredLogger.warning(
+                (f"⏭️ Fresh start late in round: {frac * 100:.1f}% >= " f"{float(SKIP_ROUND_IF_STARTED_AFTER_FRACTION) * 100:.0f}% — skipping"),
+                ColoredLogger.YELLOW,
+            )
+            ColoredLogger.info(
+                f"   Waiting ~{minutes_remaining:.1f}m to next boundary...",
+                ColoredLogger.YELLOW,
+            )
+            self.round_manager.enter_phase(
+                RoundPhase.WAITING,
+                block=current_block,
+                note="Late start detected; deferring to next boundary",
+            )
+            await self._wait_until_next_round_boundary()
+            return StartPhaseResult(
+                all_tasks=[],
+                resumed=False,
+                continue_forward=False,
+                reason="late_start_boundary_wait",
+            )
 
-        if not resumed:
-            self._reset_iwap_round_state()
-            reset_consensus = getattr(self, "_reset_consensus_state", None)
-            if callable(reset_consensus):
-                reset_consensus()
+        tasks_generated = 0
+        while tasks_generated < PRE_GENERATED_TASKS:
+            batch_start = time.time()
+            batch_tasks = await get_task_collection_interleaved(prompts_per_use_case=PROMPTS_PER_USECASE)
+            remaining = PRE_GENERATED_TASKS - tasks_generated
+            tasks_to_add = batch_tasks[:remaining]
+            all_tasks.extend(tasks_to_add)
+            tasks_generated += len(tasks_to_add)
 
-        if not resumed:
-            frac = float(self.round_manager.fraction_elapsed(current_block))
-            bounds = self.round_manager.get_round_boundaries(current_block, log_debug=False)
-            blocks_to_target = max(bounds["target_block"] - current_block, 0)
-            at_boundary = blocks_to_target == 0
-            if (not at_boundary) and (frac >= float(SKIP_ROUND_IF_STARTED_AFTER_FRACTION)):
-                minutes_remaining = (blocks_to_target * self.round_manager.SECONDS_PER_BLOCK) / 60
-                ColoredLogger.warning(
-                    (f"⏭️ Fresh start late in round: {frac * 100:.1f}% >= " f"{float(SKIP_ROUND_IF_STARTED_AFTER_FRACTION) * 100:.0f}% — skipping"),
-                    ColoredLogger.YELLOW,
-                )
-                ColoredLogger.info(
-                    f"   Waiting ~{minutes_remaining:.1f}m to next boundary...",
-                    ColoredLogger.YELLOW,
-                )
-                self.round_manager.enter_phase(
-                    RoundPhase.WAITING,
-                    block=current_block,
-                    note="Late start detected; deferring to next boundary",
-                )
-                await self._wait_until_next_round_boundary()
-                return StartPhaseResult(
-                    all_tasks=[],
-                    resumed=False,
-                    continue_forward=False,
-                    reason="late_start_boundary_wait",
-                )
+            batch_elapsed = time.time() - batch_start
+            bt.logging.debug(f"Generated batch: {len(tasks_to_add)} in {batch_elapsed:.1f}s " f"(total {tasks_generated}/{PRE_GENERATED_TASKS})")
 
-        if not resumed:
-            tasks_generated = 0
-            while tasks_generated < PRE_GENERATED_TASKS:
-                batch_start = time.time()
-                batch_tasks = await get_task_collection_interleaved(prompts_per_use_case=PROMPTS_PER_USECASE)
-                remaining = PRE_GENERATED_TASKS - tasks_generated
-                tasks_to_add = batch_tasks[:remaining]
-                all_tasks.extend(tasks_to_add)
-                tasks_generated += len(tasks_to_add)
-
-                batch_elapsed = time.time() - batch_start
-                bt.logging.debug(f"Generated batch: {len(tasks_to_add)} in {batch_elapsed:.1f}s " f"(total {tasks_generated}/{PRE_GENERATED_TASKS})")
-
-            self.current_round_id = self._generate_validator_round_id(current_block=current_block)
-            self.round_start_timestamp = pre_generation_start
-            self._save_round_state(tasks=all_tasks)
+        self.current_round_id = self._generate_validator_round_id(current_block=current_block)
+        self.round_start_timestamp = pre_generation_start
 
         self.current_round_tasks = self._build_iwap_tasks(
             validator_round_id=self.current_round_id,
@@ -129,11 +107,11 @@ class RoundStartMixin:
         )
 
         pre_generation_elapsed = time.time() - pre_generation_start
-        bt.logging.info(f"✅ Task list ready: {len(all_tasks)} tasks in {pre_generation_elapsed:.1f}s (resumed={resumed})")
+        bt.logging.info(f"✅ Task list ready: {len(all_tasks)} tasks in {pre_generation_elapsed:.1f}s")
 
         self.round_manager.start_new_round(current_block)
 
-        # Initialize round report (NEW) - Always initialize, even if resumed
+        # Initialize round report
         round_number = await self.round_manager.calculate_round(current_block)
         self._init_round_report(
             round_number=round_number,
@@ -142,7 +120,7 @@ class RoundStartMixin:
             start_epoch=self.round_manager.block_to_epoch(self.round_manager.start_block),
             planned_tasks=len(all_tasks),
         )
-        bt.logging.info(f"📊 Round report initialized for round {round_number} (resumed={resumed})")
+        bt.logging.info(f"📊 Round report initialized for round {round_number}")
 
         self.round_manager.enter_phase(
             RoundPhase.HANDSHAKE,
@@ -151,69 +129,60 @@ class RoundStartMixin:
         )
         self._finalized_this_round = False
         boundaries = self.round_manager.get_current_boundaries()
-        if not resumed:
-            self.round_handshake_payloads = {}
-            self.current_agent_runs = {}
-            self.current_miner_snapshots = {}
-            self.agent_run_accumulators = {}
-            self._phases["handshake_sent"] = False
+        self.round_handshake_payloads = {}
+        self.current_agent_runs = {}
+        self.current_miner_snapshots = {}
+        self.agent_run_accumulators = {}
+        self._phases["handshake_sent"] = False
 
         all_uids = list(range(len(self.metagraph.uids)))
         all_axons = [self.metagraph.axons[uid] for uid in all_uids]
 
-        has_prior_handshake = resumed and self._phases.get("handshake_sent", False)
         handshake_responses = []
 
-        if has_prior_handshake:
-            ColoredLogger.info(
-                f"🤝 Handshake: using saved state (active_miners={len(self.active_miner_uids)}, already sent before restart)",
-                ColoredLogger.CYAN,
-            )
-        else:
-            ColoredLogger.info(
-                f"🤝 Handshake: sending to {len(self.metagraph.uids)} miners...",
-                ColoredLogger.CYAN,
-            )
-            all_uids = list(range(len(self.metagraph.uids)))
-            all_axons = [self.metagraph.axons[uid] for uid in all_uids]
-            start_synapse = StartRoundSynapse(
-                version=self.version,
-                round_id=self.current_round_id or f"round_{boundaries['round_start_epoch']}",
-                validator_id=str(self.uid),
-                total_prompts=len(all_tasks),
-                prompts_per_use_case=PROMPTS_PER_USECASE,
-                note=f"Starting round at epoch {boundaries['round_start_epoch']}",
-            )
+        ColoredLogger.info(
+            f"🤝 Handshake: sending to {len(self.metagraph.uids)} miners...",
+            ColoredLogger.CYAN,
+        )
+        all_uids = list(range(len(self.metagraph.uids)))
+        all_axons = [self.metagraph.axons[uid] for uid in all_uids]
+        start_synapse = StartRoundSynapse(
+            version=self.version,
+            round_id=self.current_round_id or f"round_{boundaries['round_start_epoch']}",
+            validator_id=str(self.uid),
+            total_prompts=len(all_tasks),
+            prompts_per_use_case=PROMPTS_PER_USECASE,
+            note=f"Starting round at epoch {boundaries['round_start_epoch']}",
+        )
 
-            bt.logging.debug("=" * 80)
-            bt.logging.debug("StartRoundSynapse content:")
-            bt.logging.debug(f"  - version: {start_synapse.version}")
-            bt.logging.debug(f"  - round_id: {start_synapse.round_id}")
-            bt.logging.debug(f"  - validator_id: {start_synapse.validator_id}")
-            bt.logging.debug(f"  - total_prompts: {start_synapse.total_prompts}")
-            bt.logging.debug(f"  - prompts_per_use_case: {start_synapse.prompts_per_use_case}")
-            bt.logging.debug(f"  - note: {start_synapse.note}")
-            bt.logging.debug(f"  - has_rl: {getattr(start_synapse, 'has_rl', 'NOT_SET')}")
-            bt.logging.debug(f"  - Sending to {len(all_axons)} miners")
-            bt.logging.debug("=" * 80)
+        bt.logging.debug("=" * 80)
+        bt.logging.debug("StartRoundSynapse content:")
+        bt.logging.debug(f"  - version: {start_synapse.version}")
+        bt.logging.debug(f"  - round_id: {start_synapse.round_id}")
+        bt.logging.debug(f"  - validator_id: {start_synapse.validator_id}")
+        bt.logging.debug(f"  - total_prompts: {start_synapse.total_prompts}")
+        bt.logging.debug(f"  - prompts_per_use_case: {start_synapse.prompts_per_use_case}")
+        bt.logging.debug(f"  - note: {start_synapse.note}")
+        bt.logging.debug(f"  - has_rl: {getattr(start_synapse, 'has_rl', 'NOT_SET')}")
+        bt.logging.debug(f"  - Sending to {len(all_axons)} miners")
+        bt.logging.debug("=" * 80)
 
-            try:
-                handshake_responses = await send_start_round_synapse_to_miners(
-                    validator=self,
-                    miner_axons=all_axons,
-                    start_synapse=start_synapse,
-                    timeout=60,
-                )
-            except Exception as exc:  # noqa: BLE001
-                self.round_manager.enter_phase(
-                    RoundPhase.ERROR,
-                    block=current_block,
-                    note="Handshake failed to dispatch synapse",
-                )
-                raise RuntimeError("Failed to send StartRoundSynapse to miners") from exc
+        try:
+            handshake_responses = await send_start_round_synapse_to_miners(
+                validator=self,
+                miner_axons=all_axons,
+                start_synapse=start_synapse,
+                timeout=60,
+            )
+        except Exception as exc:  # noqa: BLE001
+            self.round_manager.enter_phase(
+                RoundPhase.ERROR,
+                block=current_block,
+                note="Handshake failed to dispatch synapse",
+            )
+            raise RuntimeError("Failed to send StartRoundSynapse to miners") from exc
 
-            if not resumed:
-                self.active_miner_uids = []
+        self.active_miner_uids = []
 
             def _normalized_optional(value):
                 if value is None:
@@ -312,22 +281,19 @@ class RoundStartMixin:
                 console.print(table)
                 console.print()
 
-            if not has_prior_handshake:
-                self._phases["handshake_sent"] = True
-                if self.active_miner_uids:
-                    ColoredLogger.success(
-                        f"✅ Handshake sent: {len(self.active_miner_uids)}/{len(all_axons)} miners responded",
-                        ColoredLogger.GREEN,
-                    )
-                else:
-                    ColoredLogger.warning(
-                        f"⚠️ Handshake sent: 0/{len(all_axons)} miners responded",
-                        ColoredLogger.YELLOW,
-                    )
+            self._phases["handshake_sent"] = True
+            if self.active_miner_uids:
+                ColoredLogger.success(
+                    f"✅ Handshake sent: {len(self.active_miner_uids)}/{len(all_axons)} miners responded",
+                    ColoredLogger.GREEN,
+                )
+            else:
+                ColoredLogger.warning(
+                    f"⚠️ Handshake sent: 0/{len(all_axons)} miners responded",
+                    ColoredLogger.YELLOW,
+                )
 
-                self._save_round_state()
-
-            # Record handshake in report (NEW) - ALWAYS, even if resumed
+            # Record handshake in report
             self._report_handshake_sent(total_miners=len(all_axons))
 
             for uid in self.active_miner_uids:
@@ -384,7 +350,7 @@ class RoundStartMixin:
             self.round_manager.log_phase_history()
             return StartPhaseResult(
                 all_tasks=all_tasks,
-                resumed=resumed,
+                resumed=False,
                 continue_forward=False,
                 tasks_completed=0,
                 reason="no_active_miners",
@@ -392,16 +358,8 @@ class RoundStartMixin:
 
         await self._iwap_start_round(current_block=current_block, n_tasks=len(all_tasks))
 
-        if resumed and getattr(self, "_eval_records", None):
-            ColoredLogger.info(
-                f"♻️ Resume: rebuilding accumulators from {len(self._eval_records)} evaluations",
-                ColoredLogger.CYAN,
-            )
-            self._rebuild_from_saved_evaluations()
-            ColoredLogger.success("✅ Resume: accumulators restored", ColoredLogger.GREEN)
-
         return StartPhaseResult(
             all_tasks=all_tasks,
-            resumed=resumed,
+            resumed=False,
             continue_forward=True,
         )

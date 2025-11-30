@@ -184,10 +184,6 @@ async def submit_task_results(
                     level="warning",
                 )
                 ctx._completed_pairs.add((miner_uid, task_id))
-                try:
-                    ctx._save_round_state()
-                except Exception:
-                    pass
                 continue
             else:
                 add_evaluation_error = f"add_evaluation failed for miner_uid={miner_uid}, task_id={task_id}"
@@ -212,10 +208,6 @@ async def submit_task_results(
             except Exception:
                 pass
             ctx._completed_pairs.add((miner_uid, task_id))
-            try:
-                ctx._save_round_state()
-            except Exception:
-                pass
 
             if gif_to_upload:
                 gif_bytes = extract_gif_bytes(gif_to_upload)
