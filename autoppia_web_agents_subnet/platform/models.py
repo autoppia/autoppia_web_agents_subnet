@@ -233,7 +233,7 @@ class RoundWinnerIWAP:
 class FinishRoundAgentRunIWAP:
     agent_run_id: str
     rank: Optional[int] = None
-    weight: Optional[float] = None
+    # weight removed - now only in post_consensus_evaluation
     # FASE 1: Nuevos campos
     miner_name: Optional[str] = None
     score: Optional[float] = None
@@ -269,38 +269,47 @@ class RoundMetadataIWAP:
 @dataclass
 class FinishRoundIWAP:
     status: str
-    winners: List[RoundWinnerIWAP]
-    winner_scores: List[float]
-    weights: Dict[str, float]
     ended_at: float
     summary: Optional[Dict[str, int]] = None
     agent_runs: List[FinishRoundAgentRunIWAP] = field(default_factory=list)
-    # FASE 1: Nuevos campos opcionales (backward compatible)
+    # FASE 1: Nuevos campos opcionales
     round_metadata: Optional[RoundMetadataIWAP] = None
     local_evaluation: Optional[Dict[str, Any]] = None
+    post_consensus_evaluation: Optional[Dict[str, Any]] = None
     # FASE 2: IPFS data
     ipfs_uploaded: Optional[Dict[str, Any]] = None
     ipfs_downloaded: Optional[Dict[str, Any]] = None
+    # Deprecated fields (kept for backward compatibility but no longer populated)
+    winners: List[RoundWinnerIWAP] = field(default_factory=list)
+    winner_scores: List[float] = field(default_factory=list)
+    weights: Dict[str, float] = field(default_factory=dict)
 
     def to_payload(self) -> Dict[str, Any]:
         payload = {
             "status": self.status,
-            "winners": [winner.to_payload() for winner in self.winners],
-            "winner_scores": self.winner_scores,
-            "weights": self.weights,
             "ended_at": self.ended_at,
             "summary": self.summary or {},
             "agent_runs": [run.to_payload() for run in self.agent_runs],
         }
         
-        # Add new fields if present (backward compatible)
+        # Add new fields if present
         if self.round_metadata:
             payload["round"] = self.round_metadata.to_payload()
         if self.local_evaluation:
             payload["local_evaluation"] = self.local_evaluation
+        if self.post_consensus_evaluation:
+            payload["post_consensus_evaluation"] = self.post_consensus_evaluation
         if self.ipfs_uploaded:
             payload["ipfs_uploaded"] = self.ipfs_uploaded
         if self.ipfs_downloaded:
             payload["ipfs_downloaded"] = self.ipfs_downloaded
+            
+        # Deprecated fields (only included if populated for backward compatibility)
+        if self.winners:
+            payload["winners"] = [winner.to_payload() for winner in self.winners]
+        if self.winner_scores:
+            payload["winner_scores"] = self.winner_scores
+        if self.weights:
+            payload["weights"] = self.weights
             
         return payload

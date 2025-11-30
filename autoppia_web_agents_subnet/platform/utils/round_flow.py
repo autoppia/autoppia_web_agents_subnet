@@ -498,25 +498,6 @@ async def finish_round_flow(
         agent_run.elapsed_sec = max(0.0, ended_at - agent_run.started_at)
 
     sorted_miners = sorted(avg_rewards.items(), key=lambda item: item[1], reverse=True)
-    winners: List[iwa_models.RoundWinnerIWAP] = []
-    winner_scores: List[float] = []
-    for rank, (uid, score) in enumerate(sorted_miners[:3], start=1):
-        miner_hotkey = None
-        try:
-            miner_hotkey = ctx.metagraph.hotkeys[uid]
-        except Exception:
-            miner_hotkey = None
-        winners.append(
-            iwa_models.RoundWinnerIWAP(
-                miner_uid=uid,
-                miner_hotkey=miner_hotkey,
-                rank=rank,
-                score=float(score),
-            )
-        )
-        winner_scores.append(float(score))
-
-    weights_payload = {str(uid): float(weight) for uid, weight in final_weights.items()}
     summary = {
         "tasks_completed": tasks_completed,
         "active_miners": len(avg_rewards),
@@ -526,8 +507,7 @@ async def finish_round_flow(
     # If not available, use current avg_rewards (backward compatible)
     local_avg_rewards = getattr(ctx, "_local_avg_rewards_at_publish", None) or avg_rewards
 
-    # Build agent_run summaries with complete information
-    # Calculate ranks with FINAL scores (for weights/consensus)
+    # Calculate ranks with FINAL scores (for consensus) - needed for post_consensus_evaluation
     rank_map_final = {uid: rank for rank, (uid, _score) in enumerate(sorted_miners, start=1)}
 
     # Calculate ranks with LOCAL scores + time as tiebreaker
@@ -543,12 +523,11 @@ async def finish_round_flow(
     sorted_miners_local = sorted(miners_with_time, key=lambda x: (-x[1], x[2]))  # -score (desc), time (asc)
     rank_map_local = {uid: rank for rank, (uid, _score, _time) in enumerate(sorted_miners_local, start=1)}
 
-    agent_run_summaries: List[iwa_models.FinishRoundAgentRunIWAP] = []
-
+    # Build local_evaluation (pre-consensus) - without weight
+    local_evaluation_miners = []
     for miner_uid, agent_run in ctx.current_agent_runs.items():
         # Use LOCAL rank for local_evaluation (consistent with local scores)
         rank_value = rank_map_local.get(miner_uid)
-        weight_value = final_weights.get(miner_uid)
         # Use LOCAL score (pre-consensus) for local_evaluation
         score_value = local_avg_rewards.get(miner_uid, 0.0)
 
@@ -567,17 +546,33 @@ async def finish_round_flow(
         # Get miner name from agent_run
         miner_name = getattr(agent_run, "agent_name", None) or f"Miner {miner_uid}"
 
+        local_evaluation_miners.append(
+            {
+                "rank": rank_value,
+                "score": float(score_value),
+                "miner_uid": miner_uid,
+                "miner_name": miner_name,
+                "agent_run_id": agent_run.agent_run_id,
+                "tasks_failed": miner_tasks_failed,
+                "tasks_attempted": miner_tasks_attempted,
+                "tasks_completed": miner_tasks_completed,
+                "avg_evaluation_time": float(avg_time),
+            }
+        )
+
+    # Build agent_run summaries for backward compatibility (still needed for agent_runs field)
+    agent_run_summaries: List[iwa_models.FinishRoundAgentRunIWAP] = []
+    for miner_data in local_evaluation_miners:
         agent_run_summaries.append(
             iwa_models.FinishRoundAgentRunIWAP(
-                agent_run_id=agent_run.agent_run_id,
-                rank=rank_value,
-                weight=float(weight_value) if weight_value is not None else None,
-                miner_name=miner_name,
-                score=float(score_value),
-                avg_evaluation_time=float(avg_time),
-                tasks_attempted=miner_tasks_attempted,
-                tasks_completed=miner_tasks_completed,
-                tasks_failed=miner_tasks_failed,
+                agent_run_id=miner_data["agent_run_id"],
+                rank=miner_data["rank"],
+                miner_name=miner_data["miner_name"],
+                score=miner_data["score"],
+                avg_evaluation_time=miner_data["avg_evaluation_time"],
+                tasks_attempted=miner_data["tasks_attempted"],
+                tasks_completed=miner_data["tasks_completed"],
+                tasks_failed=miner_data["tasks_failed"],
             )
         )
 
@@ -613,8 +608,8 @@ async def finish_round_flow(
         miners_active=len(avg_rewards or {}),
     )
 
-    # Build local_evaluation (what THIS validator evaluated)
-    local_evaluation = {"timestamp": ended_at, "miners": [run.to_payload() for run in agent_run_summaries]}
+    # Build local_evaluation (what THIS validator evaluated - pre-consensus)
+    local_evaluation = {"timestamp": ended_at, "miners": local_evaluation_miners}
 
     # FASE 2: IPFS uploaded data (what THIS validator published)
     ipfs_uploaded = None
@@ -677,22 +672,78 @@ async def finish_round_flow(
 
         ipfs_downloaded = {"timestamp": ended_at, "validators_participated": len(validators_data), "total_stake": total_stake, "validators": validators_data}
 
+    # Build post_consensus_evaluation (after consensus) - without alpha_price (backend will add it)
+    post_consensus_evaluation = None
+
+    # Get consensus scores (from agg cache if available, otherwise use avg_rewards as fallback)
+    consensus_scores = getattr(ctx, "_agg_scores_cache", None)
+    if not consensus_scores:
+        # Fallback: use avg_rewards if consensus not available
+        consensus_scores = avg_rewards
+
+    if consensus_scores and isinstance(consensus_scores, dict):
+        # Calculate ranks from consensus scores
+        sorted_consensus = sorted(consensus_scores.items(), key=lambda item: item[1], reverse=True)
+        rank_map_consensus = {uid: rank for rank, (uid, _score) in enumerate(sorted_consensus, start=1)}
+
+        # Build post_consensus miners list - include all miners with weight > 0 (including burn_uid)
+        from autoppia_web_agents_subnet.validator.config import BURN_AMOUNT_PERCENTAGE, BURN_UID
+
+        post_consensus_miners = []
+        # First, add all miners from consensus_scores
+        for miner_uid, consensus_score in consensus_scores.items():
+            weight = final_weights.get(miner_uid, 0.0)
+            rank = rank_map_consensus.get(miner_uid)
+
+            post_consensus_miners.append(
+                {
+                    "miner_uid": miner_uid,
+                    "score": float(consensus_score),
+                    "weight": float(weight),
+                    "rank": rank,
+                }
+            )
+
+        # Add burn_uid if it has weight > 0 but is not in consensus_scores
+        burn_uid = int(BURN_UID)
+        burn_weight = final_weights.get(burn_uid, 0.0)
+        if burn_weight > 0.0 and burn_uid not in consensus_scores:
+            # Burn UID gets a rank after all consensus miners
+            max_rank = max(rank_map_consensus.values()) if rank_map_consensus else 0
+            post_consensus_miners.append(
+                {
+                    "miner_uid": burn_uid,
+                    "score": 0.0,  # Burn UID doesn't have a score
+                    "weight": float(burn_weight),
+                    "rank": max_rank + 1,
+                }
+            )
+
+        post_consensus_evaluation = {
+            "miners": post_consensus_miners,
+            "emission": {
+                # alpha_price will be calculated by backend
+                "burn_percentage": float(BURN_AMOUNT_PERCENTAGE) * 100,  # Convert to percentage
+                "burn_recipient_uid": int(BURN_UID),
+            },
+            "timestamp": ended_at,
+        }
+
     finish_request = iwa_models.FinishRoundIWAP(
         status="completed",
-        winners=winners,
-        winner_scores=winner_scores,
-        weights=weights_payload,
         ended_at=ended_at,
         summary=summary,
         agent_runs=agent_run_summaries,
         round_metadata=round_metadata,
         local_evaluation=local_evaluation,
+        post_consensus_evaluation=post_consensus_evaluation,
         ipfs_uploaded=ipfs_uploaded,
         ipfs_downloaded=ipfs_downloaded,
     )
 
     round_id = ctx.current_round_id
-    finish_round_message = f"Calling finish_round for round_id={round_id}, winners={len(winners)}, tasks_completed={tasks_completed}"
+    post_consensus_miners_count = len(post_consensus_evaluation.get("miners", [])) if post_consensus_evaluation else 0
+    finish_round_message = f"Calling finish_round for round_id={round_id}, post_consensus_miners={post_consensus_miners_count}, tasks_completed={tasks_completed}"
     log_iwap_phase("Phase 5", finish_round_message)
     success = False
     try:
