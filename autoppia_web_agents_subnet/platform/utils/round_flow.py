@@ -529,10 +529,22 @@ async def finish_round_flow(
     # Build agent_run summaries with complete information
     # Calculate ranks with FINAL scores (for weights/consensus)
     rank_map_final = {uid: rank for rank, (uid, _score) in enumerate(sorted_miners, start=1)}
-
-    # Calculate ranks with LOCAL scores (for local_evaluation consistency)
-    sorted_miners_local = sorted(local_avg_rewards.items(), key=lambda item: item[1], reverse=True)
-    rank_map_local = {uid: rank for rank, (uid, _score) in enumerate(sorted_miners_local, start=1)}
+    
+    # Calculate ranks with LOCAL scores + time as tiebreaker
+    # Build list of (uid, score, avg_time) for each miner
+    miners_with_time = []
+    round_times = getattr(ctx.round_manager, "round_times", {}) or {}
+    for uid, score in local_avg_rewards.items():
+        times = round_times.get(uid, []) or []
+        avg_time = sum(times) / len(times) if times else 999999.0  # High time if no data
+        miners_with_time.append((uid, score, avg_time))
+    
+    # Sort by score (desc), then by time (asc) for tiebreaker
+    sorted_miners_local = sorted(
+        miners_with_time,
+        key=lambda x: (-x[1], x[2])  # -score (desc), time (asc)
+    )
+    rank_map_local = {uid: rank for rank, (uid, _score, _time) in enumerate(sorted_miners_local, start=1)}
 
     agent_run_summaries: List[iwa_models.FinishRoundAgentRunIWAP] = []
 
@@ -578,14 +590,18 @@ async def finish_round_flow(
     except Exception:
         boundaries = {}
 
-    # Get round number (try both with and without underscore)
-    round_num = getattr(ctx, "_current_round_number", None) or getattr(ctx, "current_round_number", None)
-    if round_num is None and hasattr(ctx, 'round_manager'):
+    # Get round number from Round Manager (most reliable source)
+    round_num = 0
+    if hasattr(ctx, "round_manager"):
         try:
-            round_num = ctx.round_manager.calculate_round(ctx.block) if hasattr(ctx, 'block') else 0
-        except:
-            round_num = 0
-    
+            # Round Manager always knows the current round
+            current_block = getattr(ctx, "block", None)
+            if current_block:
+                round_num = await ctx.round_manager.calculate_round(current_block)
+        except Exception:
+            # Fallback to stored value if calculation fails
+            round_num = getattr(ctx, "_current_round_number", 0) or getattr(ctx, "current_round_number", 0)
+
     round_metadata = iwa_models.RoundMetadataIWAP(
         round_number=int(round_num or 0),
         started_at=float(getattr(ctx, "round_start_time", ended_at - 3600) or (ended_at - 3600)),
