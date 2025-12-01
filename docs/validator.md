@@ -17,11 +17,11 @@ Our `install_dependencies.sh` script currently supports:
 
 The deployment uses a **modular architecture** - each component can be deployed separately:
 
-| Component       | Requirements            | Notes                       |
-| --------------- | ----------------------- | --------------------------- |
-| **Validator**   | CPU only                | Lightweight setup           |
-| **LLM Service** | OpenAI API or Local GPU | A40 GPU suggested for local |
-| **Demo Webs**   | CPU only                | Docker required             |
+| Component       | Requirements         | Notes             |
+| --------------- | -------------------- | ----------------- |
+| **Validator**   | CPU only             | Lightweight setup |
+| **LLM Service** | OpenAI API or Chutes | No GPU required   |
+| **Demo Webs**   | CPU only             | Docker required   |
 
 💡 **Tip**: Components can run on different machines - configure `.env` with appropriate URLs.
 
@@ -75,12 +75,7 @@ cp .env.validator-example .env
 
 ## 🤖 2. LLM Configuration
 
-### **Recommended Specs for Local LLM**
-
-- **Platform**: RunPod with A40 GPU
-- **Requirements**: CUDA 12.4.1 + PyTorch 2.4.0
-- **Template**: `runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04`
-- **Model**: Qwen/Qwen2.5-14B-Instruct (default)
+The validator uses IWA to generate tasks, which requires an LLM provider. Choose one:
 
 ### **Option A: OpenAI API** 🌐 (No GPU Required)
 
@@ -89,47 +84,23 @@ Edit your `.env` file:
 ```bash
 LLM_PROVIDER="openai"
 OPENAI_API_KEY="your-api-key-here"
+OPENAI_MODEL="gpt-4o-mini"
+OPENAI_MAX_TOKENS="10000"
+OPENAI_TEMPERATURE="0.7"
 ```
 
-### **Option B: Local LLM** 🖥️ (GPU Required)
+### **Option B: Chutes LLM** 🌐 (No GPU Required)
 
-**Step 1**: Configure environment
-
-```bash
-# Edit .env
-LLM_PROVIDER="local"
-LOCAL_MODEL_ENDPOINT="http://localhost:6000/generate"
-```
-
-**Step 2**: Setup local LLM
-
-This step installs the dependencies and environment needed to run a local language model (e.g., Qwen/Qwen2.5-14B-Instruct) on your GPU. The setup script creates a virtual environment and installs PyTorch, transformers, and other required packages.
+Edit your `.env` file:
 
 ```bash
-IWA_PATH=${IWA_PATH:-../autoppia_iwa}
-chmod +x "$IWA_PATH/modules/llm_local/setup.sh"
-"$IWA_PATH/modules/llm_local/setup.sh"
-```
-
-**What this does:**
-
-- Creates a virtual environment (`llm_env`) for the LLM service
-- Installs PyTorch with CUDA support for GPU acceleration
-- Installs transformers and other model dependencies
-- Downloads and configures the default model (Qwen2.5-14B-Instruct)
-
-**Step 3**: Deploy with PM2
-
-```bash
-source llm_env/bin/activate
-CUDA_VISIBLE_DEVICES=0 pm2 start "$IWA_PATH/modules/llm_local/run_local_llm.py" \
-  --name llm_local -- --port 6000
-```
-
-**Step 4**: Test deployment
-
-```bash
-python3 "$IWA_PATH/modules/llm_local/test/test_one_request.py"
+LLM_PROVIDER="chutes"
+CHUTES_BASE_URL="https://your-username-your-chute.chutes.ai/v1"
+CHUTES_API_KEY="cpk_your_api_key_here"
+CHUTES_MODEL="meta-llama/Llama-3.1-8B-Instruct"
+CHUTES_MAX_TOKENS=2048
+CHUTES_TEMPERATURE=0.7
+CHUTES_USE_BEARER=False
 ```
 
 ---
@@ -295,7 +266,6 @@ Need help? Contact our team on Discord:
 
 ## ⚠️ Important Notes
 
-- 🖥️ **Performance**: Use bare metal GPU for optimal local LLM performance
 - 🐳 **Dependencies**: Demo webs require Docker and Docker Compose
 - 🌍 **Scalability**: All components support distributed deployment across multiple machines
 - 🔒 **Security**: Ensure proper firewall configuration for remote deployments
