@@ -136,10 +136,16 @@ chmod +x scripts/validator/demo-webs/install_docker.sh
 
 ```bash
 # Setup demo web applications (continue from repository directory)
-# Set WEBS_DEMO_PATH if different from default ../autoppia_webs_demo
 chmod +x scripts/validator/demo-webs/deploy_demo_webs.sh
-WEBS_DEMO_PATH=${WEBS_DEMO_PATH:-../autoppia_webs_demo} ./scripts/validator/demo-webs/deploy_demo_webs.sh
+./scripts/validator/demo-webs/deploy_demo_webs.sh
 ```
+
+> **Note:** The script automatically uses `../autoppia_webs_demo` as the default path. If your repository is in a different location, export `WEBS_DEMO_PATH` before running the script:
+>
+> ```bash
+> export WEBS_DEMO_PATH=/path/to/autoppia_webs_demo
+> ./scripts/validator/demo-webs/deploy_demo_webs.sh
+> ```
 
 ### **Configuration** (Optional)
 
