@@ -51,6 +51,15 @@ Once your agent performs well locally, deploy it to the network to start earning
 ---
 
 # 🔬 PHASE 1: LOCAL TESTING
+## 📋 Repository Setup
+Clona los tres repos como hermanos:
+```bash
+git clone https://github.com/autoppia/autoppia_web_agents_subnet
+git clone https://github.com/autoppia/autoppia_iwa.git
+git clone https://github.com/autoppia/autoppia_webs_demo.git
+```
+Trabaja dentro de `autoppia_web_agents_subnet` y apunta `IWA_PATH` y `WEBS_DEMO_PATH` a los repos hermanos (por defecto `../autoppia_iwa` y `../autoppia_webs_demo`).
+> Los scripts de setup usan `IWA_PATH`/`WEBS_DEMO_PATH`; si tienes otra ruta, exporta estas variables antes de ejecutarlos.
 
 ## ⚠️ IMPORTANT: Test Locally First!
 
@@ -85,7 +94,8 @@ The benchmark **generates tasks the same way a validator would** and sends them 
 
 ```bash
 # From the main repository root
-cd autoppia_iwa_module
+IWA_PATH=${IWA_PATH:-../autoppia_iwa}
+cd "$IWA_PATH"
 python -m autoppia_iwa.entrypoints.benchmark.run
 ```
 

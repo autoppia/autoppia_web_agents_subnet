@@ -43,26 +43,6 @@ upgrade_pip() {
   success_msg "pip and setuptools upgraded."
 }
 
-init_submodules() {
-  info_msg "Initializing Git submodules (autoppia_iwa_module, etc.)..."
-  
-  # Go to repo root (parent of scripts/)
-  REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-  cd "$REPO_ROOT" || handle_error "Failed to navigate to repo root"
-  
-  # Check if this is a git repository
-  if [ ! -d ".git" ]; then
-    info_msg "Not a git repository. Skipping submodule initialization."
-    return 0
-  fi
-  
-  # Initialize and update submodules
-  git submodule update --init --recursive --remote \
-    || handle_error "Failed to initialize git submodules. Make sure git is installed and you have access to the submodule repos."
-  
-  success_msg "Git submodules initialized."
-}
-
 install_python_reqs() {
   info_msg "Installing Python dependencies from requirements.txt..."
   [ -f "requirements.txt" ] || handle_error "requirements.txt not found"
@@ -95,14 +75,15 @@ install_modules() {
     || handle_error "Failed to install current package"
   success_msg "Main package installed."
 
-  info_msg "Installing autoppia_iwa_module..."
-  [ -d "autoppia_iwa_module" ] || handle_error "autoppia_iwa_module directory not found"
+  IWA_PATH="${IWA_PATH:-../autoppia_iwa}"
+  info_msg "Installing autoppia_iwa from ${IWA_PATH}..."
+  [ -d "$IWA_PATH" ] || handle_error "IWA_PATH not found: ${IWA_PATH}. Clone autoppia_iwa as a sibling repo or set IWA_PATH."
   
-  pushd autoppia_iwa_module >/dev/null
+  pushd "$IWA_PATH" >/dev/null
   pip install -e . \
-    || handle_error "Failed to install autoppia_iwa_module"
+    || handle_error "Failed to install autoppia_iwa"
   popd >/dev/null
-  success_msg "autoppia_iwa_module installed."
+  success_msg "autoppia_iwa installed."
 }
 
 install_bittensor() {
@@ -148,7 +129,6 @@ main() {
   check_python
   create_activate_venv
   upgrade_pip
-  init_submodules
   install_python_reqs
   install_modules
   install_bittensor

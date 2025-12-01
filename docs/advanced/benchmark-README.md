@@ -1,7 +1,7 @@
 # 🔬 Benchmark Framework for Autoppia IWA
 
-> **Note**: This is a copy of the benchmark README from the `autoppia_iwa_module` submodule for GitHub accessibility.
-> **Original location**: `autoppia_iwa_module/autoppia_iwa/entrypoints/benchmark/README.md`
+> **Note**: Esta copia refleja el README del repo `autoppia_iwa` para tenerlo accesible aquí.
+> **Original**: `../autoppia_iwa/autoppia_iwa/entrypoints/benchmark/README.md`
 
 > **Purpose**: Test your web agents locally before deploying to mainnet. Simulates validator behavior without network requirements.
 
@@ -80,10 +80,11 @@ Your web agents can use these actions:
 ### **Step 1: Environment Setup**
 
 ```bash
-# Clone repository
+# Clona repos hermanos
 git clone https://github.com/autoppia/autoppia_web_agents_subnet
-cd autoppia_web_agents_subnet
-git submodule update --init --recursive --remote
+git clone https://github.com/autoppia/autoppia_iwa.git
+
+cd autoppia_iwa  # el benchmark vive aquí
 ```
 
 ### **Step 2: Environment Configuration**
@@ -119,7 +120,6 @@ CHUTES_USE_BEARER=False
 
 ```bash
 # Install validator dependencies for benchmark
-cd autoppia_iwa_module
 pip install -e .
 ```
 
@@ -129,8 +129,9 @@ pip install -e .
 
 ```bash
 # Deploy demo web applications for testing
-chmod +x autoppia_iwa_module/modules/webs_demo/scripts/setup.sh
-./autoppia_iwa_module/modules/webs_demo/scripts/setup.sh
+WEBS_DEMO_PATH="${WEBS_DEMO_PATH:-../autoppia_webs_demo}"
+chmod +x "$WEBS_DEMO_PATH/scripts/setup.sh"
+"$WEBS_DEMO_PATH/scripts/setup.sh"
 ```
 
 **What this does:**
@@ -147,7 +148,6 @@ chmod +x autoppia_iwa_module/modules/webs_demo/scripts/setup.sh
 
 ```bash
 # Verify tasks are generated correctly
-cd autoppia_iwa_module
 python -m autoppia_iwa.entrypoints.benchmark.run
 ```
 
@@ -246,7 +246,7 @@ python simple_agent.py
 
 ```bash
 # Edit benchmark configuration
-nano autoppia_iwa_module/autoppia_iwa/entrypoints/benchmark/run.py
+nano autoppia_iwa/autoppia_iwa/entrypoints/benchmark/run.py
 ```
 
 **Update configuration:**
@@ -269,7 +269,6 @@ PROJECT_IDS = [
 
 ```bash
 # Test your agent
-cd autoppia_iwa_module
 python -m autoppia_iwa.entrypoints.benchmark.run
 ```
 

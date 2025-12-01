@@ -65,18 +65,12 @@ pushd "$REPO_ROOT" > /dev/null
   echo "Pulling latest from main repository..."
   git pull origin main
 
-  # Update autoppia_iwa_module (and its nested webs_demo) if present
-  if [ -d autoppia_iwa_module ]; then
-    echo "Updating autoppia_iwa_module..."
-    (
-      cd autoppia_iwa_module && git pull origin main
-
-      # Inside autoppia_iwa_module, update the nested modules/webs_demo repo if present
-      if [ -d modules/webs_demo ]; then
-        echo "Updating modules/webs_demo inside autoppia_iwa_module..."
-        (cd modules/webs_demo && git pull origin main)
-      fi
-    )
+  IWA_PATH="${IWA_PATH:-../autoppia_iwa}"
+  if [ -d "$IWA_PATH/.git" ]; then
+    echo "Updating autoppia_iwa at ${IWA_PATH}..."
+    (cd "$IWA_PATH" && git pull origin main)
+  else
+    echo "autoppia_iwa not found at ${IWA_PATH}; skipping (set IWA_PATH to override)."
   fi
 popd > /dev/null
 echo
@@ -101,7 +95,9 @@ step "Installing and restarting validator"
 echo "Activating virtualenv and installing code..."
 source "$REPO_ROOT/validator_env/bin/activate"
 pip install -e .
-pip install -e autoppia_iwa_module || true
+if [ -d "$IWA_PATH" ]; then
+  pip install -e "$IWA_PATH" || true
+fi
 
 echo "Restarting PM2 process '$PROCESS_NAME'..."
 if ! pm2 restart "$PROCESS_NAME"; then

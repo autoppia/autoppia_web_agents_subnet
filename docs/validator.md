@@ -31,11 +31,19 @@ The deployment uses a **modular architecture** - each component can be deployed 
 
 ### **Repository Setup**
 
+Clone the repositories as siblings:
+
 ```bash
-# Clone and initialize
 git clone https://github.com/autoppia/autoppia_web_agents_subnet
-cd autoppia_web_agents_subnet
-git submodule update --init --recursive --remote
+git clone https://github.com/autoppia/autoppia_iwa.git          # IWA (main)
+git clone https://github.com/autoppia/autoppia_webs_demo.git    # webs_demo (main)
+```
+
+Work inside `autoppia_web_agents_subnet`. The setup scripts will try to clone/pull `autoppia_iwa` and `autoppia_webs_demo` automatically into the default sibling paths (`../autoppia_iwa`, `../autoppia_webs_demo`). If you keep them elsewhere, export:
+
+```bash
+export IWA_PATH=/path/to/autoppia_iwa
+export WEBS_DEMO_PATH=/path/to/autoppia_webs_demo
 ```
 
 ### **System Dependencies**
@@ -95,23 +103,32 @@ LOCAL_MODEL_ENDPOINT="http://localhost:6000/generate"
 
 **Step 2**: Setup local LLM
 
+This step installs the dependencies and environment needed to run a local language model (e.g., Qwen/Qwen2.5-14B-Instruct) on your GPU. The setup script creates a virtual environment and installs PyTorch, transformers, and other required packages.
+
 ```bash
-chmod +x autoppia_iwa_module/modules/llm_local/setup.sh
-./autoppia_iwa_module/modules/llm_local/setup.sh
+IWA_PATH=${IWA_PATH:-../autoppia_iwa}
+chmod +x "$IWA_PATH/modules/llm_local/setup.sh"
+"$IWA_PATH/modules/llm_local/setup.sh"
 ```
+
+**What this does:**
+- Creates a virtual environment (`llm_env`) for the LLM service
+- Installs PyTorch with CUDA support for GPU acceleration
+- Installs transformers and other model dependencies
+- Downloads and configures the default model (Qwen2.5-14B-Instruct)
 
 **Step 3**: Deploy with PM2
 
 ```bash
 source llm_env/bin/activate
-CUDA_VISIBLE_DEVICES=0 pm2 start autoppia_iwa_module/modules/llm_local/run_local_llm.py \
+CUDA_VISIBLE_DEVICES=0 pm2 start "$IWA_PATH/modules/llm_local/run_local_llm.py" \
   --name llm_local -- --port 6000
 ```
 
 **Step 4**: Test deployment
 
 ```bash
-python3 autoppia_iwa_module/modules/llm_local/test/test_one_request.py
+python3 "$IWA_PATH/modules/llm_local/test/test_one_request.py"
 ```
 
 ---
@@ -129,9 +146,9 @@ chmod +x scripts/validator/demo-webs/install_docker.sh
 ### **Deploy Demo Webs**
 
 ```bash
-# Setup demo web applications
+# Setup demo web applications (set WEBS_DEMO_PATH if distinto al default ../webs_demo)
 chmod +x scripts/validator/demo-webs/deploy_demo_webs.sh
-./scripts/validator/demo-webs/deploy_demo_webs.sh
+WEBS_DEMO_PATH=${WEBS_DEMO_PATH:-../autoppia_webs_demo} ./scripts/validator/demo-webs/deploy_demo_webs.sh
 ```
 
 ### **Configuration** (Optional)

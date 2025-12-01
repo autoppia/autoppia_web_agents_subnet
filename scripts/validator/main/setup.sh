@@ -42,24 +42,36 @@ upgrade_pip() {
   success_msg "pip and setuptools upgraded."
 }
 
-init_submodules() {
-  echo -e "\e[34m[INFO]\e[0m Initializing Git submodules (autoppia_iwa_module, etc.)..."
-  
-  # Go to repo root (parent of scripts/)
-  REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
-  cd "$REPO_ROOT" || handle_error "Failed to navigate to repo root"
-  
-  # Check if this is a git repository
-  if [ ! -d ".git" ]; then
-    echo -e "\e[34m[INFO]\e[0m Not a git repository. Skipping submodule initialization."
-    return 0
+sync_repo() {
+  local NAME="$1"
+  local PATH_VAR="$2"
+  local URL="$3"
+
+  if [ -d "$PATH_VAR/.git" ]; then
+    echo -e "\e[34m[INFO]\e[0m Updating $NAME at $PATH_VAR..."
+    pushd "$PATH_VAR" >/dev/null || handle_error "Failed to enter $PATH_VAR"
+      git fetch --all --prune || echo "⚠️ Could not fetch $NAME (non-fatal)"
+      git checkout main 2>/dev/null || true
+      git pull origin main || echo "⚠️ Could not pull $NAME (non-fatal)"
+    popd >/dev/null || true
+  elif [ -d "$PATH_VAR" ]; then
+    echo -e "\e[34m[INFO]\e[0m Found $NAME at $PATH_VAR (non-git); skipping pull."
+  else
+    echo -e "\e[34m[INFO]\e[0m Cloning $NAME into $PATH_VAR..."
+    git clone "$URL" "$PATH_VAR" || handle_error "Failed to clone $NAME from $URL"
   fi
-  
-  # Initialize and update submodules
-  git submodule update --init --recursive --remote \
-    || handle_error "Failed to initialize git submodules. Make sure git is installed and you have access to the submodule repos."
-  
-  success_msg "Git submodules initialized."
+}
+
+sync_external_repos() {
+  local REPO_ROOT="$1"
+  IWA_PATH="${IWA_PATH:-${REPO_ROOT}/../autoppia_iwa}"
+  WEBS_DEMO_PATH="${WEBS_DEMO_PATH:-${REPO_ROOT}/../autoppia_webs_demo}"
+  IWA_URL="${IWA_URL:-https://github.com/autoppia/autoppia_iwa.git}"
+  WEBS_DEMO_URL="${WEBS_DEMO_URL:-https://github.com/autoppia/autoppia_webs_demo.git}"
+
+  sync_repo "autoppia_iwa" "$IWA_PATH" "$IWA_URL"
+  # webs_demo is optional; clone/update if present/missing
+  sync_repo "autoppia_webs_demo" "$WEBS_DEMO_PATH" "$WEBS_DEMO_URL"
 }
 
 install_python_reqs() {
@@ -94,14 +106,15 @@ install_modules() {
     || handle_error "Failed to install current package"
   success_msg "Main package installed."
 
-  echo -e "\e[34m[INFO]\e[0m Installing autoppia_iwa_module..."
-  [ -d "autoppia_iwa_module" ] || handle_error "autoppia_iwa_module directory not found"
+  IWA_PATH="${IWA_PATH:-${REPO_ROOT}/../autoppia_iwa}"
+  echo -e "\e[34m[INFO]\e[0m Installing autoppia_iwa from ${IWA_PATH}..."
+  [ -d "$IWA_PATH" ] || handle_error "IWA_PATH not found: ${IWA_PATH}. Clone autoppia_iwa as a sibling repo or set IWA_PATH."
 
-  pushd autoppia_iwa_module >/dev/null
+  pushd "$IWA_PATH" >/dev/null
     pip install -e . \
-      || handle_error "Failed to install autoppia_iwa_module"
+      || handle_error "Failed to install autoppia_iwa"
   popd >/dev/null
-  success_msg "autoppia_iwa_module installed."
+  success_msg "autoppia_iwa installed."
 }
 
 install_bittensor() {
@@ -112,10 +125,13 @@ install_bittensor() {
 }
 
 main() {
+  REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+  cd "$REPO_ROOT" || handle_error "Failed to navigate to repo root"
+
   check_python
   create_activate_venv
   upgrade_pip
-  init_submodules
+  sync_external_repos "$REPO_ROOT"
   install_python_reqs
   install_modules
   install_bittensor
