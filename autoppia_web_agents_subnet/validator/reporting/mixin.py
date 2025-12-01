@@ -190,7 +190,7 @@ class ReportingMixin:
         """Finalize the round report and send email."""
         report = self.round_manager.current_round_report
         if not report:
-            bt.logging.warning("No round report to finalize (was round resumed from checkpoint?)")
+            bt.logging.warning("No round report to finalize")
             bt.logging.info("Skipping round report email for this round")
             return
 

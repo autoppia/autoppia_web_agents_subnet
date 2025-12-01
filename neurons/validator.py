@@ -24,10 +24,6 @@ from autoppia_web_agents_subnet.protocol import StartRoundSynapse
 from autoppia_web_agents_subnet.validator.round_manager import RoundManager, RoundPhase
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.platform.mixin import ValidatorPlatformMixin
-from autoppia_web_agents_subnet.validator.round_state import (
-    RoundStateValidatorMixin,
-    RoundPhaseValidatorMixin,
-)
 from autoppia_web_agents_subnet.validator.round_start import RoundStartMixin
 from autoppia_web_agents_subnet.validator.evaluation import EvaluationPhaseMixin
 from autoppia_web_agents_subnet.validator.settlement import SettlementMixin
@@ -36,8 +32,6 @@ from autoppia_iwa.src.bootstrap import AppBootstrap
 
 
 class Validator(
-    RoundStateValidatorMixin,
-    RoundPhaseValidatorMixin,
     RoundStartMixin,
     EvaluationPhaseMixin,
     SettlementMixin,
@@ -89,19 +83,11 @@ class Validator(
             note="Starting forward pass",
         )
 
-        resume_status = getattr(self, "_last_resume_info", {}).get("status")
-        stored_round_number = getattr(self, "_current_round_number", None)
-        if resume_status == "loaded" and stored_round_number is not None:
-            try:
-                current_round_number = int(stored_round_number)
-            except Exception:
-                current_round_number = await self.round_manager.calculate_round(current_block)
-        else:
-            current_round_number = await self.round_manager.calculate_round(current_block)
-            try:
-                setattr(self, "_current_round_number", int(current_round_number))
-            except Exception:
-                pass
+        current_round_number = await self.round_manager.calculate_round(current_block)
+        try:
+            setattr(self, "_current_round_number", int(current_round_number))
+        except Exception:
+            pass
         bt.logging.info(f"🚀 Starting round-based forward (round {current_round_number})")
         ColoredLogger.info(f"🚦 Starting Round: {int(current_round_number)}", ColoredLogger.GREEN)
 

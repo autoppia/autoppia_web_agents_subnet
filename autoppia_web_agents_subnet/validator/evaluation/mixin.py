@@ -81,8 +81,6 @@ class EvaluationPhaseMixin:
                 tasks_completed += 1
             task_index += 1
 
-            self.state_manager.save_checkpoint()
-
             current_block = self.block
             boundaries_now = self.round_manager.get_round_boundaries(current_block, log_debug=False)
             rsb = boundaries_now["round_start_block"]
@@ -153,14 +151,12 @@ class EvaluationPhaseMixin:
                     ("   Waiting for end-of-round target epoch to set weights | " f"round={round_no_ctx} | target_epoch={target_epoch_ctx:.2f} | target_block={target_block_ctx}"),
                     ColoredLogger.YELLOW,
                 )
-                self.state_manager.save_checkpoint()
                 if ENABLE_DISTRIBUTED_CONSENSUS and (not self._consensus_published) and (not self._finalized_this_round):
                     bt.logging.info(f"[CONSENSUS] Safety buffer reached - publishing to IPFS with {tasks_completed} tasks")
                     await self._publish_final_snapshot(
                         tasks_completed=tasks_completed,
                         total_tasks=len(all_tasks),
                     )
-                    self.state_manager.save_checkpoint()
                 if not self._finalized_this_round:
                     bt.logging.info("[CONSENSUS] Finalizing immediately after safety-buffer publish")
                     await self._calculate_final_weights(tasks_completed)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import List
 
@@ -12,6 +13,7 @@ from autoppia_web_agents_subnet.protocol import StartRoundSynapse
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.utils.log_colors import round_details_tag
 from autoppia_web_agents_subnet.validator.config import (
+    DZ_STARTING_BLOCK,
     FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION,
     MAX_MINER_AGENT_NAME_LENGTH,
     PRE_GENERATED_TASKS,
@@ -29,7 +31,45 @@ from autoppia_web_agents_subnet.validator.evaluation.synapse_handlers import (
 
 
 class RoundStartMixin:
-    """Round preparation: resume checkpoints, pre-generate tasks, and perform handshake."""
+    """Round preparation: generate tasks, enforce start gate, and perform handshake."""
+
+    async def _wait_for_minimum_start_block(self, current_block: int) -> bool:
+        """
+        Block until the chain height reaches the configured launch gate.
+
+        Returns True when a wait occurred so callers can short-circuit their flow.
+        """
+        rm = getattr(self, "round_manager", None)
+        if rm is None:
+            raise RuntimeError("Round manager not initialized; cannot enforce minimum start block")
+
+        if rm.can_start_round(current_block):
+            return False
+
+        blocks_remaining = rm.blocks_until_allowed(current_block)
+        seconds_remaining = blocks_remaining * rm.SECONDS_PER_BLOCK
+        minutes_remaining = seconds_remaining / 60
+        hours_remaining = minutes_remaining / 60
+
+        current_epoch = rm.block_to_epoch(current_block)
+        target_epoch = rm.block_to_epoch(DZ_STARTING_BLOCK)
+
+        eta = f"~{hours_remaining:.1f}h" if hours_remaining >= 1 else f"~{minutes_remaining:.0f}m"
+        bt.logging.warning(
+            f"🔒 Locked until block {DZ_STARTING_BLOCK:,} (epoch {target_epoch:.2f}) | "
+            f"now {current_block:,} (epoch {current_epoch:.2f}) | ETA {eta}"
+        )
+
+        wait_seconds = min(max(seconds_remaining, 30), 600)
+        rm.enter_phase(
+            RoundPhase.WAITING,
+            block=current_block,
+            note=f"Waiting for minimum start block {DZ_STARTING_BLOCK}",
+        )
+        bt.logging.warning(f"💤 Rechecking in {wait_seconds:.0f}s...")
+
+        await asyncio.sleep(wait_seconds)
+        return True
 
     async def _run_start_phase(self, current_block: int) -> StartPhaseResult:
         boundaries_preview = self.round_manager.get_round_boundaries(current_block, log_debug=False)
@@ -81,7 +121,6 @@ class RoundStartMixin:
             await self._wait_until_next_round_boundary()
             return StartPhaseResult(
                 all_tasks=[],
-                resumed=False,
                 continue_forward=False,
                 reason="late_start_boundary_wait",
             )
@@ -184,135 +223,135 @@ class RoundStartMixin:
 
         self.active_miner_uids = []
 
-            def _normalized_optional(value):
-                if value is None:
-                    return None
-                text = str(value).strip()
-                return text or None
+        def _normalized_optional(value):
+            if value is None:
+                return None
+            text = str(value).strip()
+            return text or None
 
-            def _truncate_agent_name(name: str) -> str:
-                if MAX_MINER_AGENT_NAME_LENGTH and len(name) > MAX_MINER_AGENT_NAME_LENGTH:
-                    bt.logging.debug(f"Truncating agent name '{name}' to {MAX_MINER_AGENT_NAME_LENGTH} characters.")
-                    return name[:MAX_MINER_AGENT_NAME_LENGTH]
-                return name
+        def _truncate_agent_name(name: str) -> str:
+            if MAX_MINER_AGENT_NAME_LENGTH and len(name) > MAX_MINER_AGENT_NAME_LENGTH:
+                bt.logging.debug(f"Truncating agent name '{name}' to {MAX_MINER_AGENT_NAME_LENGTH} characters.")
+                return name[:MAX_MINER_AGENT_NAME_LENGTH]
+            return name
 
-            miner_status_map = {}
+        miner_status_map = {}
 
-            for idx, response in enumerate(handshake_responses):
-                if idx >= len(all_axons):
-                    continue
+        for idx, response in enumerate(handshake_responses):
+            if idx >= len(all_axons):
+                continue
 
-                mapped_uid = all_uids[idx]
-                miner_status_map[mapped_uid] = {
-                    "response": response,
-                    "success": False,
-                    "agent_name": None,
-                    "version": None,
-                    "hotkey": self.metagraph.hotkeys[mapped_uid][:12] + "..." if mapped_uid < len(self.metagraph.hotkeys) else "N/A",
+            mapped_uid = all_uids[idx]
+            miner_status_map[mapped_uid] = {
+                "response": response,
+                "success": False,
+                "agent_name": None,
+                "version": None,
+                "hotkey": self.metagraph.hotkeys[mapped_uid][:12] + "..." if mapped_uid < len(self.metagraph.hotkeys) else "N/A",
+            }
+
+            if not response:
+                continue
+
+            status_code = getattr(getattr(response, "dendrite", None), "status_code", None)
+            status_numeric = None
+            if status_code is not None:
+                try:
+                    status_numeric = int(status_code)
+                except (TypeError, ValueError):
+                    status_numeric = None
+            if status_numeric is not None and status_numeric >= 400:
+                continue
+
+            agent_name_raw = getattr(response, "agent_name", None)
+            agent_name = _normalized_optional(agent_name_raw)
+            if not agent_name:
+                continue
+
+            agent_name = _truncate_agent_name(agent_name)
+            response.agent_name = agent_name
+            response.agent_image = _normalized_optional(getattr(response, "agent_image", None))
+            response.github_url = _normalized_optional(getattr(response, "github_url", None))
+            agent_version = _normalized_optional(getattr(response, "agent_version", None))
+            if agent_version is not None:
+                response.agent_version = agent_version
+
+            self.round_handshake_payloads[mapped_uid] = response
+            self.active_miner_uids.append(mapped_uid)
+
+            miner_status_map[mapped_uid].update(
+                {
+                    "success": True,
+                    "agent_name": agent_name,
+                    "version": getattr(response, "agent_version", "N/A"),
                 }
-
-                if not response:
-                    continue
-
-                status_code = getattr(getattr(response, "dendrite", None), "status_code", None)
-                status_numeric = None
-                if status_code is not None:
-                    try:
-                        status_numeric = int(status_code)
-                    except (TypeError, ValueError):
-                        status_numeric = None
-                if status_numeric is not None and status_numeric >= 400:
-                    continue
-
-                agent_name_raw = getattr(response, "agent_name", None)
-                agent_name = _normalized_optional(agent_name_raw)
-                if not agent_name:
-                    continue
-
-                agent_name = _truncate_agent_name(agent_name)
-                response.agent_name = agent_name
-                response.agent_image = _normalized_optional(getattr(response, "agent_image", None))
-                response.github_url = _normalized_optional(getattr(response, "github_url", None))
-                agent_version = _normalized_optional(getattr(response, "agent_version", None))
-                if agent_version is not None:
-                    response.agent_version = agent_version
-
-                self.round_handshake_payloads[mapped_uid] = response
-                self.active_miner_uids.append(mapped_uid)
-
-                miner_status_map[mapped_uid].update(
-                    {
-                        "success": True,
-                        "agent_name": agent_name,
-                        "version": getattr(response, "agent_version", "N/A"),
-                    }
-                )
-
-            if miner_status_map:
-                console = Console()
-                table = Table(
-                    title=(f"[bold magenta]🤝 Handshake Results - {len(self.active_miner_uids)}/" f"{len(all_axons)} Miners Responded[/bold magenta]"),
-                    box=box.ROUNDED,
-                    show_header=True,
-                    header_style="bold cyan",
-                    title_style="bold magenta",
-                    expand=False,
-                )
-                table.add_column("Status", justify="center", style="bold", width=8)
-                table.add_column("UID", justify="right", style="cyan", width=6)
-                table.add_column("Agent Name", justify="left", style="white", width=25)
-                table.add_column("Version", justify="center", style="yellow", width=12)
-                table.add_column("Hotkey", justify="left", style="blue", width=18)
-
-                for uid in sorted(miner_status_map.keys()):
-                    miner = miner_status_map[uid]
-                    if miner["success"]:
-                        status_icon = "[bold green]✅[/bold green]"
-                        agent_name = miner["agent_name"] or "N/A"
-                        version = miner["version"] or "N/A"
-                        style = None
-                    else:
-                        status_icon = "[bold red]❌[/bold red]"
-                        agent_name = "[dim]N/A[/dim]"
-                        version = "[dim]N/A[/dim]"
-                        style = "dim"
-                    table.add_row(status_icon, str(uid), agent_name, version, miner["hotkey"], style=style)
-
-                console.print(table)
-                console.print()
-
-            self._phases["handshake_sent"] = True
-            if self.active_miner_uids:
-                ColoredLogger.success(
-                    f"✅ Handshake sent: {len(self.active_miner_uids)}/{len(all_axons)} miners responded",
-                    ColoredLogger.GREEN,
-                )
-            else:
-                ColoredLogger.warning(
-                    f"⚠️ Handshake sent: 0/{len(all_axons)} miners responded",
-                    ColoredLogger.YELLOW,
-                )
-
-            # Record handshake in report
-            self._report_handshake_sent(total_miners=len(all_axons))
-
-            for uid in self.active_miner_uids:
-                hotkey = self.metagraph.hotkeys[uid] if uid < len(self.metagraph.hotkeys) else "unknown"
-                payload = self.round_handshake_payloads.get(uid)
-
-                agent_name = None
-                agent_image = None
-                if payload:
-                    agent_name = getattr(payload, "agent_name", None)
-                    agent_image = getattr(payload, "agent_image", None)
-
-                self._report_handshake_response(uid, hotkey, agent_name, agent_image)
-
-            self.round_manager.enter_phase(
-                RoundPhase.HANDSHAKE,
-                block=current_block,
-                note=f"Handshake completed with {len(self.active_miner_uids)} active miners",
             )
+
+        if miner_status_map:
+            console = Console()
+            table = Table(
+                title=(f"[bold magenta]🤝 Handshake Results - {len(self.active_miner_uids)}/" f"{len(all_axons)} Miners Responded[/bold magenta]"),
+                box=box.ROUNDED,
+                show_header=True,
+                header_style="bold cyan",
+                title_style="bold magenta",
+                expand=False,
+            )
+            table.add_column("Status", justify="center", style="bold", width=8)
+            table.add_column("UID", justify="right", style="cyan", width=6)
+            table.add_column("Agent Name", justify="left", style="white", width=25)
+            table.add_column("Version", justify="center", style="yellow", width=12)
+            table.add_column("Hotkey", justify="left", style="blue", width=18)
+
+            for uid in sorted(miner_status_map.keys()):
+                miner = miner_status_map[uid]
+                if miner["success"]:
+                    status_icon = "[bold green]✅[/bold green]"
+                    agent_name = miner["agent_name"] or "N/A"
+                    version = miner["version"] or "N/A"
+                    style = None
+                else:
+                    status_icon = "[bold red]❌[/bold red]"
+                    agent_name = "[dim]N/A[/dim]"
+                    version = "[dim]N/A[/dim]"
+                    style = "dim"
+                table.add_row(status_icon, str(uid), agent_name, version, miner["hotkey"], style=style)
+
+            console.print(table)
+            console.print()
+
+        self._phases["handshake_sent"] = True
+        if self.active_miner_uids:
+            ColoredLogger.success(
+                f"✅ Handshake sent: {len(self.active_miner_uids)}/{len(all_axons)} miners responded",
+                ColoredLogger.GREEN,
+            )
+        else:
+            ColoredLogger.warning(
+                f"⚠️ Handshake sent: 0/{len(all_axons)} miners responded",
+                ColoredLogger.YELLOW,
+            )
+
+        # Record handshake in report
+        self._report_handshake_sent(total_miners=len(all_axons))
+
+        for uid in self.active_miner_uids:
+            hotkey = self.metagraph.hotkeys[uid] if uid < len(self.metagraph.hotkeys) else "unknown"
+            payload = self.round_handshake_payloads.get(uid)
+
+            agent_name = None
+            agent_image = None
+            if payload:
+                agent_name = getattr(payload, "agent_name", None)
+                agent_image = getattr(payload, "agent_image", None)
+
+            self._report_handshake_response(uid, hotkey, agent_name, agent_image)
+
+        self.round_manager.enter_phase(
+            RoundPhase.HANDSHAKE,
+            block=current_block,
+            note=f"Handshake completed with {len(self.active_miner_uids)} active miners",
+        )
 
         round_number = await self.round_manager.calculate_round(current_block)
         start_epoch = boundaries["round_start_epoch"]
@@ -350,7 +389,6 @@ class RoundStartMixin:
             self.round_manager.log_phase_history()
             return StartPhaseResult(
                 all_tasks=all_tasks,
-                resumed=False,
                 continue_forward=False,
                 tasks_completed=0,
                 reason="no_active_miners",
@@ -360,6 +398,5 @@ class RoundStartMixin:
 
         return StartPhaseResult(
             all_tasks=all_tasks,
-            resumed=False,
             continue_forward=True,
         )

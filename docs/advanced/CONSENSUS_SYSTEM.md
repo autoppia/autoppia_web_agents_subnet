@@ -322,48 +322,6 @@ Consensus score[107] = 0.92 (only Validator A counts)
 
 ---
 
-## Checkpoint System
-
-### ENABLE_CHECKPOINT_SYSTEM
-
-**What it does:** Enables checkpoint save/load system for crash recovery. When enabled, validator can resume mid-round after restart/crash.
-
-**Without recovery:**
-
-```
-14:00 → Round starts
-14:05 → Evaluated 2/5 tasks
-14:06 → CRASH!
-14:07 → Restart
-        → Lost all progress
-        → Round 60% complete
-        → Too late to restart
-        → Wait 8 minutes idle
-```
-
-**With recovery (default):**
-
-```
-14:00 → Round starts
-14:05 → Evaluated 2/5 tasks
-        💾 Checkpoint saved
-14:06 → CRASH!
-14:07 → Restart
-        ✅ Load checkpoint
-        ✅ Resume from task 3/5
-        ✅ Complete round normally
-```
-
-**Checkpoint contains:**
-
-- Generated tasks
-- Active miners
-- Completed evaluations
-- Partial scores
-- Round metadata
-
----
-
 ## Late Start Protection
 
 ### SKIP_ROUND_IF_STARTED_AFTER_FRACTION
@@ -496,11 +454,7 @@ Waiting ~5.8m to next boundary...
    SKIP_ROUND_IF_STARTED_AFTER_FRACTION=0.95
    ```
 
-2. **Enable checkpoint system** (production):
-
-   ```bash
-   ENABLE_CHECKPOINT_SYSTEM=true
-   ```
+2. **Avoid restarts mid-round**: keep the validator stable during the current round (or let it wait for next boundary).
 
 3. **Start at epoch boundary:**
    - Wait for epoch to be exact multiple of ROUND_SIZE_EPOCHS

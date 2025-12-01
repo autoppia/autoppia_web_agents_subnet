@@ -49,10 +49,8 @@ class ValidatorPlatformMixin:
         self.round_handshake_payloads: Dict[int, Any] = {}
         self.round_start_timestamp: float = 0.0
         self.agent_run_accumulators: Dict[int, Dict[str, float]] = {}
-        # Track completed (miner_uid, task_id) to avoid duplicates on resume
+        # Track completed (miner_uid, task_id) to avoid duplicates
         self._completed_pairs: Set[Tuple[int, str]] = set()
-        # Saved evaluation records to rebuild accumulators on resume
-        self._eval_records: List[Dict[str, Any]] = []
         # Phase flags for IWAP steps (p1=start_round, p2=set_tasks)
         self._phases: Dict[str, Any] = {"p1_done": False, "p2_done": False}
 
@@ -177,7 +175,7 @@ class ValidatorPlatformMixin:
         self._completed_pairs = set()
         self._phases = {"p1_done": False, "p2_done": False}
         # Reset round number to force recalculation on next round start
-        # This prevents reusing stale values when discarding old checkpoints
+        # This prevents reusing stale values when discarding old round state
         self._current_round_number = None
 
     # ──────────────────────────────────────────────────────────────────────────

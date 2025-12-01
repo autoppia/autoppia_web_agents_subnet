@@ -30,7 +30,6 @@ The import should be unconditional so the process fails immediately when the dep
 | `autoppia_web_agents_subnet/platform/` | IWAP integration (round phases, HTTP client, logging helpers, finish-round orchestration). |
 | `autoppia_web_agents_subnet/utils/` | Shared helpers (logging, commitments, env parsing, GIF handling, etc.). |
 | `scripts/validator/reporting/` | Reporting, monitoring, Codex integration, and admin alert scripts. |
-| `data/validator_state/` | Local checkpoints for crash-resume; automatically updated every round. |
 | `demo-webs` (Docker compose) | Local demo web applications used by miners during evaluation; start via docker-compose when needed. |
 
 Environment defaults (round size, fractions, stake thresholds, endpoints) live in `autoppia_web_agents_subnet/validator/config.py` and are sourced from `.env`. Testing mode (`TESTING=true`) shortens rounds and disables stake requirements.
@@ -48,7 +47,6 @@ Each round follows these steps (see `neurons/validator.py`):
 
 2. **Phase 1 – Handshake**
    - `send_start_round_synapse_to_miners` broadcasts the start signal; responders populate `active_miner_uids`.
-   - The validator records scope/resume checkpoints for crash recovery.
 
 3. **Phase 2 – Task Distribution**
    - Tasks are submitted through IWAP (`set_tasks`) and cached for local tracking.
@@ -67,10 +65,6 @@ Each round follows these steps (see `neurons/validator.py`):
    - Consensus snapshot publishes (when enabled), shared scores fetched, and final weights set (`validator/settlement/mixin.py`).
    - IWAP `finish_round` posts burn/weights summary to the Autoppia backend.
    - Validator idles in `WAITING` until the next round boundary before the loop restarts.
-
-7. **Checkpoint & Resume Safety**
-   - `state_manager.save_checkpoint()` persists round state at key points (after each task, before waiting for boundary, upon finalization).
-   - `RoundPhaseValidatorMixin` rebuilds accumulators if the process restarts.
 
 ---
 
@@ -216,7 +210,6 @@ It loads `.env`, infers SMTP (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`
 - **Testing vs Production**: `TESTING=true` shrinks rounds and removes stake gates, but expect more on-chain `TimeoutError: Max retries exceeded` because the validator lacks weight. Monitor emails will flag these as `ERROR`.
 - **Handling Commitment Failures**: When consensus commits time out, `_close_async_subtensor()` can be called (see `platform/mixin`) before the next attempt to reset the websocket connection.
 - **Codex IAM**: Ensure `codex` CLI has the necessary credentials (API key, etc.) before launching pm2 processes. Restart with `pm2 restart … --update-env` after changing `.env`.
-- **Checkpoint hygiene**: Clear `data/validator_state/round_state/*.pkl` if you need a completely fresh start; otherwise resume works seamlessly.
 - **Log housekeeping**: `pm2 flush validator_monitor` trims old notifications if the log history gets noisy.
 
 This document is the canonical context for automation agents. Keep it current when you change report formats, adjust phases, or add new scripts so Codex and other operators stay in sync.

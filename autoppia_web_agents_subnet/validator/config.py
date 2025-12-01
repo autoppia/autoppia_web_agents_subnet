@@ -111,10 +111,6 @@ MAX_MINER_AGENT_NAME_LENGTH = _env_int("MAX_MINER_AGENT_NAME_LENGTH", 12)
 
 IWAP_VALIDATOR_AUTH_MESSAGE = _normalized(os.getenv("IWAP_VALIDATOR_AUTH_MESSAGE", "I am a honest validator"))
 
-# ── Checkpoint System & Recovery ─────────────────────────────────────────────
-# Enable checkpoint system (save/load round state for crash recovery)
-# Enabled by default, can be disabled via .env (works in both testing and production)
-ENABLE_CHECKPOINT_SYSTEM = _str_to_bool(os.getenv("ENABLE_CHECKPOINT_SYSTEM", "true"))
 
 # ── Distributed Consensus (IPFS + Blockchain) ────────────────────────────────
 # Enabled by default, can be disabled via .env (works in both testing and production)

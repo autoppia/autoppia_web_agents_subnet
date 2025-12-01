@@ -84,14 +84,14 @@ class SettlementMixin:
                 )
                 return
 
-        if not wait_logged:
-            ColoredLogger.info(
-                f"⏳ Waiting ~{remaining} blocks for commitment propagation",
-                ColoredLogger.CYAN,
-            )
-            wait_logged = True
+            if not wait_logged:
+                ColoredLogger.info(
+                    f"⏳ Waiting ~{remaining} blocks for commitment propagation",
+                    ColoredLogger.CYAN,
+                )
+                wait_logged = True
 
-        await asyncio.sleep(seconds_per_block)
+            await asyncio.sleep(seconds_per_block)
 
     async def _publish_final_snapshot(self, *, tasks_completed: int, total_tasks: int) -> None:
         """Emit final consensus snapshot once all tasks complete, then finalize weights."""
@@ -148,11 +148,6 @@ class SettlementMixin:
         - Calculate and broadcast final weights (if not already done).
         - Wait for the next round boundary before exiting to the scheduler loop.
         """
-        try:
-            self.state_manager.save_checkpoint()
-        except Exception as exc:
-            bt.logging.warning(f"Checkpoint save before settlement finalization failed: {exc}")
-
         if ENABLE_DISTRIBUTED_CONSENSUS and (not self._consensus_published):
             await self._publish_final_snapshot(
                 tasks_completed=tasks_completed,

@@ -195,18 +195,6 @@ async def submit_task_results(
         else:
             add_evaluation_success = f"add_evaluation completed for miner_uid={miner_uid}, task_id={task_id}"
             log_iwap_phase("Phase 4", add_evaluation_success, level="success")
-            try:
-                ctx._eval_records.append(
-                    {
-                        "miner_uid": miner_uid,
-                        "task_id": task_id,
-                        "reward": float(reward_value),
-                        "final_score": float(final_score),
-                        "exec_time": float(exec_time),
-                    }
-                )
-            except Exception:
-                pass
             ctx._completed_pairs.add((miner_uid, task_id))
 
             if gif_to_upload:
