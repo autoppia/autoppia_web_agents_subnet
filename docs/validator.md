@@ -69,8 +69,6 @@ cp .env.validator-example .env
 # Edit .env with your specific settings
 ```
 
-> **Important:** Ensure `IWAP_VALIDATOR_AUTH_MESSAGE` in your `.env` matches the backend configuration so IWAP requests are signed with the correct challenge.
-
 ---
 
 ## 🤖 2. LLM Configuration
@@ -217,43 +215,45 @@ chmod +x scripts/validator/update/update_deploy.sh
 
 ## 📊 6. Reports Module
 
-We have added a reports module for both terminal and email reporting. To configure email report sending, modify the `.env` file:
+The validator automatically generates and sends detailed round reports via email at the end of each round. Reports include round statistics, miner performance, consensus data, and any errors or warnings.
 
 ### **Email Configuration**
 
-```bash
-# Validator EMAIL Report
-SMTP_HOST=smtp.your-provider.com
-SMTP_PORT=587
-SMTP_USER=user@domain.com
-SMTP_PASS=PASSWORD
-SMTP_FROM=report@domain.com
-SMTP_TO=test@domain.com
-SMTP_STARTTLS=true
+Configure email settings in your `.env` file using `REPORT_MONITOR_*` variables:
 
-# reports folder (where the forward writes the jsonl)
-REPORTS_DIR=forward_reports
+```bash
+# Validator Email Report Configuration
+REPORT_MONITOR_SMTP_HOST=smtp.your-provider.com
+REPORT_MONITOR_SMTP_PORT=587
+REPORT_MONITOR_SMTP_USERNAME=user@domain.com
+REPORT_MONITOR_SMTP_PASSWORD=your-password
+REPORT_MONITOR_EMAIL_FROM=report@domain.com
+REPORT_MONITOR_EMAIL_TO=recipient1@domain.com,recipient2@domain.com
+REPORT_MONITOR_SMTP_TLS=true
+REPORT_MONITOR_SMTP_SSL=false
 ```
 
-### Setting up Automated Reports
+**Note:** Reports are sent automatically at the end of each round. No additional PM2 process is needed.
 
-Once configured, it's as simple as creating a PM2 process that executes the reports at regular intervals, for example every hour. Here's an example command so you can verify everything is working correctly:
+### **Log Splitting by Round (Optional)**
 
-```bash
-python3 autoppia_web_agents_subnet/validator/send_reports.py
-```
-
-### PM2 Automated Reports Setup
+To organize validator logs by round for easier analysis, you can use the log splitter script. This monitors your PM2 validator log file and automatically creates separate log files for each round:
 
 ```bash
-pm2 start --name "validator-reports" \
+pm2 start scripts/validator/utils/simple_log_splitter_v2.py \
+  --name "validator-log-splitter" \
   --interpreter python3 \
-  --cron "0 * * * *" \
-  --no-autorestart \
-  autoppia_web_agents_subnet/validator/send_reports.py
+  -- \
+  --log-file ~/.pm2/logs/validator-out.log \
+  --output-dir data/logs/rounds
 ```
 
-## This will send reports every hour and help you monitor that everything is functioning correctly.
+**Replace:**
+
+- `--log-file` with your actual PM2 validator log file path (e.g., `~/.pm2/logs/validator-6am-out.log`)
+- `--output-dir` with your desired output directory path
+
+This will automatically split the validator logs into separate files per round (e.g., `round_598.log`, `round_599.log`) in the specified output directory.
 
 ## 🆘 Support & Contact
 
