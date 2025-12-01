@@ -91,7 +91,8 @@ cd autoppia_iwa  # el benchmark vive aquí
 
 ```bash
 # Create environment file
-cp .env.example .env
+# Note: Benchmark uses IWA's .env configuration
+# See IWA documentation for .env setup
 ```
 
 **Configure LLM for task generation:**

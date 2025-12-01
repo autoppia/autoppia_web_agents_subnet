@@ -65,7 +65,7 @@ chmod +x scripts/validator/main/setup.sh
 ### **Environment Configuration**
 
 ```bash
-cp .env.example .env
+cp .env.validator-example .env
 # Edit .env with your specific settings
 ```
 
@@ -112,6 +112,7 @@ chmod +x "$IWA_PATH/modules/llm_local/setup.sh"
 ```
 
 **What this does:**
+
 - Creates a virtual environment (`llm_env`) for the LLM service
 - Installs PyTorch with CUDA support for GPU acceleration
 - Installs transformers and other model dependencies

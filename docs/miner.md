@@ -51,14 +51,19 @@ Once your agent performs well locally, deploy it to the network to start earning
 ---
 
 # 🔬 PHASE 1: LOCAL TESTING
+
 ## 📋 Repository Setup
+
 Clona los tres repos como hermanos:
+
 ```bash
 git clone https://github.com/autoppia/autoppia_web_agents_subnet
 git clone https://github.com/autoppia/autoppia_iwa.git
 git clone https://github.com/autoppia/autoppia_webs_demo.git
 ```
+
 Trabaja dentro de `autoppia_web_agents_subnet` y apunta `IWA_PATH` y `WEBS_DEMO_PATH` a los repos hermanos (por defecto `../autoppia_iwa` y `../autoppia_webs_demo`).
+
 > Los scripts de setup usan `IWA_PATH`/`WEBS_DEMO_PATH`; si tienes otra ruta, exporta estas variables antes de ejecutarlos.
 
 ## ⚠️ IMPORTANT: Test Locally First!
@@ -134,15 +139,10 @@ chmod +x scripts/miner/setup.sh
 **Step 2: Configure Agent in .env**
 
 ```bash
-# Configure your deployed agent
-AGENT_HOST="localhost"  # or your agent's host
-AGENT_PORT="5000"       # port where your agent is running
-MINER_AGENT_NAME=""
-MINER_AGENT_IMAGE=""  # you should send us your picture through discord nad we will provide the link
-MINER_GITHUB_URL=""
-MINER_AGENT_VERSION="1.0.0"
-MINER_HAS_RL="0"
-USE_APIFIED_AGENT="true"
+# Copy the miner environment template
+cp .env.miner-example .env
+
+# Edit .env with your agent configuration
 ```
 
 **Step 3: Deploy Miner**
