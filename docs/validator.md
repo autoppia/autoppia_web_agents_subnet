@@ -51,7 +51,7 @@ export WEBS_DEMO_PATH=/path/to/autoppia_webs_demo
 ### **System Dependencies**
 
 ```bash
-# Navigate to the subnet repository
+# Navigate to the subnet repository (do this once)
 cd autoppia_web_agents_subnet
 
 # Install system dependencies
@@ -59,13 +59,12 @@ chmod +x scripts/validator/main/install_dependencies.sh
 ./scripts/validator/main/install_dependencies.sh
 ```
 
+> **Note:** All following commands assume you're already in the `autoppia_web_agents_subnet` directory. If you navigate away, make sure to `cd` back to it.
+
 ### **Validator Setup**
 
 ```bash
-# Make sure you're in the subnet repository directory
-cd autoppia_web_agents_subnet
-
-# Setup Python environment and packages
+# Setup Python environment and packages (continue from repository directory)
 chmod +x scripts/validator/main/setup.sh
 ./scripts/validator/main/setup.sh
 ```
@@ -73,9 +72,7 @@ chmod +x scripts/validator/main/setup.sh
 ### **Environment Configuration**
 
 ```bash
-# Make sure you're in the subnet repository directory
-cd autoppia_web_agents_subnet
-
+# Configure environment (continue from repository directory)
 cp .env.validator-example .env
 # Edit .env with your specific settings
 ```
@@ -119,10 +116,7 @@ CHUTES_USE_BEARER=False
 ### **Docker Installation**
 
 ```bash
-# Navigate to the subnet repository
-cd autoppia_web_agents_subnet
-
-# Install Docker (if not already installed)
+# Install Docker (if not already installed) - from repository directory
 chmod +x scripts/validator/demo-webs/install_docker.sh
 ./scripts/validator/demo-webs/install_docker.sh
 ```
@@ -130,10 +124,8 @@ chmod +x scripts/validator/demo-webs/install_docker.sh
 ### **Deploy Demo Webs**
 
 ```bash
-# Make sure you're in the subnet repository directory
-cd autoppia_web_agents_subnet
-
-# Setup demo web applications (set WEBS_DEMO_PATH if different from default ../autoppia_webs_demo)
+# Setup demo web applications (continue from repository directory)
+# Set WEBS_DEMO_PATH if different from default ../autoppia_webs_demo
 chmod +x scripts/validator/demo-webs/deploy_demo_webs.sh
 WEBS_DEMO_PATH=${WEBS_DEMO_PATH:-../autoppia_webs_demo} ./scripts/validator/demo-webs/deploy_demo_webs.sh
 ```
@@ -163,10 +155,7 @@ DEMO_WEBS_STARTING_PORT=8000
 ### **Starting the Validator**
 
 ```bash
-# Navigate to the subnet repository
-cd autoppia_web_agents_subnet
-
-# Activate virtual environment
+# Activate virtual environment (from repository directory)
 source validator_env/bin/activate
 
 # Start the validator with PM2
@@ -191,10 +180,9 @@ Enable automatic updates with safe rollback:
 
 #### **Edit Script Configuration (Recommended)**
 
-**Step 1**: Navigate to the subnet repository and edit the auto-update script:
+**Step 1**: Edit the auto-update script (from repository directory):
 
 ```bash
-cd autoppia_web_agents_subnet
 nano scripts/validator/update/auto_update_deploy.sh
 ```
 
@@ -208,10 +196,9 @@ WALLET_HOTKEY="your_hotkey"             # Your actual hotkey
 SUBTENSOR_PARAM="--subtensor.network finney"  # Subtensor network
 ```
 
-**Step 3**: Start the auto-update service:
+**Step 3**: Start the auto-update service (from repository directory):
 
 ```bash
-cd autoppia_web_agents_subnet
 chmod +x scripts/validator/update/auto_update_deploy.sh
 pm2 start --name auto_update_validator \
   --interpreter /bin/bash \
@@ -227,12 +214,9 @@ pm2 start --name auto_update_validator \
 
 ### **Manual Updates**
 
-Update all components manually:
+Update all components manually (from repository directory):
 
 ```bash
-# Navigate to the subnet repository
-cd autoppia_web_agents_subnet
-
 # Complete update
 chmod +x scripts/validator/update/update_deploy.sh
 ./scripts/validator/update/update_deploy.sh
