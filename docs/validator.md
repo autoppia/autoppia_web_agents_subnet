@@ -41,12 +41,23 @@ git clone https://github.com/autoppia/autoppia_webs_demo.git    # webs_demo (mai
 
 **Important:** All following commands must be run from inside the `autoppia_web_agents_subnet` directory.
 
-The setup scripts will try to clone/pull `autoppia_iwa` and `autoppia_webs_demo` automatically into the default sibling paths (`../autoppia_iwa`, `../autoppia_webs_demo`). If you keep them elsewhere, export:
+The setup scripts will automatically look for `autoppia_iwa` and `autoppia_webs_demo` as sibling repositories in these default paths:
+
+- `../autoppia_iwa` (relative to `autoppia_web_agents_subnet`)
+- `../autoppia_webs_demo` (relative to `autoppia_web_agents_subnet`)
+
+**If your repositories are already in these default locations (as siblings), you do NOT need to export any variables.** The script will find them automatically.
+
+**Only if your repositories are in a different location**, export the actual paths:
 
 ```bash
-export IWA_PATH=/path/to/autoppia_iwa
-export WEBS_DEMO_PATH=/path/to/autoppia_webs_demo
+# ONLY export if repos are NOT in default sibling location
+# Replace with YOUR ACTUAL paths (NOT the example paths below!)
+export IWA_PATH=/home/youruser/path/to/autoppia_iwa
+export WEBS_DEMO_PATH=/home/youruser/path/to/autoppia_webs_demo
 ```
+
+> ⚠️ **Warning:** Do NOT use placeholder paths like `/path/to/autoppia_iwa` - these are just examples and will cause errors. Only export if you need to override the default paths.
 
 ### **System Dependencies**
 
