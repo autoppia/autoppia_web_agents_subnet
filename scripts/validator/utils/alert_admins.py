@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Send an email alert to subnet administrators using SMTP settings from environment variables.
+Send an email alert to subnet administrators using REPORT_MONITOR_* environment variables.
 Usage:
     python scripts/validator/utils/alert_admins.py "Subject" "Body text"
 
-If SMTP configuration is missing, the message is printed to stdout instead.
+If REPORT_MONITOR_* configuration is missing, the message is printed to stdout instead.
 """
 
 from __future__ import annotations
@@ -54,14 +54,14 @@ def main() -> None:
     subject = args[0] if args else os.environ.get("ALERT_SUBJECT") or "Autoppia alert"
     body = args[1] if len(args) > 1 else os.environ.get("ALERT_BODY") or "No message provided."
 
-    recipients = [addr.strip() for addr in (os.environ.get("REPORT_MONITOR_EMAIL_TO") or os.environ.get("SMTP_TO") or "").split(",") if addr.strip()]
-    sender = os.environ.get("REPORT_MONITOR_EMAIL_FROM") or os.environ.get("SMTP_FROM")
-    host = os.environ.get("REPORT_MONITOR_SMTP_HOST") or os.environ.get("SMTP_HOST")
-    port_raw = os.environ.get("REPORT_MONITOR_SMTP_PORT") or os.environ.get("SMTP_PORT") or "587"
-    username = os.environ.get("REPORT_MONITOR_SMTP_USERNAME") or os.environ.get("SMTP_USER")
-    password = os.environ.get("REPORT_MONITOR_SMTP_PASSWORD") or os.environ.get("SMTP_PASS")
-    use_tls = to_bool(os.environ.get("REPORT_MONITOR_SMTP_TLS") or os.environ.get("SMTP_STARTTLS"), default=True)
-    use_ssl = to_bool(os.environ.get("REPORT_MONITOR_SMTP_SSL") or os.environ.get("SMTP_SSL"), default=False)
+    recipients = [addr.strip() for addr in (os.environ.get("REPORT_MONITOR_EMAIL_TO") or "").split(",") if addr.strip()]
+    sender = os.environ.get("REPORT_MONITOR_EMAIL_FROM")
+    host = os.environ.get("REPORT_MONITOR_SMTP_HOST")
+    port_raw = os.environ.get("REPORT_MONITOR_SMTP_PORT", "587")
+    username = os.environ.get("REPORT_MONITOR_SMTP_USERNAME")
+    password = os.environ.get("REPORT_MONITOR_SMTP_PASSWORD")
+    use_tls = to_bool(os.environ.get("REPORT_MONITOR_SMTP_TLS"), default=True)
+    use_ssl = to_bool(os.environ.get("REPORT_MONITOR_SMTP_SSL"), default=False)
 
     try:
         port = int(port_raw)
