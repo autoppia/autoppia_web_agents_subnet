@@ -133,8 +133,8 @@ main() {
   upgrade_pip
   sync_external_repos "$REPO_ROOT"
   install_python_reqs
-  install_modules
-  install_bittensor
+  install_bittensor  # Install bittensor first
+  install_modules    # Install IWA with flexible version ranges that work with bittensor
   success_msg "Setup completed successfully."
   echo -e "\e[33m[INFO]\e[0m Virtual environment: $(pwd)/validator_env"
   echo -e "\e[33m[INFO]\e[0m To activate: source validator_env/bin/activate"
