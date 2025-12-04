@@ -5,7 +5,7 @@ from typing import List
 
 # IWA domain types
 from autoppia_iwa.src.demo_webs.classes import WebProject
-from autoppia_iwa.src.data_generation.domain.classes import Task
+from autoppia_iwa.src.data_generation.tasks.classes import Task
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -16,7 +16,7 @@ from typing import Optional, Any, Dict, List
 from filelock import FileLock
 from rich.console import Console
 
-from autoppia_iwa.src.data_generation.domain.classes import Task
+from autoppia_iwa.src.data_generation.tasks.classes import Task
 from autoppia_iwa.src.shared.visualizator import SubnetVisualizer
 from .models import MinerStats
 from ..protocol import TaskFeedbackSynapse

@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional
 from bittensor import Synapse
 from pydantic import Field
 
-from autoppia_iwa.src.data_generation.domain.classes import TestUnion
+from autoppia_iwa.src.data_generation.tasks.classes import TestUnion
 from autoppia_iwa.src.execution.actions.actions import AllActionsUnion
 
 

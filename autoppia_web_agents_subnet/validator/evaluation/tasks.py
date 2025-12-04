@@ -19,11 +19,11 @@ from autoppia_web_agents_subnet.validator.config import MAX_ACTIONS_LENGTH, TIME
 # IWA (module-wrapped) imports
 from autoppia_iwa.src.demo_webs.config import demo_web_projects
 from autoppia_iwa.src.demo_webs.classes import WebProject
-from autoppia_iwa.src.data_generation.domain.classes import Task, TaskGenerationConfig
-from autoppia_iwa.src.data_generation.application.tasks_generation_pipeline import (
+from autoppia_iwa.src.data_generation.tasks.classes import Task, TaskGenerationConfig
+from autoppia_iwa.src.data_generation.tasks.pipeline import (
     TaskGenerationPipeline,
 )
-from autoppia_iwa.src.data_generation.domain.classes import Task as IWATask
+from autoppia_iwa.src.data_generation.tasks.classes import Task as IWATask
 from autoppia_iwa.src.web_agents.classes import TaskSolution
 
 

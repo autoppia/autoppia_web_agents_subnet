@@ -15,7 +15,7 @@ from autoppia_web_agents_subnet.bittensor_config import config
 
 # IWA dependencies (agent + task types)
 from autoppia_iwa.src.bootstrap import AppBootstrap
-from autoppia_iwa.src.data_generation.domain.classes import Task
+from autoppia_iwa.src.data_generation.tasks.classes import Task
 from autoppia_iwa.src.execution.actions.base import BaseAction
 from autoppia_iwa.src.web_agents.random.agent import RandomClickerWebAgent
 from autoppia_iwa.src.web_agents.apified_agent import ApifiedWebAgent
