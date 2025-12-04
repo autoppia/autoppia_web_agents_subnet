@@ -261,9 +261,10 @@ class RoundMetadataIWAP:
     tasks_completed: int
     miners_responded_handshake: int
     miners_active: int
+    emission: Optional[Dict[str, Any]] = None
 
     def to_payload(self) -> Dict[str, Any]:
-        return asdict(self)
+        return _drop_nones(asdict(self))
 
 
 @dataclass

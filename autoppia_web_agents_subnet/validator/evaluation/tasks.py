@@ -14,7 +14,7 @@ import bittensor as bt
 from autoppia_web_agents_subnet.validator.models import TaskWithProject, ProjectTasks
 from autoppia_web_agents_subnet.utils.random import split_tasks_evenly
 from autoppia_web_agents_subnet.protocol import TaskSynapse
-from autoppia_web_agents_subnet.validator.config import MAX_ACTIONS_LENGTH, TIMEOUT, ENABLE_DYNAMIC_HTML
+from autoppia_web_agents_subnet.validator.config import MAX_ACTIONS_LENGTH, TIMEOUT, ENABLE_DYNAMIC
 
 # IWA (module-wrapped) imports
 from autoppia_iwa.src.demo_webs.config import demo_web_projects
@@ -45,6 +45,7 @@ async def _generate_tasks_limited_use_cases(
         generate_global_tasks=True,
         final_task_limit=total_tasks,
         num_use_cases=num_use_cases,
+        dynamic=ENABLE_DYNAMIC,  # Enable dynamic features (v1, v2, v3) if configured
     )
     pipeline = TaskGenerationPipeline(web_project=project, config=config)
     return await pipeline.generate()
@@ -136,15 +137,34 @@ async def get_task_collection_interleaved(
         f"across {len(projects_tasks)} projects"
     )
 
-    # Apply seed to task URLs if dynamic HTML is enabled
-    if ENABLE_DYNAMIC_HTML:
-        bt.logging.debug("[tasks] Applying seeds to task URLs (ENABLE_DYNAMIC_HTML=true)")
-        for task_with_project in interleaved_tasks:
-            task = task_with_project.task
+    # Apply seed to ALL task URLs (default behavior - seeds are always required)
+    # Seed range: 1-999 as per seed system specification
+    from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+    
+    bt.logging.debug("[tasks] Ensuring all tasks have seeds in URLs (range: 1-999)")
+    for task_with_project in interleaved_tasks:
+        task = task_with_project.task
+        # Set assign_seed attribute if it exists (for compatibility)
+        if hasattr(task, 'assign_seed'):
             task.assign_seed = True
-            if "?seed=" not in task.url:
-                task.assign_seed_to_url()
-        bt.logging.debug(f"[tasks] Seeds assigned to {len(interleaved_tasks)} tasks")
+        
+        # Add seed to URL if not already present
+        if "?seed=" not in task.url:
+            parsed = urlparse(task.url)
+            query_params = parse_qs(parsed.query)
+            
+            # Generate a random seed if not already in URL (range: 1-999)
+            if "seed" not in query_params:
+                seed = random.randint(1, 999)
+                query_params["seed"] = [str(seed)]
+                
+                # Rebuild URL with seed
+                new_query = urlencode(query_params, doseq=True)
+                new_parsed = parsed._replace(query=new_query)
+                task.url = urlunparse(new_parsed)
+                bt.logging.debug(f"[tasks] Added seed={seed} to task URL: {task.url}")
+    
+    bt.logging.debug(f"[tasks] Seeds assigned to {len(interleaved_tasks)} tasks (all tasks have seeds)")
 
     return interleaved_tasks
 

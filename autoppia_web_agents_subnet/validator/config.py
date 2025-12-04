@@ -94,8 +94,10 @@ MAX_ACTIONS_LENGTH = 60
 TIMEOUT = 120
 FEEDBACK_TIMEOUT = 60
 
-# ── Dynamic HTML / Media ─────────────────────────────────────────────────────
-ENABLE_DYNAMIC_HTML = _str_to_bool(os.getenv("ENABLE_DYNAMIC_HTML", "true"))
+# ── Dynamic Task Generation (v1, v2, v3 features) ──────────────────────────────
+# Controls whether tasks are generated with dynamic features (v1: seed, v2: DB selection, v3: structure)
+# Note: Seeds are ALWAYS sent in task URLs regardless of this setting
+ENABLE_DYNAMIC = _str_to_bool(os.getenv("ENABLE_DYNAMIC", "true"))
 SHOULD_RECORD_GIF = _str_to_bool(os.getenv("SHOULD_RECORD_GIF", "true"))
 
 # ── Scoring Weights ──────────────────────────────────────────────────────────
