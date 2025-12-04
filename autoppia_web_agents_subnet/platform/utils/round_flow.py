@@ -473,6 +473,15 @@ async def finish_round_flow(
             # Fallback to stored value if calculation fails
             round_num = getattr(ctx, "_current_round_number", 0) or getattr(ctx, "current_round_number", 0)
 
+    # Build emission info (will be added to round_metadata)
+    # alpha_price will be calculated by backend
+    from autoppia_web_agents_subnet.validator.config import BURN_AMOUNT_PERCENTAGE, BURN_UID
+    
+    emission_info = {
+        "burn_percentage": float(BURN_AMOUNT_PERCENTAGE) * 100,  # Convert to percentage
+        "burn_recipient_uid": int(BURN_UID),
+    }
+
     round_metadata = iwa_models.RoundMetadataIWAP(
         round_number=int(round_num or 0),
         started_at=float(getattr(ctx, "round_start_time", ended_at - 3600) or (ended_at - 3600)),
@@ -485,6 +494,7 @@ async def finish_round_flow(
         tasks_completed=int(tasks_completed or 0),
         miners_responded_handshake=len(getattr(ctx, "active_miner_uids", []) or []),
         miners_active=len(avg_rewards or {}),
+        emission=emission_info,
     )
 
     # Build local_evaluation (what THIS validator evaluated - pre-consensus)
@@ -551,7 +561,8 @@ async def finish_round_flow(
 
         ipfs_downloaded = {"timestamp": ended_at, "validators_participated": len(validators_data), "total_stake": total_stake, "validators": validators_data}
 
-    # Build post_consensus_evaluation (after consensus) - without alpha_price (backend will add it)
+    # Build post_consensus_evaluation (after consensus)
+    # NOTE: emission is now in round_metadata, not here
     post_consensus_evaluation = None
 
     # Get consensus scores (from agg cache if available, otherwise use avg_rewards as fallback)
@@ -566,8 +577,8 @@ async def finish_round_flow(
         rank_map_consensus = {uid: rank for rank, (uid, _score) in enumerate(sorted_consensus, start=1)}
 
         # Build post_consensus miners list - include all miners with weight > 0 (including burn_uid)
-        from autoppia_web_agents_subnet.validator.config import BURN_AMOUNT_PERCENTAGE, BURN_UID
-
+        # BURN_AMOUNT_PERCENTAGE and BURN_UID are already imported above
+        
         post_consensus_miners = []
         # First, add all miners from consensus_scores
         for miner_uid, consensus_score in consensus_scores.items():
@@ -600,11 +611,6 @@ async def finish_round_flow(
 
         post_consensus_evaluation = {
             "miners": post_consensus_miners,
-            "emission": {
-                # alpha_price will be calculated by backend
-                "burn_percentage": float(BURN_AMOUNT_PERCENTAGE) * 100,  # Convert to percentage
-                "burn_recipient_uid": int(BURN_UID),
-            },
             "timestamp": ended_at,
         }
 
