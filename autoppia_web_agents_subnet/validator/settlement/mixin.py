@@ -37,7 +37,8 @@ class SettlementMixin:
         self._agg_scores_cache = None
         # FASE 2/3: Also clear IPFS payload data to avoid stale data between rounds
         for attr in ("_consensus_commit_block", "_consensus_commit_cid", 
-                     "_local_avg_rewards_at_publish", "_ipfs_uploaded_payload", "_agg_meta_cache"):
+                     "_local_avg_rewards_at_publish", "_ipfs_uploaded_payload", 
+                     "_ipfs_upload_cid", "_consensus_publish_timestamp", "_agg_meta_cache"):
             if hasattr(self, attr):
                 setattr(self, attr, None)
 
@@ -488,14 +489,18 @@ class SettlementMixin:
         # Record winner and weights in report (NEW)
         if winner_uid is not None:
             self._report_set_winner(winner_uid, is_local=False)
-        self._report_set_weights(final_rewards_dict)
+        # Report the actual on-chain distribution (after burn applied)
+        weights_for_finish = {
+            idx: float(val) for idx, val in enumerate(wta_full) if float(val) > 0.0
+        }
+        self._report_set_weights(weights_for_finish)
 
         self.update_scores(rewards=wta_full, uids=all_uids)
         self.set_weights()
 
         finish_success = await self._finish_iwap_round(
             avg_rewards=avg_rewards,
-            final_weights=final_rewards_dict,
+            final_weights=weights_for_finish,
             tasks_completed=tasks_completed,
         )
         completion_color = ColoredLogger.GREEN if finish_success else ColoredLogger.YELLOW

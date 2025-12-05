@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Any, Dict, Optional
 
 import bittensor as bt
@@ -75,35 +76,46 @@ async def publish_round_snapshot(
     start_block = int(boundaries["round_start_block"])
     target_block = int(boundaries["target_block"])
     avg_rewards = validator.round_manager.get_average_rewards()
+    round_rewards = getattr(validator.round_manager, "round_rewards", {}) or {}
+    round_times = getattr(validator.round_manager, "round_times", {}) or {}
 
-    # Agents that actually received/produced scores (participated)
-    try:
-        participants = len([u for u, arr in (validator.round_manager.round_rewards or {}).items() if arr])
-    except Exception:
-        participants = len(getattr(validator, "active_miner_uids", []) or [])
+    # Build per-miner stats to share via IPFS (score + timing + task counters)
+    stats_list = []
+    for uid, score in (avg_rewards or {}).items():
+        rewards_arr = round_rewards.get(uid, []) or []
+        times_arr = round_times.get(uid, []) or []
+        tasks_sent = len(rewards_arr)
+        tasks_success = len([r for r in rewards_arr if r >= 0.5])
+        tasks_failed = max(tasks_sent - tasks_success, 0)
+        avg_eval_time = sum(times_arr) / len(times_arr) if times_arr else 0.0
+        stats_list.append(
+            {
+                "uid": int(uid),
+                "score": float(score),
+                "avg_eval_time": float(avg_eval_time),
+                "tasks_sent": int(tasks_sent),
+                "tasks_success": int(tasks_success),
+                "tasks_failed": int(tasks_failed),
+            }
+        )
 
     payload = {
-        "v": 1,
+        "payload_version": 2,
         # Round/window
-        "r": int(round_number) if round_number is not None else None,
         "round_number": int(round_number) if round_number is not None else None,
-        "es": float(start_epoch),
-        "et": float(target_epoch),
         "round_start_block": start_block,
         "target_block": target_block,
+        "epoch_start": float(start_epoch),
+        "epoch_end": float(target_epoch),
         # Validator identity fields
-        "hk": validator.wallet.hotkey.ss58_address,
         "validator_hotkey": validator.wallet.hotkey.ss58_address,
-        "uid": int(validator.uid),  # compact legacy
         "validator_uid": int(validator.uid),
-        "validator_id": str(validator.uid),
         "validator_round_id": getattr(validator, "current_round_id", None),
         "validator_version": getattr(validator, "version", None),
-        # Stats snapshot
-        "n": int(tasks_completed),  # tasks completed so far
-        "tasks_completed": int(tasks_completed),
-        "agents": int(participants),
-        "scores": {str(int(uid)): float(score) for uid, score in (avg_rewards or {}).items()},
+        # Per-miner stats (includes score)
+        "stats": stats_list,
+        # Timestamp for auditability
+        "timestamp": time.time(),
     }
 
     try:
@@ -131,6 +143,9 @@ async def publish_round_snapshot(
         
         # FASE 2: Save the actual payload that was uploaded (for finish_round)
         validator._ipfs_uploaded_payload = payload
+        # Also save the CID immediately (even if commit fails later)
+        validator._ipfs_upload_cid = str(cid)
+        validator._consensus_publish_timestamp = time.time()  # Save timestamp when published
         
         # FASE 3: Save local scores at publish time (before consensus can change them)
         validator._local_avg_rewards_at_publish = dict(avg_rewards)
@@ -278,6 +293,8 @@ async def aggregate_scores_from_commitments(
 
     fetched: list[tuple[str, str, float]] = []
     scores_by_validator: Dict[str, Dict[int, float]] = {}
+    stats_by_validator: Dict[str, Dict[int, Dict[str, Any]]] = {}
+    stats_accumulator: Dict[int, Dict[str, float]] = {}
 
     blocks_per_epoch = getattr(validator.round_manager, "BLOCKS_PER_EPOCH", 360)
 
@@ -382,25 +399,83 @@ async def aggregate_scores_from_commitments(
             bt.logging.info(f"[CONSENSUS] Skip {hk[:12]}... | Reason: payload is not dict")
             continue
 
-        scores = payload.get("scores")
-        if not isinstance(scores, dict):
+        # Stats entries (required)
+        stats_entries = payload.get("stats")
+        if not isinstance(stats_entries, list):
+            bt.logging.debug(f"⏭️ Skip {hk[:10]}…: payload missing required 'stats' list")
             continue
 
-        # Record per-validator scores (converted to int uid)
-        per_val_map: Dict[int, float] = {}
-        for uid_s, sc in scores.items():
+        per_val_stats: Dict[int, Dict[str, Any]] = {}
+        per_val_scores: Dict[int, float] = {}
+
+        for item in stats_entries:
+            if not isinstance(item, dict):
+                continue
             try:
-                uid = int(uid_s)
-                val = float(sc)
+                uid_val = int(item.get("uid"))
             except Exception:
                 continue
+            stat_entry: Dict[str, Any] = {}
+            score_val: Optional[float] = None
+            if "score" in item:
+                try:
+                    score_val = float(item["score"])
+                    stat_entry["score"] = score_val
+                except Exception:
+                    score_val = None
+            for key in ("avg_eval_time", "tasks_sent", "tasks_success", "tasks_failed"):
+                if key in item:
+                    try:
+                        stat_entry[key] = float(item[key]) if key == "avg_eval_time" else int(item[key])
+                    except Exception:
+                        continue
+            if stat_entry:
+                per_val_stats[uid_val] = stat_entry
+                if score_val is not None:
+                    per_val_scores[uid_val] = score_val
+                # Accumulate aggregates per miner
+                acc = stats_accumulator.setdefault(
+                    uid_val,
+                    {
+                        "avg_eval_time_sum": 0.0,
+                        "avg_eval_time_count": 0.0,
+                        "tasks_sent_sum": 0.0,
+                        "tasks_sent_count": 0.0,
+                        "tasks_success_sum": 0.0,
+                        "tasks_success_count": 0.0,
+                        "tasks_failed_sum": 0.0,
+                        "tasks_failed_count": 0.0,
+                    },
+                )
+                if "avg_eval_time" in stat_entry:
+                    acc["avg_eval_time_sum"] += float(stat_entry["avg_eval_time"])
+                    acc["avg_eval_time_count"] += 1
+                if "tasks_sent" in stat_entry:
+                    acc["tasks_sent_sum"] += float(stat_entry["tasks_sent"])
+                    acc["tasks_sent_count"] += 1
+                if "tasks_success" in stat_entry:
+                    acc["tasks_success_sum"] += float(stat_entry["tasks_success"])
+                    acc["tasks_success_count"] += 1
+                if "tasks_failed" in stat_entry:
+                    acc["tasks_failed_sum"] += float(stat_entry["tasks_failed"])
+                    acc["tasks_failed_count"] += 1
+
+        # Require stats with score; otherwise skip this validator
+        if not per_val_scores:
+            bt.logging.debug(f"⏭️ Skip {hk[:10]}…: no scores found in stats")
+            continue
+
+        # Apply stake-weighted aggregation using per_val_scores
+        for uid, val in per_val_scores.items():
             effective_weight = st_val if st_val > 0.0 else 1.0
             weighted_sum[uid] = weighted_sum.get(uid, 0.0) + effective_weight * val
             weight_total[uid] = weight_total.get(uid, 0.0) + effective_weight
-            per_val_map[uid] = val
+
         included += 1
         fetched.append((hk, cid, st_val))
-        scores_by_validator[hk] = per_val_map
+        scores_by_validator[hk] = per_val_scores
+        if per_val_stats:
+            stats_by_validator[hk] = per_val_stats
 
     result: Dict[int, float] = {}
     for uid, wsum in weighted_sum.items():
@@ -474,9 +549,32 @@ async def aggregate_scores_from_commitments(
         {"hotkey": hk, "uid": hk_to_uid.get(hk, "?"), "stake": stake, "cid": cid}
         for hk, cid, stake in fetched
     ]
+    # Aggregate stats per miner across validators (simple averages where available)
+    stats_by_miner: Dict[int, Dict[str, float]] = {}
+    for uid, agg in stats_accumulator.items():
+        stats_by_miner[uid] = {}
+        if agg.get("avg_eval_time_count", 0) > 0:
+            stats_by_miner[uid]["avg_eval_time"] = float(
+                agg["avg_eval_time_sum"] / agg["avg_eval_time_count"]
+            )
+        if agg.get("tasks_sent_count", 0) > 0:
+            stats_by_miner[uid]["tasks_sent"] = float(
+                agg["tasks_sent_sum"] / agg["tasks_sent_count"]
+            )
+        if agg.get("tasks_success_count", 0) > 0:
+            stats_by_miner[uid]["tasks_success"] = float(
+                agg["tasks_success_sum"] / agg["tasks_success_count"]
+            )
+        if agg.get("tasks_failed_count", 0) > 0:
+            stats_by_miner[uid]["tasks_failed"] = float(
+                agg["tasks_failed_sum"] / agg["tasks_failed_count"]
+            )
+
     details = {
         "validators": validators_info,
         "scores_by_validator": scores_by_validator,
+        "stats_by_validator": stats_by_validator,
+        "stats_by_miner": stats_by_miner,
         "skips": {
             "wrong_window": skipped_wrong_window_list,
             "missing_cid": skipped_missing_cid_list,

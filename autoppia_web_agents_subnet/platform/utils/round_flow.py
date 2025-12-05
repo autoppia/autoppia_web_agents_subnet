@@ -404,6 +404,7 @@ async def finish_round_flow(
 
     # Build local_evaluation (pre-consensus) - without weight
     local_evaluation_miners = []
+    local_stats_by_miner: Dict[int, Dict[str, Any]] = {}
     for miner_uid, agent_run in ctx.current_agent_runs.items():
         # Use LOCAL rank for local_evaluation (consistent with local scores)
         rank_value = rank_map_local.get(miner_uid)
@@ -425,6 +426,19 @@ async def finish_round_flow(
         # Get miner name from agent_run
         miner_name = getattr(agent_run, "agent_name", None) or f"Miner {miner_uid}"
 
+        miner_stats_entry = {
+            "tasks_failed": miner_tasks_failed,
+            "tasks_attempted": miner_tasks_attempted,
+            "tasks_completed": miner_tasks_completed,
+            "avg_evaluation_time": float(avg_time),
+        }
+        local_stats_by_miner[miner_uid] = {
+            "avg_eval_time": float(avg_time),
+            "tasks_sent": int(miner_tasks_attempted),
+            "tasks_success": int(miner_tasks_completed),
+            "tasks_failed": int(miner_tasks_failed),
+        }
+
         local_evaluation_miners.append(
             {
                 "rank": rank_value,
@@ -432,10 +446,7 @@ async def finish_round_flow(
                 "miner_uid": miner_uid,
                 "miner_name": miner_name,
                 "agent_run_id": agent_run.agent_run_id,
-                "tasks_failed": miner_tasks_failed,
-                "tasks_attempted": miner_tasks_attempted,
-                "tasks_completed": miner_tasks_completed,
-                "avg_evaluation_time": float(avg_time),
+                **miner_stats_entry,
             }
         )
 
@@ -503,11 +514,12 @@ async def finish_round_flow(
     # FASE 2: IPFS uploaded data (what THIS validator published)
     ipfs_uploaded = None
     consensus_cid = getattr(ctx, "_consensus_commit_cid", None)
+    # Also check if we have the payload (even if commit failed)
+    ipfs_payload = getattr(ctx, "_ipfs_uploaded_payload", None)
+    ipfs_upload_cid = getattr(ctx, "_ipfs_upload_cid", None)
+
     if consensus_cid:
         # Use the ACTUAL payload that was uploaded to IPFS (saved when published)
-        ipfs_payload = getattr(ctx, "_ipfs_uploaded_payload", None)
-
-        # Fallback: if payload wasn't saved, don't include it (just CID)
         if not ipfs_payload:
             ipfs_payload = {"note": "Payload not available"}
 
@@ -518,6 +530,16 @@ async def finish_round_flow(
             "commit_version": 4,
             "payload": ipfs_payload,
         }
+    elif ipfs_payload and ipfs_upload_cid:
+        # Fallback: if we have payload and CID but no consensus_cid (commit failed), still save what we uploaded
+        ipfs_uploaded = {
+            "cid": ipfs_upload_cid,
+            "published_at": getattr(ctx, "_consensus_publish_timestamp", ended_at - 100),
+            "reveal_round": getattr(ctx, "_consensus_reveal_round", 0),
+            "commit_version": None,  # No commit version if commit failed
+            "payload": ipfs_payload,
+            "note": "IPFS upload succeeded but blockchain commit may have failed",
+        }
 
     # FASE 3: IPFS downloaded data (what was downloaded from ALL validators)
     ipfs_downloaded = None
@@ -526,6 +548,7 @@ async def finish_round_flow(
         # Extract validators data from consensus metadata
         validators_list = agg_meta.get("validators", [])
         scores_by_validator = agg_meta.get("scores_by_validator", {})
+        stats_by_validator = agg_meta.get("stats_by_validator", {})
 
         # Build structured ipfs_downloaded
         validators_data = []
@@ -554,6 +577,7 @@ async def finish_round_flow(
                     "stake": validator_stake,
                     "ipfs_cid": validator_cid,
                     "scores": {int(uid): float(score) for uid, score in validator_scores.items()},
+                    "stats": {int(uid): stat for uid, stat in (stats_by_validator.get(validator_hk, {}) or {}).items()},
                 }
             )
 
@@ -571,6 +595,10 @@ async def finish_round_flow(
         # Fallback: use avg_rewards if consensus not available
         consensus_scores = avg_rewards
 
+    stats_by_miner = {}
+    if agg_meta and isinstance(agg_meta, dict):
+        stats_by_miner = agg_meta.get("stats_by_miner", {}) or {}
+
     if consensus_scores and isinstance(consensus_scores, dict):
         # Calculate ranks from consensus scores
         sorted_consensus = sorted(consensus_scores.items(), key=lambda item: item[1], reverse=True)
@@ -584,6 +612,7 @@ async def finish_round_flow(
         for miner_uid, consensus_score in consensus_scores.items():
             weight = final_weights.get(miner_uid, 0.0)
             rank = rank_map_consensus.get(miner_uid)
+            stats_entry = stats_by_miner.get(miner_uid) or local_stats_by_miner.get(miner_uid) or {}
 
             post_consensus_miners.append(
                 {
@@ -591,6 +620,7 @@ async def finish_round_flow(
                     "score": float(consensus_score),
                     "weight": float(weight),
                     "rank": rank,
+                    **({k: v for k, v in stats_entry.items() if v is not None} if stats_entry else {}),
                 }
             )
 
