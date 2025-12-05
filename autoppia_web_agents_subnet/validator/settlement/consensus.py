@@ -124,12 +124,19 @@ async def publish_round_snapshot(
         payload_json = json.dumps(payload, indent=2, sort_keys=True)
 
         bt.logging.info("=" * 80)
-        bt.logging.info(ipfs_tag("UPLOAD", f"Round {payload['r']} | {len(payload.get('scores', {}))} miners | Validator UID {payload['uid']}"))
+        round_num_log = payload.get("round_number")
+        stats_len = len(payload.get("stats", []) or [])
+        bt.logging.info(
+            ipfs_tag(
+                "UPLOAD",
+                f"Round {round_num_log} | {stats_len} miners | Validator UID {payload.get('validator_uid')}",
+            )
+        )
         bt.logging.info(ipfs_tag("UPLOAD", f"Payload:\n{payload_json}"))
 
         cid, sha_hex, byte_len = await aadd_json(
             payload,
-            filename=f"autoppia_commit_r{payload['r'] or 'X'}.json",
+            filename=f"autoppia_commit_r{round_num_log or 'X'}.json",
             api_url=IPFS_API_URL,
             pin=True,
             sort_keys=True,
