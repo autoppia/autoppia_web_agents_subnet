@@ -50,7 +50,7 @@ if TESTING:
     # ── Consensus Participation Requirements ─────────────────────────────────
     # Testing: No stake required (0 τ) - anyone can participate
     MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO = 0.0
-    IWAP_API_BASE_URL = "https://dev-api-leaderboard.autoppia.com"
+    IWAP_API_BASE_URL = os.getenv("IWAP_API_BASE_URL", "https://dev-api-leaderboard.autoppia.com")
     _PROPAGATION_BLOCKS_DEFAULT = 0
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -82,7 +82,7 @@ else:
     # ── Consensus Participation Requirements ─────────────────────────────────
     # Production: Minimum 10k τ stake required to be included in consensus calculations
     MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO = 10000.0
-    IWAP_API_BASE_URL = "https://api-leaderboard.autoppia.com"
+    IWAP_API_BASE_URL = os.getenv("IWAP_API_BASE_URL", "https://api-leaderboard.autoppia.com")
     _PROPAGATION_BLOCKS_DEFAULT = 2
 # ═══════════════════════════════════════════════════════════════════════════
 # SHARED CONFIGURATION (same for all modes)
