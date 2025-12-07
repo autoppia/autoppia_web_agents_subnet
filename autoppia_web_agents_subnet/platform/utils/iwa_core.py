@@ -246,6 +246,9 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
     stake = normalized_stake_tao(validator.metagraph, validator.uid)
     vtrust = validator_vtrust(validator.metagraph, validator.uid)
     metadata: Dict[str, Any] = {"source": "autoppia_validator"}
+    
+    # Get coldkey from validator wallet (same as in build_validator_identity)
+    coldkey = getattr(getattr(validator.wallet, "coldkeypub", None), "ss58_address", None)
 
     if stake is None:
         bt.logging.warning(f"Validator snapshot stake is unavailable for uid={validator.uid}; snapshot will omit stake")
@@ -257,6 +260,7 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
         validator_round_id=validator_round_id,
         validator_uid=int(validator.uid),
         validator_hotkey=validator.wallet.hotkey.ss58_address,
+        validator_coldkey=coldkey,
         name=VALIDATOR_NAME,
         stake=stake,
         vtrust=vtrust,

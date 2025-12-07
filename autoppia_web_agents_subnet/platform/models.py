@@ -24,6 +24,7 @@ class ValidatorSnapshotIWAP:
     validator_round_id: str
     validator_uid: int
     validator_hotkey: str
+    validator_coldkey: Optional[str] = None
     name: Optional[str] = None
     stake: Optional[float] = None
     vtrust: Optional[float] = None
