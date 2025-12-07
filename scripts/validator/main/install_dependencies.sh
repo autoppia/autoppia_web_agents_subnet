@@ -73,8 +73,8 @@ install_nodejs_and_npm() {
     fi
   fi
   
-  info_msg "Installing Node.js 18 LTS..."
-  curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash - \
+  info_msg "Installing Node.js 20 LTS..."
+  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - \
     || handle_error "Failed to add NodeSource repository"
   
   sudo apt install -y nodejs || handle_error "Failed to install Node.js"
