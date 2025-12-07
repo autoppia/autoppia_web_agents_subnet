@@ -63,14 +63,14 @@ install_nodejs_and_npm() {
   # Remove old Node.js if present
   if command -v node &>/dev/null; then
     NODE_VERSION=$(node --version | cut -d'v' -f2 | cut -d'.' -f1)
-    if [ "$NODE_VERSION" -lt 16 ]; then
-      info_msg "Removing old Node.js version..."
-      sudo apt remove -y nodejs npm 2>/dev/null || true
-      sudo apt autoremove -y || true
-    else
+    if [ "$NODE_VERSION" -ge 20 ]; then
       info_msg "Node.js version is compatible: $(node --version)"
       return
     fi
+
+    info_msg "Detected Node.js <$NODE_VERSION>. Upgrading to Node.js 20 LTS..."
+    sudo apt remove -y nodejs npm 2>/dev/null || true
+    sudo apt autoremove -y || true
   fi
   
   info_msg "Installing Node.js 20 LTS..."
