@@ -62,11 +62,14 @@ def calculate_rewards_for_task(
     time_weight: float,
 ) -> NDArray[np.float32]:
     """
-    Calculate final scores by combining eval scores and execution time scores.
+    Calculate rewards by combining eval_scores and execution time scores.
 
-    Formula: final_score = eval_weight × eval_scores + time_weight × time_scores
+    Formula: reward = eval_score_weight × eval_scores + time_weight × time_scores
 
-    The time scores are calculated inversely: faster miners get higher scores.
+    Where:
+    - eval_scores: evaluation scores from task tests (0-1)
+    - time_scores: normalized execution time scores (faster = higher, 0-1)
+    - reward: final reward value used for consensus and weight calculation
     """
     # Caller may choose non-unit sum; we don't enforce exact 1.0.
     eval_scores = pad_or_trim(eval_scores, n_miners)

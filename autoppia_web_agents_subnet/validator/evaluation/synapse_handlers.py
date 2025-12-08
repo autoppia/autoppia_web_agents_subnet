@@ -158,7 +158,7 @@ async def send_feedback_synapse_to_miners(
         miner_axons: List of miner axons
         miner_uids: List of miner UIDs
         task: Task object
-        rewards: List of reward scores
+        rewards: List of reward values (eval_score + time_score)
         execution_times: List of execution times
         task_solutions: List of solutions from miners
         test_results_list: Test results for each miner (list of dicts)
@@ -174,7 +174,7 @@ async def send_feedback_synapse_to_miners(
                 task_id=task.id,
                 task_url=task.url,
                 prompt=task.prompt,
-                score=rewards[i],
+                reward=rewards[i],
                 execution_time=execution_times[i],
                 tests=task.tests,
                 actions=task_solutions[i].actions if i < len(task_solutions) else [],

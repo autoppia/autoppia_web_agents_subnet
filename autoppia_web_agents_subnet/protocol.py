@@ -46,7 +46,7 @@ class TaskSynapse(Synapse):
 
 class TaskFeedbackSynapse(Synapse):
     """
-    Feedback from validator back to miner: tests, scores, eval data.
+    Feedback from validator back to miner: tests, rewards, eval data.
     (Data-only; keep IO/printing elsewhere.)
     """
 
@@ -56,7 +56,7 @@ class TaskFeedbackSynapse(Synapse):
     task_id: str
     task_url: str
     prompt: str
-    score: Optional[float] = 0.0
+    reward: Optional[float] = 0.0  # Reward value (eval_score + time_score)
     execution_time: Optional[float] = 0.0
     tests: Optional[List["TestUnion"]] = None
     actions: Optional[List[AllActionsUnion]] = Field(default_factory=list)

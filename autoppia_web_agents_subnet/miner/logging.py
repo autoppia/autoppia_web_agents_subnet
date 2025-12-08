@@ -39,7 +39,7 @@ def _render_task_feedback_header(console: Console, fb: TaskFeedbackSynapse) -> N
         f"[bold]Prompt:[/bold] {fb.prompt}\n"
     )
     console.print(
-        f"[bold]Score:[/bold] {fb.score} | "
+        f"[bold]Reward:[/bold] {fb.reward} | "
         f"[bold]Execution Time:[/bold] {fb.execution_time} seconds\n",
         style="cyan",
     )
@@ -87,13 +87,13 @@ def _render_miner_stats(console: Console, miner_stats: Optional[MinerStats]) -> 
 
     console.print("\n[bold magenta]Miner Global Stats[/bold magenta]")
     console.print(f" • Total Tasks: [bold]{miner_stats.num_tasks}[/bold]")
-    console.print(f" • Avg. Score: [bold]{miner_stats.avg_score:.2f}[/bold]")
+    console.print(f" • Avg. Reward: [bold]{miner_stats.avg_reward:.2f}[/bold]")
     console.print(
         "\n[bold magenta]----- Miner Global Stats -----[/bold magenta]",
         style="bold magenta",
     )
     console.print(f"  • Total Tasks: [bold]{miner_stats.num_tasks}[/bold]")
-    console.print(f"  • Avg. Score: [bold]{miner_stats.avg_score:.2f}[/bold]")
+    console.print(f"  • Avg. Reward: [bold]{miner_stats.avg_reward:.2f}[/bold]")
     console.print(f"  • Avg. Execution Time: [bold]{miner_stats.avg_execution_time:.2f}[/bold] seconds")
 
 

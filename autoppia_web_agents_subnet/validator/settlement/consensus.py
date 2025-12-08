@@ -79,9 +79,9 @@ async def publish_round_snapshot(
     round_rewards = getattr(validator.round_manager, "round_rewards", {}) or {}
     round_times = getattr(validator.round_manager, "round_times", {}) or {}
 
-    # Build per-miner stats to share via IPFS (score + timing + task counters)
+    # Build per-miner stats to share via IPFS (reward + timing + task counters)
     stats_list = []
-    for uid, score in (avg_rewards or {}).items():
+    for uid, avg_reward in (avg_rewards or {}).items():
         rewards_arr = round_rewards.get(uid, []) or []
         times_arr = round_times.get(uid, []) or []
         tasks_sent = len(rewards_arr)
@@ -91,7 +91,7 @@ async def publish_round_snapshot(
         stats_list.append(
             {
                 "uid": int(uid),
-                "score": float(score),
+                "reward": float(avg_reward),  # Average reward (eval_score + time_score)
                 "avg_eval_time": float(avg_eval_time),
                 "tasks_sent": int(tasks_sent),
                 "tasks_success": int(tasks_success),
@@ -112,7 +112,7 @@ async def publish_round_snapshot(
         "validator_uid": int(validator.uid),
         "validator_round_id": getattr(validator, "current_round_id", None),
         "validator_version": getattr(validator, "version", None),
-        # Per-miner stats (includes score)
+        # Per-miner stats (includes reward - average of eval_score + time_score)
         "stats": stats_list,
         # Timestamp for auditability
         "timestamp": time.time(),
@@ -236,14 +236,14 @@ async def aggregate_scores_from_commitments(
 ) -> tuple[Dict[int, float], Dict[str, Any]]:
     """
     Read all validators' commitments for this round block window and compute
-    stake-weighted average scores per miner UID.
+    stake-weighted average rewards per miner UID.
 
-    Returns a tuple: (final_scores, details)
-      - final_scores: Dict[uid -> aggregated score]
+    Returns a tuple: (final_rewards, details)
+      - final_rewards: Dict[uid -> aggregated reward] (reward = eval_score + time_score)
       - details:
           {
             "validators": [ {"hotkey": str, "uid": int|"?", "stake": float, "cid": str} ],
-            "scores_by_validator": { hotkey: { uid: score } }
+            "scores_by_validator": { hotkey: { uid: reward } }  # Note: kept as "scores_by_validator" for backward compatibility
           }
     """
     if not ENABLE_DISTRIBUTED_CONSENSUS:
@@ -299,7 +299,7 @@ async def aggregate_scores_from_commitments(
     skipped_ipfs_list: list[tuple[str, str]] = []  # (hk, cid)
 
     fetched: list[tuple[str, str, float]] = []
-    scores_by_validator: Dict[str, Dict[int, float]] = {}
+    scores_by_validator: Dict[str, Dict[int, float]] = {}  # Note: contains rewards, kept name for backward compatibility
     stats_by_validator: Dict[str, Dict[int, Dict[str, Any]]] = {}
     stats_accumulator: Dict[int, Dict[str, float]] = {}
 
@@ -395,7 +395,11 @@ async def aggregate_scores_from_commitments(
             bt.logging.info(f"[IPFS] [DOWNLOAD] Validator {hk[:12]}... (UID {validator_uid}) | CID: {cid}")
             bt.logging.info(f"[IPFS] [DOWNLOAD] URL: http://ipfs.metahash73.com:5001/api/v0/cat?arg={cid}")
             bt.logging.info(f"[IPFS] [DOWNLOAD] Payload:\n{payload_json}")
-            bt.logging.success(f"[IPFS] [DOWNLOAD] ✅ SUCCESS - Round {payload.get('r')} | {len(payload.get('scores', {}))} miners | Stake: {st_val:.2f}τ")
+            # Count miners from stats list (new format) or scores dict (legacy format)
+            stats_count = len(payload.get('stats', [])) if isinstance(payload.get('stats'), list) else 0
+            scores_count = len(payload.get('scores', {})) if isinstance(payload.get('scores'), dict) else 0
+            miner_count = stats_count if stats_count > 0 else scores_count
+            bt.logging.success(f"[IPFS] [DOWNLOAD] ✅ SUCCESS - Round {payload.get('round_number') or payload.get('r')} | {miner_count} miners | Stake: {st_val:.2f}τ")
             bt.logging.info("=" * 80)
         except Exception as e:
             skipped_ipfs += 1
@@ -413,7 +417,7 @@ async def aggregate_scores_from_commitments(
             continue
 
         per_val_stats: Dict[int, Dict[str, Any]] = {}
-        per_val_scores: Dict[int, float] = {}
+        per_val_rewards: Dict[int, float] = {}
 
         for item in stats_entries:
             if not isinstance(item, dict):
@@ -423,13 +427,20 @@ async def aggregate_scores_from_commitments(
             except Exception:
                 continue
             stat_entry: Dict[str, Any] = {}
-            score_val: Optional[float] = None
-            if "score" in item:
+            reward_val: Optional[float] = None
+            # Read "reward" (new format) or fallback to "score" (legacy format for backward compatibility)
+            if "reward" in item:
                 try:
-                    score_val = float(item["score"])
-                    stat_entry["score"] = score_val
+                    reward_val = float(item["reward"])
+                    stat_entry["reward"] = reward_val
                 except Exception:
-                    score_val = None
+                    reward_val = None
+            elif "score" in item:  # Legacy format support
+                try:
+                    reward_val = float(item["score"])
+                    stat_entry["reward"] = reward_val  # Normalize to "reward"
+                except Exception:
+                    reward_val = None
             for key in ("avg_eval_time", "tasks_sent", "tasks_success", "tasks_failed"):
                 if key in item:
                     try:
@@ -438,8 +449,8 @@ async def aggregate_scores_from_commitments(
                         continue
             if stat_entry:
                 per_val_stats[uid_val] = stat_entry
-                if score_val is not None:
-                    per_val_scores[uid_val] = score_val
+                if reward_val is not None:
+                    per_val_rewards[uid_val] = reward_val
                 # Accumulate aggregates per miner
                 acc = stats_accumulator.setdefault(
                     uid_val,
@@ -467,20 +478,20 @@ async def aggregate_scores_from_commitments(
                     acc["tasks_failed_sum"] += float(stat_entry["tasks_failed"])
                     acc["tasks_failed_count"] += 1
 
-        # Require stats with score; otherwise skip this validator
-        if not per_val_scores:
-            bt.logging.debug(f"⏭️ Skip {hk[:10]}…: no scores found in stats")
+        # Require stats with reward; otherwise skip this validator
+        if not per_val_rewards:
+            bt.logging.debug(f"⏭️ Skip {hk[:10]}…: no rewards found in stats")
             continue
 
-        # Apply stake-weighted aggregation using per_val_scores
-        for uid, val in per_val_scores.items():
+        # Apply stake-weighted aggregation using per_val_rewards
+        for uid, val in per_val_rewards.items():
             effective_weight = st_val if st_val > 0.0 else 1.0
             weighted_sum[uid] = weighted_sum.get(uid, 0.0) + effective_weight * val
             weight_total[uid] = weight_total.get(uid, 0.0) + effective_weight
 
         included += 1
         fetched.append((hk, cid, st_val))
-        scores_by_validator[hk] = per_val_scores
+        scores_by_validator[hk] = per_val_rewards  # Note: kept as "scores_by_validator" for backward compatibility in details dict
         if per_val_stats:
             stats_by_validator[hk] = per_val_stats
 
@@ -517,32 +528,32 @@ async def aggregate_scores_from_commitments(
         except Exception:
             pass
         if len(result) > 0:
-            # Log validator contributions used for the aggregation so we can inspect their raw scores.
+            # Log validator contributions used for the aggregation so we can inspect their raw rewards.
             try:
                 bt.logging.info(
                     f"[CONSENSUS] Validators included ({included}): "
                     + ", ".join(f"{hk[:12]}…(stake={stake:.2f}τ)" for hk, _, stake in fetched)
                 )
                 for hk, cid, stake in fetched:
-                    per_val_scores = scores_by_validator.get(hk, {})
-                    miner_count = len(per_val_scores)
+                    per_val_rewards = scores_by_validator.get(hk, {})
+                    miner_count = len(per_val_rewards)
                     bt.logging.info(
                         f"[CONSENSUS]   ↳ {hk[:12]}… | miners={miner_count} | stake={stake:.2f}τ | cid={cid}"
                     )
-                    if per_val_scores:
-                        top_items = list(per_val_scores.items())[:10]
-                        for uid, score in top_items:
-                            bt.logging.info(f"[CONSENSUS]      UID {uid}: {score:.4f}")
+                    if per_val_rewards:
+                        top_items = list(per_val_rewards.items())[:10]
+                        for uid, reward in top_items:
+                            bt.logging.info(f"[CONSENSUS]      UID {uid}: reward={reward:.4f}")
                         if miner_count > len(top_items):
                             bt.logging.info(
                                 f"[CONSENSUS]      … {miner_count - len(top_items)} more miners omitted for brevity"
                             )
             except Exception:
                 pass
-            bt.logging.info(f"[CONSENSUS] Aggregated scores ({len(result)} miners):")
+            bt.logging.info(f"[CONSENSUS] Aggregated rewards ({len(result)} miners):")
             top_sample = list(sorted(result.items(), key=lambda x: x[1], reverse=True))[:10]
-            for uid, score in top_sample:
-                bt.logging.info(f"[CONSENSUS]   UID {uid}: {score:.4f}")
+            for uid, reward in top_sample:
+                bt.logging.info(f"[CONSENSUS]   UID {uid}: reward={reward:.4f}")
         else:
             bt.logging.warning(f"[CONSENSUS] ⚠️ No miners aggregated (all scores were <= 0 or no common miners)")
     else:

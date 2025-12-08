@@ -235,7 +235,7 @@ class Miner(BaseMinerNeuron):
         # DEBUG: Log detailed TaskFeedbackSynapse content
         ColoredLogger.info("🔍 DEBUG TaskFeedbackSynapse content:", ColoredLogger.YELLOW)
         ColoredLogger.info(f"  - task_id: {synapse.task_id}", ColoredLogger.GRAY)
-        ColoredLogger.info(f"  - score: {synapse.score}", ColoredLogger.GRAY)
+        ColoredLogger.info(f"  - reward: {synapse.reward}", ColoredLogger.GRAY)
         ColoredLogger.info(f"  - execution_time: {synapse.execution_time}", ColoredLogger.GRAY)
         ColoredLogger.info(f"  - tests: {synapse.tests}", ColoredLogger.GRAY)
         ColoredLogger.info(f"  - test_results: {synapse.test_results}", ColoredLogger.GRAY)
@@ -257,10 +257,10 @@ class Miner(BaseMinerNeuron):
 
         try:
             # Defensive defaults
-            score = float(synapse.score or 0.0)
+            reward = float(synapse.reward or 0.0)
             exec_time = float(synapse.execution_time or 0.0)
 
-            self.miner_stats.log_feedback(score, exec_time)
+            self.miner_stats.log_feedback(reward, exec_time)
             print_task_feedback(synapse, self.miner_stats)
         except Exception as e:
             ColoredLogger.error("Error occurred while printing TaskFeedback in terminal")
