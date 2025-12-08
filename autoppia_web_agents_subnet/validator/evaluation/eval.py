@@ -79,7 +79,11 @@ async def evaluate_task_solutions(
     evaluation_results: List[Dict[str, Any]] = []
 
     for res in detailed_results:
-        score = float(getattr(res, "final_score", 0.0) or 0.0)
+        # Prefer eval_score; fall back to legacy final_score for backward compatibility
+        score_val = getattr(res, "eval_score", None)
+        if score_val is None:
+            score_val = getattr(res, "final_score", None)
+        score = float(score_val or 0.0)
         eval_scores.append(score)
 
         # Tests - simple list of test results
@@ -130,8 +134,10 @@ async def evaluate_task_solutions(
                 feedback_dict = None
 
         # Summary (add simple, durable fields only)
+        # Note: eval_score is the pure evaluation score from tests/actions (0-1)
+        # This will be used to calculate reward = eval_score_weight × eval_score + time_weight × time_score
         result_dict = {
-            "final_score": score,
+            "eval_score": score,  # Pure evaluation score (tests/actions only, 0-1)
             "version_ok": bool(getattr(res, "version_ok", True)),
             "notes": str(getattr(res, "notes", "")) if hasattr(res, "notes") else "",
             "error_message": error_msg,  # Include validation errors (e.g. seed mismatch)

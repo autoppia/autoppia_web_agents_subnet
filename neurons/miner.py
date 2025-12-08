@@ -207,8 +207,11 @@ class Miner(BaseMinerNeuron):
 
             # Process the task
             task_solution = await self.agent.solve_task(task=task_for_agent)
-            task_solution.web_agent_id = str(self.uid)
-            actions: List[BaseAction] = task_solution.replace_web_agent_id()
+            # Replace web_agent_id placeholders in actions if needed
+            if hasattr(task_solution, "web_agent_id") and task_solution.web_agent_id:
+                actions: List[BaseAction] = task_solution.replace_web_agent_id()
+            else:
+                actions: List[BaseAction] = task_solution.actions if hasattr(task_solution, "actions") else []
 
             self._show_actions(actions)
 

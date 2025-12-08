@@ -385,12 +385,23 @@ class RoundManager:
 
     def get_average_rewards(self) -> Dict[int, float]:
         """
-        Calculate average scores for each miner.
+        Calculate average rewards for each miner.
+        reward = eval_score_weight × eval_score + time_weight × time_score
 
         Returns:
-            Dict mapping miner_uid to average score
+            Dict mapping miner_uid to average reward
         """
         return {uid: (sum(rewards) / len(rewards)) if rewards else 0.0 for uid, rewards in self.round_rewards.items()}
+
+    def get_average_eval_scores(self) -> Dict[int, float]:
+        """
+        Calculate average eval_scores for each miner.
+        eval_score = pure evaluation score from tests/actions (0-1), before time weighting.
+
+        Returns:
+            Dict mapping miner_uid to average eval_score
+        """
+        return {uid: (sum(eval_scores) / len(eval_scores)) if eval_scores else 0.0 for uid, eval_scores in self.round_eval_scores.items()}
 
     def reset_round(self):
         """Reset round state for new round."""

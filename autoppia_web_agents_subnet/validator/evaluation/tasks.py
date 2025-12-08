@@ -176,7 +176,6 @@ async def get_task_collection_interleaved(
 def get_task_solution_from_synapse(
     task_id: str,
     synapse: TaskSynapse,
-    web_agent_id: str,
     max_actions_length: int = MAX_ACTIONS_LENGTH,
 ) -> TaskSolution:
     """
@@ -186,7 +185,7 @@ def get_task_solution_from_synapse(
     actions = []
     if synapse and hasattr(synapse, "actions") and isinstance(synapse.actions, list):
         actions = synapse.actions[:max_actions_length]
-    return TaskSolution(task_id=task_id, actions=actions, web_agent_id=web_agent_id)
+    return TaskSolution(task_id=task_id, actions=actions)
 
 
 def collect_task_solutions_and_execution_times(
@@ -206,7 +205,7 @@ def collect_task_solutions_and_execution_times(
         if response is None:
             bt.logging.warning(f"Miner {miner_uid} returned None response")
             task_solutions.append(
-                TaskSolution(task_id=task.id, actions=[], web_agent_id=str(miner_uid))
+                TaskSolution(task_id=task.id, actions=[])
             )
             execution_times.append(TIMEOUT)
             bt.logging.debug(
@@ -220,13 +219,12 @@ def collect_task_solutions_and_execution_times(
                 get_task_solution_from_synapse(
                     task_id=task.id,
                     synapse=response,
-                    web_agent_id=str(miner_uid),
                 )
             )
         except Exception as e:
             bt.logging.error(f"Miner response format error: {e}")
             task_solutions.append(
-                TaskSolution(task_id=task.id, actions=[], web_agent_id=str(miner_uid))
+                TaskSolution(task_id=task.id, actions=[])
             )
             execution_times.append(TIMEOUT)
             bt.logging.debug(

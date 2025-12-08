@@ -403,13 +403,17 @@ async def finish_round_flow(
     rank_map_local = {uid: rank for rank, (uid, _score, _time) in enumerate(sorted_miners_local, start=1)}
 
     # Build local_evaluation (pre-consensus) - without weight
+    # local_avg_rewards: Dict[uid -> avg_reward] where avg_reward = average of all rewards for that miner
     local_evaluation_miners = []
     local_stats_by_miner: Dict[int, Dict[str, Any]] = {}
+    
+    # Guardar local_evaluation antes de finish_round para que pueda ser incluido en IPFS
+    # (se construye aquí porque necesitamos los datos antes de que termine el round)
     for miner_uid, agent_run in ctx.current_agent_runs.items():
         # Use LOCAL rank for local_evaluation (consistent with local scores)
         rank_value = rank_map_local.get(miner_uid)
-        # Use LOCAL score (pre-consensus) for local_evaluation
-        score_value = local_avg_rewards.get(miner_uid, 0.0)
+        # Use LOCAL avg_reward (pre-consensus) for local_evaluation
+        avg_reward_value = local_avg_rewards.get(miner_uid, 0.0)
 
         # Calculate tasks completed/failed (safe access)
         round_rewards = getattr(ctx.round_manager, "round_rewards", {}) or {}
@@ -425,6 +429,19 @@ async def finish_round_flow(
 
         # Get miner name from agent_run
         miner_name = getattr(agent_run, "agent_name", None) or f"Miner {miner_uid}"
+        
+        # Obtener miner_hotkey
+        miner_hotkey = None
+        try:
+            # Primero intentar desde snapshots guardados
+            miner_snapshot = ctx.current_miner_snapshots.get(miner_uid)
+            if miner_snapshot and hasattr(miner_snapshot, "miner_hotkey"):
+                miner_hotkey = miner_snapshot.miner_hotkey
+            # Fallback a metagraph
+            if not miner_hotkey:
+                miner_hotkey = ctx.metagraph.hotkeys[miner_uid] if miner_uid < len(ctx.metagraph.hotkeys) else None
+        except Exception:
+            pass
 
         miner_stats_entry = {
             "tasks_failed": miner_tasks_failed,
@@ -442,15 +459,16 @@ async def finish_round_flow(
         local_evaluation_miners.append(
             {
                 "rank": rank_value,
-                "score": float(score_value),
+                "avg_reward": float(avg_reward_value),  # Average of all rewards for this miner (pre-consensus, local to this validator)
                 "miner_uid": miner_uid,
+                "miner_hotkey": miner_hotkey,  # Miner hotkey for identification
                 "miner_name": miner_name,
                 "agent_run_id": agent_run.agent_run_id,
                 **miner_stats_entry,
             }
         )
 
-    # Build agent_run summaries for backward compatibility (still needed for agent_runs field)
+    # Build agent_run summaries (still needed for agent_runs field)
     agent_run_summaries: List[iwa_models.FinishRoundAgentRunIWAP] = []
     for miner_data in local_evaluation_miners:
         agent_run_summaries.append(
@@ -458,7 +476,7 @@ async def finish_round_flow(
                 agent_run_id=miner_data["agent_run_id"],
                 rank=miner_data["rank"],
                 miner_name=miner_data["miner_name"],
-                score=miner_data["score"],
+                avg_reward=miner_data["avg_reward"],
                 avg_evaluation_time=miner_data["avg_evaluation_time"],
                 tasks_attempted=miner_data["tasks_attempted"],
                 tasks_completed=miner_data["tasks_completed"],
@@ -510,6 +528,11 @@ async def finish_round_flow(
 
     # Build local_evaluation (what THIS validator evaluated - pre-consensus)
     local_evaluation = {"timestamp": ended_at, "miners": local_evaluation_miners}
+    
+    # Actualizar el payload IPFS guardado para incluir local_evaluation
+    # (aunque se publique antes, actualizamos el payload guardado para que tenga la info completa)
+    if hasattr(ctx, "validator") and hasattr(ctx.validator, "_ipfs_uploaded_payload"):
+        ctx.validator._ipfs_uploaded_payload["local_evaluation"] = local_evaluation
 
     # FASE 2: IPFS uploaded data (what THIS validator published)
     ipfs_uploaded = None
@@ -590,6 +613,7 @@ async def finish_round_flow(
     post_consensus_evaluation = None
 
     # Get consensus scores (from agg cache if available, otherwise use avg_rewards as fallback)
+    # consensus_scores: Dict[uid -> consensus_reward] where consensus_reward = stake-weighted average of avg_rewards from all validators
     consensus_scores = getattr(ctx, "_agg_scores_cache", None)
     if not consensus_scores:
         # Fallback: use avg_rewards if consensus not available
@@ -602,22 +626,36 @@ async def finish_round_flow(
     if consensus_scores and isinstance(consensus_scores, dict):
         # Calculate ranks from consensus scores
         sorted_consensus = sorted(consensus_scores.items(), key=lambda item: item[1], reverse=True)
-        rank_map_consensus = {uid: rank for rank, (uid, _score) in enumerate(sorted_consensus, start=1)}
+        rank_map_consensus = {uid: rank for rank, (uid, _consensus_reward) in enumerate(sorted_consensus, start=1)}
 
         # Build post_consensus miners list - include all miners with weight > 0 (including burn_uid)
         # BURN_AMOUNT_PERCENTAGE and BURN_UID are already imported above
         
         post_consensus_miners = []
         # First, add all miners from consensus_scores
-        for miner_uid, consensus_score in consensus_scores.items():
+        for miner_uid, consensus_reward in consensus_scores.items():
             weight = final_weights.get(miner_uid, 0.0)
             rank = rank_map_consensus.get(miner_uid)
             stats_entry = stats_by_miner.get(miner_uid) or local_stats_by_miner.get(miner_uid) or {}
+            
+            # Obtener miner_hotkey
+            miner_hotkey = None
+            try:
+                # Primero intentar desde snapshots guardados
+                miner_snapshot = ctx.current_miner_snapshots.get(miner_uid)
+                if miner_snapshot and hasattr(miner_snapshot, "miner_hotkey"):
+                    miner_hotkey = miner_snapshot.miner_hotkey
+                # Fallback a metagraph
+                if not miner_hotkey:
+                    miner_hotkey = ctx.metagraph.hotkeys[miner_uid] if miner_uid < len(ctx.metagraph.hotkeys) else None
+            except Exception:
+                pass
 
             post_consensus_miners.append(
                 {
                     "miner_uid": miner_uid,
-                    "score": float(consensus_score),
+                    "miner_hotkey": miner_hotkey,  # Miner hotkey for identification
+                    "consensus_reward": float(consensus_reward),  # Stake-weighted average of avg_rewards from all validators
                     "weight": float(weight),
                     "rank": rank,
                     **({k: v for k, v in stats_entry.items() if v is not None} if stats_entry else {}),
@@ -630,10 +668,18 @@ async def finish_round_flow(
         if burn_weight > 0.0 and burn_uid not in consensus_scores:
             # Burn UID gets a rank after all consensus miners
             max_rank = max(rank_map_consensus.values()) if rank_map_consensus else 0
+            # Obtener miner_hotkey para burn_uid
+            burn_miner_hotkey = None
+            try:
+                burn_miner_hotkey = ctx.metagraph.hotkeys[burn_uid] if burn_uid < len(ctx.metagraph.hotkeys) else None
+            except Exception:
+                pass
+            
             post_consensus_miners.append(
                 {
                     "miner_uid": burn_uid,
-                    "score": 0.0,  # Burn UID doesn't have a score
+                    "miner_hotkey": burn_miner_hotkey,  # Miner hotkey for identification
+                    "consensus_reward": 0.0,  # Burn UID doesn't have a reward
                     "weight": float(burn_weight),
                     "rank": max_rank + 1,
                 }
@@ -643,6 +689,10 @@ async def finish_round_flow(
             "miners": post_consensus_miners,
             "timestamp": ended_at,
         }
+        
+        # NOTA: post_consensus_evaluation NO se sube a IPFS
+        # Se calcula DESPUÉS de descargar todos los IPFS de otros validadores
+        # Solo se guarda para enviarlo al backend en finish_round
 
     finish_request = iwa_models.FinishRoundIWAP(
         status="completed",

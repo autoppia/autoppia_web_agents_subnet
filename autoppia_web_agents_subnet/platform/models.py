@@ -184,7 +184,6 @@ class TaskSolutionIWAP:
     miner_uid: Optional[int]
     miner_hotkey: Optional[str]
     actions: List[Dict[str, Any]]
-    web_agent_id: Optional[str] = None
     recording: Optional[Any] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -203,11 +202,11 @@ class EvaluationResultIWAP:
     task_solution_id: str
     validator_uid: int
     miner_uid: Optional[int]
-    final_score: float
+    eval_score: float  # Evaluation score (tests/actions only, 0-1)
+    reward: float  # Reward value (eval_score + time_score, used for consensus)
     test_results: List[Dict[str, Any]] = field(default_factory=list)  # Simplified from matrix to list
     execution_history: List[Dict[str, Any]] = field(default_factory=list)
     feedback: Optional[Dict[str, Any]] = None
-    web_agent_id: Optional[str] = None
     evaluation_time: Optional[float] = None
     stats: Optional[Dict[str, Any]] = None
     gif_recording: Optional[str] = None
@@ -239,7 +238,7 @@ class FinishRoundAgentRunIWAP:
     # weight removed - now only in post_consensus_evaluation
     # FASE 1: Nuevos campos
     miner_name: Optional[str] = None
-    score: Optional[float] = None
+    avg_reward: Optional[float] = None  # Average reward (eval_score + time_score)
     avg_evaluation_time: Optional[float] = None
     tasks_attempted: Optional[int] = None
     tasks_completed: Optional[int] = None

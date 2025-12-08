@@ -98,7 +98,7 @@ async def submit_task_results(
 
         task_solution_id = iwa_main.generate_task_solution_id(task_id, miner_uid)
         evaluation_id = iwa_main.generate_evaluation_id(task_id, miner_uid)
-        final_score = float(eval_scores[idx]) if idx < len(eval_scores) else 0.0
+        eval_score = float(eval_scores[idx]) if idx < len(eval_scores) else 0.0
         evaluation_meta = evaluation_results[idx] if idx < len(evaluation_results) else {}
         if not isinstance(evaluation_meta, dict):
             evaluation_meta = {}
@@ -107,7 +107,9 @@ async def submit_task_results(
         # Remove fields that are already in specific EvaluationResultIWAP fields
         # These should not be in metadata
         evaluation_metadata.pop("gif_recording", None)
-        evaluation_metadata.pop("final_score", None)
+        evaluation_metadata.pop("final_score", None)  # Legacy field name
+        evaluation_metadata.pop("eval_score", None)  # Now a separate field
+        evaluation_metadata.pop("reward", None)  # Now a separate field
         evaluation_metadata.pop("version_ok", None)
         evaluation_metadata.pop("notes", None)
         evaluation_metadata.pop("error_message", None)
@@ -125,7 +127,7 @@ async def submit_task_results(
             evaluation_metadata = {}
         test_results_data = test_results_list[idx] if idx < len(test_results_list) else []
         exec_time = float(execution_times[idx]) if idx < len(execution_times) else 0.0
-        reward_value = rewards[idx] if idx < len(rewards) else final_score
+        reward_value = float(rewards[idx]) if idx < len(rewards) else eval_score
 
         task_solution_payload = iwa_models.TaskSolutionIWAP(
             solution_id=task_solution_id,
@@ -137,7 +139,6 @@ async def submit_task_results(
             miner_uid=miner_uid,
             miner_hotkey=miner_hotkey,
             actions=actions_payload,
-            web_agent_id=getattr(solution, "web_agent_id", None),
             recording=getattr(solution, "recording", None),
         )
 
@@ -149,11 +150,11 @@ async def submit_task_results(
             task_solution_id=task_solution_id,
             validator_uid=int(ctx.uid),
             miner_uid=miner_uid,
-            final_score=final_score,
+            eval_score=eval_score,  # Evaluation score (tests/actions only)
+            reward=reward_value,  # Reward (eval_score + time_score)
             test_results=test_results_data or [],
             execution_history=evaluation_meta.get("execution_history", []),
             feedback=evaluation_meta.get("feedback"),
-            web_agent_id=getattr(solution, "web_agent_id", None),
             evaluation_time=evaluation_meta.get("evaluation_time", exec_time),
             stats=evaluation_meta.get("stats"),
             gif_recording=None,
@@ -243,9 +244,9 @@ async def submit_task_results(
                         level="warning",
                     )
 
-        accumulators = ctx.agent_run_accumulators.setdefault(miner_uid, {"reward": 0.0, "score": 0.0, "execution_time": 0.0, "tasks": 0})
+        accumulators = ctx.agent_run_accumulators.setdefault(miner_uid, {"reward": 0.0, "eval_score": 0.0, "execution_time": 0.0, "tasks": 0})
         accumulators["reward"] += float(reward_value)
-        accumulators["score"] += float(final_score)
+        accumulators["eval_score"] += float(eval_score)
         accumulators["execution_time"] += exec_time
         accumulators["tasks"] += 1
 
@@ -253,5 +254,5 @@ async def submit_task_results(
         agent_run.completed_tasks = accumulators["tasks"]
         agent_run.total_reward = accumulators["reward"]
         agent_run.average_reward = accumulators["reward"] / accumulators["tasks"] if accumulators["tasks"] else None
-        agent_run.average_score = accumulators["score"] / accumulators["tasks"] if accumulators["tasks"] else None
+        agent_run.average_score = accumulators["eval_score"] / accumulators["tasks"] if accumulators["tasks"] else None
         agent_run.average_execution_time = accumulators["execution_time"] / accumulators["tasks"] if accumulators["tasks"] else None
