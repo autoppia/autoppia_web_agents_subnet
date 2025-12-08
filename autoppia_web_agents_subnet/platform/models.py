@@ -31,11 +31,12 @@ class ValidatorSnapshotIWAP:
     image_url: Optional[str] = None
     version: Optional[str] = None
     role: str = "primary"
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    validator_config: Dict[str, Any] = field(default_factory=dict)
 
     def to_payload(self) -> Dict[str, Any]:
         data = asdict(self)
-        data["metadata"] = self.metadata or {}
+        # Ensure validator_config is included even if empty
+        data["validator_config"] = self.validator_config or {}
         return _drop_nones(data)
 
 

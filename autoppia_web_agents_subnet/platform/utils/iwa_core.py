@@ -243,9 +243,31 @@ def build_validator_identity(validator) -> iwa_models.ValidatorIdentityIWAP:
 
 
 def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.ValidatorSnapshotIWAP:
+    from autoppia_web_agents_subnet.validator.config import (
+        ROUND_SIZE_EPOCHS,
+        SAFETY_BUFFER_EPOCHS,
+        DZ_STARTING_BLOCK,
+        PRE_GENERATED_TASKS,
+        AVG_TASK_DURATION_SECONDS,
+        STOP_TASK_EVALUATION_AT_ROUND_FRACTION,
+        FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION,
+        SKIP_ROUND_IF_STARTED_AFTER_FRACTION,
+        MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO,
+        ENABLE_DISTRIBUTED_CONSENSUS,
+        PROPAGATION_BLOCKS_SLEEP,
+        ENABLE_DYNAMIC,
+        SHOULD_RECORD_GIF,
+        TIMEOUT,
+        FEEDBACK_TIMEOUT,
+        MAX_ACTIONS_LENGTH,
+        EVAL_SCORE_WEIGHT,
+        TIME_WEIGHT,
+        TESTING,
+        IWAP_API_BASE_URL,
+    )
+    
     stake = normalized_stake_tao(validator.metagraph, validator.uid)
     vtrust = validator_vtrust(validator.metagraph, validator.uid)
-    metadata: Dict[str, Any] = {"source": "autoppia_validator"}
     
     # Get coldkey from validator wallet (same as in build_validator_identity)
     coldkey = getattr(getattr(validator.wallet, "coldkeypub", None), "ss58_address", None)
@@ -255,6 +277,42 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
 
     if vtrust is None:
         bt.logging.warning(f"Validator snapshot vtrust is unavailable for uid={validator.uid}; snapshot will omit vtrust")
+
+    # Build validator configuration dictionary
+    validator_config: Dict[str, Any] = {
+        "round": {
+            "round_size_epochs": ROUND_SIZE_EPOCHS,
+            "safety_buffer_epochs": SAFETY_BUFFER_EPOCHS,
+            "dz_starting_block": DZ_STARTING_BLOCK,
+            "pre_generated_tasks": PRE_GENERATED_TASKS,
+            "avg_task_duration_seconds": AVG_TASK_DURATION_SECONDS,
+        },
+        "timing": {
+            "stop_task_evaluation_at_round_fraction": STOP_TASK_EVALUATION_AT_ROUND_FRACTION,
+            "fetch_ipfs_validator_payloads_at_round_fraction": FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION,
+            "skip_round_if_started_after_fraction": SKIP_ROUND_IF_STARTED_AFTER_FRACTION,
+        },
+        "consensus": {
+            "min_validator_stake_for_consensus_tao": MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO,
+            "enable_distributed_consensus": ENABLE_DISTRIBUTED_CONSENSUS,
+            "propagation_blocks_sleep": PROPAGATION_BLOCKS_SLEEP,
+        },
+        "execution": {
+            "enable_dynamic": ENABLE_DYNAMIC,
+            "should_record_gif": SHOULD_RECORD_GIF,
+            "timeout": TIMEOUT,
+            "feedback_timeout": FEEDBACK_TIMEOUT,
+            "max_actions_length": MAX_ACTIONS_LENGTH,
+        },
+        "scoring": {
+            "eval_score_weight": EVAL_SCORE_WEIGHT,
+            "time_weight": TIME_WEIGHT,
+        },
+        "environment": {
+            "testing": TESTING,
+            "iwap_api_base_url": IWAP_API_BASE_URL,
+        }
+    }
 
     return iwa_models.ValidatorSnapshotIWAP(
         validator_round_id=validator_round_id,
@@ -266,7 +324,7 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
         vtrust=vtrust,
         image_url=VALIDATOR_IMAGE,
         version=validator.version,
-        metadata=metadata,
+        validator_config=validator_config,
     )
 
 
