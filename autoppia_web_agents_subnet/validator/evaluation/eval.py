@@ -1,7 +1,7 @@
 # autoppia_web_agents_subnet/validator/eval.py
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple, Iterable
+from typing import Any, Dict, List, Optional, Tuple, Iterable
 import numpy as np
 from numpy.typing import NDArray
 import bittensor as bt
@@ -100,14 +100,49 @@ async def evaluate_task_solutions(
         if hasattr(res, "stats") and res.stats:
             error_msg = str(getattr(res.stats, "error_message", "")) or ""
 
+        # Extract feedback if present and convert to dict
+        feedback_dict = None
+        feedback_obj = getattr(res, "feedback", None)
+        if feedback_obj is not None:
+            try:
+                # Convert Feedback Pydantic model to dict
+                if hasattr(feedback_obj, "model_dump"):
+                    feedback_dict = feedback_obj.model_dump(mode="json", exclude_none=True)
+                elif isinstance(feedback_obj, dict):
+                    feedback_dict = feedback_obj
+                
+                # Only include feedback if it has useful information
+                # (not empty and has at least task_prompt or meaningful data)
+                if feedback_dict and (
+                    feedback_dict.get("task_prompt") or 
+                    feedback_dict.get("executed_actions", 0) > 0 or
+                    feedback_dict.get("passed_tests", 0) > 0 or
+                    feedback_dict.get("failed_tests", 0) > 0
+                ):
+                    # Remove execution_history and test_results from feedback
+                    # as they're already in separate fields
+                    feedback_dict.pop("execution_history", None)
+                    feedback_dict.pop("test_results", None)
+                else:
+                    feedback_dict = None
+            except Exception as e:
+                bt.logging.warning(f"Failed to extract feedback: {e}")
+                feedback_dict = None
+
         # Summary (add simple, durable fields only)
-        evaluation_results.append({
+        result_dict = {
             "final_score": score,
             "version_ok": bool(getattr(res, "version_ok", True)),
             "notes": str(getattr(res, "notes", "")) if hasattr(res, "notes") else "",
             "error_message": error_msg,  # Include validation errors (e.g. seed mismatch)
             "gif_recording": gif_recording,  # GIF base64 for leaderboard
-        })
+        }
+        
+        # Only add feedback if it has useful information
+        if feedback_dict:
+            result_dict["feedback"] = feedback_dict
+        
+        evaluation_results.append(result_dict)
 
     scores_arr = np.asarray(eval_scores, dtype=np.float32).ravel()
     np.clip(scores_arr, 0.0, 1.0, out=scores_arr)

@@ -103,7 +103,26 @@ async def submit_task_results(
         if not isinstance(evaluation_meta, dict):
             evaluation_meta = {}
         evaluation_metadata = dict(evaluation_meta)
-        gif_payload = evaluation_metadata.pop("gif_recording", evaluation_meta.get("gif_recording"))
+        
+        # Remove fields that are already in specific EvaluationResultIWAP fields
+        # These should not be in metadata
+        evaluation_metadata.pop("gif_recording", None)
+        evaluation_metadata.pop("final_score", None)
+        evaluation_metadata.pop("version_ok", None)
+        evaluation_metadata.pop("notes", None)
+        evaluation_metadata.pop("error_message", None)
+        evaluation_metadata.pop("feedback", None)  # feedback is a separate field
+        evaluation_metadata.pop("execution_history", None)  # execution_history is a separate field
+        evaluation_metadata.pop("test_results", None)  # test_results is a separate field
+        evaluation_metadata.pop("raw_score", None)  # raw_score is a separate field
+        evaluation_metadata.pop("evaluation_time", None)  # evaluation_time is a separate field
+        evaluation_metadata.pop("stats", None)  # stats is a separate field
+        
+        gif_payload = evaluation_meta.get("gif_recording")
+        
+        # Only keep metadata if it has useful information (not empty)
+        if not evaluation_metadata:
+            evaluation_metadata = {}
         test_results_data = test_results_list[idx] if idx < len(test_results_list) else []
         exec_time = float(execution_times[idx]) if idx < len(execution_times) else 0.0
         reward_value = rewards[idx] if idx < len(rewards) else final_score
@@ -135,7 +154,6 @@ async def submit_task_results(
             execution_history=evaluation_meta.get("execution_history", []),
             feedback=evaluation_meta.get("feedback"),
             web_agent_id=getattr(solution, "web_agent_id", None),
-            raw_score=evaluation_meta.get("raw_score", final_score),
             evaluation_time=evaluation_meta.get("evaluation_time", exec_time),
             stats=evaluation_meta.get("stats"),
             gif_recording=None,

@@ -207,7 +207,6 @@ class EvaluationResultIWAP:
     execution_history: List[Dict[str, Any]] = field(default_factory=list)
     feedback: Optional[Dict[str, Any]] = None
     web_agent_id: Optional[str] = None
-    raw_score: Optional[float] = None
     evaluation_time: Optional[float] = None
     stats: Optional[Dict[str, Any]] = None
     gif_recording: Optional[str] = None
@@ -215,7 +214,9 @@ class EvaluationResultIWAP:
 
     def to_payload(self) -> Dict[str, Any]:
         data = asdict(self)
-        data["metadata"] = self.metadata or {}
+        # Only include metadata if it has useful information (not empty)
+        if self.metadata:
+            data["metadata"] = self.metadata
         return _drop_nones(data)
 
 

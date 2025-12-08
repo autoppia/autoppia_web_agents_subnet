@@ -200,9 +200,7 @@ class IWAPClient:
                 "miner_uid": evaluation_result.miner_uid,
                 "miner_hotkey": task_solution.miner_hotkey,
                 "final_score": evaluation_result.final_score,
-                "raw_score": evaluation_result.raw_score or evaluation_result.final_score,
                 "evaluation_time": evaluation_result.evaluation_time,
-                "summary": evaluation_result.metadata or {},
             },
             "evaluation_result": evaluation_result.to_payload(),
         }
