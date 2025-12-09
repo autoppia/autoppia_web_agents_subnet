@@ -166,12 +166,9 @@ async def publish_round_snapshot(
         bt.logging.info(ipfs_tag("UPLOAD", f"Download: http://ipfs.metahash73.com:5001/api/v0/cat?arg={cid}"))
         bt.logging.info("=" * 80)
         
-        # FASE 2: Add local_evaluation to payload if available (solo local_evaluation, NO post_consensus_evaluation)
-        # post_consensus_evaluation NO se sube a IPFS porque se calcula DESPUÉS de descargar todos los IPFS
-        if hasattr(validator, "_local_evaluation_at_publish") and validator._local_evaluation_at_publish:
-            payload["local_evaluation"] = validator._local_evaluation_at_publish
-        
-        # FASE 3: Save the actual payload that was uploaded (for finish_round)
+        # Save the actual payload that was uploaded (for finish_round)
+        # Note: local_evaluation and post_consensus_evaluation are NOT included in IPFS payload
+        # They are stored separately in meta at the backend level
         validator._ipfs_uploaded_payload = payload
         # Also save the CID immediately (even if commit fails later)
         validator._ipfs_upload_cid = str(cid)
@@ -322,9 +319,10 @@ async def aggregate_scores_from_commitments(
     skipped_ipfs_list: list[tuple[str, str]] = []  # (hk, cid)
 
     fetched: list[tuple[str, str, float]] = []
-        scores_by_validator: Dict[str, Dict[int, float]] = {}  # Note: contains avg_reward, kept name for backward compatibility
+    scores_by_validator: Dict[str, Dict[int, float]] = {}  # Note: contains avg_reward, kept name for backward compatibility
     stats_by_validator: Dict[str, Dict[int, Dict[str, Any]]] = {}
     stats_accumulator: Dict[int, Dict[str, float]] = {}
+    downloaded_payloads: list[Dict[str, Any]] = []  # Lista para guardar payloads originales descargados
 
     blocks_per_epoch = getattr(validator.round_manager, "BLOCKS_PER_EPOCH", 360)
 
@@ -433,6 +431,15 @@ async def aggregate_scores_from_commitments(
             bt.logging.info(f"[CONSENSUS] Skip {hk[:12]}... | Reason: payload is not dict")
             continue
 
+        # Guardar payload original descargado ANTES de procesarlo
+        downloaded_payloads.append({
+            "validator_hotkey": hk,
+            "validator_uid": validator_uid,
+            "stake": st_val,
+            "ipfs_cid": cid,
+            "payload": payload,  # Payload completo tal cual se descargó de IPFS (misma estructura que ipfs_uploaded)
+        })
+
         # Stats entries (required)
         stats_entries = payload.get("stats")
         if not isinstance(stats_entries, list):
@@ -461,6 +468,12 @@ async def aggregate_scores_from_commitments(
             # Read "miner_hotkey" if available
             if "miner_hotkey" in item:
                 stat_entry["miner_hotkey"] = item["miner_hotkey"]
+            # Read "avg_eval_score" if available
+            if "avg_eval_score" in item:
+                try:
+                    stat_entry["avg_eval_score"] = float(item["avg_eval_score"])
+                except Exception:
+                    pass
             for key in ("avg_eval_time", "tasks_sent", "tasks_success", "tasks_failed"):
                 if key in item:
                     try:
@@ -475,6 +488,8 @@ async def aggregate_scores_from_commitments(
                 acc = stats_accumulator.setdefault(
                     uid_val,
                     {
+                        "avg_eval_score_sum": 0.0,
+                        "avg_eval_score_count": 0.0,
                         "avg_eval_time_sum": 0.0,
                         "avg_eval_time_count": 0.0,
                         "tasks_sent_sum": 0.0,
@@ -485,6 +500,9 @@ async def aggregate_scores_from_commitments(
                         "tasks_failed_count": 0.0,
                     },
                 )
+                if "avg_eval_score" in stat_entry:
+                    acc["avg_eval_score_sum"] += float(stat_entry["avg_eval_score"])
+                    acc["avg_eval_score_count"] += 1
                 if "avg_eval_time" in stat_entry:
                     acc["avg_eval_time_sum"] += float(stat_entry["avg_eval_time"])
                     acc["avg_eval_time_count"] += 1
@@ -591,6 +609,10 @@ async def aggregate_scores_from_commitments(
     stats_by_miner: Dict[int, Dict[str, float]] = {}
     for uid, agg in stats_accumulator.items():
         stats_by_miner[uid] = {}
+        if agg.get("avg_eval_score_count", 0) > 0:
+            stats_by_miner[uid]["avg_eval_score"] = float(
+                agg["avg_eval_score_sum"] / agg["avg_eval_score_count"]
+            )
         if agg.get("avg_eval_time_count", 0) > 0:
             stats_by_miner[uid]["avg_eval_time"] = float(
                 agg["avg_eval_time_sum"] / agg["avg_eval_time_count"]
@@ -613,6 +635,7 @@ async def aggregate_scores_from_commitments(
         "scores_by_validator": scores_by_validator,
         "stats_by_validator": stats_by_validator,
         "stats_by_miner": stats_by_miner,
+        "downloaded_payloads": downloaded_payloads,  # Payloads originales descargados de IPFS
         "skips": {
             "wrong_window": skipped_wrong_window_list,
             "missing_cid": skipped_missing_cid_list,

@@ -369,6 +369,7 @@ def build_iwap_tasks(*, validator_round_id: str, tasks: List[TaskWithProject]) -
             validator_round_id=validator_round_id,
             is_web_real=bool(getattr(task, "is_web_real", False)),
             web_project_id=getattr(project, "id", None),
+            web_version=getattr(project, "version", None),
             url=getattr(task, "url", getattr(project, "frontend_url", "")),
             prompt=getattr(task, "prompt", ""),
             specifications=specifications,

@@ -389,6 +389,15 @@ async def finish_round_flow(
     # Calculate ranks with FINAL scores (for consensus) - needed for post_consensus_evaluation
     rank_map_final = {uid: rank for rank, (uid, _score) in enumerate(sorted_miners, start=1)}
 
+    # Calculate local avg_eval_scores (average of eval_scores for each miner)
+    local_avg_eval_scores = {}
+    round_eval_scores = getattr(ctx.round_manager, "round_eval_scores", {}) or {}
+    for uid, eval_scores_list in round_eval_scores.items():
+        if eval_scores_list:
+            local_avg_eval_scores[uid] = sum(eval_scores_list) / len(eval_scores_list)
+        else:
+            local_avg_eval_scores[uid] = 0.0
+
     # Calculate ranks with LOCAL scores + time as tiebreaker
     # Build list of (uid, score, avg_time) for each miner
     miners_with_time = []
@@ -456,10 +465,14 @@ async def finish_round_flow(
             "tasks_failed": int(miner_tasks_failed),
         }
 
+        # Get local avg_eval_score
+        local_avg_eval_score = local_avg_eval_scores.get(miner_uid, 0.0)
+
         local_evaluation_miners.append(
             {
                 "rank": rank_value,
                 "avg_reward": float(avg_reward_value),  # Average of all rewards for this miner (pre-consensus, local to this validator)
+                "avg_eval_score": float(local_avg_eval_score),  # Average of all eval_scores for this miner (pure evaluation score, 0-1)
                 "miner_uid": miner_uid,
                 "miner_hotkey": miner_hotkey,  # Miner hotkey for identification
                 "miner_name": miner_name,
@@ -565,48 +578,25 @@ async def finish_round_flow(
         }
 
     # FASE 3: IPFS downloaded data (what was downloaded from ALL validators)
+    # Los payloads descargados tienen la misma estructura que los que se suben (ipfs_uploaded)
     ipfs_downloaded = None
     agg_meta = getattr(ctx, "_agg_meta_cache", None)
     if agg_meta and isinstance(agg_meta, dict):
-        # Extract validators data from consensus metadata
-        validators_list = agg_meta.get("validators", [])
-        scores_by_validator = agg_meta.get("scores_by_validator", {})
-        stats_by_validator = agg_meta.get("stats_by_validator", {})
-
-        # Build structured ipfs_downloaded
-        validators_data = []
-        total_stake = 0.0
-
-        for val_info in validators_list:
-            validator_hk = val_info.get("hotkey", "")
-            validator_uid = val_info.get("uid", "?")
-            validator_stake = float(val_info.get("stake", 0))
-            validator_cid = val_info.get("cid", "")
-
-            # Get scores from this validator
-            validator_scores = scores_by_validator.get(validator_hk, {})
-
-            # Try to get validator name (if available in metagraph or cached)
-            validator_name = None
-            if isinstance(validator_uid, int):
-                # Could look up in metagraph, but for now just use UID
-                validator_name = f"Validator {validator_uid}"
-
-            validators_data.append(
-                {
-                    "validator_uid": validator_uid,
-                    "validator_hotkey": validator_hk,
-                    "validator_name": validator_name,
-                    "stake": validator_stake,
-                    "ipfs_cid": validator_cid,
-                    "scores": {int(uid): float(score) for uid, score in validator_scores.items()},
-                    "stats": {int(uid): stat for uid, stat in (stats_by_validator.get(validator_hk, {}) or {}).items()},
-                }
-            )
-
-            total_stake += validator_stake
-
-        ipfs_downloaded = {"timestamp": ended_at, "validators_participated": len(validators_data), "total_stake": total_stake, "validators": validators_data}
+        # Obtener los payloads originales descargados de IPFS
+        downloaded_payloads = agg_meta.get("downloaded_payloads", [])
+        
+        if downloaded_payloads:
+            # Calcular total_stake y validators_participated
+            total_stake = sum(p.get("stake", 0.0) for p in downloaded_payloads)
+            
+            # Guardar los payloads originales tal cual se descargaron de IPFS
+            # Cada payload tiene la misma estructura que ipfs_uploaded
+            ipfs_downloaded = {
+                "timestamp": ended_at,
+                "validators_participated": len(downloaded_payloads),
+                "total_stake": total_stake,
+                "payloads": downloaded_payloads,  # Lista de payloads originales con la misma estructura que ipfs_uploaded
+            }
 
     # Build post_consensus_evaluation (after consensus)
     # NOTE: emission is now in round_metadata, not here
@@ -636,7 +626,10 @@ async def finish_round_flow(
         for miner_uid, consensus_reward in consensus_scores.items():
             weight = final_weights.get(miner_uid, 0.0)
             rank = rank_map_consensus.get(miner_uid)
-            stats_entry = stats_by_miner.get(miner_uid) or local_stats_by_miner.get(miner_uid) or {}
+            
+            # Obtener stats: primero del consensus, luego locales como fallback
+            consensus_stats = stats_by_miner.get(miner_uid) or {}
+            local_stats = local_stats_by_miner.get(miner_uid) or {}
             
             # Obtener miner_hotkey
             miner_hotkey = None
@@ -651,14 +644,29 @@ async def finish_round_flow(
             except Exception:
                 pass
 
+            # Get avg_eval_score: consensus primero, luego local
+            post_consensus_avg_eval_score = consensus_stats.get("avg_eval_score")
+            if post_consensus_avg_eval_score is None:
+                # Fallback to local avg_eval_score if not in aggregated stats
+                post_consensus_avg_eval_score = local_avg_eval_scores.get(miner_uid, 0.0)
+
+            # Asegurar que siempre tengamos los campos requeridos por el backend
+            # Usar consensus si está disponible, sino usar datos locales
+            avg_eval_time = consensus_stats.get("avg_eval_time") or local_stats.get("avg_eval_time", 0.0)
+            tasks_sent = consensus_stats.get("tasks_sent") or local_stats.get("tasks_sent", 0)
+            tasks_success = consensus_stats.get("tasks_success") or local_stats.get("tasks_success", 0)
+
             post_consensus_miners.append(
                 {
                     "miner_uid": miner_uid,
                     "miner_hotkey": miner_hotkey,  # Miner hotkey for identification
                     "consensus_reward": float(consensus_reward),  # Stake-weighted average of avg_rewards from all validators
+                    "avg_eval_score": float(post_consensus_avg_eval_score),  # Average eval_score (from aggregated stats or local fallback)
+                    "avg_eval_time": float(avg_eval_time),  # SIEMPRE presente - consensus o local
+                    "tasks_sent": int(tasks_sent),  # SIEMPRE presente - consensus o local
+                    "tasks_success": int(tasks_success),  # SIEMPRE presente - consensus o local
                     "weight": float(weight),
                     "rank": rank,
-                    **({k: v for k, v in stats_entry.items() if v is not None} if stats_entry else {}),
                 }
             )
 

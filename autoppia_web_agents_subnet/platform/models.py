@@ -118,6 +118,7 @@ class TaskIWAP:
     relevant_data: Dict[str, Any]
     use_case: Dict[str, Any]
     web_project_id: Optional[str] = None
+    web_version: Optional[str] = None
 
     def to_payload(self) -> Dict[str, Any]:
         from datetime import datetime, date, time as datetime_time
