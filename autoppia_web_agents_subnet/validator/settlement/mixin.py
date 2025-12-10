@@ -112,8 +112,39 @@ class SettlementMixin:
         )
 
         current_block = self.block
+        bt.logging.info(f"[CONSENSUS] Attempting to publish snapshot - current_block: {current_block}")
+        
+        # 🔍 VALIDATION: Ensure we have a valid block number
+        if current_block is None:
+            bt.logging.error("=" * 80)
+            bt.logging.error("[CONSENSUS] ❌ CRITICAL: self.block is None - cannot get current block from blockchain!")
+            bt.logging.error("[CONSENSUS] This usually means:")
+            bt.logging.error("[CONSENSUS]   1. Subtensor connection failed")
+            bt.logging.error("[CONSENSUS]   2. Network issues")
+            bt.logging.error("[CONSENSUS]   3. Blockchain RPC endpoint unavailable")
+            bt.logging.error("=" * 80)
+            return
+        
         try:
             round_number = await self.round_manager.calculate_round(current_block)
+            
+            # Additional validation: round_number should NEVER be None or < 1
+            if round_number is None or round_number < 1:
+                bt.logging.error("=" * 80)
+                bt.logging.error(f"[CONSENSUS] ❌ Invalid round_number: {round_number} (block: {current_block})")
+                bt.logging.error("[CONSENSUS] Attempting to use stored _current_round_number as fallback...")
+                # Try to use stored value as fallback
+                round_number = getattr(self, "_current_round_number", None)
+                if round_number is None or round_number < 1:
+                    bt.logging.error("[CONSENSUS] ❌ Cannot publish: no valid round_number available")
+                    bt.logging.error("=" * 80)
+                    return
+                else:
+                    bt.logging.warning(f"[CONSENSUS] ⚠️ Using fallback round_number: {round_number}")
+                    bt.logging.error("=" * 80)
+            else:
+                bt.logging.info(f"[CONSENSUS] ✅ Valid round_number: {round_number} (block: {current_block})")
+            
             st = await self._get_async_subtensor()
             cid = await publish_round_snapshot(
                 validator=self,

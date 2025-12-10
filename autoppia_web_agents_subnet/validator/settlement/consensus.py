@@ -69,6 +69,34 @@ async def publish_round_snapshot(
         bt.logging.warning(consensus_tag("Disabled - skipping publish"))
         return None
 
+    # 🔍 VALIDATION: round_number should NEVER be None
+    if round_number is None:
+        bt.logging.error("=" * 80)
+        bt.logging.error(consensus_tag("❌ CRITICAL: round_number is None - this should never happen!"))
+        bt.logging.error(consensus_tag(f"Validator UID: {getattr(validator, 'uid', 'unknown')}"))
+        bt.logging.error(consensus_tag(f"Current block: {getattr(validator, 'block', 'unknown')}"))
+        bt.logging.error(consensus_tag(f"_current_round_number: {getattr(validator, '_current_round_number', 'not set')}"))
+        bt.logging.error(consensus_tag("Attempting to calculate round_number from current block..."))
+        bt.logging.error("=" * 80)
+        
+        # Try to recover by calculating round_number directly
+        try:
+            current_block = getattr(validator, 'block', None)
+            if current_block is not None:
+                round_number = await validator.round_manager.calculate_round(current_block)
+                bt.logging.warning(consensus_tag(f"✅ Recovered round_number: {round_number}"))
+            else:
+                bt.logging.error(consensus_tag("❌ Cannot recover: validator.block is None"))
+                return None
+        except Exception as e:
+            bt.logging.error(consensus_tag(f"❌ Failed to recover round_number: {e}"))
+            return None
+    
+    # Ensure round_number is a valid positive integer
+    if round_number is None or round_number < 1:
+        bt.logging.error(consensus_tag(f"❌ Invalid round_number: {round_number} (must be >= 1)"))
+        return None
+
     # Build payload: per-miner averages so far
     boundaries = validator.round_manager.get_current_boundaries()
     start_epoch = boundaries["round_start_epoch"]
@@ -186,6 +214,8 @@ async def publish_round_snapshot(
         return None
 
     # On-chain commitment: v4 (CID-only), bind to epoch window
+    # NOTE: On-chain commits have strict serialization limits (scalecodec)
+    # Only include optional fields if they have valid values (no None)
     commit_v4 = {
         "v": 4,
         "e": int(target_epoch) - 1,
@@ -193,10 +223,20 @@ async def publish_round_snapshot(
         "sb": start_block,
         "tb": target_block,
         "c": str(cid),
-        "r": int(round_number) if round_number is not None else None,
     }
+    # Only include "r" if round_number is not None (on-chain can't serialize None)
+    if round_number is not None:
+        commit_v4["r"] = int(round_number)
 
     try:
+        # 🔍 DEBUG: Log the exact commit_v4 structure before serialization
+        import json
+        commit_v4_json = json.dumps(commit_v4, sort_keys=True)
+        bt.logging.info("=" * 80)
+        bt.logging.info(ipfs_tag("BLOCKCHAIN", f"📋 Commit payload (before serialization):"))
+        bt.logging.info(ipfs_tag("BLOCKCHAIN", commit_v4_json))
+        bt.logging.info("=" * 80)
+        
         bt.logging.info(
             f"📮 CONSENSUS COMMIT START | blocks {start_block}→{target_block} | "
             f"e={commit_v4['e']}→pe={commit_v4['pe']} r={commit_v4.get('r')} cid={commit_v4['c']}"
