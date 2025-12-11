@@ -153,8 +153,19 @@ async def submit_task_results(
         # Only keep metadata if it has useful information (not empty)
         if not evaluation_metadata:
             evaluation_metadata = {}
-        # Calculate reward - use eval_score if rewards array is not available
-        reward_value = float(rewards[idx]) if idx < len(rewards) else eval_score
+        # Calculate reward - use rewards array if available, otherwise calculate from eval_score
+        # 🔍 CRITICAL: If eval_score = 1.0, reward must be at least EVAL_SCORE_WEIGHT (0.995), never 0.0
+        if idx < len(rewards):
+            reward_value = float(rewards[idx])
+        else:
+            # Fallback: if eval_score = 1.0, reward should be at least EVAL_SCORE_WEIGHT
+            # If eval_score = 0.0, reward = 0.0
+            if eval_score >= 1.0:
+                # Use minimum reward (EVAL_SCORE_WEIGHT) if task was completed but reward not available
+                from autoppia_web_agents_subnet.validator.config import EVAL_SCORE_WEIGHT
+                reward_value = float(EVAL_SCORE_WEIGHT)  # Minimum reward for completed task
+            else:
+                reward_value = 0.0  # Failed task = 0 reward
 
         task_solution_payload = iwa_models.TaskSolutionIWAP(
             solution_id=task_solution_id,
