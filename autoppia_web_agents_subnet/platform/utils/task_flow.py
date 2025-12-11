@@ -153,6 +153,20 @@ async def submit_task_results(
         # Only keep metadata if it has useful information (not empty)
         if not evaluation_metadata:
             evaluation_metadata = {}
+
+        # Marcar timeout en metadata si el tiempo de ejecución alcanza el TIMEOUT
+        try:
+            from autoppia_web_agents_subnet.validator.config import TIMEOUT
+            is_timeout = False
+            if exec_time is not None and TIMEOUT is not None:
+                is_timeout = float(exec_time) >= float(TIMEOUT)
+            if evaluation_metadata.get("timeout") is True:
+                is_timeout = True
+            if is_timeout:
+                evaluation_metadata["timeout"] = True
+        except Exception:
+            # No bloquear el flujo si falla la detección de timeout
+            pass
         # Calculate reward - use rewards array if available, otherwise calculate from eval_score
         # 🔍 CRITICAL: If eval_score = 1.0, reward must be at least EVAL_SCORE_WEIGHT (0.995), never 0.0
         if idx < len(rewards):
