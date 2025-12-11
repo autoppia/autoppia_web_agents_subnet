@@ -376,7 +376,7 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                 )
                 ctx.current_agent_runs[miner_uid] = agent_run
                 ctx.current_miner_snapshots[miner_uid] = ctx.current_miner_snapshots.get(miner_uid) or miner_snapshot
-                ctx.agent_run_accumulators.setdefault(miner_uid, {"reward": 0.0, "score": 0.0, "execution_time": 0.0, "tasks": 0})
+                ctx.agent_run_accumulators.setdefault(miner_uid, {"reward": 0.0, "eval_score": 0.0, "execution_time": 0.0, "tasks": 0})
             else:
                 start_agent_run_error = f"start_agent_run failed for miner_uid={miner_uid}, agent_run_id={agent_run_id}"
                 log_iwap_phase(
@@ -396,7 +396,7 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
             # Update local state for bookkeeping
             ctx.current_agent_runs[miner_uid] = agent_run
             ctx.current_miner_snapshots[miner_uid] = miner_snapshot
-            ctx.agent_run_accumulators.setdefault(miner_uid, {"reward": 0.0, "score": 0.0, "execution_time": 0.0, "tasks": 0})
+            ctx.agent_run_accumulators.setdefault(miner_uid, {"reward": 0.0, "eval_score": 0.0, "execution_time": 0.0, "tasks": 0})
 
 
 async def finish_round_flow(
