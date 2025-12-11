@@ -101,7 +101,7 @@ ENABLE_DYNAMIC = _str_to_bool(os.getenv("ENABLE_DYNAMIC", "true"))
 SHOULD_RECORD_GIF = _str_to_bool(os.getenv("SHOULD_RECORD_GIF", "true"))
 
 # ── Scoring Weights ──────────────────────────────────────────────────────────
-EVAL_SCORE_WEIGHT = 1.0
+EVAL_SCORE_WEIGHT = float(os.getenv("EVAL_SCORE_WEIGHT", "0.995")) 
 # TIME_WEIGHT: Small weight to incorporate execution time as tiebreaker in score calculation
 TIME_WEIGHT = float(os.getenv("TIME_WEIGHT", "0.005")) 
 
