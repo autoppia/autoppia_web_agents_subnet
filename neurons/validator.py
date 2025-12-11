@@ -19,6 +19,9 @@ from autoppia_web_agents_subnet.validator.config import (
     VALIDATOR_NAME,
     VALIDATOR_IMAGE,
     DZ_STARTING_BLOCK,
+    TESTING,
+    MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO,
+    PRE_GENERATED_TASKS,
 )
 from autoppia_web_agents_subnet.protocol import StartRoundSynapse
 from autoppia_web_agents_subnet.validator.round_manager import RoundManager, RoundPhase
@@ -70,6 +73,17 @@ class Validator(
             safety_buffer_epochs=SAFETY_BUFFER_EPOCHS,
             minimum_start_block=DZ_STARTING_BLOCK,
         )
+
+        # Log validator configuration
+        bt.logging.info("=" * 80)
+        bt.logging.info("🔧 VALIDATOR CONFIGURATION")
+        bt.logging.info("=" * 80)
+        bt.logging.info(f"📊 Mode: {'TESTING' if TESTING else 'PRODUCTION'}")
+        bt.logging.info(f"🔢 DZ_STARTING_BLOCK: {DZ_STARTING_BLOCK:,}")
+        bt.logging.info(f"⏱️  Round Size: {ROUND_SIZE_EPOCHS} epochs")
+        bt.logging.info(f"📋 Pre-generated Tasks: {PRE_GENERATED_TASKS}")
+        bt.logging.info(f"💰 Min Stake for Consensus: {MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO:,.0f} τ")
+        bt.logging.info("=" * 80)
 
         bt.logging.info("load_state()")
         self.load_state()
