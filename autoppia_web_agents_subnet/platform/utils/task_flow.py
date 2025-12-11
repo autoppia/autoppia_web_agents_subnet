@@ -4,8 +4,10 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
+import bittensor as bt
 from autoppia_web_agents_subnet.platform import models as iwa_models
 from autoppia_web_agents_subnet.platform import client as iwa_main
+from autoppia_web_agents_subnet.validator.config import TIMEOUT
 from .iwa_core import (
     log_iwap_phase,
     log_gif_event,
@@ -46,13 +48,36 @@ async def submit_task_results(
 
     validator_hotkey = ctx.wallet.hotkey.ss58_address
 
+    # CRITICAL: Always create evaluations for ALL miners that have agent_runs
+    # active_miner_uids should match current_agent_runs, but iterate over agent_runs to be safe
+    # Each miner with agent_run MUST have a TaskSolution and Evaluation for each task
+    
     for idx, miner_uid in enumerate(ctx.active_miner_uids):
-        if idx >= len(task_solutions):
-            break
-
+        # Get agent_run - if it doesn't exist, skip (shouldn't happen, but handle gracefully)
         agent_run = ctx.current_agent_runs.get(miner_uid)
         if agent_run is None:
+            bt.logging.warning(
+                f"⚠️ Miner {miner_uid} is in active_miner_uids but has no agent_run. "
+                f"This should not happen - agent_run should be created during handshake."
+            )
             continue
+        
+        # Get solution and evaluation data for this miner
+        # task_solutions, eval_scores, etc. are aligned with active_miner_uids by index
+        if idx < len(task_solutions):
+            solution = task_solutions[idx]
+            eval_score = float(eval_scores[idx]) if idx < len(eval_scores) else 0.0
+            evaluation_meta = evaluation_results[idx] if idx < len(evaluation_results) else {}
+            test_results_data = test_results_list[idx] if idx < len(test_results_list) else []
+            exec_time = float(execution_times[idx]) if idx < len(execution_times) else TIMEOUT
+        else:
+            # Shouldn't happen - task_solutions should have same length as active_miner_uids
+            # But handle gracefully: create empty evaluation
+            solution = None
+            eval_score = 0.0
+            evaluation_meta = {}
+            test_results_data = []
+            exec_time = TIMEOUT
 
         miner_hotkey = None
         try:
@@ -60,10 +85,13 @@ async def submit_task_results(
         except Exception:
             miner_hotkey = None
 
-        solution = task_solutions[idx]
+        # Handle None solution (miner didn't respond)
+        if solution is None:
+            raw_actions = []
+        else:
+            raw_actions = getattr(solution, "actions", []) or []
+        
         actions_payload: List[Dict[str, Any]] = []
-
-        raw_actions = getattr(solution, "actions", []) or []
         log_iwap_phase(
             "Phase 4",
             f"🔧 Converting {len(raw_actions)} actions for miner_uid={miner_uid}",
@@ -98,8 +126,8 @@ async def submit_task_results(
 
         task_solution_id = iwa_main.generate_task_solution_id(task_id, miner_uid)
         evaluation_id = iwa_main.generate_evaluation_id(task_id, miner_uid)
-        eval_score = float(eval_scores[idx]) if idx < len(eval_scores) else 0.0
-        evaluation_meta = evaluation_results[idx] if idx < len(evaluation_results) else {}
+        
+        # Ensure evaluation_meta is a dict
         if not isinstance(evaluation_meta, dict):
             evaluation_meta = {}
         evaluation_metadata = dict(evaluation_meta)
@@ -125,8 +153,7 @@ async def submit_task_results(
         # Only keep metadata if it has useful information (not empty)
         if not evaluation_metadata:
             evaluation_metadata = {}
-        test_results_data = test_results_list[idx] if idx < len(test_results_list) else []
-        exec_time = float(execution_times[idx]) if idx < len(execution_times) else 0.0
+        # Calculate reward - use eval_score if rewards array is not available
         reward_value = float(rewards[idx]) if idx < len(rewards) else eval_score
 
         task_solution_payload = iwa_models.TaskSolutionIWAP(
@@ -139,7 +166,7 @@ async def submit_task_results(
             miner_uid=miner_uid,
             miner_hotkey=miner_hotkey,
             actions=actions_payload,
-            recording=getattr(solution, "recording", None),
+            recording=getattr(solution, "recording", None) if solution is not None else None,
         )
 
         evaluation_result_payload = iwa_models.EvaluationResultIWAP(
@@ -197,20 +224,34 @@ async def submit_task_results(
             )
         except httpx.HTTPStatusError as exc:
             if exc.response is not None and exc.response.status_code == 409:
+                # Already exists - mark as completed
                 log_iwap_phase(
                     "Phase 4",
                     f"add_evaluation returned 409 for miner_uid={miner_uid}, task_id={task_id}; marking as completed",
                     level="warning",
                 )
                 ctx._completed_pairs.add((miner_uid, task_id))
-                continue
             else:
-                add_evaluation_error = f"add_evaluation failed for miner_uid={miner_uid}, task_id={task_id}"
+                # HTTP error - log but don't skip, try to retry or at least mark the attempt
+                add_evaluation_error = f"add_evaluation HTTP error for miner_uid={miner_uid}, task_id={task_id}: {exc}"
                 log_iwap_phase("Phase 4", add_evaluation_error, level="error", exc_info=True)
-                continue
-        except Exception:
-            add_evaluation_error = f"add_evaluation failed for miner_uid={miner_uid}, task_id={task_id}"
+                bt.logging.error(
+                    f"❌ CRITICAL: HTTP error creating evaluation for miner_uid={miner_uid}, task_id={task_id}, agent_run_id={agent_run.agent_run_id}. "
+                    f"Status: {exc.response.status_code if exc.response else 'unknown'}. "
+                    f"This evaluation MUST be created - retrying may be needed."
+                )
+                # Don't continue - the evaluation is essential, but we can't create it if HTTP fails
+                # The error is logged, but we can't proceed without a successful HTTP call
+        except Exception as exc:
+            # Any other error - log as critical
+            add_evaluation_error = f"add_evaluation failed for miner_uid={miner_uid}, task_id={task_id}: {exc}"
             log_iwap_phase("Phase 4", add_evaluation_error, level="error", exc_info=True)
+            bt.logging.error(
+                f"❌ CRITICAL: Failed to create evaluation for miner_uid={miner_uid}, task_id={task_id}, agent_run_id={agent_run.agent_run_id}. "
+                f"Error: {type(exc).__name__}: {exc}. "
+                f"This will result in an agent_run without evaluations, which should NEVER happen."
+            )
+            # Don't continue - we've logged the error, but can't create evaluation if the call fails
         else:
             add_evaluation_success = f"add_evaluation completed for miner_uid={miner_uid}, task_id={task_id}"
             log_iwap_phase("Phase 4", add_evaluation_success, level="success")
