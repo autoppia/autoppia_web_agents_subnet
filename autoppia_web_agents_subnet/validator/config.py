@@ -29,8 +29,8 @@ BURN_AMOUNT_PERCENTAGE = _env_float("BURN_AMOUNT_PERCENTAGE", 0.925)
 # ═══════════════════════════════════════════════════════════════════════════
 if TESTING:
     # ── Round Structure ──────────────────────────────────────────────────────
-    # Short rounds for rapid testing (~15 minutes per round)
-    ROUND_SIZE_EPOCHS = _env_float("TEST_ROUND_SIZE_EPOCHS", 0.208)
+    # Short rounds for rapid testing (~20 minutes per round)
+    ROUND_SIZE_EPOCHS = _env_float("TEST_ROUND_SIZE_EPOCHS", 0.278)
     SAFETY_BUFFER_EPOCHS = _env_float("TEST_SAFETY_BUFFER_EPOCHS", 0.02)
     AVG_TASK_DURATION_SECONDS = _env_int("TEST_AVG_TASK_DURATION_SECONDS", 300)
     PRE_GENERATED_TASKS = _env_int("TEST_PRE_GENERATED_TASKS", 3)
