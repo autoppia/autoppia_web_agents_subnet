@@ -101,7 +101,6 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
 
     # 🔍 DIAGNOSTIC: Log block and round calculation details
     from autoppia_web_agents_subnet.validator.config import DZ_STARTING_BLOCK
-    from autoppia_web_agents_subnet.validator.config import ROUND_SIZE_EPOCHS
     blocks_since_start = current_block - DZ_STARTING_BLOCK
     round_blocks = int(ctx.round_manager.ROUND_BLOCK_LENGTH)
     round_index = blocks_since_start // round_blocks
