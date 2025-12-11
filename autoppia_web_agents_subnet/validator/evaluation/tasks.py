@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import math
 import random
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 import bittensor as bt
 
@@ -177,15 +177,32 @@ def get_task_solution_from_synapse(
     task_id: str,
     synapse: TaskSynapse,
     max_actions_length: int = MAX_ACTIONS_LENGTH,
+    miner_uid: Optional[int] = None,
 ) -> TaskSolution:
     """
     Safely extract actions from a TaskSynapse response and limit their length.
     NOTE: correct slicing is [:max], not [max].
+    
+    Args:
+        task_id: Task identifier
+        synapse: TaskSynapse response from miner
+        max_actions_length: Maximum number of actions to extract
+        miner_uid: Miner UID to use for web_agent_id if not provided in synapse
     """
     actions = []
     if synapse and hasattr(synapse, "actions") and isinstance(synapse.actions, list):
         actions = synapse.actions[:max_actions_length]
-    return TaskSolution(task_id=task_id, actions=actions)
+    
+    # Try to get web_agent_id from synapse if available
+    web_agent_id = None
+    if synapse and hasattr(synapse, "web_agent_id"):
+        web_agent_id = synapse.web_agent_id
+    
+    # Fallback to miner_uid-based ID if not provided
+    if not web_agent_id and miner_uid is not None:
+        web_agent_id = f"miner_{miner_uid}"
+    
+    return TaskSolution(task_id=task_id, actions=actions, web_agent_id=web_agent_id)
 
 
 def collect_task_solutions_and_execution_times(
@@ -205,7 +222,7 @@ def collect_task_solutions_and_execution_times(
         if response is None:
             bt.logging.warning(f"Miner {miner_uid} returned None response")
             task_solutions.append(
-                TaskSolution(task_id=task.id, actions=[])
+                TaskSolution(task_id=task.id, actions=[], web_agent_id=f"miner_{miner_uid}")
             )
             execution_times.append(TIMEOUT)
             bt.logging.debug(
@@ -219,12 +236,13 @@ def collect_task_solutions_and_execution_times(
                 get_task_solution_from_synapse(
                     task_id=task.id,
                     synapse=response,
+                    miner_uid=miner_uid,
                 )
             )
         except Exception as e:
             bt.logging.error(f"Miner response format error: {e}")
             task_solutions.append(
-                TaskSolution(task_id=task.id, actions=[])
+                TaskSolution(task_id=task.id, actions=[], web_agent_id=f"miner_{miner_uid}")
             )
             execution_times.append(TIMEOUT)
             bt.logging.debug(

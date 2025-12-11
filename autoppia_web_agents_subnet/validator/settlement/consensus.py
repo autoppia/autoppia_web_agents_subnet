@@ -213,13 +213,13 @@ async def publish_round_snapshot(
         bt.logging.error("=" * 80)
         return None
 
-    # On-chain commitment: v4 (CID-only), bind to epoch window
+    # On-chain commitment: v4 (CID + blocks + round)
     # NOTE: On-chain commits have strict serialization limits (scalecodec)
-    # Only include optional fields if they have valid values (no None)
+    # Substrate Data enum has variants Raw0-Raw128 (max 128 bytes)
+    # Payload with sb, tb, c, r: 102 bytes (within limit)
+    # Payload with sb, tb, c (no r): 93 bytes (within limit)
+    # Filtering: First by round_number (r), fallback to blocks (sb/tb) if r is None
     commit_v4 = {
-        "v": 4,
-        "e": int(target_epoch) - 1,
-        "pe": int(target_epoch),
         "sb": start_block,
         "tb": target_block,
         "c": str(cid),
@@ -232,14 +232,19 @@ async def publish_round_snapshot(
         # 🔍 DEBUG: Log the exact commit_v4 structure before serialization
         import json
         commit_v4_json = json.dumps(commit_v4, sort_keys=True)
+        commit_v4_bytes = commit_v4_json.encode("utf-8")
         bt.logging.info("=" * 80)
         bt.logging.info(ipfs_tag("BLOCKCHAIN", f"📋 Commit payload (before serialization):"))
         bt.logging.info(ipfs_tag("BLOCKCHAIN", commit_v4_json))
+        bt.logging.info(ipfs_tag("BLOCKCHAIN", f"Payload size: {len(commit_v4_bytes)} bytes (limit: 128 bytes)"))
+        if len(commit_v4_bytes) > 128:
+            bt.logging.error(ipfs_tag("BLOCKCHAIN", f"❌ ERROR: Payload exceeds 128 bytes! This will cause Raw129 error."))
+        bt.logging.info(ipfs_tag("BLOCKCHAIN", f"Full metadata (blocks {start_block}→{target_block}, epochs {target_epoch-1}→{target_epoch}) is in IPFS payload"))
         bt.logging.info("=" * 80)
         
         bt.logging.info(
             f"📮 CONSENSUS COMMIT START | blocks {start_block}→{target_block} | "
-            f"e={commit_v4['e']}→pe={commit_v4['pe']} r={commit_v4.get('r')} cid={commit_v4['c']}"
+            f"r={commit_v4.get('r')} cid={commit_v4['c']}"
         )
         ok = False
         try:
@@ -325,20 +330,29 @@ async def aggregate_scores_from_commitments(
             raise RuntimeError(f"Unable to read stake for UID {uid}") from exc
 
     # Fetch all plain commitments and select those for this round (v4 with CID)
+    # Calculate expected round_number from start_block for filtering
+    expected_round_number = await validator.round_manager.calculate_round(start_block)
     blocks_per_epoch = getattr(validator.round_manager, "BLOCKS_PER_EPOCH", 360)
 
     commits = await read_all_plain_commitments(st, netuid=validator.config.netuid, block=None)
     start_epoch = start_block / blocks_per_epoch
     target_epoch = target_block / blocks_per_epoch
     expected_window = f"{start_block:,}→{target_block:,} (epochs {start_epoch:.2f}→{target_epoch:.2f})"
-    bt.logging.info(consensus_tag(f"Aggregate | Expected blocks {expected_window} | Commitments found: {len(commits or {})}"))
+    bt.logging.info(consensus_tag(f"Aggregate | Round {expected_round_number} | Expected blocks {expected_window} | Commitments found: {len(commits or {})}"))
+    
     if commits:
         bt.logging.info(consensus_tag(f"Found {len(commits)} validator commitments:"))
         for hk, entry in list(commits.items())[:5]:
-            sb = entry.get("sb") or entry.get("round_start_block")
-            tb = entry.get("tb") or entry.get("target_block")
-            window_str = f"blocks {sb}→{tb}" if sb is not None and tb is not None else f"epochs {entry.get('e')}→{entry.get('pe')}"
-            bt.logging.info(consensus_tag(f"  - {hk[:12]}... | {window_str} | CID {str(entry.get('c', 'N/A'))[:24]}..."))
+            r = entry.get("r")
+            sb = entry.get("sb")
+            tb = entry.get("tb")
+            cid_preview = str(entry.get('c', 'N/A'))[:24]
+            if r is not None:
+                bt.logging.info(consensus_tag(f"  - {hk[:12]}... | round={r} | CID {cid_preview}..."))
+            elif sb is not None and tb is not None:
+                bt.logging.info(consensus_tag(f"  - {hk[:12]}... | blocks {sb}→{tb} | CID {cid_preview}..."))
+            else:
+                bt.logging.info(consensus_tag(f"  - {hk[:12]}... | CID {cid_preview}..."))
 
     expected_start_block = int(start_block)
     expected_target_block = int(target_block)
@@ -406,14 +420,34 @@ async def aggregate_scores_from_commitments(
             bt.logging.info(f"[CONSENSUS] Skip {hk[:12]}... | Reason: entry is not dict")
             continue
 
-        entry_window = _extract_block_window_from_entry(entry)
-        if entry_window is not None:
-            entry_sb, entry_tb = entry_window
-            if entry_sb != expected_start_block or entry_tb != expected_target_block:
+        # Filter by round_number (r) first - most efficient
+        entry_round = _coerce_int(entry.get("r"))
+        if entry_round is not None:
+            if entry_round != expected_round_number:
                 skipped_wrong_window += 1
-                skipped_wrong_window_list.append((hk, entry_sb, entry_tb))
+                skipped_wrong_window_list.append((hk, None, None))
                 bt.logging.debug(
-                    f"⏭️ Skip {hk[:10]}…: wrong window (has blocks {entry_sb}→{entry_tb}, need {expected_start_block}→{expected_target_block})"
+                    f"⏭️ Skip {hk[:10]}…: wrong round (has r={entry_round}, need r={expected_round_number})"
+                )
+                continue
+        else:
+            # Fallback: If no round_number, filter by block window (sb/tb)
+            entry_window = _extract_block_window_from_entry(entry)
+            if entry_window is not None:
+                entry_sb, entry_tb = entry_window
+                if entry_sb != expected_start_block or entry_tb != expected_target_block:
+                    skipped_wrong_window += 1
+                    skipped_wrong_window_list.append((hk, entry_sb, entry_tb))
+                    bt.logging.debug(
+                        f"⏭️ Skip {hk[:10]}…: wrong window (has blocks {entry_sb}→{entry_tb}, need {expected_start_block}→{expected_target_block})"
+                    )
+                    continue
+            # If no round and no blocks, skip (invalid entry)
+            else:
+                skipped_wrong_window += 1
+                skipped_wrong_window_list.append((hk, None, None))
+                bt.logging.debug(
+                    f"⏭️ Skip {hk[:10]}…: missing both round (r) and blocks (sb/tb)"
                 )
                 continue
 
