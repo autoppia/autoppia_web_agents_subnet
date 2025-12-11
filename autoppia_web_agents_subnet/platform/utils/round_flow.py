@@ -67,9 +67,30 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
     if not ctx.current_round_id:
         return
 
+    # 🔍 FIX: Fetch a fresh block height to avoid TTL-cached values around round boundaries
+    # self.block is cached with 12s TTL. If block advances within that TTL, we send a stale round
+    # and backend returns "round_number mismatch". Always use fresh block for round calculation.
+    original_block = current_block
+    try:
+        latest_block = ctx.subtensor.get_current_block()
+        if latest_block is not None:
+            current_block = int(latest_block)
+            if current_block != original_block:
+                bt.logging.info(
+                    f"[IWAP] Block refresh: using fresh_block={current_block:,} "
+                    f"(was {original_block:,}, diff={current_block - original_block})"
+                )
+    except Exception:
+        # If refresh fails, use the passed block (fallback)
+        pass
+
     validator_identity = build_validator_identity(ctx)
     validator_snapshot = build_validator_snapshot(ctx, ctx.current_round_id)
-    boundaries = ctx.round_manager.get_current_boundaries()
+    
+    # 🔍 IMPORTANT: Recalculate boundaries with refreshed block to ensure consistency
+    # get_current_boundaries() uses self.start_block (from original block), but we need
+    # boundaries consistent with the refreshed current_block for round_number calculation
+    boundaries = ctx.round_manager.get_round_boundaries(current_block, log_debug=False)
     max_epochs = max(1, int(round(ROUND_SIZE_EPOCHS))) if ROUND_SIZE_EPOCHS else 1
     start_epoch_raw = boundaries["round_start_epoch"]
     start_epoch = math.floor(start_epoch_raw)
@@ -78,7 +99,33 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
         "target_epoch": boundaries.get("target_epoch"),
     }
 
+    # 🔍 DIAGNOSTIC: Log block and round calculation details
+    from autoppia_web_agents_subnet.validator.config import DZ_STARTING_BLOCK
+    from autoppia_web_agents_subnet.validator.config import ROUND_SIZE_EPOCHS
+    blocks_since_start = current_block - DZ_STARTING_BLOCK
+    round_blocks = int(ctx.round_manager.ROUND_BLOCK_LENGTH)
+    round_index = blocks_since_start // round_blocks
+    calculated_round = round_index + 1
+    
+    bt.logging.info(
+        f"[IWAP] Round calculation: block={current_block:,} | "
+        f"DZ_STARTING_BLOCK={DZ_STARTING_BLOCK:,} | "
+        f"blocks_since_start={blocks_since_start:,} | "
+        f"round_blocks={round_blocks} | "
+        f"round_index={round_index} | "
+        f"calculated_round={calculated_round}"
+    )
+    
     round_number = await ctx.round_manager.calculate_round(current_block)
+    
+    # 🔍 VALIDATION: Ensure calculated round matches expected
+    if round_number != calculated_round:
+        bt.logging.warning(
+            f"[IWAP] Round number mismatch: calculate_round()={round_number} vs "
+            f"manual calculation={calculated_round} | "
+            f"Using calculate_round() result: {round_number}"
+        )
+    
     try:
         ctx._current_round_number = int(round_number)
     except Exception:
@@ -121,13 +168,16 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
         bt.logging.info("✅ Validator will proceed with: handshake → tasks → evaluations → SET WEIGHTS on-chain")
         return
 
+    # Use round_start_block from boundaries (not current_block) for consistency
+    round_start_block = int(boundaries.get("round_start_block", current_block) or current_block)
+    
     validator_round = iwa_models.ValidatorRoundIWAP(
         validator_round_id=ctx.current_round_id,
         round_number=round_number,
         validator_uid=int(ctx.uid),
         validator_hotkey=validator_identity.hotkey,
         validator_coldkey=validator_identity.coldkey,
-        start_block=current_block,
+        start_block=round_start_block,
         start_epoch=start_epoch,
         max_epochs=max_epochs,
         max_blocks=ctx.round_manager.BLOCKS_PER_EPOCH,
