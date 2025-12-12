@@ -66,7 +66,7 @@ else:
     # reserved consensus window. Previous default was 75; 2.5x -> ~188.
     # Environment variable PRE_GENERATED_TASKS still takes precedence.
     PRE_GENERATED_TASKS = _env_int("PRE_GENERATED_TASKS", 75)
-    DZ_STARTING_BLOCK = _env_int("DZ_STARTING_BLOCK", 7084057)
+    DZ_STARTING_BLOCK = _env_int("DZ_STARTING_BLOCK", 7084250)
 
     # ── Round Phase Timing (all absolute % of total round) ──────────────────
     # Stop task evaluation at 90% of round to reserve time for consensus
