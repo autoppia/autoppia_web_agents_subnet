@@ -133,6 +133,28 @@ async def evaluate_task_solutions(
                 bt.logging.warning(f"Failed to extract feedback: {e}")
                 feedback_dict = None
 
+        # Extract execution_history if present
+        execution_history = []
+        execution_history_obj = getattr(res, "execution_history", None)
+        if execution_history_obj is not None:
+            try:
+                # Convert ActionExecutionResult objects to dicts
+                if hasattr(execution_history_obj, "__iter__") and not isinstance(execution_history_obj, (str, bytes)):
+                    for action_result in execution_history_obj:
+                        if hasattr(action_result, "model_dump"):
+                            execution_history.append(action_result.model_dump(mode="json", exclude_none=True))
+                        elif isinstance(action_result, dict):
+                            execution_history.append(action_result)
+                        else:
+                            # Fallback: try to convert to dict
+                            try:
+                                execution_history.append(dict(action_result) if hasattr(action_result, "__dict__") else str(action_result))
+                            except Exception:
+                                execution_history.append(str(action_result))
+            except Exception as e:
+                bt.logging.warning(f"Failed to extract execution_history: {e}")
+                execution_history = []
+
         # Summary (add simple, durable fields only)
         # Note: eval_score is the pure evaluation score from tests/actions (0-1)
         # This will be used to calculate reward = eval_score_weight × eval_score + time_weight × time_score
@@ -142,6 +164,7 @@ async def evaluate_task_solutions(
             "notes": str(getattr(res, "notes", "")) if hasattr(res, "notes") else "",
             "error_message": error_msg,  # Include validation errors (e.g. seed mismatch)
             "gif_recording": gif_recording,  # GIF base64 for leaderboard
+            "execution_history": execution_history,  # History of executed actions during evaluation
         }
         
         # Only add feedback if it has useful information
