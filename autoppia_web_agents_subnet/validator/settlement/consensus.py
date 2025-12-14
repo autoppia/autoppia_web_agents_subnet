@@ -607,6 +607,22 @@ async def aggregate_scores_from_commitments(
         if per_val_stats:
             stats_by_validator[hk] = per_val_stats
 
+    # Ensure missing miners in a validator payload count as zero (still counting stake).
+    if fetched:
+        # Union of all miners present in any validator payload.
+        all_miners: set[int] = set()
+        for rewards in scores_by_validator.values():
+            all_miners.update(rewards.keys())
+
+        # Add zero contribution for miners omitted by each validator.
+        for hk, _cid, st_val in fetched:
+            stake = st_val if st_val > 0.0 else 1.0
+            rewards = scores_by_validator.get(hk, {}) or {}
+            missing = all_miners.difference(rewards.keys())
+            for uid in missing:
+                weight_total[uid] = weight_total.get(uid, 0.0) + stake
+                # weighted_sum unchanged (implicit zero reward)
+
     result: Dict[int, float] = {}
     for uid, wsum in weighted_sum.items():
         denom = weight_total.get(uid, 0.0)

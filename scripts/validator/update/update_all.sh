@@ -78,3 +78,5 @@ echo
 echo "✅ Update completed successfully!"
 echo "💡 To restart the validator, run: pm2 restart <process-name>"
 
+
+
