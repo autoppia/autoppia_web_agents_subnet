@@ -254,7 +254,6 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
         SKIP_ROUND_IF_STARTED_AFTER_FRACTION,
         MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO,
         ENABLE_DISTRIBUTED_CONSENSUS,
-        PROPAGATION_BLOCKS_SLEEP,
         ENABLE_DYNAMIC,
         SHOULD_RECORD_GIF,
         TIMEOUT,
@@ -295,7 +294,6 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
         "consensus": {
             "min_validator_stake_for_consensus_tao": MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO,
             "enable_distributed_consensus": ENABLE_DISTRIBUTED_CONSENSUS,
-            "propagation_blocks_sleep": PROPAGATION_BLOCKS_SLEEP,
         },
         "execution": {
             "enable_dynamic": ENABLE_DYNAMIC,

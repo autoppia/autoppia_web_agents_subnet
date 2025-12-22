@@ -14,7 +14,6 @@ from autoppia_web_agents_subnet.validator.config import (
     BURN_UID,
     ENABLE_DISTRIBUTED_CONSENSUS,
     FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION,
-    PROPAGATION_BLOCKS_SLEEP,
 )
 from autoppia_web_agents_subnet.validator.round_manager import RoundPhase
 from autoppia_web_agents_subnet.validator.visualization.round_table import (
@@ -41,58 +40,6 @@ class SettlementMixin:
                      "_ipfs_upload_cid", "_consensus_publish_timestamp", "_agg_meta_cache"):
             if hasattr(self, attr):
                 setattr(self, attr, None)
-
-    async def _wait_for_commit_propagation(self) -> None:
-        """Wait for the most recent commitment to settle a few blocks deep."""
-        if not ENABLE_DISTRIBUTED_CONSENSUS:
-            return
-        blocks_to_wait = max(int(PROPAGATION_BLOCKS_SLEEP or 0), 0)
-        if blocks_to_wait <= 0:
-            return
-        commit_block = getattr(self, "_consensus_commit_block", None)
-        if commit_block is None:
-            return
-
-        target_block = int(commit_block) + blocks_to_wait
-        seconds_per_block = getattr(self.round_manager, "SECONDS_PER_BLOCK", 12)
-        wait_logged = False
-        consecutive_failures = 0
-
-        while True:
-            try:
-                current_block = int(self.subtensor.get_current_block())
-                consecutive_failures = 0
-            except Exception:
-                consecutive_failures += 1
-                current_block = None
-
-            if current_block is not None:
-                if current_block >= target_block:
-                    if wait_logged:
-                        ColoredLogger.info(
-                            f"✅ Commitment propagation window satisfied at block {current_block}",
-                            ColoredLogger.CYAN,
-                        )
-                    return
-                remaining = max(target_block - current_block, 0)
-            else:
-                remaining = max(blocks_to_wait, 0)
-
-            if consecutive_failures >= 3:
-                ColoredLogger.warning(
-                    "Propagation wait aborted: unable to read current block height",
-                    ColoredLogger.YELLOW,
-                )
-                return
-
-            if not wait_logged:
-                ColoredLogger.info(
-                    f"⏳ Waiting ~{remaining} blocks for commitment propagation",
-                    ColoredLogger.CYAN,
-                )
-                wait_logged = True
-
-            await asyncio.sleep(seconds_per_block)
 
     async def _publish_final_snapshot(self, *, tasks_completed: int, total_tasks: int) -> None:
         """Emit final consensus snapshot once all tasks complete, then finalize weights."""
@@ -385,7 +332,6 @@ class SettlementMixin:
             return
 
         if ENABLE_DISTRIBUTED_CONSENSUS:
-            await self._wait_for_commit_propagation()
             boundaries = self.round_manager.get_current_boundaries()
             bt.logging.info("[CONSENSUS] Aggregating scores from other validators...")
             agg = self._agg_scores_cache or {}

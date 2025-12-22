@@ -51,7 +51,6 @@ if TESTING:
     # Testing: No stake required (0 τ) - anyone can participate
     MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO = 0.0
     IWAP_API_BASE_URL = os.getenv("IWAP_API_BASE_URL", "https://dev-api-leaderboard.autoppia.com")
-    _PROPAGATION_BLOCKS_DEFAULT = 0
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PRODUCTION CONFIGURATION (4.8-hour rounds, conservative)
@@ -83,7 +82,6 @@ else:
     # Production: Minimum 10k τ stake required to be included in consensus calculations
     MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO = 10000.0
     IWAP_API_BASE_URL = os.getenv("IWAP_API_BASE_URL", "https://api-leaderboard.autoppia.com")
-    _PROPAGATION_BLOCKS_DEFAULT = 2
 # ═══════════════════════════════════════════════════════════════════════════
 # SHARED CONFIGURATION (same for all modes)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -118,7 +116,6 @@ IWAP_VALIDATOR_AUTH_MESSAGE = _normalized(os.getenv("IWAP_VALIDATOR_AUTH_MESSAGE
 # ── Distributed Consensus (IPFS + Blockchain) ────────────────────────────────
 # Enabled by default, can be disabled via .env (works in both testing and production)
 ENABLE_DISTRIBUTED_CONSENSUS = _str_to_bool(os.getenv("ENABLE_DISTRIBUTED_CONSENSUS", "true"))
-PROPAGATION_BLOCKS_SLEEP = _env_int("PROPAGATION_BLOCKS_SLEEP", _PROPAGATION_BLOCKS_DEFAULT)
 
 # ── IPFS Storage ─────────────────────────────────────────────────────────────
 IPFS_API_URL = os.getenv("IPFS_API_URL", "http://ipfs.metahash73.com:5001/api/v0")
