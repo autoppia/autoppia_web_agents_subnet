@@ -14,12 +14,12 @@ from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.utils.log_colors import round_details_tag
 from autoppia_web_agents_subnet.validator.config import (
     DZ_STARTING_BLOCK,
-    FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION,
+    FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION,
     MAX_MINER_AGENT_NAME_LENGTH,
     PRE_GENERATED_TASKS,
     PROMPTS_PER_USECASE,
     SKIP_ROUND_IF_STARTED_AFTER_FRACTION,
-    STOP_TASK_EVALUATION_AT_ROUND_FRACTION,
+    STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION,
 )
 from autoppia_web_agents_subnet.validator.round_manager import RoundPhase
 from autoppia_web_agents_subnet.validator.round_start.types import StartPhaseResult
@@ -370,8 +370,8 @@ class RoundStartMixin:
         bt.logging.info(round_details_tag(f"Duration: ~{minutes_remaining:.1f} minutes"))
         bt.logging.info(round_details_tag(f"Total Blocks: {total_blocks}"))
         bt.logging.info(round_details_tag(f"Tasks to Execute: {len(all_tasks)}"))
-        bt.logging.info(round_details_tag(f"Stop Evaluation at: {STOP_TASK_EVALUATION_AT_ROUND_FRACTION:.0%}"))
-        bt.logging.info(round_details_tag(f"Fetch Commits at: {FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION:.0%}"))
+        bt.logging.info(round_details_tag(f"Stop Evaluation & Upload IPFS at: {STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION:.0%}"))
+        bt.logging.info(round_details_tag(f"Fetch Commits & Calculate Weight at: {FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION:.0%}"))
         bt.logging.info("=" * 100)
 
         if not self.active_miner_uids:

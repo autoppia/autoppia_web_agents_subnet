@@ -251,11 +251,11 @@ All validators set the SAME weights → consensus achieved ✅
 # Enable/disable distributed consensus
 ENABLE_DISTRIBUTED_CONSENSUS = true  # Default: enabled
 
-# When to stop task evaluation (absolute % of round)
-STOP_TASK_EVALUATION_AT_ROUND_FRACTION = 0.75  # Production: 75%
+# When to stop task evaluation and upload to IPFS (absolute % of round)
+STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION = 0.90  # Production: 90%
 
-# When to fetch IPFS payloads (absolute % of round)
-FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION = 0.875  # Production: 87.5%
+# When to fetch IPFS payloads and calculate consensus weights (absolute % of round)
+FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION = 0.95  # Production: 95%
 
 # Minimum stake to be included in consensus calculations
 MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO = 10000.0  # 10k τ minimum
@@ -537,8 +537,8 @@ PRE_GENERATED_TASKS = 5                              # 5 tasks
 DZ_STARTING_BLOCK = 6870000
 
 # Phase Timing (absolute % of round)
-STOP_TASK_EVALUATION_AT_ROUND_FRACTION = 0.50        # Stop at 50%
-FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION = 0.75  # Fetch at 75%
+STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION = 0.65  # Stop evaluation and upload IPFS at 65%
+FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION = 0.75  # Fetch and calculate weights at 75%
 
 # Checkpoint System & Late Start
 ENABLE_CHECKPOINT_SYSTEM = True
@@ -559,8 +559,8 @@ PRE_GENERATED_TASKS = 75                             # 75 tasks
 DZ_STARTING_BLOCK = 6870000
 
 # Phase Timing (absolute % of round)
-STOP_TASK_EVALUATION_AT_ROUND_FRACTION = 0.75        # Stop at 75%
-FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION = 0.875  # Fetch at 87.5%
+STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION = 0.90  # Stop evaluation and upload IPFS at 90%
+FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION = 0.95  # Fetch and calculate weights at 95%
 
 # Checkpoint System & Late Start
 ENABLE_CHECKPOINT_SYSTEM = True

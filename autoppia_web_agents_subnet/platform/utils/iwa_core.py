@@ -249,8 +249,8 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
         DZ_STARTING_BLOCK,
         PRE_GENERATED_TASKS,
         AVG_TASK_DURATION_SECONDS,
-        STOP_TASK_EVALUATION_AT_ROUND_FRACTION,
-        FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION,
+        STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION,
+        FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION,
         SKIP_ROUND_IF_STARTED_AFTER_FRACTION,
         MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO,
         ENABLE_DISTRIBUTED_CONSENSUS,
@@ -287,8 +287,8 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
             "avg_task_duration_seconds": AVG_TASK_DURATION_SECONDS,
         },
         "timing": {
-            "stop_task_evaluation_at_round_fraction": STOP_TASK_EVALUATION_AT_ROUND_FRACTION,
-            "fetch_ipfs_validator_payloads_at_round_fraction": FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION,
+            "stop_task_evaluation_at_round_fraction": STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION,
+            "fetch_ipfs_validator_payloads_at_round_fraction": FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION,
             "skip_round_if_started_after_fraction": SKIP_ROUND_IF_STARTED_AFTER_FRACTION,
         },
         "consensus": {

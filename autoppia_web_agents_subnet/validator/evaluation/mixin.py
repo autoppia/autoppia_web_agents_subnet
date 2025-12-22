@@ -14,9 +14,8 @@ from autoppia_web_agents_subnet.utils.log_colors import consensus_tag
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.validator.config import (
     ENABLE_DISTRIBUTED_CONSENSUS,
-    FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION,
     SAFETY_BUFFER_EPOCHS,
-    STOP_TASK_EVALUATION_AT_ROUND_FRACTION,
+    STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION,
     TIME_WEIGHT,
     EVAL_SCORE_WEIGHT,
 )
@@ -89,34 +88,23 @@ class EvaluationPhaseMixin:
             bt_done = max(current_block - rsb, 0)
             progress_frac = min(max(bt_done / bt_total, 0.0), 1.0)
 
-            if not self._finalized_this_round and progress_frac >= float(FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION):
+            # CRITICAL: Verificar 90% PRIMERO para asegurar que siempre se publique a IPFS
+            # Si progress >= 90% y no se ha publicado, publicar ahora.
+            # El cálculo de consenso se hará más adelante (95%) en _run_settlement_phase.
+            if ENABLE_DISTRIBUTED_CONSENSUS and (not self._finalized_this_round) and (not self._consensus_published) and (progress_frac >= float(STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION)):
+                ColoredLogger.info("\n" + "=" * 80, ColoredLogger.CYAN)
                 ColoredLogger.info(
-                    f"⏳ Finalizing early at {FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION:.0%} to avoid boundary issues",
-                    ColoredLogger.PURPLE,
+                    f"🛑🛑🛑 STOP FRACTION REACHED: {STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION:.0%} 🛑🛑🛑",
+                    ColoredLogger.CYAN,
                 )
-                self.round_manager.enter_phase(
-                    RoundPhase.FINALIZING,
-                    block=current_block,
-                    note="Early finalize window reached",
-                )
-                await self._calculate_final_weights(tasks_completed)
-                self._finalized_this_round = True
-                break
-
-            if ENABLE_DISTRIBUTED_CONSENSUS and (not self._finalized_this_round) and (not self._consensus_published) and (progress_frac >= float(STOP_TASK_EVALUATION_AT_ROUND_FRACTION)):
-                ColoredLogger.error("\n" + "=" * 80, ColoredLogger.RED)
-                ColoredLogger.error(
-                    f"🛑🛑🛑 STOP FRACTION REACHED: {STOP_TASK_EVALUATION_AT_ROUND_FRACTION:.0%} 🛑🛑🛑",
-                    ColoredLogger.RED,
-                )
-                ColoredLogger.error(
+                ColoredLogger.info(
                     f"📤📤📤 PUBLISHING TO IPFS NOW WITH {tasks_completed} TASKS 📤📤📤",
-                    ColoredLogger.RED,
+                    ColoredLogger.CYAN,
                 )
-                ColoredLogger.error("⏸️⏸️⏸️  HALTING ALL TASK EXECUTION ⏸️⏸️⏸️", ColoredLogger.RED)
-                ColoredLogger.error("=" * 80 + "\n", ColoredLogger.RED)
+                ColoredLogger.info("⏸️⏸️⏸️  HALTING ALL TASK EXECUTION ⏸️⏸️⏸️", ColoredLogger.CYAN)
+                ColoredLogger.info("=" * 80 + "\n", ColoredLogger.CYAN)
                 bt.logging.info("=" * 80)
-                bt.logging.info(consensus_tag(f"🛑 STOP EVAL @ {STOP_TASK_EVALUATION_AT_ROUND_FRACTION:.0%}"))
+                bt.logging.info(consensus_tag(f"🛑 STOP EVAL @ {STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION:.0%}"))
                 bt.logging.info(consensus_tag(f"Progress: {progress_frac:.2f}"))
                 bt.logging.info(consensus_tag(f"Current Block: {current_block:,}"))
                 bt.logging.info(consensus_tag(f"Blocks Done/Total: {bt_done}/{bt_total}"))
@@ -157,10 +145,7 @@ class EvaluationPhaseMixin:
                         tasks_completed=tasks_completed,
                         total_tasks=len(all_tasks),
                     )
-                if not self._finalized_this_round:
-                    bt.logging.info("[CONSENSUS] Finalizing immediately after safety-buffer publish")
-                    await self._calculate_final_weights(tasks_completed)
-                    self._finalized_this_round = True
+                # NO finalizar aquí - esperar hasta FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION (95%) para calcular consenso
                 break
 
         if ENABLE_DISTRIBUTED_CONSENSUS and (not self._consensus_published) and (not self._finalized_this_round):

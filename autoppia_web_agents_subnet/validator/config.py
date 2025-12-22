@@ -37,10 +37,10 @@ if TESTING:
     DZ_STARTING_BLOCK = _env_int("TEST_DZ_STARTING_BLOCK", 6949035)  # Synced with PROD
 
     # ── Round Phase Timing (all absolute % of total round) ──────────────────
-    # Stop task evaluation at 50% of round to allow time for consensus
-    STOP_TASK_EVALUATION_AT_ROUND_FRACTION = 0.65
-    # Fetch IPFS payloads at 75% of round (gives 25% gap for propagation)
-    FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION = 0.75
+    # Stop task evaluation and upload to IPFS at this fraction
+    STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION = 0.65
+    # Fetch IPFS payloads and calculate consensus weights at this fraction
+    FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION = 0.75
 
     # ── Late Start Protection ────────────────────────────────────────────────
     # Skip round only if started when >95% complete (very permissive for testing)
@@ -68,10 +68,10 @@ else:
     DZ_STARTING_BLOCK = _env_int("DZ_STARTING_BLOCK", 7084250)
 
     # ── Round Phase Timing (all absolute % of total round) ──────────────────
-    # Stop task evaluation at 90% of round to reserve time for consensus
-    STOP_TASK_EVALUATION_AT_ROUND_FRACTION = 0.90
-    # Fetch IPFS payloads at 95% of round (gives 5% gap for propagation)
-    FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION = 0.95
+    # Stop task evaluation and upload to IPFS at this fraction
+    STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION = 0.90
+    # Fetch IPFS payloads and calculate consensus weights at this fraction
+    FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION = 0.95
 
     # ── Late Start Protection ────────────────────────────────────────────────
     # Skip round if started when >30% complete (conservative for production)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import time
 from typing import Dict, Optional
 
@@ -13,7 +14,7 @@ from autoppia_web_agents_subnet.validator.config import (
     BURN_AMOUNT_PERCENTAGE,
     BURN_UID,
     ENABLE_DISTRIBUTED_CONSENSUS,
-    FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION,
+    FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION,
 )
 from autoppia_web_agents_subnet.validator.round_manager import RoundPhase
 from autoppia_web_agents_subnet.validator.visualization.round_table import (
@@ -115,16 +116,14 @@ class SettlementMixin:
             # Record consensus published in report (NEW)
             self._report_consensus_published(ipfs_cid=cid)
 
-        if not self._finalized_this_round:
-            bt.logging.info("[CONSENSUS] Finalizing immediately after all-tasks completion publish")
-            await self._calculate_final_weights(tasks_completed)
-            self._finalized_this_round = True
+        # NO finalizar aquí - esperar hasta FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION (95%) para calcular consenso
 
     async def _run_settlement_phase(self, *, tasks_completed: int, total_tasks: int) -> None:
         """
         Complete the round:
         - Publish consensus snapshot if pending.
-        - Calculate and broadcast final weights (if not already done).
+        - Wait until 95% progress (if not already reached) before calculating consensus.
+        - Calculate and broadcast final weights.
         - Wait for the next round boundary before exiting to the scheduler loop.
         """
         if ENABLE_DISTRIBUTED_CONSENSUS and (not self._consensus_published):
@@ -133,9 +132,59 @@ class SettlementMixin:
                 total_tasks=total_tasks,
             )
 
+        # Esperar hasta el 95% antes de calcular consenso (si aún no se alcanzó)
         if not self._finalized_this_round:
-            await self._calculate_final_weights(tasks_completed)
-            self._finalized_this_round = True
+            import asyncio
+            
+            fetch_fraction = float(FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION)
+            max_wait_iterations = 1000  # Límite de seguridad (evitar bucle infinito)
+            wait_interval_seconds = 2.0  # Verificar progreso cada 2 segundos
+            
+            iteration = 0
+            while iteration < max_wait_iterations:
+                # Use subtensor.get_current_block() for accurate block reading (not metagraph.block which can be stale)
+                try:
+                    current_block_now = self.subtensor.get_current_block()
+                except Exception as e:
+                    bt.logging.warning(f"[CONSENSUS] Failed to get current block from subtensor: {e}, using metagraph.block as fallback")
+                    block_tensor = getattr(self.metagraph, "block", None)
+                    current_block_now = int(block_tensor.item()) if block_tensor is not None else 0
+                
+                bounds_now = self.round_manager.get_round_boundaries(
+                    current_block_now,
+                    log_debug=False,
+                )
+                rsb = bounds_now["round_start_block"]
+                tb = bounds_now["target_block"]
+                progress_now = min(max((current_block_now - rsb) / max(tb - rsb, 1), 0.0), 1.0)
+                
+                # Calcular si se alcanzó el 95% o el round terminó (progress >= 1.0)
+                if progress_now >= fetch_fraction or progress_now >= 1.0:
+                    bt.logging.info(
+                        f"[CONSENSUS] Progress {progress_now:.2%} >= {fetch_fraction:.0%} - "
+                        "Calculating consensus and final weights"
+                    )
+                    await self._calculate_final_weights(tasks_completed)
+                    self._finalized_this_round = True
+                    break
+                
+                # Si aún no se alcanzó, esperar y verificar de nuevo
+                if iteration == 0:
+                    bt.logging.info(
+                        f"[CONSENSUS] Progress {progress_now:.2%} < {fetch_fraction:.0%} - "
+                        f"Waiting until {fetch_fraction:.0%} before calculating consensus"
+                    )
+                
+                await asyncio.sleep(wait_interval_seconds)
+                iteration += 1
+            
+            # Si salimos del bucle sin calcular (límite alcanzado), calcular de todas formas
+            if not self._finalized_this_round:
+                bt.logging.warning(
+                    f"[CONSENSUS] Max wait iterations reached - calculating weights anyway"
+                )
+                await self._calculate_final_weights(tasks_completed)
+                self._finalized_this_round = True
 
         self.round_manager.enter_phase(
             RoundPhase.WAITING,
@@ -331,49 +380,25 @@ class SettlementMixin:
             )
             return
 
+        # NOTE: Removed duplicate re-fetch here - we only do the final re-fetch before calculating weights
+        # This simplifies the code and avoids duplicate IPFS/chain calls
         if ENABLE_DISTRIBUTED_CONSENSUS:
-            boundaries = self.round_manager.get_current_boundaries()
-            bt.logging.info("[CONSENSUS] Aggregating scores from other validators...")
-            agg = self._agg_scores_cache or {}
-            agg_meta = None
-            if not agg:
-                block_tensor = getattr(self.metagraph, "block", None)
-                current_block_now = int(block_tensor.item()) if block_tensor is not None else 0
-                bounds_now = self.round_manager.get_round_boundaries(
-                    current_block_now,
-                    log_debug=False,
-                )
-                rsb = bounds_now["round_start_block"]
-                tb = bounds_now["target_block"]
-                progress_now = min(max((current_block_now - rsb) / max(tb - rsb, 1), 0.0), 1.0)
-
-                bt.logging.info("=" * 80)
-                bt.logging.info(consensus_tag(f"📥 FETCH COMMITS @ {FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION:.0%}"))
-                bt.logging.info(consensus_tag(f"Progress: {progress_now:.2f}"))
-                bt.logging.info(consensus_tag(f"Current Block: {current_block_now:,}"))
-                bt.logging.info(consensus_tag("Fetching commitments from IPFS to aggregate scores"))
-                bt.logging.info("=" * 80)
-
-                st = await self._get_async_subtensor()
-                agg, agg_meta = await aggregate_scores_from_commitments(
-                    validator=self,
-                    st=st,
-                    start_block=boundaries["round_start_block"],
-                    target_block=boundaries["target_block"],
-                )
-                self._agg_scores_cache = agg
-                self._agg_meta_cache = agg_meta  # FASE 3: Save consensus metadata
-
-            if agg:
+            # Use cached consensus scores if available, otherwise will be fetched in final re-fetch
+            # cached_consensus_scores: Dict[miner_uid -> stake_weighted_avg_reward] from previous fetch
+            cached_consensus_scores = self._agg_scores_cache or {}
+            # cached_consensus_metadata: Dict with validators info, participation stats, downloaded payloads
+            cached_consensus_metadata = self._agg_meta_cache
+            
+            if cached_consensus_scores:
                 ColoredLogger.info(
-                    f"🤝 Using aggregated scores from commitments ({len(agg)} miners)",
+                    f"🤝 Using cached aggregated consensus scores from commitments ({len(cached_consensus_scores)} miners)",
                     ColoredLogger.CYAN,
                 )
-                avg_rewards = agg
-                self._consensus_last_details = agg_meta or {}
+                avg_rewards = cached_consensus_scores
+                self._consensus_last_details = cached_consensus_metadata or {}
 
                 # Record consensus validators in report (NEW)
-                validators_info = agg_meta.get("validators", []) if agg_meta else []
+                validators_info = cached_consensus_metadata.get("validators", []) if cached_consensus_metadata else []
                 for val_info in validators_info:
                     self._report_consensus_validator(
                         uid=val_info.get("uid"),
@@ -385,10 +410,11 @@ class SettlementMixin:
                     )
 
                 self._report_consensus_aggregated()
-                self._report_set_final_scores(agg)
+                self._report_set_final_scores(cached_consensus_scores)
             else:
+                # No cache available - will use local scores or fetch in final re-fetch
                 ColoredLogger.warning(
-                    "No aggregated scores available; using local averages.",
+                    "⚠️ No cached consensus scores available, will use local scores or fetch in final re-fetch",
                     ColoredLogger.YELLOW,
                 )
 
@@ -408,15 +434,114 @@ class SettlementMixin:
 
         self.round_manager.log_round_summary()
 
-        uids = list(avg_rewards.keys())
-        scores_array = np.array([avg_rewards[uid] for uid in uids], dtype=np.float32)
+        # Re-fetch final justo antes de calcular pesos WTA para asegurar todos los commits
+        # CRITICAL: After this re-fetch, we create an immutable snapshot that will be used
+        # for BOTH weight calculation AND IWAP submission to guarantee consistency
+        if ENABLE_DISTRIBUTED_CONSENSUS:
+            # Use subtensor.get_current_block() for accurate block reading (not metagraph.block which can be stale)
+            try:
+                current_block_final = self.subtensor.get_current_block()
+            except Exception as e:
+                bt.logging.warning(consensus_tag(f"Failed to get current block from subtensor: {e}, using metagraph.block as fallback"))
+                block_tensor = getattr(self.metagraph, "block", None)
+                current_block_final = int(block_tensor.item()) if block_tensor is not None else 0
+            
+            bounds_final = self.round_manager.get_round_boundaries(
+                current_block_final,
+                log_debug=False,
+            )
+            rsb_final = bounds_final["round_start_block"]
+            tb_final = bounds_final["target_block"]
+            progress_final = min(max((current_block_final - rsb_final) / max(tb_final - rsb_final, 1), 0.0), 1.0)
+            
+            # Si progreso >= 95%, hacer un último re-fetch antes de calcular pesos
+            # Si progreso < 95% pero no hay cache, también hacer re-fetch (caso edge: llamado antes de tiempo)
+            should_do_final_refetch = (
+                progress_final >= float(FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION) or
+                (not self._agg_scores_cache and progress_final > 0.5)  # Si no hay cache y ya pasamos 50%, hacer fetch
+            )
+            
+            if should_do_final_refetch:
+                boundaries = self.round_manager.get_current_boundaries()
+                if progress_final >= float(FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION):
+                    bt.logging.info(consensus_tag("🔄 Final re-fetch before calculating weights (95% reached)"))
+                else:
+                    bt.logging.info(consensus_tag(f"🔄 Re-fetch before calculating weights (progress {progress_final:.1%}, no cache available)"))
+                
+                st = await self._get_async_subtensor()
+                # final_aggregated_consensus_scores: Dict[miner_uid -> stake_weighted_avg_reward] from all validators
+                # final_aggregated_consensus_metadata: Dict with validators info, participation stats, downloaded payloads
+                final_aggregated_consensus_scores, final_aggregated_consensus_metadata = await aggregate_scores_from_commitments(
+                    validator=self,
+                    st=st,
+                    start_block=boundaries["round_start_block"],
+                    target_block=boundaries["target_block"],
+                )
+                if final_aggregated_consensus_scores:
+                    self._agg_scores_cache = final_aggregated_consensus_scores
+                    self._agg_meta_cache = final_aggregated_consensus_metadata
+                    avg_rewards = final_aggregated_consensus_scores
+                    self._consensus_last_details = final_aggregated_consensus_metadata or {}
+                    bt.logging.info(consensus_tag(f"✅ Updated consensus with {len(final_aggregated_consensus_scores)} miners from final fetch"))
+                else:
+                    bt.logging.warning(consensus_tag("⚠️ Final re-fetch returned no consensus data, will use local scores"))
+                    
+                    # Log quorum participation report
+                    if final_aggregated_consensus_metadata and isinstance(final_aggregated_consensus_metadata, dict):
+                        downloaded_payloads = final_aggregated_consensus_metadata.get("downloaded_payloads", [])
+                        validators_participated = len(downloaded_payloads)
+                        
+                        # Get active validators count
+                        active_validators_count = 0
+                        try:
+                            validator_permit = getattr(self.metagraph, "validator_permit", None)
+                            if validator_permit is not None:
+                                active_validators_count = int(validator_permit.sum().item())
+                        except Exception:
+                            pass
+                        
+                        bt.logging.info("=" * 80)
+                        bt.logging.info(consensus_tag("📊 CONSENSUS PARTICIPATION REPORT (Final Fetch)"))
+                        bt.logging.info(consensus_tag(f"Validators active (metagraph): {active_validators_count}"))
+                        bt.logging.info(consensus_tag(f"Validators participated: {validators_participated}"))
+                        
+                        if active_validators_count > 0:
+                            participation_rate = (validators_participated / active_validators_count) * 100
+                            bt.logging.info(consensus_tag(f"Participation rate: {participation_rate:.1f}%"))
+                            
+                            if validators_participated < active_validators_count:
+                                missing = active_validators_count - validators_participated
+                                bt.logging.warning(
+                                    consensus_tag(
+                                        f"⚠️ QUORUM PARTIAL: {missing} validator(s) missing from consensus"
+                                    )
+                                )
+                        bt.logging.info("=" * 80)
+
+        # Create immutable snapshot of consensus data to ensure IWAP receives EXACTLY
+        # the same data used for weight calculation (prevents race conditions)
+        if ENABLE_DISTRIBUTED_CONSENSUS and isinstance(avg_rewards, dict):
+            final_consensus_scores = copy.deepcopy(avg_rewards)
+        else:
+            # If not distributed consensus or not a dict, use as-is (but ensure it's a dict)
+            final_consensus_scores = avg_rewards if isinstance(avg_rewards, dict) else {}
+        
+        final_consensus_meta = copy.deepcopy(self._agg_meta_cache) if ENABLE_DISTRIBUTED_CONSENSUS and self._agg_meta_cache else self._agg_meta_cache
+        
+        # Use the immutable snapshot for weight calculation
+        if not final_consensus_scores:
+            bt.logging.warning(consensus_tag("⚠️ No consensus scores available for weight calculation"))
+            final_consensus_scores = {}
+        
+        uids = list(final_consensus_scores.keys())
+        scores_array = np.array([final_consensus_scores[uid] for uid in uids], dtype=np.float32)
         final_rewards_array = wta_rewards(scores_array)
         final_rewards_dict = {uid: float(reward) for uid, reward in zip(uids, final_rewards_array)}
 
         try:
-            agg_scores = avg_rewards if isinstance(avg_rewards, dict) else None
+            agg_scores = final_consensus_scores if isinstance(final_consensus_scores, dict) else None
             active_set = set(self.active_miner_uids or [])
-            consensus_meta = getattr(self, "_consensus_last_details", None)
+            consensus_meta = final_consensus_meta
             render_round_summary_table(
                 self.round_manager,
                 final_rewards_dict,
@@ -475,8 +600,10 @@ class SettlementMixin:
         self.update_scores(rewards=wta_full, uids=all_uids)
         self.set_weights()
 
+        # Use the SAME immutable snapshot for IWAP submission to guarantee consistency
+        # between weight calculation and IWAP data
         finish_success = await self._finish_iwap_round(
-            avg_rewards=avg_rewards,
+            avg_rewards=final_consensus_scores,
             final_weights=weights_for_finish,
             tasks_completed=tasks_completed,
         )

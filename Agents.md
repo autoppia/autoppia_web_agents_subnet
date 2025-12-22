@@ -90,8 +90,8 @@ All IWAP requests include validator-hotkey signature headers (set in `platform/c
 
 | Setting | Value | Description |
 |---------|-------|-------------|
-| `STOP_TASK_EVALUATION_AT_ROUND_FRACTION` | 0.65 | Stop launching new tasks after 65% of round to reserve consensus window. |
-| `FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION` | 0.75 | Begin fetching peer commitments at 75%. |
+| `STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION` | 0.65 | Stop task evaluation and upload to IPFS at 65% of round. |
+| `FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION` | 0.75 | Fetch IPFS payloads and calculate consensus weights at 75% of round. |
 | `SKIP_ROUND_IF_STARTED_AFTER_FRACTION` | 0.95 | Skip if starting too late (looser in testing). |
 | `SAFETY_BUFFER_EPOCHS` | 0.02 | Buffer before the round boundary when we park and wait. |
 
@@ -104,7 +104,7 @@ All IWAP requests include validator-hotkey signature headers (set in `platform/c
 6. On failure, warn and continue with local data (monitor + Codex highlight this as `ERROR`).
 
 **Aggregation & Settlement**:
-- At `FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION`, the validator fetches peer CIDs (`aggregate_scores_from_commitments`) and averages scores if stake thresholds are met (`MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO`).
+- At `FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION`, the validator fetches peer CIDs (`aggregate_scores_from_commitments`) and averages scores if stake thresholds are met (`MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO`). A final re-fetch is performed just before calculating weights to ensure all commits are included, and an immutable snapshot of consensus data is used for both weight calculation and IWAP submission to guarantee consistency.
 - If all scores ≤ 0, or no miners responded, on-chain weights burn to `BURN_UID` with explanatory logs.
 
 ---
