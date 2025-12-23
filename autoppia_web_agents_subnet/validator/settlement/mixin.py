@@ -35,10 +35,11 @@ class SettlementMixin:
         self._consensus_published = False
         self._consensus_mid_fetched = False
         self._agg_scores_cache = None
+        self._agg_meta_cache = None
         # FASE 2/3: Also clear IPFS payload data to avoid stale data between rounds
         for attr in ("_consensus_commit_block", "_consensus_commit_cid", 
                      "_local_avg_rewards_at_publish", "_ipfs_uploaded_payload", 
-                     "_ipfs_upload_cid", "_consensus_publish_timestamp", "_agg_meta_cache"):
+                     "_ipfs_upload_cid", "_consensus_publish_timestamp"):
             if hasattr(self, attr):
                 setattr(self, attr, None)
 
@@ -220,10 +221,15 @@ class SettlementMixin:
                     report.completed = False
                     from autoppia_web_agents_subnet.validator.reporting.email_sender import send_round_report_email
 
-                    send_round_report_email(report, codex_analysis=None)
-                    bt.logging.warning("⚠️ Sent partial report via email despite finalization error")
+                    email_sent = send_round_report_email(report, codex_analysis=None)
+                    if email_sent:
+                        bt.logging.warning("⚠️ Sent partial report via email despite finalization error")
+                    else:
+                        bt.logging.error("❌ Failed to send partial report email - check SMTP configuration")
+                else:
+                    bt.logging.error("❌ No round report available to send emergency email")
             except Exception as email_exc:
-                bt.logging.error(f"Could not send emergency email: {email_exc}")
+                bt.logging.error(f"❌ Exception while trying to send emergency email: {email_exc}", exc_info=True)
 
     async def _wait_until_next_round_boundary(self) -> None:
         start_block_snapshot = self.subtensor.get_current_block()

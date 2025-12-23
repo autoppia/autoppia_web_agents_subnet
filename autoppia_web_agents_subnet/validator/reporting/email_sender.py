@@ -11,6 +11,8 @@ import smtplib
 from email.message import EmailMessage
 from typing import Optional
 
+import bittensor as bt
+
 from .round_report import RoundReport
 
 
@@ -545,7 +547,7 @@ def send_round_report_email(report: RoundReport, codex_analysis: Optional[str] =
     environment = "DEV" if is_testing else "PROD"
 
     if not smtp_host or not email_to:
-        print("❌ Email not configured")
+        bt.logging.error(f"❌ Email not configured - SMTP_HOST: {bool(smtp_host)}, EMAIL_TO: {bool(email_to)}")
         return False
 
     # Generate HTML
@@ -597,9 +599,9 @@ Miners Evaluated: {len(report.miners)}
                     server.login(smtp_user, smtp_pass)
                 server.send_message(msg)
 
-        print(f"✅ Email sent to {email_to}")
+        bt.logging.success(f"✅ Email sent to {email_to}")
         return True
 
     except Exception as e:
-        print(f"❌ Error sending email: {e}")
+        bt.logging.error(f"❌ Error sending email: {e}", exc_info=True)
         return False

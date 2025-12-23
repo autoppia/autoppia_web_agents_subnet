@@ -63,6 +63,7 @@ class Validator(
         self._consensus_published: bool = False
         self._consensus_mid_fetched: bool = False
         self._agg_scores_cache: dict[int, float] | None = None
+        self._agg_meta_cache: dict | None = None
         # Track if final weights + IWAP finish_round were already sent this round
         self._finalized_this_round: bool = False
 
@@ -132,10 +133,15 @@ class Validator(
                     report.completed = False
                     from autoppia_web_agents_subnet.validator.reporting.email_sender import send_round_report_email
 
-                    send_round_report_email(report, codex_analysis=None)
-                    bt.logging.warning("⚠️ Emergency email sent after crash")
+                    email_sent = send_round_report_email(report, codex_analysis=None)
+                    if email_sent:
+                        bt.logging.warning("⚠️ Emergency email sent after crash")
+                    else:
+                        bt.logging.error("❌ Failed to send emergency email after crash - check SMTP configuration")
+                else:
+                    bt.logging.error("❌ No round report available to send emergency email")
             except Exception as email_exc:
-                bt.logging.error(f"Could not send emergency email: {email_exc}")
+                bt.logging.error(f"❌ Exception while trying to send emergency email: {email_exc}", exc_info=True)
             raise  # Re-raise to let PM2 restart the validator
 
     # ═══════════════════════════════════════════════════════════════════════════════
