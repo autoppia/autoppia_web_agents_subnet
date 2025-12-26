@@ -1,4 +1,4 @@
-__version__ = "11.1.1"
+__version__ = "11.1.2"
 __least_acceptable_version__ = "11.0.0"
 version_split = __version__.split(".")
 version_url = "https://raw.githubusercontent.com/autoppia/autoppia_web_agents_subnet/main/autoppia_web_agents_subnet/__init__.py"
