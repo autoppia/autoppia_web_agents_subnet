@@ -226,6 +226,11 @@ class BaseValidatorNeuron(BaseNeuron):
         """
         Sets the validator weights to the metagraph hotkeys based on the scores it has received from the miners. The weights determine the trust and incentive level the validator assigns to miner nodes on the network.
         """
+        
+        # Check if set_weights is disabled
+        if self.config.neuron.disable_set_weights:
+            bt.logging.warning("set_weights is disabled via config. Skipping weight setting.")
+            return
 
         # Check if self.scores contains any NaN values and log a warning if it does.
         if np.isnan(self.scores).any():

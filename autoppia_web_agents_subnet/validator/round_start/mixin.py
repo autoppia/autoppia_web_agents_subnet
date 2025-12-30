@@ -128,7 +128,12 @@ class RoundStartMixin:
         tasks_generated = 0
         while tasks_generated < PRE_GENERATED_TASKS:
             batch_start = time.time()
-            batch_tasks = await get_task_collection_interleaved(prompts_per_use_case=PROMPTS_PER_USECASE)
+            try:
+                batch_tasks = await get_task_collection_interleaved(prompts_per_use_case=PROMPTS_PER_USECASE)
+            except Exception as gen_exc:
+                bt.logging.error(f"❌ Task generation failed; continuing with {tasks_generated} tasks so far: {gen_exc}", exc_info=True)
+                # Do not crash the round; proceed with whatever tasks were already built
+                break
             remaining = PRE_GENERATED_TASKS - tasks_generated
             tasks_to_add = batch_tasks[:remaining]
             all_tasks.extend(tasks_to_add)
@@ -136,6 +141,10 @@ class RoundStartMixin:
 
             batch_elapsed = time.time() - batch_start
             bt.logging.debug(f"Generated batch: {len(tasks_to_add)} in {batch_elapsed:.1f}s " f"(total {tasks_generated}/{PRE_GENERATED_TASKS})")
+
+        if tasks_generated == 0:
+            bt.logging.error("❌ No tasks generated; skipping forward for this round")
+            return StartPhaseResult(all_tasks=[], continue_forward=False, reason="task_generation_failed")
 
         self.current_round_id = self._generate_validator_round_id(current_block=current_block)
         self.round_start_timestamp = pre_generation_start

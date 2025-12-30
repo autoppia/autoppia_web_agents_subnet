@@ -11,7 +11,9 @@ Each synapse type has its own dedicated handler:
 from __future__ import annotations
 
 import asyncio
-from typing import List, Optional
+from datetime import date, datetime, time as dtime
+from enum import Enum
+from typing import Any, List, Optional
 
 import bittensor as bt
 from bittensor import AxonInfo
@@ -164,6 +166,23 @@ async def send_feedback_synapse_to_miners(
         test_results_list: Test results for each miner (list of dicts)
         evaluation_results: Evaluation results for each miner
     """
+    def _json_safe(obj: Any) -> Any:
+        """Convert values to JSON-serializable types to avoid dendrite TypeError."""
+        if obj is None or isinstance(obj, (str, int, float, bool)):
+            return obj
+        if isinstance(obj, (datetime, date, dtime)):
+            try:
+                return obj.isoformat()
+            except Exception:
+                return str(obj)
+        if isinstance(obj, Enum):
+            return obj.value
+        if isinstance(obj, dict):
+            return {k: _json_safe(v) for k, v in obj.items()}
+        if isinstance(obj, (list, tuple, set)):
+            return [_json_safe(v) for v in obj]
+        return str(obj)
+
     feedback_list: List[TaskFeedbackSynapse] = []
     for i, miner_uid in enumerate(miner_uids):
         feedback_list.append(
@@ -176,14 +195,10 @@ async def send_feedback_synapse_to_miners(
                 prompt=task.prompt,
                 reward=rewards[i],
                 execution_time=execution_times[i],
-                tests=task.tests,
-                actions=task_solutions[i].actions if i < len(task_solutions) else [],
-                test_results=(
-                    test_results_list[i] if i < len(test_results_list) else []
-                ),
-                evaluation_result=(
-                    evaluation_results[i] if i < len(evaluation_results) else None
-                ),
+                tests=_json_safe(task.tests),
+                actions=_json_safe(task_solutions[i].actions if i < len(task_solutions) else []),
+                test_results=_json_safe(test_results_list[i] if i < len(test_results_list) else []),
+                evaluation_result=_json_safe(evaluation_results[i] if i < len(evaluation_results) else None),
                 # 🔍 DEBUG: Add web project name
                 web_project_name=web_project_name,
             )
@@ -192,16 +207,22 @@ async def send_feedback_synapse_to_miners(
     # Send feedback to miners
     bt.logging.info(f"Sending feedback to {len(miner_axons)} miners...")
 
-    tasks = [
-        asyncio.create_task(
-            validator.dendrite(
-                axons=[axon],
-                synapse=fb,
-                deserialize=True,
-                timeout=FEEDBACK_TIMEOUT,
+    tasks = []
+    for axon, fb in zip(miner_axons, feedback_list):
+        tasks.append(
+            asyncio.create_task(
+                validator.dendrite(
+                    axons=[axon],
+                    synapse=fb,
+                    deserialize=True,
+                    timeout=FEEDBACK_TIMEOUT,
+                )
             )
         )
-        for axon, fb in zip(miner_axons, feedback_list)
-    ]
-    await asyncio.gather(*tasks)
-    ColoredLogger.info("Feedback responses received from miners", ColoredLogger.BLUE)
+
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    errors = [res for res in results if isinstance(res, Exception)]
+    if errors:
+        for err in errors:
+            bt.logging.error(f"Feedback delivery to miner failed: {err}", exc_info=True)
+    ColoredLogger.info(f"Feedback responses received from miners (errors={len(errors)})", ColoredLogger.BLUE)
