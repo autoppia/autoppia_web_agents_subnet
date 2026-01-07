@@ -147,14 +147,22 @@ class BaseValidatorNeuron(BaseNeuron):
 
         # If someone intentionally stops the validator, it'll safely terminate operations.
         except KeyboardInterrupt:
+            self.should_exit = True
             self.axon.stop()
             bt.logging.success("Validator killed by keyboard interrupt.")
             exit()
 
-        # In case of unforeseen errors, the validator will log the error and continue operations.
+        # In case of unforeseen errors, the validator will log the error and exit to allow PM2 restart.
         except Exception as err:
-            bt.logging.error(f"Error during validation: {str(err)}")
+            self.should_exit = True
+            self.is_running = False
+            bt.logging.error(f"❌ FATAL ERROR in validator main loop: {str(err)}")
             bt.logging.debug(str(print_exception(type(err), err, err.__traceback__)))
+            bt.logging.error("🔄 Exiting to allow PM2 restart...")
+            raise  # Re-raise to let PM2 restart the validator
+        finally:
+            # Make sure the running flag is cleared so watchdogs can detect failure.
+            self.is_running = False
 
     def run_in_background_thread(self):
         """
