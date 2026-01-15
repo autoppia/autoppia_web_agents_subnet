@@ -6,71 +6,9 @@ These are the communication protocols used in Bittensor.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
 from bittensor import Synapse
-from pydantic import Field
-
-from autoppia_iwa.src.data_generation.tasks.classes import TestUnion
-from autoppia_iwa.src.execution.actions.actions import AllActionsUnion
-
-
-class TaskSynapse(Synapse):
-    """
-    Synapse carrying the Task prompt & data from validator to miners.
-    """
-
-    version: str = ""
-    prompt: str
-    url: str
-    seed: Optional[int] = Field(
-        default=None,
-        description="Seed assigned to the task URL (when applicable).",
-    )
-    web_project_name: Optional[str] = Field(
-        default=None,
-        description="Display name of the web project the task belongs to.",
-    )
-    actions: List[AllActionsUnion] = Field(
-        default_factory=list,
-        description="The actions that solve the task",
-    )
-
-    class Config:
-        extra = "allow"
-        arbitrary_types_allowed = True
-
-    def deserialize(self) -> "TaskSynapse":
-        return self
-
-
-class TaskFeedbackSynapse(Synapse):
-    """
-    Feedback from validator back to miner: tests, rewards, eval data.
-    (Data-only; keep IO/printing elsewhere.)
-    """
-
-    version: str = ""
-    validator_id: str
-    miner_id: str
-    task_id: str
-    task_url: str
-    prompt: str
-    reward: Optional[float] = 0.0  # Reward value (eval_score + time_score)
-    execution_time: Optional[float] = 0.0
-    tests: Optional[List["TestUnion"]] = None
-    actions: Optional[List[AllActionsUnion]] = Field(default_factory=list)
-    test_results: Optional[List[Any]] = None  # Simplified from matrix to simple list
-    evaluation_result: Optional[Dict[str, Any]] = None
-    # 🔍 DEBUG: Add web project name for debugging
-    web_project_name: Optional[str] = None
-
-    class Config:
-        extra = "allow"
-        arbitrary_types_allowed = True
-
-    def deserialize(self) -> "TaskFeedbackSynapse":
-        return self
 
 
 class StartRoundSynapse(Synapse):
@@ -91,13 +29,10 @@ class StartRoundSynapse(Synapse):
       - github_url: repository with miner/agent code.
       - agent_version / capabilities: optional details.
     """
-
     # Request (validator -> miner)
     version: str = ""
     round_id: str
     validator_id: Optional[str] = None
-    total_prompts: Optional[int] = None
-    prompts_per_use_case: Optional[int] = None
     note: Optional[str] = None
 
     # Response (miner -> validator)

@@ -62,29 +62,13 @@ def calculate_rewards_for_task(
     time_weight: float,
 ) -> NDArray[np.float32]:
     """
-    Calculate rewards by combining eval_scores and execution time scores.
+    Calculate final scores by combining eval scores and execution time scores.
 
-    Formula:
-    - If eval_score == 0.0 (task not completed): reward = 0.0 (time factor not applied)
-    - If eval_score > 0.0 (task completed): reward = eval_score_weight × eval_score + time_weight × time_score
+    Formula: final_score = eval_weight × eval_scores + time_weight × time_scores
 
-    Where:
-    - eval_scores: evaluation scores from task tests (0-1, binary: 0.0 = failed, 1.0 = passed)
-    - time_scores: normalized execution time scores (faster = higher, 0-1)
-    - reward: final reward value used for consensus and weight calculation
-
-    CRITICAL: Time factor is ONLY applied if the task was completed (eval_score > 0.0).
-    If the task was not completed, reward must be 0.0 regardless of execution time.
+    The time scores are calculated inversely: faster miners get higher scores.
     """
-    # Caller may choose non-unit sum; we don't enforce exact 1.0.
     eval_scores = pad_or_trim(eval_scores, n_miners)
     time_scores = times_to_scores(execution_times, n_miners)
-    
-    # 🔍 FIX: Only apply time factor if task was completed (eval_score > 0.0)
-    # If eval_score == 0.0, reward must be 0.0 regardless of time
-    final = np.zeros(n_miners, dtype=np.float32)
-    completed_mask = eval_scores > 0.0
-    final[completed_mask] = (eval_score_weight * eval_scores[completed_mask]) + (time_weight * time_scores[completed_mask])
-    # For failed tasks (eval_score == 0.0), reward remains 0.0 (already set by np.zeros)
-    
+    final = (eval_score_weight * eval_scores) + (time_weight * time_scores)
     return final.astype(np.float32)

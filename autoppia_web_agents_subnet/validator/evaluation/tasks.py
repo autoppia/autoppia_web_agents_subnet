@@ -1,4 +1,3 @@
-# file: autoppia_web_agents_subnet/validator/tasks.py
 """
 Task generation and processing utilities for validator.
 Handles both task generation and task data processing.
@@ -6,29 +5,30 @@ Handles both task generation and task data processing.
 from __future__ import annotations
 
 import math
+import time
 import random
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 import bittensor as bt
 
 from autoppia_web_agents_subnet.validator.models import TaskWithProject, ProjectTasks
 from autoppia_web_agents_subnet.utils.random import split_tasks_evenly
 from autoppia_web_agents_subnet.protocol import TaskSynapse
-from autoppia_web_agents_subnet.validator.config import MAX_ACTIONS_LENGTH, TIMEOUT, ENABLE_DYNAMIC
+from autoppia_web_agents_subnet.validator.config import MAX_ACTIONS_LENGTH, TIMEOUT, ENABLE_DYNAMIC_HTML, PROMPTS_PER_USE_CASE
 
 # IWA (module-wrapped) imports
 from autoppia_iwa.src.demo_webs.config import demo_web_projects
 from autoppia_iwa.src.demo_webs.classes import WebProject
-from autoppia_iwa.src.data_generation.tasks.classes import Task, TaskGenerationConfig
-from autoppia_iwa.src.data_generation.tasks.pipeline import (
+from autoppia_iwa.src.data_generation.domain.classes import Task, TaskGenerationConfig
+from autoppia_iwa.src.data_generation.application.tasks_generation_pipeline import (
     TaskGenerationPipeline,
 )
-from autoppia_iwa.src.data_generation.tasks.classes import Task as IWATask
+from autoppia_iwa.src.data_generation.domain.classes import Task as IWATask
 from autoppia_iwa.src.web_agents.classes import TaskSolution
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TASK GENERATION - Generate tasks for miners
+# TASK GENERATION - Generate tasks for agents
 # ═══════════════════════════════════════════════════════════════════════════════
 
 async def _generate_tasks_limited_use_cases(
@@ -45,13 +45,12 @@ async def _generate_tasks_limited_use_cases(
         generate_global_tasks=True,
         final_task_limit=total_tasks,
         num_use_cases=num_use_cases,
-        dynamic=ENABLE_DYNAMIC,  # Enable dynamic features (v1, v2, v3) if configured
     )
     pipeline = TaskGenerationPipeline(web_project=project, config=config)
     return await pipeline.generate()
 
 
-async def get_task_collection_interleaved(
+async def _get_task_collection_interleaved(
     *,
     prompts_per_use_case: int,
 ) -> List[TaskWithProject]:
@@ -137,36 +136,50 @@ async def get_task_collection_interleaved(
         f"across {len(projects_tasks)} projects"
     )
 
-    # Apply seed to ALL task URLs (default behavior - seeds are always required)
-    # Seed range: 1-999 as per seed system specification
-    from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
-    
-    bt.logging.debug("[tasks] Ensuring all tasks have seeds in URLs (range: 1-999)")
-    for task_with_project in interleaved_tasks:
-        task = task_with_project.task
-        # Set assign_seed attribute if it exists (for compatibility)
-        if hasattr(task, 'assign_seed'):
+    # Apply seed to task URLs if dynamic HTML is enabled
+    if ENABLE_DYNAMIC_HTML:
+        bt.logging.debug("[tasks] Applying seeds to task URLs (ENABLE_DYNAMIC_HTML=true)")
+        for task_with_project in interleaved_tasks:
+            task = task_with_project.task
             task.assign_seed = True
-        
-        # Add seed to URL if not already present
-        if "?seed=" not in task.url:
-            parsed = urlparse(task.url)
-            query_params = parse_qs(parsed.query)
-            
-            # Generate a random seed if not already in URL (range: 1-999)
-            if "seed" not in query_params:
-                seed = random.randint(1, 999)
-                query_params["seed"] = [str(seed)]
-                
-                # Rebuild URL with seed
-                new_query = urlencode(query_params, doseq=True)
-                new_parsed = parsed._replace(query=new_query)
-                task.url = urlunparse(new_parsed)
-                bt.logging.debug(f"[tasks] Added seed={seed} to task URL: {task.url}")
-    
-    bt.logging.debug(f"[tasks] Seeds assigned to {len(interleaved_tasks)} tasks (all tasks have seeds)")
+            if "?seed=" not in task.url:
+                task.assign_seed_to_url()
+        bt.logging.debug(f"[tasks] Seeds assigned to {len(interleaved_tasks)} tasks")
 
     return interleaved_tasks
+
+
+# Public wrapper used in tests/validator flow
+async def get_task_collection_interleaved(*, prompts_per_use_case: int) -> List[TaskWithProject]:
+    return await _get_task_collection_interleaved(prompts_per_use_case=prompts_per_use_case)
+
+async def generate_tasks(pre_generated_tasks: int) -> List[TaskWithProject]:
+    pre_generation_start = time.time()
+    all_tasks: List[TaskWithProject] = []
+
+    tasks_generated = 0
+    while tasks_generated < pre_generated_tasks:
+        batch_start = time.time()
+        batch_tasks = await _get_task_collection_interleaved(
+            prompts_per_use_case=PROMPTS_PER_USE_CASE
+        )
+        remaining = pre_generated_tasks - tasks_generated
+        tasks_to_add = batch_tasks[:remaining]
+        all_tasks.extend(tasks_to_add)
+        tasks_generated += len(tasks_to_add)
+
+        batch_elapsed = time.time() - batch_start
+        bt.logging.debug(
+            f"Generated batch: {len(tasks_to_add)} in {batch_elapsed:.1f}s "
+            f"(total {tasks_generated}/{pre_generated_tasks})"
+        )
+
+    pre_generation_elapsed = time.time() - pre_generation_start
+    bt.logging.info(
+        f"✅ Task list ready: {len(all_tasks)} tasks in {pre_generation_elapsed:.1f}s"
+    )
+
+    return all_tasks
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -176,32 +189,16 @@ async def get_task_collection_interleaved(
 def get_task_solution_from_synapse(
     task_id: str,
     synapse: TaskSynapse,
+    web_agent_id: str,
     max_actions_length: int = MAX_ACTIONS_LENGTH,
-    miner_uid: Optional[int] = None,
 ) -> TaskSolution:
     """
     Safely extract actions from a TaskSynapse response and limit their length.
     NOTE: correct slicing is [:max], not [max].
-    
-    Args:
-        task_id: Task identifier
-        synapse: TaskSynapse response from miner
-        max_actions_length: Maximum number of actions to extract
-        miner_uid: Miner UID to use for web_agent_id if not provided in synapse
     """
     actions = []
     if synapse and hasattr(synapse, "actions") and isinstance(synapse.actions, list):
         actions = synapse.actions[:max_actions_length]
-    
-    # Try to get web_agent_id from synapse if available
-    web_agent_id = None
-    if synapse and hasattr(synapse, "web_agent_id"):
-        web_agent_id = synapse.web_agent_id
-    
-    # Fallback to miner_uid-based ID if not provided
-    if not web_agent_id and miner_uid is not None:
-        web_agent_id = f"miner_{miner_uid}"
-    
     return TaskSolution(task_id=task_id, actions=actions, web_agent_id=web_agent_id)
 
 
@@ -222,7 +219,7 @@ def collect_task_solutions_and_execution_times(
         if response is None:
             bt.logging.warning(f"Miner {miner_uid} returned None response")
             task_solutions.append(
-                TaskSolution(task_id=task.id, actions=[], web_agent_id=f"miner_{miner_uid}")
+                TaskSolution(task_id=task.id, actions=[], web_agent_id=str(miner_uid))
             )
             execution_times.append(TIMEOUT)
             bt.logging.debug(
@@ -236,34 +233,16 @@ def collect_task_solutions_and_execution_times(
                 get_task_solution_from_synapse(
                     task_id=task.id,
                     synapse=response,
-                    miner_uid=miner_uid,
+                    web_agent_id=str(miner_uid),
                 )
             )
+            exec_time = getattr(response, "execution_time", TIMEOUT)
+            execution_times.append(float(exec_time))
         except Exception as e:
-            bt.logging.error(f"Miner response format error: {e}")
+            bt.logging.warning(f"Failed to parse response from miner {miner_uid}: {e}")
             task_solutions.append(
-                TaskSolution(task_id=task.id, actions=[], web_agent_id=f"miner_{miner_uid}")
+                TaskSolution(task_id=task.id, actions=[], web_agent_id=str(miner_uid))
             )
             execution_times.append(TIMEOUT)
-            bt.logging.debug(
-                f"[TIME] uid={miner_uid} process_time=None -> using TIMEOUT={TIMEOUT:.3f}s"
-            )
-            continue
-
-        if (
-            response
-            and hasattr(response, "dendrite")
-            and hasattr(response.dendrite, "process_time")
-            and response.dendrite.process_time is not None
-        ):
-            execution_times.append(response.dendrite.process_time)
-            bt.logging.debug(
-                f"[TIME] uid={miner_uid} process_time={response.dendrite.process_time:.3f}s (taken)"
-            )
-        else:
-            execution_times.append(TIMEOUT)
-            bt.logging.debug(
-                f"[TIME] uid={miner_uid} process_time=None -> using TIMEOUT={TIMEOUT:.3f}s"
-            )
 
     return task_solutions, execution_times
