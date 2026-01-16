@@ -5,7 +5,7 @@ from typing import Tuple
 
 import bittensor as bt
 
-from autoppia_iwa.src.data_generation.domain.classes import Task
+from autoppia_iwa.src.data_generation.tasks.classes import Task
 from autoppia_iwa.src.evaluation.stateful_evaluator import AsyncStatefulEvaluator, ScoreDetails
 from autoppia_iwa.src.web_agents.cua import ApifiedWebCUA
 from autoppia_iwa.src.web_agents.classes import TaskSolution

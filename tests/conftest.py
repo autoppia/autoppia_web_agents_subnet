@@ -1,6 +1,10 @@
 import sys
 import types
+import os
 from pathlib import Path
+
+# Set TESTING environment variable before any imports
+os.environ["TESTING"] = "True"
 
 # Ensure repo root is on sys.path so autoppia_web_agents_subnet imports work in tests
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,7 +44,7 @@ def pytest_configure(config):
     domain_pkg = _ensure_module("autoppia_iwa.src.data_generation")
     if not hasattr(domain_pkg, "__path__"):
         domain_pkg.__path__ = []  # type: ignore[attr-defined]
-    domain_classes = types.ModuleType("autoppia_iwa.src.data_generation.domain.classes")
+    domain_classes = types.ModuleType("autoppia_iwa.src.data_generation.tasks.classes")
 
     class TaskStub:
         _id_counter = 0
@@ -68,7 +72,7 @@ def pytest_configure(config):
 
     domain_classes.TaskGenerationConfig = TaskGenerationConfig  # type: ignore[attr-defined]
     domain_classes.TestUnion = object  # type: ignore[attr-defined]
-    sys.modules["autoppia_iwa.src.data_generation.domain.classes"] = domain_classes
+    sys.modules["autoppia_iwa.src.data_generation.tasks.classes"] = domain_classes
 
     web_agents_pkg = types.ModuleType("autoppia_iwa.src.web_agents.classes")
 
@@ -176,7 +180,7 @@ def pytest_configure(config):
     if not hasattr(app_pkg, "__path__"):
         app_pkg.__path__ = []  # type: ignore[attr-defined]
 
-    pipeline_module = types.ModuleType("autoppia_iwa.src.data_generation.application.tasks_generation_pipeline")
+    pipeline_module = types.ModuleType("autoppia_iwa.src.data_generation.tasks.pipeline")
 
     class TaskGenerationPipeline:
         def __init__(self, *_, **__):
@@ -186,7 +190,7 @@ def pytest_configure(config):
             return []
 
     pipeline_module.TaskGenerationPipeline = TaskGenerationPipeline  # type: ignore[attr-defined]
-    sys.modules["autoppia_iwa.src.data_generation.application.tasks_generation_pipeline"] = pipeline_module
+    sys.modules["autoppia_iwa.src.data_generation.tasks.pipeline"] = pipeline_module
     bootstrap_module = types.ModuleType("autoppia_iwa.src.bootstrap")
 
     class _AppBootstrapStub:
@@ -202,10 +206,295 @@ def pytest_configure(config):
 import pytest
 
 
-@pytest.fixture(autouse=True)
-def reset_mock_network_fixture():
-    from autoppia_web_agents_subnet.base.mock import reset_mock_network
+# Validator fixtures - imported after pytest_configure sets up stubs
+@pytest.fixture
+def mock_validator_config():
+    """Minimal validator configuration for testing."""
+    return {
+        "round_size_epochs": 2.0,
+        "minimum_start_block": 1000,
+        "settlement_fraction": 0.8,
+        "season_size_epochs": 10.0,
+        "netuid": 99,
+        "subtensor": {
+            "network": "test",
+            "chain_endpoint": "ws://127.0.0.1:9944",
+        },
+        "wallet": {
+            "name": "test_validator",
+            "hotkey": "test_hotkey",
+        },
+    }
 
-    reset_mock_network()
-    yield
-    reset_mock_network()
+
+@pytest.fixture
+def round_manager(mock_validator_config):
+    """Create a RoundManager instance with test configuration."""
+    from autoppia_web_agents_subnet.validator.round_manager import RoundManager
+    
+    return RoundManager(
+        round_size_epochs=mock_validator_config["round_size_epochs"],
+        minimum_start_block=mock_validator_config["minimum_start_block"],
+        settlement_fraction=mock_validator_config["settlement_fraction"],
+    )
+
+
+@pytest.fixture
+def season_manager(mock_validator_config):
+    """Create a SeasonManager instance with test configuration."""
+    from unittest.mock import AsyncMock, Mock
+    from autoppia_web_agents_subnet.validator.season_manager import SeasonManager
+    
+    manager = SeasonManager()
+    # Override with test config values
+    manager.minimum_start_block = mock_validator_config["minimum_start_block"]
+    manager.season_size_epochs = mock_validator_config["season_size_epochs"]
+    manager.season_block_length = int(manager.BLOCKS_PER_EPOCH * manager.season_size_epochs)
+    
+    # Mock generate_season_tasks to avoid hanging on complex imports
+    # Return a list with one mock task
+    mock_task = Mock()
+    mock_task.id = "test-task-1"
+    manager.generate_season_tasks = AsyncMock(return_value=[mock_task])
+    return manager
+
+
+@pytest.fixture
+def dummy_validator(mock_validator_config):
+    """Create a mock validator with all necessary attributes and mixins."""
+    from unittest.mock import Mock, AsyncMock
+    from autoppia_web_agents_subnet.validator.round_manager import RoundManager
+    from types import SimpleNamespace
+    
+    validator = Mock()
+    
+    # Convert config dict to object with attributes
+    validator.config = SimpleNamespace(**mock_validator_config)
+    validator.block = 1000
+    validator.uid = 0
+    validator.version = "1.0.0"
+    
+    # Wallet mock
+    validator.wallet = Mock()
+    validator.wallet.hotkey = Mock()
+    validator.wallet.hotkey.ss58_address = "test_hotkey_address"
+    
+    # Subtensor mock
+    validator.subtensor = Mock()
+    # Make get_current_block return increasing values to avoid infinite loops in wait functions
+    validator._mock_block_counter = 1000
+    def get_increasing_block():
+        validator._mock_block_counter += 1
+        return validator._mock_block_counter
+    validator.subtensor.get_current_block = Mock(side_effect=get_increasing_block)
+    
+    # Dendrite mock
+    validator.dendrite = Mock()
+    validator.dendrite.query = AsyncMock(return_value=[])  # Return empty list by default
+    
+    # Managers
+    validator.round_manager = RoundManager(
+        round_size_epochs=mock_validator_config["round_size_epochs"],
+        minimum_start_block=mock_validator_config["minimum_start_block"],
+        settlement_fraction=mock_validator_config["settlement_fraction"],
+    )
+    # Mock get_wait_info to return plenty of time for evaluation
+    validator.round_manager.get_wait_info = Mock(return_value={
+        "minutes_to_settlement": 60.0,  # Plenty of time
+        "blocks_to_settlement": 300,
+        "minutes_to_target": 120.0,  # Plenty of time
+        "blocks_to_target": 600,
+    })
+    
+    validator.season_manager = Mock()
+    validator.season_manager.generate_season_tasks = AsyncMock(return_value=[])
+    validator.season_manager.get_season_tasks = AsyncMock(return_value=[])
+    # Mock should_start_new_season to return False by default (tests can override)
+    validator.season_manager.should_start_new_season = Mock(return_value=False)
+    # Add task_generated_season attribute for tests
+    validator.season_manager.task_generated_season = 0
+    
+    # Agent tracking
+    validator.agents_dict = {}
+    validator.agents_queue = Mock()
+    validator.agents_queue.empty = Mock(return_value=True)
+    validator.agents_queue.get = Mock(side_effect=Exception("Queue empty"))
+    validator.agents_queue.put = Mock()
+    
+    # Sandbox manager (mocked)
+    validator.sandbox_manager = Mock()
+    
+    # Metagraph mock
+    validator.metagraph = Mock()
+    validator.metagraph.n = 10
+    validator.metagraph.uids = list(range(10))
+    validator.metagraph.S = [15000.0] * 10  # Stake values (old format) - above MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO
+    validator.metagraph.stake = [15000.0] * 10  # Stake values (new format)
+    validator.metagraph.hotkeys = [f"hotkey{i}" for i in range(10)]
+    validator.metagraph.coldkeys = [f"coldkey{i}" for i in range(10)]
+    validator.metagraph.axons = [Mock(ip="127.0.0.1", port=8000 + i) for i in range(10)]
+    
+    # Async methods
+    validator.sync = AsyncMock()
+    validator.set_weights = AsyncMock()
+    validator.update_scores = AsyncMock()
+    validator._get_async_subtensor = AsyncMock()
+    validator._log_round_completion = Mock()
+    
+    # Mixin methods (mocked instead of inherited)
+    validator._start_round = AsyncMock()
+    validator._perform_handshake = AsyncMock()
+    validator._wait_for_minimum_start_block = AsyncMock(return_value=False)
+    validator._wait_until_specific_block = AsyncMock()
+    validator._run_evaluation_phase = AsyncMock(return_value=0)
+    validator._run_settlement_phase = AsyncMock()
+    
+    # Round ID for logging
+    validator.current_round_id = "test-round-1"
+    validator._current_round_number = 1
+    validator._last_round_winner_uid = None
+    validator._finalized_this_round = False
+    
+    return validator
+
+
+@pytest.fixture
+def validator_with_agents(dummy_validator):
+    """Create a validator with pre-populated agent information."""
+    from unittest.mock import Mock
+    from autoppia_web_agents_subnet.validator.models import AgentInfo
+    import queue
+    
+    # Replace mock queue with real queue
+    dummy_validator.agents_queue = queue.Queue()
+    
+    # Add 3 test agents
+    for uid in [1, 2, 3]:
+        agent = AgentInfo(
+            uid=uid,
+            agent_name=f"test_agent_{uid}",
+            github_url=f"https://github.com/test/agent{uid}",
+            score=0.0,
+        )
+        dummy_validator.agents_dict[uid] = agent
+        dummy_validator.agents_queue.put(agent)
+    
+    return dummy_validator
+
+
+def _bind_evaluation_mixin(validator):
+    """Helper to bind evaluation mixin methods to validator (lazy import to avoid circular deps)."""
+    from autoppia_web_agents_subnet.validator.evaluation.mixin import ValidatorEvaluationMixin
+    validator._run_evaluation_phase = ValidatorEvaluationMixin._run_evaluation_phase.__get__(validator, type(validator))
+    return validator
+
+
+def _bind_settlement_mixin(validator):
+    """Helper to bind settlement mixin methods to validator (lazy import to avoid circular deps)."""
+    from autoppia_web_agents_subnet.validator.settlement.mixin import ValidatorSettlementMixin
+    validator._run_settlement_phase = ValidatorSettlementMixin._run_settlement_phase.__get__(validator, type(validator))
+    validator._calculate_final_weights = ValidatorSettlementMixin._calculate_final_weights.__get__(validator, type(validator))
+    validator._burn_all = ValidatorSettlementMixin._burn_all.__get__(validator, type(validator))
+    # Don't bind _wait_until_specific_block - keep it as AsyncMock to avoid infinite loops in tests
+    # validator._wait_until_specific_block = ValidatorSettlementMixin._wait_until_specific_block.__get__(validator, type(validator))
+    return validator
+
+
+def _bind_settlement_mixin_with_wait(validator):
+    """Helper to bind settlement mixin methods including _wait_until_specific_block."""
+    from autoppia_web_agents_subnet.validator.settlement.mixin import ValidatorSettlementMixin
+    validator._run_settlement_phase = ValidatorSettlementMixin._run_settlement_phase.__get__(validator, type(validator))
+    validator._calculate_final_weights = ValidatorSettlementMixin._calculate_final_weights.__get__(validator, type(validator))
+    validator._burn_all = ValidatorSettlementMixin._burn_all.__get__(validator, type(validator))
+    validator._wait_until_specific_block = ValidatorSettlementMixin._wait_until_specific_block.__get__(validator, type(validator))
+    return validator
+
+
+def _bind_round_start_mixin(validator):
+    """Helper to bind round start mixin methods to validator (lazy import to avoid circular deps)."""
+    from autoppia_web_agents_subnet.validator.round_start.mixin import ValidatorRoundStartMixin
+    validator._start_round = ValidatorRoundStartMixin._start_round.__get__(validator, type(validator))
+    validator._perform_handshake = ValidatorRoundStartMixin._perform_handshake.__get__(validator, type(validator))
+    validator._wait_for_minimum_start_block = ValidatorRoundStartMixin._wait_for_minimum_start_block.__get__(validator, type(validator))
+    return validator
+
+
+@pytest.fixture
+def season_tasks():
+    """Create mock season tasks for testing."""
+    from autoppia_web_agents_subnet.validator.models import TaskWithProject
+    from unittest.mock import Mock
+    
+    # Create 5 mock tasks (to match test expectations)
+    tasks = []
+    for i in range(5):
+        task = Mock()
+        task.id = f"task-{i}"
+        task.url = f"https://example.com/task{i}"
+        task.prompt = f"Test task {i}"
+        task.tests = []
+        
+        task_with_project = TaskWithProject(
+            project=None,
+            task=task
+        )
+        tasks.append(task_with_project)
+    
+    return tasks
+
+
+@pytest.fixture
+def mock_metagraph():
+    """Create a mock metagraph for testing."""
+    from unittest.mock import Mock
+    
+    metagraph = Mock()
+    metagraph.n = 10
+    metagraph.uids = list(range(10))
+    metagraph.S = [15000.0] * 10
+    metagraph.stake = [15000.0] * 10
+    metagraph.hotkeys = [f"hotkey{i}" for i in range(10)]
+    metagraph.axons = [Mock(ip="127.0.0.1", port=8000 + i) for i in range(10)]
+    
+    return metagraph
+
+
+@pytest.fixture
+def mock_ipfs_client():
+    """Create a mock IPFS client for testing."""
+    from unittest.mock import Mock, AsyncMock
+    
+    # Storage for uploaded data
+    storage = {}
+    cid_counter = [0]
+    
+    async def mock_add_json(data, **kwargs):
+        cid_counter[0] += 1
+        cid = f"QmTestCID{cid_counter[0]}"
+        storage[cid] = data
+        return (cid, f"sha256hex{cid_counter[0]}", len(str(data)))
+    
+    async def mock_get_json(cid, **kwargs):
+        data = storage.get(cid, {"scores": {}})
+        return (data, None, None)
+    
+    client = Mock()
+    client.add_json_async = AsyncMock(side_effect=mock_add_json)
+    client.get_json_async = AsyncMock(side_effect=mock_get_json)
+    
+    return client
+
+
+@pytest.fixture
+def mock_async_subtensor():
+    """Create a mock async subtensor for testing."""
+    from unittest.mock import Mock, AsyncMock
+    
+    subtensor = Mock()
+    subtensor.commitments = {}
+    subtensor.stakes = {}
+    subtensor.get_current_block = Mock(return_value=1000)
+    subtensor.commit = AsyncMock(return_value=True)
+    subtensor.set_weights = AsyncMock(return_value=True)
+    
+    return subtensor

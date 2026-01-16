@@ -17,6 +17,9 @@ class TestEvaluationPhase:
 
     async def test_run_evaluation_phase_processes_all_agents_in_queue(self, validator_with_agents, season_tasks):
         """Test that evaluation phase processes all agents in the queue."""
+        from tests.conftest import _bind_evaluation_mixin
+        validator_with_agents = _bind_evaluation_mixin(validator_with_agents)
+        
         validator_with_agents.season_manager.get_season_tasks = AsyncMock(return_value=season_tasks)
         validator_with_agents.sandbox_manager = Mock()
         
@@ -38,6 +41,9 @@ class TestEvaluationPhase:
 
     async def test_evaluation_respects_maximum_evaluation_time(self, validator_with_agents, season_tasks):
         """Test that evaluation stops when approaching settlement time."""
+        from tests.conftest import _bind_evaluation_mixin
+        validator_with_agents = _bind_evaluation_mixin(validator_with_agents)
+        
         validator_with_agents.season_manager.get_season_tasks = AsyncMock(return_value=season_tasks)
         validator_with_agents.sandbox_manager = Mock()
         
@@ -55,6 +61,9 @@ class TestEvaluationPhase:
 
     async def test_evaluation_updates_current_block_during_loop(self, validator_with_agents, season_tasks):
         """Test that evaluation uses current block for timing checks."""
+        from tests.conftest import _bind_evaluation_mixin
+        validator_with_agents = _bind_evaluation_mixin(validator_with_agents)
+        
         validator_with_agents.season_manager.get_season_tasks = AsyncMock(return_value=season_tasks)
         validator_with_agents.sandbox_manager = Mock()
         validator_with_agents.sandbox_manager.deploy_agent = Mock(return_value=None)
@@ -79,6 +88,9 @@ class TestEvaluationPhase:
 
     async def test_evaluation_enters_evaluation_phase(self, validator_with_agents, season_tasks):
         """Test that evaluation enters EVALUATION phase."""
+        from tests.conftest import _bind_evaluation_mixin
+        validator_with_agents = _bind_evaluation_mixin(validator_with_agents)
+        
         validator_with_agents.season_manager.get_season_tasks = AsyncMock(return_value=season_tasks)
         validator_with_agents.sandbox_manager = Mock()
         validator_with_agents.sandbox_manager.deploy_agent = Mock(return_value=None)
@@ -98,6 +110,9 @@ class TestAgentDeployment:
 
     async def test_evaluation_deploys_agents_via_sandbox_manager(self, validator_with_agents, season_tasks):
         """Test that evaluation deploys agents using sandbox_manager."""
+        from tests.conftest import _bind_evaluation_mixin
+        validator_with_agents = _bind_evaluation_mixin(validator_with_agents)
+        
         validator_with_agents.season_manager.get_season_tasks = AsyncMock(return_value=season_tasks)
         validator_with_agents.sandbox_manager = Mock()
         
@@ -118,6 +133,9 @@ class TestAgentDeployment:
 
     async def test_evaluation_skips_agents_with_invalid_github_url(self, validator_with_agents, season_tasks):
         """Test that evaluation skips agents with invalid GitHub URLs."""
+        from tests.conftest import _bind_evaluation_mixin
+        validator_with_agents = _bind_evaluation_mixin(validator_with_agents)
+        
         validator_with_agents.season_manager.get_season_tasks = AsyncMock(return_value=season_tasks)
         validator_with_agents.sandbox_manager = Mock()
         
@@ -131,6 +149,9 @@ class TestAgentDeployment:
 
     async def test_evaluation_handles_sandbox_deployment_failure(self, validator_with_agents, season_tasks):
         """Test that evaluation handles sandbox deployment failures gracefully."""
+        from tests.conftest import _bind_evaluation_mixin
+        validator_with_agents = _bind_evaluation_mixin(validator_with_agents)
+        
         validator_with_agents.season_manager.get_season_tasks = AsyncMock(return_value=season_tasks)
         validator_with_agents.sandbox_manager = Mock()
         validator_with_agents.sandbox_manager.deploy_agent = Mock(return_value=None)  # Deployment fails
@@ -145,6 +166,9 @@ class TestAgentDeployment:
 
     async def test_evaluation_cleans_up_containers_after_evaluation(self, validator_with_agents, season_tasks):
         """Test that evaluation cleans up agent containers after evaluation."""
+        from tests.conftest import _bind_evaluation_mixin
+        validator_with_agents = _bind_evaluation_mixin(validator_with_agents)
+        
         validator_with_agents.season_manager.get_season_tasks = AsyncMock(return_value=season_tasks)
         validator_with_agents.sandbox_manager = Mock()
         
@@ -171,6 +195,9 @@ class TestScoreCalculation:
 
     async def test_evaluation_calculates_average_score_across_tasks(self, validator_with_agents, season_tasks):
         """Test that evaluation calculates average score across all tasks."""
+        from tests.conftest import _bind_evaluation_mixin
+        validator_with_agents = _bind_evaluation_mixin(validator_with_agents)
+        
         validator_with_agents.season_manager.get_season_tasks = AsyncMock(return_value=season_tasks)
         validator_with_agents.sandbox_manager = Mock()
         
@@ -182,8 +209,15 @@ class TestScoreCalculation:
         with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua') as mock_eval:
             with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize:
                 mock_normalize.return_value = "https://github.com/test/agent"
-                # Return different scores for each task
-                mock_eval.side_effect = [(0.8, None, None), (0.6, None, None), (1.0, None, None), (0.4, None, None), (0.7, None, None)]
+                # Return different scores for each task (3 agents * 5 tasks = 15 evaluations)
+                # Agent 1: 0.8, 0.6, 1.0, 0.4, 0.7 (avg = 0.7)
+                # Agent 2: 0.5, 0.5, 0.5, 0.5, 0.5 (avg = 0.5)
+                # Agent 3: 0.9, 0.9, 0.9, 0.9, 0.9 (avg = 0.9)
+                mock_eval.side_effect = [
+                    (0.8, None, None), (0.6, None, None), (1.0, None, None), (0.4, None, None), (0.7, None, None),
+                    (0.5, None, None), (0.5, None, None), (0.5, None, None), (0.5, None, None), (0.5, None, None),
+                    (0.9, None, None), (0.9, None, None), (0.9, None, None), (0.9, None, None), (0.9, None, None),
+                ]
                 
                 await validator_with_agents._run_evaluation_phase()
                 
@@ -195,6 +229,9 @@ class TestScoreCalculation:
 
     async def test_evaluation_updates_agent_score_in_agents_dict(self, validator_with_agents, season_tasks):
         """Test that evaluation updates agent.score in agents_dict."""
+        from tests.conftest import _bind_evaluation_mixin
+        validator_with_agents = _bind_evaluation_mixin(validator_with_agents)
+        
         validator_with_agents.season_manager.get_season_tasks = AsyncMock(return_value=season_tasks)
         validator_with_agents.sandbox_manager = Mock()
         
@@ -218,6 +255,9 @@ class TestScoreCalculation:
 
     async def test_evaluation_handles_empty_scores_list(self, validator_with_agents):
         """Test that evaluation handles case with no tasks gracefully."""
+        from tests.conftest import _bind_evaluation_mixin
+        validator_with_agents = _bind_evaluation_mixin(validator_with_agents)
+        
         validator_with_agents.season_manager.get_season_tasks = AsyncMock(return_value=[])  # No tasks
         validator_with_agents.sandbox_manager = Mock()
         
@@ -237,6 +277,9 @@ class TestScoreCalculation:
 
     async def test_evaluation_handles_exceptions_in_evaluate_with_stateful_cua(self, validator_with_agents, season_tasks):
         """Test that evaluation handles exceptions during task evaluation."""
+        from tests.conftest import _bind_evaluation_mixin
+        validator_with_agents = _bind_evaluation_mixin(validator_with_agents)
+        
         validator_with_agents.season_manager.get_season_tasks = AsyncMock(return_value=season_tasks)
         validator_with_agents.sandbox_manager = Mock()
         

@@ -5,7 +5,7 @@ Tests handling of unusual but valid scenarios.
 """
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 
 @pytest.mark.unit
@@ -14,32 +14,32 @@ class TestStakeEdgeCases:
 
     @pytest.mark.asyncio
     async def test_handshake_when_no_miners_meet_minimum_stake(
-        self, validator_with_agents, mock_metagraph
+        self, dummy_validator, mock_metagraph
     ):
         """Test handshake when no miners meet minimum stake requirement."""
         # Setup metagraph with all low-stake miners
         mock_metagraph.S = [50.0] * 10  # All below MIN_MINER_STAKE_TAO (100)
         mock_metagraph.n = 10
         
-        validator_with_agents.metagraph = mock_metagraph
-        validator_with_agents.uid = 0
+        dummy_validator.metagraph = mock_metagraph
+        dummy_validator.uid = 0
         
         # Mock dendrite
         async def mock_query(*args, **kwargs):
             return []
         
-        validator_with_agents.dendrite.query = mock_query
+        dummy_validator.dendrite.query = mock_query
         
         # Should not crash
-        await validator_with_agents._perform_handshake()
+        await dummy_validator._perform_handshake()
         
         # No agents should be added
-        assert len(validator_with_agents.agents_dict) == 0
-        assert validator_with_agents.agents_queue.empty()
+        assert len(dummy_validator.agents_dict) == 0
+        assert dummy_validator.agents_queue.empty()
 
     @pytest.mark.asyncio
     async def test_consensus_when_all_validators_have_zero_stake(
-        self, mock_ipfs_client, mock_async_subtensor
+        self, mock_ipfs_client, mock_async_subtensor, dummy_validator
     ):
         """Test consensus aggregation when all validators have zero stake."""
         from autoppia_web_agents_subnet.validator.settlement.consensus import (
@@ -49,38 +49,47 @@ class TestStakeEdgeCases:
         # Setup validators with zero stake
         round_number = 100
         
+        # Create commitments
+        commitments = {}
         for validator_uid in range(3):
             scores = {1: 0.8, 2: 0.6}
-            payload = {"round_number": round_number, "scores": scores}
+            payload = {"round_number": round_number, "r": round_number, "scores": scores}
             cid = await mock_ipfs_client.add_json_async(payload)
             
-            mock_async_subtensor.commitments[validator_uid] = {
-                "round_number": round_number,
-                "cid": cid[0],
-                "block": 1000
+            commitments[f"hotkey{validator_uid}"] = {
+                "r": round_number,
+                "c": cid[0],
+                "p": 0
             }
         
-        # All validators have zero stake
-        mock_async_subtensor.stakes = {0: 0.0, 1: 0.0, 2: 0.0}
+        # Mock read_all_plain_commitments to return our commitments
+        with patch('autoppia_web_agents_subnet.validator.settlement.consensus.read_all_plain_commitments',
+                   new=AsyncMock(return_value=commitments)):
+            # Setup dummy validator for method call
+            dummy_validator.block = 1000
+            dummy_validator.config.netuid = 99
+            dummy_validator.round_manager.calculate_round = AsyncMock(return_value=round_number)
+            dummy_validator.metagraph.stake = [0.0, 0.0, 0.0]
+            dummy_validator.metagraph.hotkeys = [f"hotkey{i}" for i in range(3)]
+            dummy_validator.metagraph.axons = [Mock(hotkey=f"hotkey{i}") for i in range(3)]
+            
+            # With zero stake, validators are filtered out by MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO
+            result, _ = await aggregate_scores_from_commitments(
+                dummy_validator,
+                st=mock_async_subtensor
+            )
         
-        # Should use simple average
-        result = await aggregate_scores_from_commitments(
-            async_subtensor=mock_async_subtensor,
-            ipfs_client=mock_ipfs_client,
-            round_number=round_number,
-            min_stake=0.0  # Allow zero stake
-        )
-        
-        # Should still aggregate scores
-        assert len(result) > 0, "Should aggregate scores even with zero stake"
-        assert result[1] == pytest.approx(0.8, abs=0.01)
-        assert result[2] == pytest.approx(0.6, abs=0.01)
+        # Should return empty dict since all validators have zero stake (below minimum)
+        assert result == {}, "Should return empty dict when all validators have zero stake"
 
     @pytest.mark.asyncio
     async def test_settlement_when_no_validators_committed(
         self, validator_with_agents
     ):
         """Test settlement when no validators committed scores."""
+        from tests.conftest import _bind_settlement_mixin
+        validator_with_agents = _bind_settlement_mixin(validator_with_agents)
+        
         # Setup agents with scores
         validator_with_agents.agents_dict = {
             1: MagicMock(uid=1, score=0.8),
@@ -90,16 +99,16 @@ class TestStakeEdgeCases:
         # Mock consensus to return empty dict
         with patch(
             'autoppia_web_agents_subnet.validator.settlement.consensus.aggregate_scores_from_commitments',
-            new=AsyncMock(return_value={})
+            new=AsyncMock(return_value=({}, None))
         ):
             validator_with_agents.update_scores = MagicMock()
             validator_with_agents.set_weights = AsyncMock()
             validator_with_agents.round_manager.enter_phase = MagicMock()
             
-            # Should not crash
-            await validator_with_agents._calculate_final_weights()
+            # Should not crash - pass empty scores dict
+            await validator_with_agents._calculate_final_weights(scores={})
             
-            # Should still set weights (using local scores)
+            # Should still set weights (using burn logic since no scores)
             validator_with_agents.set_weights.assert_called()
 
 
@@ -110,6 +119,9 @@ class TestEmptyDataEdgeCases:
     @pytest.mark.asyncio
     async def test_evaluation_with_no_agents(self, validator_with_agents):
         """Test evaluation phase with no agents."""
+        from tests.conftest import _bind_evaluation_mixin
+        validator_with_agents = _bind_evaluation_mixin(validator_with_agents)
+        
         # Clear agents
         validator_with_agents.agents_dict = {}
         validator_with_agents.agents_queue.queue.clear()
@@ -123,6 +135,9 @@ class TestEmptyDataEdgeCases:
     @pytest.mark.asyncio
     async def test_evaluation_with_no_tasks(self, validator_with_agents):
         """Test evaluation with no tasks available."""
+        from tests.conftest import _bind_evaluation_mixin
+        validator_with_agents = _bind_evaluation_mixin(validator_with_agents)
+        
         # Setup agent
         agent = MagicMock()
         agent.uid = 1
@@ -151,6 +166,9 @@ class TestEmptyDataEdgeCases:
     @pytest.mark.asyncio
     async def test_settlement_with_no_scores(self, validator_with_agents):
         """Test settlement when no agents have scores."""
+        from tests.conftest import _bind_settlement_mixin
+        validator_with_agents = _bind_settlement_mixin(validator_with_agents)
+        
         # Setup agents with zero scores
         validator_with_agents.agents_dict = {
             1: MagicMock(uid=1, score=0.0),
@@ -161,32 +179,34 @@ class TestEmptyDataEdgeCases:
         validator_with_agents.set_weights = AsyncMock()
         validator_with_agents.round_manager.enter_phase = MagicMock()
         
-        # Should trigger burn logic
-        await validator_with_agents._calculate_final_weights()
+        # Should trigger burn logic - pass empty scores dict
+        await validator_with_agents._calculate_final_weights(scores={})
         
         # Should still call set_weights (with burn)
         validator_with_agents.set_weights.assert_called()
 
     @pytest.mark.asyncio
     async def test_consensus_with_no_commitments(
-        self, mock_ipfs_client, mock_async_subtensor
+        self, mock_ipfs_client, mock_async_subtensor, dummy_validator
     ):
         """Test consensus when no validators have commitments."""
         from autoppia_web_agents_subnet.validator.settlement.consensus import (
             aggregate_scores_from_commitments
         )
         
-        # No commitments
-        mock_async_subtensor.commitments = {}
-        mock_async_subtensor.stakes = {}
-        
-        # Should return empty dict
-        result = await aggregate_scores_from_commitments(
-            async_subtensor=mock_async_subtensor,
-            ipfs_client=mock_ipfs_client,
-            round_number=100,
-            min_stake=100.0
-        )
+        # Mock read_all_plain_commitments to return empty dict
+        with patch('autoppia_web_agents_subnet.validator.settlement.consensus.read_all_plain_commitments',
+                   new=AsyncMock(return_value={})):
+            # Setup dummy validator for method call
+            dummy_validator.block = 1000
+            dummy_validator.config.netuid = 99
+            dummy_validator.round_manager.calculate_round = AsyncMock(return_value=100)
+            
+            # Should return empty dict
+            result, _ = await aggregate_scores_from_commitments(
+                dummy_validator,
+                st=mock_async_subtensor
+            )
         
         assert result == {}, "Should return empty dict with no commitments"
 
@@ -240,11 +260,11 @@ class TestSeasonTransitionEdgeCases:
     ):
         """Test season transition at exact season boundary."""
         # Calculate exact season boundary
-        season_size = mock_validator_config.SEASON_SIZE_EPOCHS
-        epoch_length = mock_validator_config.EPOCH_LENGTH
-        minimum_start_block = mock_validator_config.MINIMUM_START_BLOCK
+        season_size = mock_validator_config["season_size_epochs"]
+        epoch_length = season_manager.BLOCKS_PER_EPOCH
+        minimum_start_block = mock_validator_config["minimum_start_block"]
         
-        season_boundary = minimum_start_block + (season_size * epoch_length)
+        season_boundary = minimum_start_block + int(season_size * epoch_length)
         
         # Should detect transition
         assert season_manager.should_start_new_season(season_boundary)
@@ -258,15 +278,15 @@ class TestSeasonTransitionEdgeCases:
         self, season_manager, mock_validator_config
     ):
         """Test multiple consecutive season transitions."""
-        season_size = mock_validator_config.SEASON_SIZE_EPOCHS
-        epoch_length = mock_validator_config.EPOCH_LENGTH
-        minimum_start_block = mock_validator_config.MINIMUM_START_BLOCK
+        season_size = mock_validator_config["season_size_epochs"]
+        epoch_length = season_manager.BLOCKS_PER_EPOCH
+        minimum_start_block = mock_validator_config["minimum_start_block"]
         
         season_numbers = []
         
         # Simulate 3 seasons
         for i in range(3):
-            block = minimum_start_block + (i * season_size * epoch_length)
+            block = minimum_start_block + int(i * season_size * epoch_length)
             season_num = season_manager.get_season_number(block)
             season_numbers.append(season_num)
             
@@ -288,10 +308,18 @@ class TestMetagraphEdgeCases:
         self, validator_with_agents
     ):
         """Test handshake when validator is the only node."""
+        from tests.conftest import _bind_round_start_mixin
+        validator_with_agents = _bind_round_start_mixin(validator_with_agents)
+        
+        # Clear pre-populated agents
+        validator_with_agents.agents_dict = {}
+        
         # Setup metagraph with only validator
         mock_metagraph = MagicMock()
         mock_metagraph.n = 1
         mock_metagraph.S = [1000.0]  # Only validator
+        mock_metagraph.stake = [1000.0]  # Add stake attribute
+        mock_metagraph.axons = [MagicMock()]  # Add axons
         
         validator_with_agents.metagraph = mock_metagraph
         validator_with_agents.uid = 0
@@ -303,7 +331,7 @@ class TestMetagraphEdgeCases:
         validator_with_agents.dendrite.query = mock_query
         
         # Should not crash
-        await validator_with_agents._perform_handshake()
+        await validator_with_agents._perform_handshake(total_prompts=0)
         
         # No agents (validator excludes itself)
         assert len(validator_with_agents.agents_dict) == 0
@@ -351,23 +379,40 @@ class TestConcurrencyEdgeCases:
         self, validator_with_agents, season_tasks
     ):
         """Test evaluation when queue is modified during processing."""
-        # Setup initial agents
+        from tests.conftest import _bind_evaluation_mixin
+        from autoppia_web_agents_subnet.validator.models import AgentInfo
+        validator_with_agents = _bind_evaluation_mixin(validator_with_agents)
+        
+        # Clear pre-populated agents
+        validator_with_agents.agents_dict = {}
+        validator_with_agents.agents_queue.queue.clear()
+        
+        # Setup initial agents using AgentInfo
         for i in range(3):
-            agent = MagicMock()
-            agent.uid = i
-            agent.agent_name = f"Agent{i}"
-            agent.github_url = f"https://github.com/test/agent{i}"
-            agent.score = 0.0
+            agent = AgentInfo(
+                uid=i,
+                agent_name=f"Agent{i}",
+                github_url=f"https://github.com/test/agent{i}",
+                score=0.0
+            )
             
             validator_with_agents.agents_dict[i] = agent
             validator_with_agents.agents_queue.put(agent)
         
-        validator_with_agents.sandbox_manager.deploy_agent = AsyncMock(return_value=True)
-        validator_with_agents.sandbox_manager.cleanup_agent = AsyncMock()
+        # Mock season_manager to return tasks
+        mock_task = Mock()
+        mock_task.id = "test-task"
+        validator_with_agents.season_manager.get_season_tasks = AsyncMock(return_value=[mock_task])
+        
+        # Mock deploy_agent to return proper instance
+        mock_instance = Mock()
+        mock_instance.base_url = "http://localhost:8001"
+        validator_with_agents.sandbox_manager.deploy_agent = Mock(return_value=mock_instance)
+        validator_with_agents.sandbox_manager.cleanup_agent = Mock()
         
         # Mock evaluation
         async def mock_evaluate(*args, **kwargs):
-            return 0.8
+            return (0.8, None, None)  # Return tuple as expected
         
         with patch(
             'autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua',

@@ -55,10 +55,7 @@ def season_manager(mock_validator_config: Dict[str, Any]) -> SeasonManager:
     """
     Create a SeasonManager instance with test configuration.
     """
-    return SeasonManager(
-        season_size_epochs=mock_validator_config["season_size_epochs"],
-        minimum_start_block=mock_validator_config["minimum_start_block"],
-    )
+    return SeasonManager()
 
 
 @pytest.fixture
@@ -83,10 +80,7 @@ def dummy_validator(mock_validator_config: Dict[str, Any]) -> Mock:
         minimum_start_block=mock_validator_config["minimum_start_block"],
         settlement_fraction=mock_validator_config["settlement_fraction"],
     )
-    validator.season_manager = SeasonManager(
-        season_size_epochs=mock_validator_config["season_size_epochs"],
-        minimum_start_block=mock_validator_config["minimum_start_block"],
-    )
+    validator.season_manager = SeasonManager()
     
     # Agent tracking
     validator.agents_dict = {}

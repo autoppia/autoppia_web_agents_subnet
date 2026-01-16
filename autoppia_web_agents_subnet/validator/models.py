@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 
 # IWA domain types
 from autoppia_iwa.src.demo_webs.classes import WebProject
-from autoppia_iwa.src.data_generation.domain.classes import Task
+from autoppia_iwa.src.data_generation.tasks.classes import Task
 from autoppia_iwa.src.web_agents.classes import TaskSolution
 
 
@@ -80,7 +80,7 @@ class AgentInfo:
     """
     uid: int
     agent_name: str
-    agent_image: Optional[str] = None
     github_url: str
+    agent_image: Optional[str] = None
     agent_version: Optional[int] = None
     score: Optional[float] = 0.0

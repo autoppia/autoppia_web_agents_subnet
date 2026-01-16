@@ -5,7 +5,6 @@ from typing import List, Optional
 import bittensor as bt
 from bittensor import AxonInfo
 
-from autoppia_web_agents_subnet import __version__
 from autoppia_web_agents_subnet.protocol import StartRoundSynapse
 from autoppia_web_agents_subnet.utils.dendrite import dendrite_with_retries
 

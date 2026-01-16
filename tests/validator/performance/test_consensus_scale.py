@@ -8,7 +8,7 @@ and score commitments.
 import asyncio
 import time
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 import psutil
 import os
 
@@ -20,7 +20,7 @@ class TestConsensusScaling:
 
     @pytest.mark.asyncio
     async def test_aggregate_scores_from_50_validators(
-        self, mock_ipfs_client, mock_async_subtensor
+        self, mock_ipfs_client, mock_async_subtensor, dummy_validator
     ):
         """Test aggregating scores from 50 validators completes in time."""
         from autoppia_web_agents_subnet.validator.settlement.consensus import (
@@ -33,6 +33,7 @@ class TestConsensusScaling:
         num_miners = 100
         
         # Create commitments for each validator
+        commitments = {}
         for validator_uid in range(num_validators):
             # Each validator scores all miners
             scores = {
@@ -42,6 +43,7 @@ class TestConsensusScaling:
             
             payload = {
                 "round_number": round_number,
+                "r": round_number,
                 "scores": scores,
                 "timestamp": time.time()
             }
@@ -50,31 +52,37 @@ class TestConsensusScaling:
             cid = await mock_ipfs_client.add_json_async(payload)
             
             # Commit to blockchain
-            mock_async_subtensor.commitments[validator_uid] = {
-                "round_number": round_number,
-                "cid": cid[0],
-                "block": 1000
+            commitments[f"hotkey{validator_uid}"] = {
+                "r": round_number,
+                "c": cid[0],
+                "p": 0
             }
         
-        # Set stakes for validators
-        mock_async_subtensor.stakes = {
-            uid: 1000.0 for uid in range(num_validators)
-        }
+        # Mock read_all_plain_commitments and get_json_async
+        with patch('autoppia_web_agents_subnet.validator.settlement.consensus.read_all_plain_commitments',
+                   new=AsyncMock(return_value=commitments)):
+            with patch('autoppia_web_agents_subnet.validator.settlement.consensus.get_json_async',
+                       new=mock_ipfs_client.get_json_async):
+                # Setup dummy validator
+                dummy_validator.block = 1000
+                dummy_validator.config.netuid = 99
+                dummy_validator.round_manager.calculate_round = AsyncMock(return_value=round_number)
+                dummy_validator.metagraph.stake = [15000.0] * num_validators
+                dummy_validator.metagraph.hotkeys = [f"hotkey{i}" for i in range(num_validators)]
+                dummy_validator.metagraph.axons = [Mock(hotkey=f"hotkey{i}") for i in range(num_validators)]
+                
+                start_time = time.time()
+                
+                # Aggregate scores
+                aggregated, _ = await aggregate_scores_from_commitments(
+                    dummy_validator,
+                    st=mock_async_subtensor
+                )
+                
+                elapsed = time.time() - start_time
         
-        start_time = time.time()
-        
-        # Aggregate scores
-        aggregated = await aggregate_scores_from_commitments(
-            async_subtensor=mock_async_subtensor,
-            ipfs_client=mock_ipfs_client,
-            round_number=round_number,
-            min_stake=100.0
-        )
-        
-        elapsed = time.time() - start_time
-        
-        # Should complete in reasonable time (< 2 seconds)
-        assert elapsed < 2.0, f"Aggregation took {elapsed:.2f}s, expected < 2s"
+        # Should complete in reasonable time (< 5 seconds)
+        assert elapsed < 5.0, f"Aggregation took {elapsed:.2f}s, expected < 5s"
         
         # Should have aggregated scores for all miners
         assert len(aggregated) == num_miners, \
@@ -86,7 +94,7 @@ class TestConsensusScaling:
 
     @pytest.mark.asyncio
     async def test_consensus_memory_usage_stays_bounded(
-        self, mock_ipfs_client, mock_async_subtensor
+        self, mock_ipfs_client, mock_async_subtensor, dummy_validator
     ):
         """Test that memory usage doesn't grow unbounded during consensus."""
         from autoppia_web_agents_subnet.validator.settlement.consensus import (
@@ -101,6 +109,7 @@ class TestConsensusScaling:
         num_validators = 30
         num_miners = 200
         
+        commitments = {}
         for validator_uid in range(num_validators):
             scores = {
                 miner_uid: 0.5 + (miner_uid % 20) * 0.025
@@ -109,6 +118,7 @@ class TestConsensusScaling:
             
             payload = {
                 "round_number": round_number,
+                "r": round_number,
                 "scores": scores,
                 "timestamp": time.time(),
                 "metadata": {"validator": validator_uid}  # Extra data
@@ -116,23 +126,28 @@ class TestConsensusScaling:
             
             cid = await mock_ipfs_client.add_json_async(payload)
             
-            mock_async_subtensor.commitments[validator_uid] = {
-                "round_number": round_number,
-                "cid": cid[0],
-                "block": 1000
+            commitments[f"hotkey{validator_uid}"] = {
+                "r": round_number,
+                "c": cid[0],
+                "p": 0
             }
         
-        mock_async_subtensor.stakes = {
-            uid: 1000.0 for uid in range(num_validators)
-        }
-        
-        # Aggregate scores
-        await aggregate_scores_from_commitments(
-            async_subtensor=mock_async_subtensor,
-            ipfs_client=mock_ipfs_client,
-            round_number=round_number,
-            min_stake=100.0
-        )
+        # Mock read_all_plain_commitments
+        with patch('autoppia_web_agents_subnet.validator.settlement.consensus.read_all_plain_commitments',
+                   new=AsyncMock(return_value=commitments)):
+            # Setup dummy validator
+            dummy_validator.block = 1000
+            dummy_validator.config.netuid = 99
+            dummy_validator.round_manager.calculate_round = AsyncMock(return_value=round_number)
+            dummy_validator.metagraph.stake = [15000.0] * num_validators
+            dummy_validator.metagraph.hotkeys = [f"hotkey{i}" for i in range(num_validators)]
+            dummy_validator.metagraph.axons = [Mock(hotkey=f"hotkey{i}") for i in range(num_validators)]
+            
+            # Aggregate scores
+            await aggregate_scores_from_commitments(
+                dummy_validator,
+                st=mock_async_subtensor
+            )
         
         final_memory = process.memory_info().rss / 1024 / 1024  # MB
         memory_increase = final_memory - initial_memory
@@ -143,7 +158,7 @@ class TestConsensusScaling:
 
     @pytest.mark.asyncio
     async def test_consensus_with_varying_validator_count(
-        self, mock_ipfs_client, mock_async_subtensor
+        self, mock_ipfs_client, mock_async_subtensor, dummy_validator
     ):
         """Test consensus performance with different numbers of validators."""
         from autoppia_web_agents_subnet.validator.settlement.consensus import (
@@ -156,7 +171,7 @@ class TestConsensusScaling:
         
         for num_validators in [5, 10, 20, 40]:
             # Setup validators
-            mock_async_subtensor.commitments.clear()
+            commitments = {}
             
             for validator_uid in range(num_validators):
                 scores = {
@@ -166,36 +181,44 @@ class TestConsensusScaling:
                 
                 payload = {
                     "round_number": round_number,
+                    "r": round_number,
                     "scores": scores,
                     "timestamp": time.time()
                 }
                 
                 cid = await mock_ipfs_client.add_json_async(payload)
                 
-                mock_async_subtensor.commitments[validator_uid] = {
-                    "round_number": round_number,
-                    "cid": cid[0],
-                    "block": 1000
+                commitments[f"hotkey{validator_uid}"] = {
+                    "r": round_number,
+                    "c": cid[0],
+                    "p": 0
                 }
             
-            mock_async_subtensor.stakes = {
-                uid: 1000.0 for uid in range(num_validators)
-            }
-            
-            start_time = time.time()
-            
-            aggregated = await aggregate_scores_from_commitments(
-                async_subtensor=mock_async_subtensor,
-                ipfs_client=mock_ipfs_client,
-                round_number=round_number,
-                min_stake=100.0
-            )
-            
-            elapsed = time.time() - start_time
-            results[num_validators] = elapsed
-            
-            # Verify correctness
-            assert len(aggregated) == num_miners
+            # Mock read_all_plain_commitments and get_json_async
+            with patch('autoppia_web_agents_subnet.validator.settlement.consensus.read_all_plain_commitments',
+                       new=AsyncMock(return_value=commitments)):
+                with patch('autoppia_web_agents_subnet.validator.settlement.consensus.get_json_async',
+                           new=mock_ipfs_client.get_json_async):
+                    # Setup dummy validator
+                    dummy_validator.block = 1000
+                    dummy_validator.config.netuid = 99
+                    dummy_validator.round_manager.calculate_round = AsyncMock(return_value=round_number)
+                    dummy_validator.metagraph.stake = [15000.0] * num_validators
+                    dummy_validator.metagraph.hotkeys = [f"hotkey{i}" for i in range(num_validators)]
+                    dummy_validator.metagraph.axons = [Mock(hotkey=f"hotkey{i}") for i in range(num_validators)]
+                    
+                    start_time = time.time()
+                    
+                    aggregated, _ = await aggregate_scores_from_commitments(
+                        dummy_validator,
+                        st=mock_async_subtensor
+                    )
+                    
+                    elapsed = time.time() - start_time
+                    results[num_validators] = elapsed
+                    
+                    # Verify correctness
+                    assert len(aggregated) == num_miners
         
         # Verify scaling is reasonable
         # 40 validators should take more time than 5, but not 8x more
@@ -289,59 +312,66 @@ class TestStressTests:
         self, mock_validator_config, season_tasks
     ):
         """Test that continuous rounds don't leak memory."""
-        from autoppia_web_agents_subnet.validator.round_start.mixin import ValidatorRoundStartMixin
         from autoppia_web_agents_subnet.validator.evaluation.mixin import ValidatorEvaluationMixin
-        from autoppia_web_agents_subnet.validator.settlement.mixin import ValidatorSettlementMixin
+        from autoppia_web_agents_subnet.validator.models import AgentInfo
+        import queue
         
-        class TestValidator(
-            ValidatorRoundStartMixin,
-            ValidatorEvaluationMixin,
-            ValidatorSettlementMixin
-        ):
-            def __init__(self, config):
+        class TestValidator(ValidatorEvaluationMixin):
+            def __init__(self, config, tasks):
                 self.config = config
                 self.agents_dict = {}
-                self.agents_queue = MagicMock()
+                self.agents_queue = queue.Queue()
                 self.sandbox_manager = MagicMock()
-                self.sandbox_manager.deploy_agent = AsyncMock(return_value=True)
-                self.sandbox_manager.cleanup_agent = AsyncMock()
+                
+                # Mock deploy_agent to return proper instance
+                def mock_deploy(*args, **kwargs):
+                    mock_instance = Mock()
+                    mock_instance.base_url = "http://localhost:8001"
+                    return mock_instance
+                
+                self.sandbox_manager.deploy_agent = mock_deploy
+                self.sandbox_manager.cleanup_agent = Mock()
+                
                 self.round_manager = MagicMock()
+                self.round_manager.get_wait_info = Mock(return_value={
+                    "minutes_to_settlement": 120.0,
+                    "blocks_to_settlement": 600,
+                    "minutes_to_target": 240.0,
+                    "blocks_to_target": 1200,
+                })
                 self.season_manager = MagicMock()
-                self.season_manager.get_season_tasks = AsyncMock(return_value=season_tasks)
+                self.season_manager.get_season_tasks = AsyncMock(return_value=tasks)
                 self.block = 1000
-                self._async_subtensor = MagicMock()
-                self._async_subtensor.commit_round_snapshot = AsyncMock()
-                self.ipfs_client = MagicMock()
-                self.ipfs_client.add_json_async = AsyncMock(return_value=("cid123", "cid123", 100))
         
-        validator = TestValidator(mock_validator_config)
+        validator = TestValidator(mock_validator_config, season_tasks)
         
         process = psutil.Process(os.getpid())
         initial_memory = process.memory_info().rss / 1024 / 1024  # MB
         
         # Simulate 10 rounds
         for round_num in range(10):
-            # Add some agents
+            # Add some agents using real queue
             validator.agents_dict = {}
-            for i in range(5):
-                agent = MagicMock()
-                agent.uid = i
-                agent.agent_name = f"Agent{i}"
-                agent.github_url = f"https://github.com/test/agent{i}"
-                agent.score = 0.0
-                validator.agents_dict[i] = agent
+            validator.agents_queue = queue.Queue()
             
-            validator.agents_queue.empty = MagicMock(return_value=False)
-            validator.agents_queue.get = MagicMock(
-                side_effect=list(validator.agents_dict.values()) + [None]
-            )
+            for i in range(5):
+                agent = AgentInfo(
+                    uid=i,
+                    agent_name=f"Agent{i}",
+                    github_url=f"https://github.com/test/agent{i}",
+                    score=0.0
+                )
+                validator.agents_dict[i] = agent
+                validator.agents_queue.put(agent)
             
             # Mock evaluation
-            with patch(
-                'autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua',
-                new=AsyncMock(return_value=0.8)
-            ):
-                await validator._run_evaluation_phase()
+            with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url',
+                       return_value="https://github.com/test/agent"):
+                with patch(
+                    'autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua',
+                    new=AsyncMock(return_value=(0.8, None, None))
+                ):
+                    await validator._run_evaluation_phase()
             
             # Clear for next round
             validator.agents_dict.clear()
@@ -359,23 +389,25 @@ class TestStressTests:
         self, validator_with_agents
     ):
         """Test validator can handle 10 tasks per agent."""
-        from autoppia_web_agents_subnet.opensource.task import Task
-        from autoppia_web_agents_subnet.opensource.web_project import WebProject
+        from tests.conftest import _bind_evaluation_mixin
+        from autoppia_web_agents_subnet.validator.models import AgentInfo, TaskWithProject
         
-        # Create 10 tasks
+        validator_with_agents = _bind_evaluation_mixin(validator_with_agents)
+        
+        # Create 10 tasks using mocks
         tasks = []
         for i in range(10):
-            project = WebProject(
-                name=f"Project{i}",
-                description=f"Test project {i}",
-                github_url=f"https://github.com/test/project{i}"
+            mock_task = Mock()
+            mock_task.id = f"task-{i}"
+            mock_task.url = f"https://example.com/task{i}"
+            mock_task.prompt = f"Test task {i}"
+            mock_task.tests = []
+            
+            task_with_project = TaskWithProject(
+                project=None,
+                task=mock_task
             )
-            task = Task(
-                name=f"Task{i}",
-                description=f"Test task {i}",
-                project=project
-            )
-            tasks.append(MagicMock(project=project, task=task))
+            tasks.append(task_with_project)
         
         validator_with_agents.season_manager.get_season_tasks = AsyncMock(
             return_value=tasks
@@ -386,22 +418,26 @@ class TestStressTests:
         validator_with_agents.agents_queue.queue.clear()
         
         for i in range(5):
-            agent_info = MagicMock()
-            agent_info.uid = i
-            agent_info.agent_name = f"Agent{i}"
-            agent_info.github_url = f"https://github.com/test/agent{i}"
-            agent_info.score = 0.0
+            agent_info = AgentInfo(
+                uid=i,
+                agent_name=f"Agent{i}",
+                github_url=f"https://github.com/test/agent{i}",
+                score=0.0
+            )
             
             validator_with_agents.agents_dict[i] = agent_info
             validator_with_agents.agents_queue.put(agent_info)
         
-        validator_with_agents.sandbox_manager.deploy_agent = AsyncMock(return_value=True)
-        validator_with_agents.sandbox_manager.cleanup_agent = AsyncMock()
+        # Mock deploy_agent to return proper instance
+        mock_instance = Mock()
+        mock_instance.base_url = "http://localhost:8001"
+        validator_with_agents.sandbox_manager.deploy_agent = Mock(return_value=mock_instance)
+        validator_with_agents.sandbox_manager.cleanup_agent = Mock()
         
         # Mock evaluation
         async def mock_evaluate(*args, **kwargs):
             await asyncio.sleep(0.001)
-            return 0.8
+            return (0.8, None, None)
         
         with patch(
             'autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua',

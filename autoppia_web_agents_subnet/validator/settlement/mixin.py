@@ -46,7 +46,12 @@ class ValidatorSettlementMixin:
             target_description="round boundary block",
         )
 
-        scores, _ = aggregate_scores_from_commitments(self, st=st)
+        try:
+            scores, _ = await aggregate_scores_from_commitments(self, st=st)
+        except Exception as e:
+            ColoredLogger.error(f"Error aggregating scores from commitments: {e}", ColoredLogger.RED)
+            scores = {}
+            
         await self._calculate_final_weights(scores=scores)
 
         self.round_manager.enter_phase(
@@ -242,6 +247,7 @@ class ValidatorSettlementMixin:
         #         ColoredLogger.YELLOW,
         #     )
 
+        finish_success = True  # Default to True since IWAP finish is commented out
         self._log_round_completion(
             color=ColoredLogger.GREEN if finish_success else ColoredLogger.YELLOW,
             reason="completed",

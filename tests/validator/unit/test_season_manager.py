@@ -17,17 +17,17 @@ class TestSeasonBoundaries:
     def test_get_season_number_calculates_correctly(self):
         """Test that get_season_number calculates season from block number."""
         manager = SeasonManager()
-        # Assuming SEASON_SIZE_EPOCHS=10.0, MINIMUM_START_BLOCK=1000
-        # season_block_length = 360 * 10 = 3600 blocks per season
+        # With TESTING=True: SEASON_SIZE_EPOCHS=2.0, MINIMUM_START_BLOCK=6726960
+        # season_block_length = 360 * 2 = 720 blocks per season
 
-        # First season (blocks 1000-4599)
-        assert manager.get_season_number(1000) == 1
-        assert manager.get_season_number(2000) == 1
-        assert manager.get_season_number(4599) == 1
+        # First season (blocks 6726960-6727679)
+        assert manager.get_season_number(6726960) == 1
+        assert manager.get_season_number(6727000) == 1
+        assert manager.get_season_number(6727679) == 1
 
-        # Second season (blocks 4600-8199)
-        assert manager.get_season_number(4600) == 2
-        assert manager.get_season_number(5000) == 2
+        # Second season (blocks 6727680-6728399)
+        assert manager.get_season_number(6727680) == 2
+        assert manager.get_season_number(6728000) == 2
 
     def test_season_block_length_uses_season_size_epochs(self):
         """Test that season_block_length is calculated from SEASON_SIZE_EPOCHS."""
@@ -95,10 +95,10 @@ class TestTaskGeneration:
         with patch('autoppia_web_agents_subnet.validator.season_manager.generate_tasks') as mock_gen:
             mock_gen.return_value = []
             
-            await manager.generate_season_tasks(1000)
+            await manager.generate_season_tasks(6726960)
             assert manager.task_generated_season == 1
             
-            await manager.generate_season_tasks(5000)
+            await manager.generate_season_tasks(6727680)
             assert manager.task_generated_season == 2
 
 
@@ -112,16 +112,16 @@ class TestSeasonTransitions:
         manager = SeasonManager()
         
         # No tasks generated yet
-        assert manager.should_start_new_season(1000) is True
+        assert manager.should_start_new_season(6726960) is True
         
         # Mark season 1 as generated
         manager.task_generated_season = 1
         
         # Still in season 1
-        assert manager.should_start_new_season(2000) is False
+        assert manager.should_start_new_season(6727000) is False
         
         # Moved to season 2
-        assert manager.should_start_new_season(5000) is True
+        assert manager.should_start_new_season(6727680) is True
 
     async def test_new_season_regenerates_tasks(self):
         """Test that moving to a new season triggers task regeneration."""
@@ -131,20 +131,20 @@ class TestSeasonTransitions:
             mock_gen.return_value = [TaskWithProject(project=None, task=None)]
             
             # Generate tasks for season 1
-            await manager.get_season_tasks(1000)
+            await manager.get_season_tasks(6726960)
             assert mock_gen.call_count == 1
             
             # Move to season 2 - should regenerate
-            await manager.get_season_tasks(5000)
+            await manager.get_season_tasks(6727680)
             assert mock_gen.call_count == 2
 
     def test_season_number_increments_correctly(self):
         """Test that season_number increments as blocks progress."""
         manager = SeasonManager()
         
-        season1 = manager.get_season_number(1000)
-        season2 = manager.get_season_number(5000)
-        season3 = manager.get_season_number(9000)
+        season1 = manager.get_season_number(6726960)
+        season2 = manager.get_season_number(6727680)
+        season3 = manager.get_season_number(6728400)
         
         assert season2 == season1 + 1
         assert season3 == season2 + 1

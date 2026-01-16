@@ -18,7 +18,7 @@ class TestRoundBoundaries:
 
     def test_sync_boundaries_calculates_correct_blocks(self, round_manager):
         """Test that sync_boundaries calculates start, settlement, and target blocks correctly."""
-        current_block = 1720  # 2 epochs into first round
+        current_block = 1360  # 1 epoch into first round (360 blocks)
         round_manager.sync_boundaries(current_block)
 
         # With minimum_start_block=1000, round_size_epochs=2.0 (720 blocks)
@@ -243,7 +243,7 @@ class TestRoundStatus:
 
     def test_get_status_returns_complete_info(self, round_manager):
         """Test that get_status returns all relevant status information."""
-        round_manager.sync_boundaries(1000)
+        round_manager.sync_boundaries(1200)
         round_manager.enter_phase(RoundPhase.EVALUATION, block=1200, note="Evaluating agents")
 
         status = round_manager.get_status(current_block=1200)

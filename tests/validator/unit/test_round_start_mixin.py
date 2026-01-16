@@ -16,6 +16,9 @@ class TestRoundStart:
     """Test round start logic."""
 
     async def test_start_round_early_in_round_continues_forward(self, dummy_validator):
+        from tests.conftest import _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+        
         """Test that _start_round early in round continues with forward pass."""
         dummy_validator.block = 1100  # Early in round (fraction < 0.2)
         
@@ -25,6 +28,9 @@ class TestRoundStart:
         assert dummy_validator.round_manager.round_number == 1
 
     async def test_start_round_late_in_round_waits_for_boundary(self, dummy_validator):
+        from tests.conftest import _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+        
         """Test that _start_round late in round waits for next boundary."""
         dummy_validator.block = 1650  # Late in round (fraction > 0.2)
         dummy_validator._wait_until_specific_block = AsyncMock()
@@ -36,10 +42,16 @@ class TestRoundStart:
         dummy_validator._wait_until_specific_block.assert_called_once()
 
     async def test_season_transition_triggers_task_regeneration(self, dummy_validator):
+        from tests.conftest import _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+        
         """Test that season transition regenerates tasks and clears agents."""
-        dummy_validator.block = 5000  # New season
+        dummy_validator.block = 4600  # Start of new season (early in round)
         dummy_validator.season_manager.task_generated_season = 1
-        dummy_validator.season_manager.generate_season_tasks = AsyncMock()
+        # Mock should_start_new_season to return True for this test
+        dummy_validator.season_manager.should_start_new_season = Mock(return_value=True)
+        # Use the existing mock from fixture, just reset it
+        dummy_validator.season_manager.generate_season_tasks.reset_mock()
         
         # Add some agents to queue
         from autoppia_web_agents_subnet.validator.models import AgentInfo
@@ -55,6 +67,9 @@ class TestRoundStart:
         assert len(dummy_validator.agents_dict) == 0
 
     async def test_round_manager_start_new_round_is_called(self, dummy_validator):
+        from tests.conftest import _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+        
         """Test that start_new_round is called on round_manager."""
         dummy_validator.block = 1100
         
@@ -70,6 +85,9 @@ class TestHandshake:
     """Test handshake logic."""
 
     async def test_perform_handshake_sends_to_eligible_miners(self, dummy_validator):
+        from tests.conftest import _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+        
         """Test that handshake sends synapse to miners meeting stake requirement."""
         with patch('autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners') as mock_send:
             # Mock responses with agent info
@@ -85,12 +103,17 @@ class TestHandshake:
             assert mock_send.call_count == 1
 
     async def test_handshake_filters_miners_by_min_stake(self, dummy_validator):
+        from tests.conftest import _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+        
         """Test that handshake filters out miners below MIN_MINER_STAKE_TAO."""
-        # Set stakes: only UIDs 1,2,3 have sufficient stake
-        dummy_validator.metagraph.S = [100.0, 150.0, 200.0, 50.0, 30.0, 10.0, 0.0, 0.0, 0.0, 0.0]
+        # Set stakes: UIDs 1,2,3 have sufficient stake (UID 0 is validator)
+        # UID 0: 100.0 (validator, excluded), UID 1: 150.0, UID 2: 200.0, UID 3: 100.0, rest < 100.0
+        dummy_validator.metagraph.S = [100.0, 150.0, 200.0, 100.0, 50.0, 30.0, 10.0, 0.0, 0.0, 0.0]
+        dummy_validator.metagraph.stake = [100.0, 150.0, 200.0, 100.0, 50.0, 30.0, 10.0, 0.0, 0.0, 0.0]
         
         with patch('autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners') as mock_send:
-            with patch('autoppia_web_agents_subnet.validator.config.MIN_MINER_STAKE_TAO', 100.0):
+            with patch('autoppia_web_agents_subnet.validator.round_start.mixin.MIN_MINER_STAKE_TAO', 100.0):
                 mock_send.return_value = []
                 
                 await dummy_validator._perform_handshake(total_prompts=0)
@@ -103,6 +126,9 @@ class TestHandshake:
                     assert len(miner_axons) == 3
 
     async def test_handshake_populates_agents_dict_and_queue(self, dummy_validator):
+        from tests.conftest import _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+        
         """Test that handshake populates agents_dict and agents_queue."""
         with patch('autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners') as mock_send:
             mock_responses = [
@@ -120,6 +146,9 @@ class TestHandshake:
             assert len(dummy_validator.agents_dict) > 0
 
     async def test_handshake_excludes_validator_own_uid(self, dummy_validator):
+        from tests.conftest import _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+        
         """Test that handshake excludes the validator's own UID."""
         dummy_validator.uid = 0
         
@@ -136,6 +165,9 @@ class TestHandshake:
                 assert all(axon.port != 8000 for axon in miner_axons)
 
     async def test_handshake_handles_missing_agent_name_or_github_url(self, dummy_validator):
+        from tests.conftest import _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+        
         """Test that handshake skips responses with missing agent_name or github_url."""
         with patch('autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners') as mock_send:
             mock_responses = [
@@ -162,6 +194,9 @@ class TestMinimumBlock:
     """Test minimum block waiting logic."""
 
     async def test_wait_for_minimum_start_block_waits_when_early(self, dummy_validator):
+        from tests.conftest import _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+        
         """Test that _wait_for_minimum_start_block waits when before minimum."""
         dummy_validator.block = 500  # Before minimum_start_block (1000)
         
@@ -172,6 +207,9 @@ class TestMinimumBlock:
             mock_sleep.assert_called_once()
 
     async def test_wait_for_minimum_start_block_continues_when_ready(self, dummy_validator):
+        from tests.conftest import _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+        
         """Test that _wait_for_minimum_start_block continues when past minimum."""
         dummy_validator.block = 1500  # After minimum_start_block (1000)
         
@@ -180,6 +218,9 @@ class TestMinimumBlock:
         assert result is False  # No wait needed
 
     async def test_wait_calculates_correct_eta(self, dummy_validator):
+        from tests.conftest import _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+        
         """Test that wait calculates correct ETA for minimum block."""
         dummy_validator.block = 500  # 500 blocks before minimum
         
@@ -197,6 +238,9 @@ class TestHandshakeEdgeCases:
     """Test edge cases in handshake logic."""
 
     async def test_handshake_with_no_metagraph(self, dummy_validator):
+        from tests.conftest import _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+        
         """Test handshake handles missing metagraph gracefully."""
         dummy_validator.metagraph = None
         
@@ -204,6 +248,9 @@ class TestHandshakeEdgeCases:
         await dummy_validator._perform_handshake(total_prompts=0)
 
     async def test_handshake_with_empty_metagraph(self, dummy_validator):
+        from tests.conftest import _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+        
         """Test handshake handles empty metagraph."""
         dummy_validator.metagraph.n = 0
         
@@ -211,10 +258,14 @@ class TestHandshakeEdgeCases:
         await dummy_validator._perform_handshake(total_prompts=0)
 
     async def test_handshake_with_no_eligible_miners(self, dummy_validator):
+        from tests.conftest import _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+        
         """Test handshake when no miners meet minimum stake."""
         # All miners have insufficient stake
         dummy_validator.metagraph.S = [10.0] * 10
+        dummy_validator.metagraph.stake = [10.0] * 10
         
-        with patch('autoppia_web_agents_subnet.validator.config.MIN_MINER_STAKE_TAO', 100.0):
+        with patch('autoppia_web_agents_subnet.validator.round_start.mixin.MIN_MINER_STAKE_TAO', 100.0):
             # Should not raise exception
             await dummy_validator._perform_handshake(total_prompts=0)

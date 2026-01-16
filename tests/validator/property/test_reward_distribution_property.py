@@ -31,7 +31,7 @@ class TestRewardDistributionProperties:
         **Validates: Requirements 5.4**
         """
         assume(len(scores) > 0)
-        assume(max(scores) > 0)  # At least one non-zero score
+        assume(max(scores) > 1e-6)  # At least one meaningful non-zero score
         
         from autoppia_web_agents_subnet.validator.settlement.rewards import wta_rewards
         
@@ -60,7 +60,7 @@ class TestRewardDistributionProperties:
         **Validates: Requirements 5.4**
         """
         assume(len(scores) > 0)
-        assume(max(scores) > 0)
+        assume(max(scores) > 1e-6)  # At least one meaningful non-zero score
         
         from autoppia_web_agents_subnet.validator.settlement.rewards import wta_rewards
         
@@ -87,7 +87,7 @@ class TestRewardDistributionProperties:
         **Validates: Requirements 5.4**
         """
         assume(len(scores) > 0)
-        assume(max(scores) > 0)
+        assume(max(scores) > 1e-6)  # At least one meaningful non-zero score
         
         from autoppia_web_agents_subnet.validator.settlement.rewards import wta_rewards
         
@@ -115,7 +115,7 @@ class TestRewardDistributionProperties:
         **Validates: Requirements 5.4**
         """
         assume(len(scores) > 0)
-        assume(max(scores) > 0)
+        assume(max(scores) > 1e-6)  # At least one meaningful non-zero score
         
         from autoppia_web_agents_subnet.validator.settlement.rewards import wta_rewards
         
@@ -173,7 +173,7 @@ class TestRewardDistributionProperties:
         **Validates: Requirements 5.4**
         """
         assume(len(scores) > 0)
-        assume(max(scores) > 0)
+        assume(max(scores) > 1e-6)  # At least one meaningful non-zero score
         
         from autoppia_web_agents_subnet.validator.settlement.rewards import wta_rewards
         

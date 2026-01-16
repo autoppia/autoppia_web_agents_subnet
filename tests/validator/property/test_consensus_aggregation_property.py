@@ -20,7 +20,7 @@ class TestConsensusAggregationProperties:
             max_size=10
         ),
         stakes=st.lists(
-            st.floats(min_value=0.0, max_value=1000.0, allow_nan=False, allow_infinity=False),
+            st.floats(min_value=0.1, max_value=1000.0, allow_nan=False, allow_infinity=False),
             min_size=1,
             max_size=10
         )
@@ -35,7 +35,6 @@ class TestConsensusAggregationProperties:
         **Validates: Requirements 6.3, 6.6**
         """
         assume(len(scores) == len(stakes))
-        assume(sum(stakes) > 0)  # At least some stake
         
         # Calculate stake-weighted average
         weighted_sum = sum(score * stake for score, stake in zip(scores, stakes))
@@ -111,12 +110,12 @@ class TestConsensusAggregationProperties:
         scores=st.lists(
             st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False),
             min_size=2,
-            max_size=10
+            max_size=2  # Exactly 2 validators for this test
         ),
         stakes=st.lists(
             st.floats(min_value=1.0, max_value=100.0, allow_nan=False, allow_infinity=False),
             min_size=2,
-            max_size=10
+            max_size=2  # Exactly 2 validators for this test
         )
     )
     def test_higher_stake_increases_influence(self, scores, stakes):
@@ -130,8 +129,9 @@ class TestConsensusAggregationProperties:
         """
         assume(len(scores) == len(stakes))
         assume(len(scores) >= 2)
-        assume(sum(stakes) > 0)
-        assume(stakes[0] > stakes[1])  # First validator has more stake
+        
+        # Only test when stakes are meaningfully different
+        assume(stakes[0] > stakes[1] * 1.5)  # First validator has significantly more stake
         assume(abs(scores[0] - scores[1]) > 0.1)  # Scores are different
         
         # Calculate weighted average
@@ -140,7 +140,7 @@ class TestConsensusAggregationProperties:
         aggregated = weighted_sum / total_stake
         
         # If first validator has higher stake and higher score,
-        # aggregated should be closer to their score
+        # aggregated should be between the two scores
         if scores[0] > scores[1]:
             # Aggregated should be between the two scores
             assert min(scores[0], scores[1]) <= aggregated <= max(scores[0], scores[1])

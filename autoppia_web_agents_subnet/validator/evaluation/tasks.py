@@ -13,17 +13,16 @@ import bittensor as bt
 
 from autoppia_web_agents_subnet.validator.models import TaskWithProject, ProjectTasks
 from autoppia_web_agents_subnet.utils.random import split_tasks_evenly
-from autoppia_web_agents_subnet.protocol import TaskSynapse
 from autoppia_web_agents_subnet.validator.config import MAX_ACTIONS_LENGTH, TIMEOUT, ENABLE_DYNAMIC_HTML, PROMPTS_PER_USE_CASE
 
 # IWA (module-wrapped) imports
 from autoppia_iwa.src.demo_webs.config import demo_web_projects
 from autoppia_iwa.src.demo_webs.classes import WebProject
-from autoppia_iwa.src.data_generation.domain.classes import Task, TaskGenerationConfig
-from autoppia_iwa.src.data_generation.application.tasks_generation_pipeline import (
+from autoppia_iwa.src.data_generation.tasks.classes import Task, TaskGenerationConfig
+from autoppia_iwa.src.data_generation.tasks.pipeline import (
     TaskGenerationPipeline,
 )
-from autoppia_iwa.src.data_generation.domain.classes import Task as IWATask
+from autoppia_iwa.src.data_generation.tasks.classes import Task as IWATask
 from autoppia_iwa.src.web_agents.classes import TaskSolution
 
 
@@ -181,68 +180,3 @@ async def generate_tasks(pre_generated_tasks: int) -> List[TaskWithProject]:
 
     return all_tasks
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# TASK PROCESSING - Process task data and miner responses
-# ═══════════════════════════════════════════════════════════════════════════════
-
-def get_task_solution_from_synapse(
-    task_id: str,
-    synapse: TaskSynapse,
-    web_agent_id: str,
-    max_actions_length: int = MAX_ACTIONS_LENGTH,
-) -> TaskSolution:
-    """
-    Safely extract actions from a TaskSynapse response and limit their length.
-    NOTE: correct slicing is [:max], not [max].
-    """
-    actions = []
-    if synapse and hasattr(synapse, "actions") and isinstance(synapse.actions, list):
-        actions = synapse.actions[:max_actions_length]
-    return TaskSolution(task_id=task_id, actions=actions, web_agent_id=web_agent_id)
-
-
-def collect_task_solutions_and_execution_times(
-    task: IWATask,
-    responses: List[TaskSynapse | None],
-    miner_uids: List[int],
-) -> Tuple[List[TaskSolution], List[float]]:
-    """
-    Convert miner responses into TaskSolution and gather process times.
-    Handles None responses (failed requests) gracefully.
-    """
-    task_solutions: List[TaskSolution] = []
-    execution_times: List[float] = []
-
-    for miner_uid, response in zip(miner_uids, responses):
-        # Handle None or failed responses
-        if response is None:
-            bt.logging.warning(f"Miner {miner_uid} returned None response")
-            task_solutions.append(
-                TaskSolution(task_id=task.id, actions=[], web_agent_id=str(miner_uid))
-            )
-            execution_times.append(TIMEOUT)
-            bt.logging.debug(
-                f"[TIME] uid={miner_uid} response=None -> using TIMEOUT={TIMEOUT:.3f}s"
-            )
-            continue
-
-        # Try to parse valid response
-        try:
-            task_solutions.append(
-                get_task_solution_from_synapse(
-                    task_id=task.id,
-                    synapse=response,
-                    web_agent_id=str(miner_uid),
-                )
-            )
-            exec_time = getattr(response, "execution_time", TIMEOUT)
-            execution_times.append(float(exec_time))
-        except Exception as e:
-            bt.logging.warning(f"Failed to parse response from miner {miner_uid}: {e}")
-            task_solutions.append(
-                TaskSolution(task_id=task.id, actions=[], web_agent_id=str(miner_uid))
-            )
-            execution_times.append(TIMEOUT)
-
-    return task_solutions, execution_times

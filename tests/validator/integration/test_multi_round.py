@@ -14,6 +14,10 @@ class TestMultiRound:
     """Test multi-round scenarios."""
 
     async def test_multiple_rounds_maintain_state_correctly(self, dummy_validator, season_tasks):
+        from tests.conftest import _bind_evaluation_mixin, _bind_settlement_mixin, _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        
         """Test that multiple rounds maintain state correctly."""
         validator = dummy_validator
         validator.season_manager.get_season_tasks = AsyncMock(return_value=season_tasks)
@@ -41,12 +45,19 @@ class TestMultiRound:
 
     async def test_season_transition_regenerates_tasks(self, dummy_validator):
         """Test that season transition triggers task regeneration."""
-        validator = dummy_validator
-        validator.season_manager.generate_season_tasks = AsyncMock(return_value=[])
-        validator.season_manager.task_generated_season = 1
+        # Set up the mocks BEFORE binding
+        dummy_validator.season_manager.task_generated_season = 1
+        dummy_validator.season_manager.should_start_new_season = Mock(return_value=True)
+        dummy_validator.season_manager.generate_season_tasks = AsyncMock(return_value=[])
         
-        # Move to new season
-        validator.block = 5000  # Season 2
+        from tests.conftest import _bind_evaluation_mixin, _bind_settlement_mixin, _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        
+        validator = dummy_validator
+        
+        # Move to new season - use a block early in the round to avoid waiting
+        validator.block = 4620  # Season 2, early in round (< 20% through)
         
         await validator._start_round()
         
@@ -54,6 +65,10 @@ class TestMultiRound:
         validator.season_manager.generate_season_tasks.assert_called_once()
 
     async def test_winner_bonus_applies_across_rounds(self, dummy_validator):
+        from tests.conftest import _bind_evaluation_mixin, _bind_settlement_mixin, _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        
         """Test that winner bonus applies to previous round winner."""
         validator = dummy_validator
         validator._last_round_winner_uid = 1  # UID 1 won last round
@@ -73,7 +88,12 @@ class TestMultiRound:
                     assert call_args[1] > 0.8
 
     async def test_state_resets_between_rounds(self, dummy_validator):
+        from tests.conftest import _bind_evaluation_mixin, _bind_settlement_mixin, _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        
         """Test that state resets properly between rounds."""
+        from autoppia_web_agents_subnet.validator.round_manager import RoundPhase
         validator = dummy_validator
         
         # Run first round
@@ -81,7 +101,7 @@ class TestMultiRound:
         await validator._start_round()
         
         # Add some phase history
-        validator.round_manager.enter_phase(validator.round_manager.RoundPhase.EVALUATION, block=1200)
+        validator.round_manager.enter_phase(RoundPhase.EVALUATION, block=1200)
         phase_count_1 = len(validator.round_manager.phase_history)
         
         # Start new round
@@ -100,9 +120,16 @@ class TestSeasonTransitions:
 
     async def test_season_transition_clears_agent_queue(self, dummy_validator):
         """Test that season transition clears the agent queue."""
+        # Set up the mocks BEFORE binding
+        dummy_validator.season_manager.task_generated_season = 1
+        dummy_validator.season_manager.generate_season_tasks = AsyncMock(return_value=[])
+        dummy_validator.season_manager.should_start_new_season = Mock(return_value=True)
+        
+        from tests.conftest import _bind_evaluation_mixin, _bind_settlement_mixin, _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        
         validator = dummy_validator
-        validator.season_manager.task_generated_season = 1
-        validator.season_manager.generate_season_tasks = AsyncMock(return_value=[])
         
         # Add agents to queue
         from autoppia_web_agents_subnet.validator.models import AgentInfo
@@ -111,8 +138,8 @@ class TestSeasonTransitions:
             validator.agents_dict[uid] = agent
             validator.agents_queue.put(agent)
         
-        # Move to new season
-        validator.block = 5000
+        # Move to new season - use early block
+        validator.block = 4620
         await validator._start_round()
         
         # Agents should be cleared
@@ -120,9 +147,16 @@ class TestSeasonTransitions:
 
     async def test_season_transition_clears_agent_dict(self, dummy_validator):
         """Test that season transition clears the agent dictionary."""
+        # Set up the mocks BEFORE binding
+        dummy_validator.season_manager.task_generated_season = 1
+        dummy_validator.season_manager.generate_season_tasks = AsyncMock(return_value=[])
+        dummy_validator.season_manager.should_start_new_season = Mock(return_value=True)
+        
+        from tests.conftest import _bind_evaluation_mixin, _bind_settlement_mixin, _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        
         validator = dummy_validator
-        validator.season_manager.task_generated_season = 1
-        validator.season_manager.generate_season_tasks = AsyncMock(return_value=[])
         
         # Add agents
         from autoppia_web_agents_subnet.validator.models import AgentInfo
@@ -131,8 +165,8 @@ class TestSeasonTransitions:
             2: AgentInfo(uid=2, agent_name="agent2", github_url="https://test.com"),
         }
         
-        # Move to new season
-        validator.block = 5000
+        # Move to new season - use early block
+        validator.block = 4620
         await validator._start_round()
         
         # Agents dict should be cleared
@@ -145,6 +179,10 @@ class TestRoundBoundaries:
     """Test round boundary behavior."""
 
     async def test_late_round_start_waits_for_next_boundary(self, dummy_validator):
+        from tests.conftest import _bind_evaluation_mixin, _bind_settlement_mixin, _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        
         """Test that starting late in round waits for next boundary."""
         validator = dummy_validator
         validator.block = 1650  # Late in round (90% through)
@@ -158,6 +196,10 @@ class TestRoundBoundaries:
             validator._wait_until_specific_block.assert_called_once()
 
     async def test_early_round_start_continues_forward(self, dummy_validator):
+        from tests.conftest import _bind_evaluation_mixin, _bind_settlement_mixin, _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        
         """Test that starting early in round continues forward."""
         validator = dummy_validator
         validator.block = 1050  # Early in round (7% through)

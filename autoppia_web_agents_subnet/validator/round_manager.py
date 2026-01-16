@@ -148,8 +148,10 @@ class RoundManager:
         return {
             "round_start_block": self.start_block,
             "round_target_block": self.target_block,
+            "target_block": self.target_block,  # Alias for compatibility
             "round_start_epoch": self.start_epoch,
             "round_target_epoch": self.target_epoch,
+            "fraction_elapsed": self.fraction_elapsed(current_block),
         }
 
     def get_current_boundaries(self) -> Dict[str, Any]:
@@ -253,7 +255,7 @@ class RoundManager:
         if self.start_block is not None:
             boundaries = self.get_round_boundaries(self.start_block, log_debug=False)
 
-        target_block = boundaries.get("target_block")
+        target_block = boundaries.get("round_target_block")  # Fixed: was "target_block"
         blocks_remaining: Optional[int] = None
         minutes_remaining: Optional[float] = None
         if current_block is not None and target_block is not None:

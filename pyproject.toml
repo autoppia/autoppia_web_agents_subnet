@@ -4,3 +4,13 @@ line-length = 200
 # opcional:
 # target-version = ["py311"]
 # skip-string-normalization = true
+
+[tool.pytest.ini_options]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "property: Property-based tests",
+    "performance: Performance tests",
+    "slow: Slow-running tests",
+    "requires_docker: Tests that require Docker",
+]

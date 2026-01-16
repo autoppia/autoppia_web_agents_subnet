@@ -41,7 +41,8 @@ def render_round_summary_table(
     if agg_scores:
         uids_to_show = {int(uid) for uid, sc in agg_scores.items() if float(sc) > 0.0}
     else:
-        uids_to_show = set(list(round_manager.round_rewards.keys()) + list(final_rewards.keys()))
+        round_rewards_keys = list(getattr(round_manager, 'round_rewards', {}).keys())
+        uids_to_show = set(round_rewards_keys + list(final_rewards.keys()))
 
     validators_info: List[Dict[str, Any]] = []
     scores_by_validator: Dict[str, Dict[int, float]] = {}
@@ -54,9 +55,9 @@ def render_round_summary_table(
     for uid in sorted(uids_to_show):
         hotkey = metagraph.hotkeys[uid] if uid < len(metagraph.hotkeys) else "<unknown>"
         coldkey = metagraph.coldkeys[uid] if uid < len(metagraph.coldkeys) else "<unknown>"
-        avg_eval = _mean_safe(round_manager.round_eval_scores.get(uid, []))
-        avg_time = _mean_safe(round_manager.round_times.get(uid, []))
-        local_participated = bool(round_manager.round_rewards.get(uid)) or bool(round_manager.round_eval_scores.get(uid))
+        avg_eval = _mean_safe(getattr(round_manager, 'round_eval_scores', {}).get(uid, []))
+        avg_time = _mean_safe(getattr(round_manager, 'round_times', {}).get(uid, []))
+        local_participated = bool(getattr(round_manager, 'round_rewards', {}).get(uid)) or bool(getattr(round_manager, 'round_eval_scores', {}).get(uid))
         final_score = float((agg_scores or {}).get(uid, 0.0))
         wta_reward = float(final_rewards.get(uid, 0.0))  # 1.0 for winner else 0.0
 

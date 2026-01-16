@@ -122,8 +122,14 @@ class TestHealthCheck:
         from autoppia_web_agents_subnet.opensource.sandbox_manager import AgentInstance
         
         mock_container = Mock()
+        mock_container.attrs = {
+            "NetworkSettings": {
+                "Ports": {
+                    "8000/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8001"}]
+                }
+            }
+        }
         agent = AgentInstance(uid=1, container=mock_container, temp_dir="/tmp/test", port=8000)
-        agent.base_url = "http://localhost:8001"
         
         with patch('httpx.get') as mock_get:
             mock_response = Mock()
@@ -143,8 +149,14 @@ class TestHealthCheck:
         from autoppia_web_agents_subnet.opensource.sandbox_manager import AgentInstance
         
         mock_container = Mock()
+        mock_container.attrs = {
+            "NetworkSettings": {
+                "Ports": {
+                    "8000/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8001"}]
+                }
+            }
+        }
         agent = AgentInstance(uid=1, container=mock_container, temp_dir="/tmp/test", port=8000)
-        agent.base_url = "http://localhost:8001"
         
         with patch('httpx.get') as mock_get:
             with patch('time.sleep'):
@@ -163,8 +175,14 @@ class TestHealthCheck:
         from autoppia_web_agents_subnet.opensource.sandbox_manager import AgentInstance
         
         mock_container = Mock()
+        mock_container.attrs = {
+            "NetworkSettings": {
+                "Ports": {
+                    "8000/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8001"}]
+                }
+            }
+        }
         agent = AgentInstance(uid=1, container=mock_container, temp_dir="/tmp/test", port=8000)
-        agent.base_url = "http://localhost:8001"
         
         with patch('httpx.get') as mock_get:
             with patch('time.sleep'):

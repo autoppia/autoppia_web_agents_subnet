@@ -30,10 +30,12 @@ class SeasonManager:
         effective_block = max(current_block, base_block)
 
         blocks_since_base = effective_block - base_block
+        # Season 1 starts at minimum_start_block (blocks_since_base = 0)
+        # Season 2 starts at minimum_start_block + season_block_length
         season_index = blocks_since_base // self.season_block_length
 
-        self.season_number = season_index + 1
-        return int(self.season_number)
+        self.season_number = int(season_index + 1)
+        return self.season_number
 
     async def get_season_tasks(self, current_block: int) -> List[TaskWithProject]:
         if self.should_start_new_season(current_block):

@@ -16,6 +16,9 @@ class TestSettlementPhase:
     """Test settlement phase logic."""
 
     async def test_run_settlement_phase_publishes_snapshot(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        
         """Test that settlement phase publishes round snapshot."""
         dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
         dummy_validator._wait_until_specific_block = AsyncMock()
@@ -31,6 +34,9 @@ class TestSettlementPhase:
                 mock_publish.assert_called_once()
 
     async def test_settlement_waits_for_settlement_block(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        
         """Test that settlement waits until settlement_block is reached."""
         dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
         dummy_validator._wait_until_specific_block = AsyncMock()
@@ -48,6 +54,9 @@ class TestSettlementPhase:
                 assert call_args[1]['target_block'] == dummy_validator.round_manager.settlement_block
 
     async def test_settlement_aggregates_scores_from_commitments(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        
         """Test that settlement aggregates scores from validator commitments."""
         dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
         dummy_validator._wait_until_specific_block = AsyncMock()
@@ -64,6 +73,9 @@ class TestSettlementPhase:
                 mock_aggregate.assert_called_once()
 
     async def test_settlement_calls_calculate_final_weights(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        
         """Test that settlement calls _calculate_final_weights with aggregated scores."""
         dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
         dummy_validator._wait_until_specific_block = AsyncMock()
@@ -82,6 +94,9 @@ class TestSettlementPhase:
                 assert call_args[1]['scores'] == mock_scores
 
     async def test_settlement_enters_complete_phase(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        
         """Test that settlement enters COMPLETE phase after finalization."""
         dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
         dummy_validator._wait_until_specific_block = AsyncMock()
@@ -103,6 +118,9 @@ class TestConsensusPublishing:
     """Test consensus snapshot publishing."""
 
     async def test_publish_round_snapshot_uploads_to_ipfs(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        
         """Test that publish_round_snapshot is called with correct scores."""
         dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
         dummy_validator._wait_until_specific_block = AsyncMock()
@@ -137,6 +155,9 @@ class TestWeightCalculation:
     """Test weight calculation logic."""
 
     async def test_calculate_final_weights_with_valid_scores(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        
         """Test that _calculate_final_weights processes valid scores."""
         scores = {1: 0.8, 2: 0.6, 3: 0.9}
         
@@ -154,6 +175,9 @@ class TestWeightCalculation:
                 dummy_validator.set_weights.assert_called_once()
 
     async def test_weight_calculation_applies_wta_rewards(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        
         """Test that weight calculation applies winner-takes-all rewards."""
         scores = {1: 0.5, 2: 0.8, 3: 0.3}
         
@@ -169,6 +193,9 @@ class TestWeightCalculation:
                 mock_wta.assert_called_once()
 
     async def test_weight_calculation_applies_winner_bonus(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        
         """Test that weight calculation applies previous winner bonus."""
         scores = {1: 0.8, 2: 0.6}
         dummy_validator._last_round_winner_uid = 1  # UID 1 won last round
@@ -186,6 +213,9 @@ class TestWeightCalculation:
                     assert call_args[1] > 0.8
 
     async def test_weight_calculation_calls_update_scores_and_set_weights(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        
         """Test that weight calculation calls update_scores and set_weights."""
         scores = {1: 0.8}
         
@@ -206,6 +236,9 @@ class TestBurnLogic:
     """Test burn logic for edge cases."""
 
     async def test_calculate_final_weights_burns_when_no_scores(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        
         """Test that _calculate_final_weights burns when no valid scores."""
         scores = {}  # No scores
         dummy_validator._burn_all = AsyncMock()
@@ -216,17 +249,24 @@ class TestBurnLogic:
         dummy_validator._burn_all.assert_called_once()
 
     async def test_burn_all_when_burn_all_enabled(self, dummy_validator):
-        """Test that _burn_all is called when BURN_ALL is enabled."""
+        from tests.conftest import _bind_settlement_mixin
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        
+        """Test that weights are burned when BURN_ALL is enabled."""
         scores = {1: 0.8}
-        dummy_validator._burn_all = AsyncMock()
         
         with patch('autoppia_web_agents_subnet.validator.config.BURN_ALL', True):
             await dummy_validator._calculate_final_weights(scores=scores)
             
-            # Should have called _burn_all
-            dummy_validator._burn_all.assert_called_once()
+            # Should have called update_scores (which happens in _burn_all)
+            dummy_validator.update_scores.assert_called_once()
+            # Should have called set_weights
+            dummy_validator.set_weights.assert_called_once()
 
     async def test_burn_sets_weight_to_burn_uid(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        
         """Test that _burn_all sets weight to BURN_UID."""
         with patch('autoppia_web_agents_subnet.validator.config.BURN_UID', 5):
             await dummy_validator._burn_all(reason="test burn")
@@ -241,6 +281,9 @@ class TestBurnLogic:
             assert np.sum(rewards) == 1.0
 
     async def test_burn_handles_custom_weights_array(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        
         """Test that _burn_all can accept custom weights array."""
         custom_weights = np.array([0.0, 0.5, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float32)
         
@@ -261,6 +304,9 @@ class TestWaitLogic:
     """Test wait logic for specific blocks."""
 
     async def test_wait_until_specific_block_waits_correctly(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin_with_wait
+        dummy_validator = _bind_settlement_mixin_with_wait(dummy_validator)
+        
         """Test that _wait_until_specific_block waits until target is reached."""
         dummy_validator.block = 1000
         dummy_validator.subtensor.get_current_block = Mock(side_effect=[1000, 1010, 1020, 1030])
@@ -275,6 +321,9 @@ class TestWaitLogic:
             assert mock_sleep.call_count >= 2
 
     async def test_wait_returns_immediately_when_already_past_target(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin_with_wait
+        dummy_validator = _bind_settlement_mixin_with_wait(dummy_validator)
+        
         """Test that wait returns immediately when already past target block."""
         dummy_validator.block = 1500
         
@@ -288,6 +337,9 @@ class TestWaitLogic:
             mock_sleep.assert_not_called()
 
     async def test_wait_logs_progress_periodically(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin_with_wait
+        dummy_validator = _bind_settlement_mixin_with_wait(dummy_validator)
+        
         """Test that wait logs progress during waiting."""
         dummy_validator.block = 1000
         dummy_validator.subtensor.get_current_block = Mock(side_effect=[1000, 1010, 1020])
@@ -309,6 +361,9 @@ class TestSettlementEdgeCases:
     """Test edge cases in settlement logic."""
 
     async def test_settlement_handles_empty_agents_dict(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        
         """Test settlement handles empty agents_dict gracefully."""
         dummy_validator.agents_dict = {}
         dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
@@ -323,6 +378,9 @@ class TestSettlementEdgeCases:
                 await dummy_validator._run_settlement_phase(agents_evaluated=0)
 
     async def test_calculate_final_weights_with_zero_scores(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        
         """Test weight calculation with all zero scores."""
         scores = {1: 0.0, 2: 0.0, 3: 0.0}
         dummy_validator._burn_all = AsyncMock()
@@ -333,6 +391,9 @@ class TestSettlementEdgeCases:
         dummy_validator._burn_all.assert_called_once()
 
     async def test_calculate_final_weights_with_negative_scores(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        
         """Test weight calculation filters out negative scores."""
         scores = {1: 0.8, 2: -0.5, 3: 0.6}  # UID 2 has negative score
         

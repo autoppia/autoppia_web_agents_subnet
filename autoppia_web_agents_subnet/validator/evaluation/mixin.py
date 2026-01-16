@@ -27,7 +27,7 @@ class ValidatorEvaluationMixin:
         agents_evaluated = 0
         while not self.agents_queue.empty():    
             wait_info = self.round_manager.get_wait_info(current_block)
-            if wait_info["minutes_to_settlement"] > MAXIMUM_EVALUATION_TIME:
+            if wait_info["minutes_to_settlement"] < MAXIMUM_EVALUATION_TIME:
                 break
 
             agent = self.agents_queue.get()
@@ -35,25 +35,42 @@ class ValidatorEvaluationMixin:
             if normalized_github_url is None:
                 continue
 
-            agent_instance = self.sandbox_manager.deploy_agent(agent.uid, normalized_github_url)
+            agent_instance = None
+            try:
+                agent_instance = self.sandbox_manager.deploy_agent(agent.uid, normalized_github_url)
+            except Exception as e:
+                ColoredLogger.error(f"Error deploying agent {agent.uid}: {e}", ColoredLogger.RED)
+                continue
+                
             if agent_instance is None:
                 continue
 
-            scores = []
-            for task in season_tasks:
-                score, _, _ = await evaluate_with_stateful_cua(
-                    task=task,
-                    uid=agent.uid,
-                    base_url=agent_instance.base_url,
-                )
-                scores.append(score)
+            try:
+                scores = []
+                for task in season_tasks:
+                    try:
+                        score, _, _ = await evaluate_with_stateful_cua(
+                            task=task,
+                            uid=agent.uid,
+                            base_url=agent_instance.base_url,
+                        )
+                        scores.append(score)
+                    except Exception as e:
+                        ColoredLogger.error(f"Error evaluating task {task}: {e}", ColoredLogger.RED)
+                        continue
 
-            avg_score = sum(scores) / len(scores)
-            agent.score = avg_score
-            self.agents_dict[agent.uid] = agent
-
-            agents_evaluated += 1
-            self.sandbox_manager.cleanup_agent(agent.uid)
+                # Handle empty scores list
+                if len(scores) > 0:
+                    avg_score = sum(scores) / len(scores)
+                    agent.score = avg_score
+                else:
+                    agent.score = 0.0
+                    
+                self.agents_dict[agent.uid] = agent
+                agents_evaluated += 1
+            finally:
+                # Always cleanup, even if evaluation fails
+                self.sandbox_manager.cleanup_agent(agent.uid)
 
         ColoredLogger.info("Evaluation phase completed", ColoredLogger.MAGENTA)
         return agents_evaluated

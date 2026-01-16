@@ -196,13 +196,13 @@ class TestScoreAggregation:
         dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
         dummy_validator.round_manager.calculate_round = AsyncMock(return_value=5)
         
-        # Set up metagraph with different stakes
-        dummy_validator.metagraph.stake = [100.0, 200.0]
+        # Set up metagraph with different stakes (above MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO)
+        dummy_validator.metagraph.stake = [10000.0, 20000.0]
         dummy_validator.metagraph.hotkeys = ["hotkey1", "hotkey2"]
         
         mock_commits = {
-            "hotkey1": {"r": 5, "c": "QmCID1"},  # 100 TAO stake
-            "hotkey2": {"r": 5, "c": "QmCID2"},  # 200 TAO stake
+            "hotkey1": {"r": 5, "c": "QmCID1"},  # 10000 TAO stake
+            "hotkey2": {"r": 5, "c": "QmCID2"},  # 20000 TAO stake
         }
         
         with patch('autoppia_web_agents_subnet.validator.settlement.consensus.read_all_plain_commitments') as mock_read:
@@ -217,7 +217,7 @@ class TestScoreAggregation:
                 from autoppia_web_agents_subnet.validator.settlement.consensus import aggregate_scores_from_commitments
                 scores, details = await aggregate_scores_from_commitments(dummy_validator, st=Mock())
                 
-                # Weighted average: (100*0.6 + 200*0.9) / (100+200) = 240/300 = 0.8
+                # Weighted average: (10000*0.6 + 20000*0.9) / (10000+20000) = 24000/30000 = 0.8
                 assert 1 in scores
                 assert abs(scores[1] - 0.8) < 0.01
 
