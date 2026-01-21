@@ -35,15 +35,13 @@ class StartRoundSynapse(Synapse):
     note: Optional[str] = None
 
     # Response (miner -> validator)
-    agent_name: str
-    github_url: str
+    agent_name: Optional[str] = None
+    github_url: Optional[str] = None
     agent_image: Optional[str] = None
     agent_version: Optional[str] = None
     has_rl: bool = False
 
-    class Config:
-        extra = "allow"
-        arbitrary_types_allowed = True
+    model_config = {"extra": "allow", "arbitrary_types_allowed": True}
 
     def deserialize(self) -> "StartRoundSynapse":
         return self

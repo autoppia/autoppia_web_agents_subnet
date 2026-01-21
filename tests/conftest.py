@@ -334,10 +334,9 @@ def dummy_validator(mock_validator_config):
     validator.metagraph.coldkeys = [f"coldkey{i}" for i in range(10)]
     validator.metagraph.axons = [Mock(ip="127.0.0.1", port=8000 + i) for i in range(10)]
     
-    # Async methods
-    validator.sync = AsyncMock()
-    validator.set_weights = AsyncMock()
-    validator.update_scores = AsyncMock()
+    # Sync methods that were incorrectly marked as async
+    validator.set_weights = Mock()
+    validator.update_scores = Mock()
     validator._get_async_subtensor = AsyncMock()
     validator._log_round_completion = Mock()
     

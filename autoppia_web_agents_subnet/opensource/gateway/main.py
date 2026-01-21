@@ -50,11 +50,10 @@ class LLMGateway:
         self.current_usage.total_tokens += input_tokens + output_tokens
 
         logger.info(f"Used {input_tokens} input tokens, {output_tokens} output tokens")
-        logger.info(f"Totally token usage: {total_tokens}.")
-        
+        logger.info(f"Total token usage: {self.current_usage.total_tokens}.")
         model = response_data.get("model", "")
         provider_config = self.providers[provider]
-        pricing = provider_config.models.get(model, {})
+        pricing = provider_config.pricing.get(model, {})
         
         input_price = pricing.get("input", 10.0)
         output_price = pricing.get("output", 40.0)
@@ -64,7 +63,7 @@ class LLMGateway:
         self.current_usage.total_cost += input_cost + output_cost
 
         logger.info(f"Used ${input_cost:.4f} input, ${output_cost:.4f} output")
-        logger.info(f"Totally cost usage: ${total_cost:.4f}.")
+        logger.info(f"Total cost usage: ${self.current_usage.total_cost:.4f}.")
 
     def reset_usage(self) -> None:
         self.current_usage = TokenUsage()    

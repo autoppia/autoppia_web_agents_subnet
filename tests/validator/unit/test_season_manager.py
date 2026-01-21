@@ -103,7 +103,6 @@ class TestTaskGeneration:
 
 
 @pytest.mark.unit
-@pytest.mark.asyncio
 class TestSeasonTransitions:
     """Test season transition detection and handling."""
 
@@ -123,6 +122,7 @@ class TestSeasonTransitions:
         # Moved to season 2
         assert manager.should_start_new_season(6727680) is True
 
+    @pytest.mark.asyncio
     async def test_new_season_regenerates_tasks(self):
         """Test that moving to a new season triggers task regeneration."""
         manager = SeasonManager()

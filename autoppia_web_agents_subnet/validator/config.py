@@ -78,10 +78,10 @@ LAST_WINNER_BONUS_PCT = _env_float("LAST_WINNER_BONUS_PCT", 0.05)
 # ═══════════════════════════════════════════════════════════════════════════
 
 SANDBOX_NETWORK_NAME = _env_str("SANDBOX_NETWORK_NAME", "sandbox-network")
-SANDBOX_IMAGE = _env_str("SANDBOX_IMAGE", "autoppia-sandbox-image")
 SANDBOX_GATEWAY_IMAGE = _env_str("SANDBOX_GATEWAY_IMAGE", "autoppia-sandbox-gateway-image")
 SANDBOX_GATEWAY_HOST = _env_str("SANDBOX_GATEWAY_HOST", "sandbox-gateway")
 SANDBOX_GATEWAY_PORT = _env_int("SANDBOX_GATEWAY_PORT", 8080)
+SANDBOX_AGENT_IMAGE = _env_str("SANDBOX_IMAGE", "autoppia-sandbox-agent-image")
 SANDBOX_AGENT_PORT = _env_int("SANDBOX_AGENT_PORT", 9000)
 SANDBOX_AGENT_START_CMD = _env_str(
     "SANDBOX_AGENT_START_CMD",

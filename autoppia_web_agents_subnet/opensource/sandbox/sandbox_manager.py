@@ -21,6 +21,7 @@ from autoppia_web_agents_subnet.validator.config import (
     SANDBOX_GATEWAY_IMAGE,
     SANDBOX_GATEWAY_HOST,
     SANDBOX_GATEWAY_PORT,
+    SANDBOX_AGENT_IMAGE,
     SANDBOX_AGENT_PORT,
     SANDBOX_AGENT_START_CMD,
     SANDBOX_CLONE_TIMEOUT,
@@ -131,7 +132,7 @@ class SandboxManager:
             if val:
                 env[key] = val
         container = self.client.containers.run(
-            image=SANDBOX_IMAGE,
+            image=SANDBOX_AGENT_IMAGE,
             name=f"sandbox-agent-{uid}",
             volumes={temp_dir: {"bind": "/sandbox", "mode": "rw"}},
             network=SANDBOX_NETWORK_NAME,
@@ -147,7 +148,6 @@ class SandboxManager:
         return AgentInstance(uid=uid, container=container, temp_dir=temp_dir, port=SANDBOX_AGENT_PORT)
 
     def deploy_agent(self, uid: int, github_url: str) -> Optional[AgentInstance]:
-        self._ensure_base_image()
         try:
             temp_dir = self._clone_repo(github_url)
             agent = self._start_container(uid, temp_dir)

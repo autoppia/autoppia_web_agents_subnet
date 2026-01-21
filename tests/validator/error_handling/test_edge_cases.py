@@ -101,8 +101,8 @@ class TestStakeEdgeCases:
             'autoppia_web_agents_subnet.validator.settlement.consensus.aggregate_scores_from_commitments',
             new=AsyncMock(return_value=({}, None))
         ):
-            validator_with_agents.update_scores = MagicMock()
-            validator_with_agents.set_weights = AsyncMock()
+            validator_with_agents.update_scores = Mock()
+            validator_with_agents.set_weights = Mock()
             validator_with_agents.round_manager.enter_phase = MagicMock()
             
             # Should not crash - pass empty scores dict
@@ -155,7 +155,7 @@ class TestEmptyDataEdgeCases:
         )
         
         validator_with_agents.sandbox_manager.deploy_agent = AsyncMock(return_value=True)
-        validator_with_agents.sandbox_manager.cleanup_agent = AsyncMock()
+        validator_with_agents.sandbox_manager.cleanup_agent = Mock()
         
         # Should not crash
         await validator_with_agents._run_evaluation_phase()
@@ -175,8 +175,8 @@ class TestEmptyDataEdgeCases:
             2: MagicMock(uid=2, score=0.0)
         }
         
-        validator_with_agents.update_scores = MagicMock()
-        validator_with_agents.set_weights = AsyncMock()
+        validator_with_agents.update_scores = Mock()
+        validator_with_agents.set_weights = Mock()
         validator_with_agents.round_manager.enter_phase = MagicMock()
         
         # Should trigger burn logic - pass empty scores dict

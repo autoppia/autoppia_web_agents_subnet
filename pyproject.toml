@@ -14,3 +14,8 @@ markers = [
     "slow: Slow-running tests",
     "requires_docker: Tests that require Docker",
 ]
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = [
+    "ignore::RuntimeWarning:inspect",
+    "ignore::RuntimeWarning:unittest.mock",
+]

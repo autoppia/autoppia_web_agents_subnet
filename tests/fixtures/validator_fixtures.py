@@ -100,8 +100,10 @@ def dummy_validator(mock_validator_config: Dict[str, Any]) -> Mock:
     
     # Async methods
     validator.sync = AsyncMock()
-    validator.set_weights = AsyncMock()
-    validator.update_scores = AsyncMock()
+    
+    # Sync methods that were incorrectly marked as async
+    validator.set_weights = Mock()
+    validator.update_scores = Mock()
     
     # Mixin methods (will be tested separately)
     validator._start_round = AsyncMock()

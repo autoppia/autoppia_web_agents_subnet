@@ -46,7 +46,7 @@ class ValidatorEvaluationMixin:
                 ColoredLogger.error(f"Agent not deployed correctly for uid {agent.uid}", ColoredLogger.RED)
                 continue
                 
-            if not self.sandbox_manager.health_check(agent_instance):
+            if not self.sandbox_manager.check_agent_health(agent_instance):
                 ColoredLogger.error(f"Failed health checking of agent instance for uid {agent.uid}", ColoredLogger.RED)
                 continue
 

@@ -163,8 +163,8 @@ def mock_sandbox_manager() -> Mock:
     
     manager = Mock()
     manager.deploy_agent = AsyncMock(side_effect=deploy_agent)
-    manager.cleanup_agent = AsyncMock(side_effect=cleanup_agent)
-    manager.cleanup_all_agents = AsyncMock(side_effect=cleanup_all_agents)
+    manager.cleanup_agent = Mock(side_effect=cleanup_agent)
+    manager.cleanup_all_agents = Mock(side_effect=cleanup_all_agents)
     manager.get_base_url = Mock(side_effect=get_base_url)
     manager.health_check = AsyncMock(side_effect=health_check)
     manager.deployed_agents = deployed_agents  # Expose for test inspection
