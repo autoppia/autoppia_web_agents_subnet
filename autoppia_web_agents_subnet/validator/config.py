@@ -1,8 +1,5 @@
 import os
 
-from dotenv import load_dotenv
-load_dotenv()
-
 from autoppia_web_agents_subnet.utils.env import (
     _env_str, 
     _env_bool,
@@ -80,18 +77,12 @@ LAST_WINNER_BONUS_PCT = _env_float("LAST_WINNER_BONUS_PCT", 0.05)
 # SANDBOX / DEPLOYMENT CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
 
-SANDBOX_ENABLED = _env_bool("SANDBOX_ENABLED", True)
 SANDBOX_NETWORK_NAME = _env_str("SANDBOX_NETWORK_NAME", "sandbox-network")
 SANDBOX_IMAGE = _env_str("SANDBOX_IMAGE", "autoppia-sandbox-image")
-SANDBOX_PROXY_IMAGE = _env_str("SANDBOX_PROXY_IMAGE", "autoppia-sandbox-proxy-image")
-SANDBOX_PROXY_TARGET = _env_str(
-    "SANDBOX_PROXY_TARGET",
-    # Default to the OpenAI API host; this means miner agents can only reach
-    # the ChatGPT API (and only via the sandbox proxy). Operators can point
-    # this at a more complex gateway if needed.
-    "https://api.openai.com",
-)
-SANDBOX_AGENT_PORT = _env_int("SANDBOX_AGENT_PORT", 8000)
+SANDBOX_GATEWAY_IMAGE = _env_str("SANDBOX_GATEWAY_IMAGE", "autoppia-sandbox-gateway-image")
+SANDBOX_GATEWAY_HOST = _env_str("SANDBOX_GATEWAY_HOST", "sandbox-gateway")
+SANDBOX_GATEWAY_PORT = _env_int("SANDBOX_GATEWAY_PORT", 8080)
+SANDBOX_AGENT_PORT = _env_int("SANDBOX_AGENT_PORT", 9000)
 SANDBOX_AGENT_START_CMD = _env_str(
     "SANDBOX_AGENT_START_CMD",
     # Miner code is expected to run against a predefined runtime image. We

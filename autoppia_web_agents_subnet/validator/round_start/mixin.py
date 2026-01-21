@@ -36,6 +36,12 @@ class ValidatorRoundStartMixin:
                 continue_forward=False,
             )
 
+        if not self.sandbox_manager.check_gateway_health():
+            bt.logging.error("Sandbox gateway is not healthy; aborting round start")
+            return RoundStartResult(
+                continue_forward=False,
+            )
+
         if self.season_manager.should_start_new_season(current_block):
             await self.season_manager.generate_season_tasks(current_block)
             while not self.agents_queue.empty():

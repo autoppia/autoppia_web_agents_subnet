@@ -22,7 +22,7 @@ from autoppia_web_agents_subnet.validator.settlement.mixin import ValidatorSettl
 from autoppia_web_agents_subnet.platform.validator_mixin import ValidatorPlatformMixin
 
 from autoppia_iwa.src.bootstrap import AppBootstrap
-from autoppia_web_agents_subnet.opensource.sandbox_manager import SandboxManager
+from autoppia_web_agents_subnet.opensource.sandbox.sandbox_manager import SandboxManager
 from autoppia_web_agents_subnet.validator.models import AgentInfo
 
 
@@ -41,14 +41,12 @@ class Validator(
         self.agents_queue: queue.Queue[AgentInfo] = queue.Queue()
         self.agents_dict: dict[int, AgentInfo] = {}
 
-        if SANDBOX_ENABLED:
-            try:
-                self.sandbox_manager = SandboxManager()
-            except Exception as exc:
-                bt.logging.warning(f"Sandbox manager failed to initialize: {exc}")
-                self.sandbox_manager = None
-        else:
-            self.sandbox_manager = None
+        try:
+            self.sandbox_manager = SandboxManager()
+        except Exception as e:
+            import sys            
+            bt.logging.warning(f"Sandbox manager failed to initialize: {e}")
+            sys.exit(1)
 
         # Season manager for task generation
         self.season_manager = SeasonManager()

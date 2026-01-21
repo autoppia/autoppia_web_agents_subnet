@@ -20,7 +20,6 @@ class StartRoundSynapse(Synapse):
     Validator-populated (request):
       - round_id: unique identifier for the round.
       - validator_id: optional human-readable or wallet ID.
-      - total_prompts / prompts_per_use_case: optional planning hints.
       - note: free-form context.
 
     Miner-populated (response):
@@ -36,9 +35,9 @@ class StartRoundSynapse(Synapse):
     note: Optional[str] = None
 
     # Response (miner -> validator)
-    agent_name: Optional[str] = None
-    agent_image: Optional[str] = None  # URL or data URI
-    github_url: Optional[str] = None
+    agent_name: str
+    github_url: str
+    agent_image: Optional[str] = None
     agent_version: Optional[str] = None
     has_rl: bool = False
 
