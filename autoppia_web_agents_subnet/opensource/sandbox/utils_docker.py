@@ -21,6 +21,15 @@ def ensure_network(name: str, internal: bool = True) -> None:
         client.networks.create(name, driver="bridge", internal=internal)
 
 
+def check_image(image_name: str) -> bool:
+    client = get_client()
+    try:
+        client.images.get(image_name)
+        return True
+    except NotFound:
+        return False
+
+
 def build_image(context_path: str, tag: str) -> None:
     client = get_client()
     client.images.build(path=context_path, tag=tag, quiet=False)
@@ -28,7 +37,7 @@ def build_image(context_path: str, tag: str) -> None:
 
 def stop_and_remove(container) -> None:
     try:
-        container.stop(timeout=3)
+        container.stop(timeout=10)
     except Exception:
         pass
     try:

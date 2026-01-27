@@ -23,8 +23,8 @@ BURN_ALL = _env_bool("BURN_ALL", False)
 SEASON_SIZE_EPOCHS = _env_float("SEASON_SIZE_EPOCHS", 280.0, test_default=2.0)
 ROUND_SIZE_EPOCHS = _env_float("ROUND_SIZE_EPOCHS", 4.0, test_default=0.2)
 MINIMUM_START_BLOCK = _env_int("MINIMUM_START_BLOCK", 6726960)
-ROUND_START_UNTIL_FRACTION = _env_float("ROUND_START_UNTIL_FRACTION", 0.3)
-MAXIMUM_EVALUATION_TIME = _env_int("MAXIMUM_EVALUATION_TIME", 30) # minutes
+ROUND_START_UNTIL_FRACTION = _env_float("ROUND_START_UNTIL_FRACTION", 0.3, test_default=0.9)
+MAXIMUM_EVALUATION_TIME = _env_float("MAXIMUM_EVALUATION_TIME", 30.0, test_default=0.5) # minutes
 
 PROMPTS_PER_USE_CASE = _env_int("PROMPTS_PER_USE_CASE", 1)
 MAX_ACTIONS_LENGTH = _env_int("MAX_ACTIONS_LENGTH", 60)
@@ -44,9 +44,9 @@ VALIDATOR_NAME = _env_str("VALIDATOR_NAME")
 VALIDATOR_IMAGE = _env_str("VALIDATOR_IMAGE")
 IWAP_VALIDATOR_AUTH_MESSAGE = _env_str("IWAP_VALIDATOR_AUTH_MESSAGE", "I am a honest validator")
 MAX_MINER_AGENT_NAME_LENGTH = _env_int("MAX_MINER_AGENT_NAME_LENGTH", 12)
-MIN_MINER_STAKE_TAO = _env_float("MIN_MINER_STAKE_TAO", 0.0)
+MIN_MINER_STAKE_TAO = _env_float("MIN_MINER_STAKE_TAO", 0.0, test_default=0.0)
 ENABLE_CHECKPOINT_SYSTEM = _env_bool("ENABLE_CHECKPOINT_SYSTEM", True)
-IPFS_API_URL = _env_str("IPFS_API_URL", "")
+IPFS_API_URL = _env_str("IPFS_API_URL", "http://ipfs.metahash73.com:5001/api/v0")
 # Comma-separated gateways for fetch fallback
 IPFS_GATEWAYS = [
     gw.strip()
@@ -80,9 +80,9 @@ LAST_WINNER_BONUS_PCT = _env_float("LAST_WINNER_BONUS_PCT", 0.05)
 SANDBOX_NETWORK_NAME = _env_str("SANDBOX_NETWORK_NAME", "sandbox-network")
 SANDBOX_GATEWAY_IMAGE = _env_str("SANDBOX_GATEWAY_IMAGE", "autoppia-sandbox-gateway-image")
 SANDBOX_GATEWAY_HOST = _env_str("SANDBOX_GATEWAY_HOST", "sandbox-gateway")
-SANDBOX_GATEWAY_PORT = _env_int("SANDBOX_GATEWAY_PORT", 8080)
+SANDBOX_GATEWAY_PORT = _env_int("SANDBOX_GATEWAY_PORT", 8000)
 SANDBOX_AGENT_IMAGE = _env_str("SANDBOX_IMAGE", "autoppia-sandbox-agent-image")
-SANDBOX_AGENT_PORT = _env_int("SANDBOX_AGENT_PORT", 9000)
+SANDBOX_AGENT_PORT = _env_int("SANDBOX_AGENT_PORT", 8080)
 SANDBOX_AGENT_START_CMD = _env_str(
     "SANDBOX_AGENT_START_CMD",
     # Miner code is expected to run against a predefined runtime image. We

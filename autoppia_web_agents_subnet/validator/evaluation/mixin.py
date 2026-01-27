@@ -28,6 +28,7 @@ class ValidatorEvaluationMixin:
         while not self.agents_queue.empty():    
             wait_info = self.round_manager.get_wait_info(current_block)
             if wait_info["minutes_to_settlement"] < MAXIMUM_EVALUATION_TIME:
+                ColoredLogger.info("Stopping evaluation phase for settlement", ColoredLogger.YELLOW)
                 break
 
             agent = self.agents_queue.get()
@@ -45,8 +46,8 @@ class ValidatorEvaluationMixin:
             if agent_instance is None:
                 ColoredLogger.error(f"Agent not deployed correctly for uid {agent.uid}", ColoredLogger.RED)
                 continue
-                
-            if not self.sandbox_manager.check_agent_health(agent_instance):
+
+            if not self.sandbox_manager.health_check(agent_instance):
                 ColoredLogger.error(f"Failed health checking of agent instance for uid {agent.uid}", ColoredLogger.RED)
                 continue
 

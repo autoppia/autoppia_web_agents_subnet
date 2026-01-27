@@ -136,14 +136,14 @@ async def _get_task_collection_interleaved(
     )
 
     # Apply seed to task URLs if dynamic HTML is enabled
-    if ENABLE_DYNAMIC_HTML:
-        bt.logging.debug("[tasks] Applying seeds to task URLs (ENABLE_DYNAMIC_HTML=true)")
-        for task_with_project in interleaved_tasks:
-            task = task_with_project.task
-            task.assign_seed = True
-            if "?seed=" not in task.url:
-                task.assign_seed_to_url()
-        bt.logging.debug(f"[tasks] Seeds assigned to {len(interleaved_tasks)} tasks")
+    # if ENABLE_DYNAMIC_HTML:
+    #     bt.logging.debug("[tasks] Applying seeds to task URLs (ENABLE_DYNAMIC_HTML=true)")
+    #     for task_with_project in interleaved_tasks:
+    #         task = task_with_project.task
+    #         task.assign_seed = True
+    #         if "?seed=" not in task.url:
+    #             task.assign_seed_to_url()
+    #     bt.logging.debug(f"[tasks] Seeds assigned to {len(interleaved_tasks)} tasks")
 
     return interleaved_tasks
 

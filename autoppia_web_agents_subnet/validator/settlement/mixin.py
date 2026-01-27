@@ -43,7 +43,7 @@ class ValidatorSettlementMixin:
 
         await self._wait_until_specific_block(
             target_block=self.round_manager.settlement_block,
-            target_description="round boundary block",
+            target_description="round settlement block",
         )
 
         try:
@@ -60,11 +60,12 @@ class ValidatorSettlementMixin:
             note=f"Round finalized with tasks",
             force=True,
         )
-        self.round_manager.log_phase_history()
-        try:
-            self._finalized_this_round = True
-        except Exception:
-            pass    
+        await self._wait_until_specific_block(
+            target_block=self.round_manager.target_block,
+            target_description="round end block",
+        )
+
+        self.round_manager.log_phase_history()  
 
     async def _wait_until_specific_block(self, target_block: int, target_description: str) -> None:
         current_block = self.block

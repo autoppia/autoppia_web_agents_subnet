@@ -11,8 +11,8 @@ from autoppia_web_agents_subnet.utils.env import (
 AGENT_NAME = _env_str("AGENT_NAME")
 GITHUB_URL = _env_str("GITHUB_URL")
 AGENT_IMAGE = _env_str("AGENT_IMAGE")
-AGENT_VERSION = _env_int("MINER_AGENT_VERSION", 1)
-HAS_RL = _env_bool("MINER_HAS_RL", False)
+AGENT_VERSION = _env_int("AGENT_VERSION", 1)
+HAS_RL = _env_bool("HAS_RL", False)
 
 from autoppia_web_agents_subnet.base.miner import BaseMinerNeuron
 from autoppia_web_agents_subnet.protocol import StartRoundSynapse

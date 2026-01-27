@@ -7,8 +7,8 @@ from typing import Optional
 import httpx
 from fastapi import FastAPI, Request, HTTPException, Response
 
-from .models import TokenUsage, ProviderConfig, DEFAULT_PROVIDER_CONFIGS
-from .config import (
+from models import TokenUsage, ProviderConfig, DEFAULT_PROVIDER_CONFIGS
+from config import (
     COST_LIMIT_ENABLED,
     COST_LIMIT_VALUE,
     OPENAI_API_KEY,
@@ -42,7 +42,7 @@ class LLMGateway:
         return self.current_usage
     
     def update_usage(self, provider: str, response_data: dict) -> None:
-        """Update token usage"""        
+        """Update token usage"""  
         usage = response_data.get("usage", {})
 
         input_tokens = usage.get("input_tokens", 10_000)
@@ -51,6 +51,7 @@ class LLMGateway:
 
         logger.info(f"Used {input_tokens} input tokens, {output_tokens} output tokens")
         logger.info(f"Total token usage: {self.current_usage.total_tokens}.")
+
         model = response_data.get("model", "")
         provider_config = self.providers[provider]
         pricing = provider_config.pricing.get(model, {})
@@ -86,6 +87,16 @@ async def health_check():
     return {"status": "healthy"}
 
 
+@app.get("/usage")
+async def get_usage():
+    """Get current usage statistics"""
+    current_usage = gateway.get_current_usage()
+    return {
+        "total_tokens": current_usage.total_tokens,
+        "total_cost": current_usage.total_cost
+    }
+
+
 @app.post("/reset")
 async def reset_usage():
     """Reset current usage for new agent evaluation"""
@@ -113,9 +124,8 @@ async def proxy_request(request: Request, path: str):
         url = f"{provider_config.base_url}/{path}"
         
         # Forward the request
-        headers = dict(request.headers)
-        headers.pop("host", None)
-        headers.pop("content-length", None)
+        headers = {}
+        headers["Content-Type"] = "application/json"
 
         if provider == "openai" and OPENAI_API_KEY:
             headers["Authorization"] = f"Bearer {OPENAI_API_KEY}"
@@ -130,17 +140,17 @@ async def proxy_request(request: Request, path: str):
             url=url,
             headers=headers,
             params=request.query_params,
-            content=body,
+            content=body
         )
         
         # Parse response to extract usage and update tracking
         if response.status_code == 200:
-            try:
+            try:                      
                 response_data = response.json()
                 gateway.update_usage(provider, response_data)
             except (json.JSONDecodeError, ValueError):
                 pass
-        
+
         # Return response with cost headers
         response_headers = dict(response.headers)
         current_usage = gateway.get_current_usage()

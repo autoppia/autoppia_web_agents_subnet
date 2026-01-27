@@ -28,18 +28,9 @@ class ValidatorRoundStartMixin:
         current_fraction = float(self.round_manager.fraction_elapsed(current_block))
 
         if current_fraction > ROUND_START_UNTIL_FRACTION:
-            await self._wait_until_specific_block(
-                target_block=self.round_manager.target_block,
-                target_description="round boundary block",
-            )
             return RoundStartResult(
                 continue_forward=False,
-            )
-
-        if not self.sandbox_manager.check_gateway_health():
-            bt.logging.error("Sandbox gateway is not healthy; aborting round start")
-            return RoundStartResult(
-                continue_forward=False,
+                reason="late in round",
             )
 
         if self.season_manager.should_start_new_season(current_block):
@@ -78,6 +69,7 @@ class ValidatorRoundStartMixin:
 
         return RoundStartResult(
             continue_forward=True,
+            reason="Round Started Successfully",
         ) 
 
     async def _perform_handshake(self, *, total_prompts: int) -> None:
@@ -175,6 +167,7 @@ class ValidatorRoundStartMixin:
                 github_url=getattr(resp, "github_url", None),
                 agent_version=getattr(resp, "agent_version", 1),                
             )
+            ColoredLogger.info(agent_info.__repr__(), ColoredLogger.GREEN)
 
             if uid in self.agents_dict and agent_info == self.agents_dict[uid]:
                 continue

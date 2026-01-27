@@ -12,7 +12,6 @@ from autoppia_web_agents_subnet.bittensor_config import config
 from autoppia_web_agents_subnet.validator.config import (
     ROUND_SIZE_EPOCHS,
     SETTLEMENT_FRACTION,
-    SANDBOX_ENABLED,
 )
 from autoppia_web_agents_subnet.validator.round_manager import RoundManager
 from autoppia_web_agents_subnet.validator.season_manager import SeasonManager
@@ -68,7 +67,11 @@ class Validator(
         start_result = await self._start_round()
 
         if not getattr(start_result, "continue_forward", True):
-            bt.logging.info("Round start skipped (late in round); waiting for next boundary")
+            bt.logging.info(f"Round start skipped ({start_result.reason}); waiting for next boundary")
+            await self._wait_until_specific_block(
+                target_block=self.round_manager.target_block,
+                target_description="round boundary block",
+            )
             return
 
         try:
@@ -83,7 +86,7 @@ class Validator(
         agents_evaluated = await self._run_evaluation_phase()
 
         # 3) Settlement / weight update
-        await self._run_settlement_phase(agents_evaluated)
+        await self._run_settlement_phase(agents_evaluated=agents_evaluated)
 
     def _log_phase_plan(self) -> None:
         """

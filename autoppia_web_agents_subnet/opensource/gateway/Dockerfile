@@ -5,7 +5,7 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 
 # Install required packages
-RUN pip install --no-cache-dir fastapi uvicorn httpx pydantic
+RUN pip install --no-cache-dir fastapi uvicorn httpx pydantic python-dotenv
 
 WORKDIR /app
 
@@ -14,6 +14,8 @@ COPY main.py /app/
 COPY models.py /app/
 COPY config.py /app/
 
-EXPOSE 8080
+ENV SANDBOX_GATEWAY_PORT=8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+EXPOSE ${SANDBOX_GATEWAY_PORT}
+
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${SANDBOX_GATEWAY_PORT}"]

@@ -6,8 +6,10 @@ import time
 from typing import Dict, Optional
 
 import httpx
+import bittensor as bt
 
 from autoppia_web_agents_subnet.opensource.sandbox.utils_docker import (
+    check_image,
     build_image,
     cleanup_containers,
     clone_repo,
@@ -26,7 +28,6 @@ from autoppia_web_agents_subnet.validator.config import (
     SANDBOX_AGENT_START_CMD,
     SANDBOX_CLONE_TIMEOUT,
 )
-from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
 
 class AgentInstance:
@@ -80,9 +81,8 @@ class SandboxManager:
         self._agents: Dict[int, AgentInstance] = {}
 
     def _ensure_gateway(self):
-        try:
-            self.client.images.get(SANDBOX_GATEWAY_IMAGE)
-        except Exception:
+        if not check_image(SANDBOX_GATEWAY_IMAGE):
+            bt.logging.info("Sandbox gateway image not found; building...")
             gateway_ctx = os.path.join(os.path.dirname(__file__), "..", "gateway")
             build_image(gateway_ctx, SANDBOX_GATEWAY_IMAGE)
 
@@ -90,6 +90,7 @@ class SandboxManager:
         env = {
             "COST_LIMIT_ENABLED": os.getenv("COST_LIMIT_ENABLED", "true"),
             "COST_LIMIT_VALUE": os.getenv("COST_LIMIT_VALUE", "10.0"),
+            "SANDBOX_GATEWAY_PORT": str(SANDBOX_GATEWAY_PORT),
         }
         # Propagate API keys to the gateway
         for key in ("OPENAI_API_KEY", "CHUTES_API_KEY"):
@@ -127,10 +128,6 @@ class SandboxManager:
             "HTTPS_PROXY": gateway_url,
             "SANDBOX_AGENT_UID": str(uid),
         }
-        for key in ("OPENAI_API_KEY", "CHUTES_API_KEY"):
-            val = os.getenv(key)
-            if val:
-                env[key] = val
         container = self.client.containers.run(
             image=SANDBOX_AGENT_IMAGE,
             name=f"sandbox-agent-{uid}",
@@ -154,10 +151,10 @@ class SandboxManager:
             self._agents[uid] = agent
             return agent
         except Exception as exc:
-            ColoredLogger.error(f"Failed to deploy agent {uid} from {github_url}: {exc}", ColoredLogger.RED)
+            bt.logging.error(f"Failed to deploy agent {uid} from {github_url}: {exc}")
             return None
 
-    def check_agent_health(self, agent: AgentInstance, timeout: int = 20) -> bool:
+    def health_check(self, agent: AgentInstance, timeout: int = 20) -> bool:
         if not agent or not agent.base_url:
             return False
         url = f"{agent.base_url}/health"
@@ -165,19 +162,6 @@ class SandboxManager:
         while time.time() < deadline:
             try:
                 resp = httpx.get(url, timeout=5.0)
-                if resp.status_code < 400:
-                    return True
-            except Exception:
-                pass
-            time.sleep(1.0)
-        return False
-
-    def check_gateway_health(self, timeout: int = 20) -> bool:
-        gateway_url = f"http://{SANDBOX_GATEWAY_HOST}:{SANDBOX_GATEWAY_PORT}"
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            try:
-                resp = httpx.get(f"{gateway_url}/health", timeout=5.0)
                 if resp.status_code < 400:
                     return True
             except Exception:
