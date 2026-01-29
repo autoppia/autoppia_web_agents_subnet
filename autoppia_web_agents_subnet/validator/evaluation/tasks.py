@@ -7,23 +7,19 @@ from __future__ import annotations
 import math
 import time
 import random
-from typing import List, Tuple
+from typing import List
 
 import bittensor as bt
 
 from autoppia_web_agents_subnet.validator.models import TaskWithProject, ProjectTasks
 from autoppia_web_agents_subnet.utils.random import split_tasks_evenly
-from autoppia_web_agents_subnet.validator.config import MAX_ACTIONS_LENGTH, TIMEOUT, ENABLE_DYNAMIC_HTML, PROMPTS_PER_USE_CASE
+from autoppia_web_agents_subnet.validator.config import PROMPTS_PER_USE_CASE
 
 # IWA (module-wrapped) imports
 from autoppia_iwa.src.demo_webs.config import demo_web_projects
 from autoppia_iwa.src.demo_webs.classes import WebProject
 from autoppia_iwa.src.data_generation.tasks.classes import Task, TaskGenerationConfig
-from autoppia_iwa.src.data_generation.tasks.pipeline import (
-    TaskGenerationPipeline,
-)
-from autoppia_iwa.src.data_generation.tasks.classes import Task as IWATask
-from autoppia_iwa.src.web_agents.classes import TaskSolution
+from autoppia_iwa.src.data_generation.tasks.pipeline import TaskGenerationPipeline
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -134,16 +130,6 @@ async def _get_task_collection_interleaved(
         f"[tasks] Generated {len(interleaved_tasks)} interleaved tasks "
         f"across {len(projects_tasks)} projects"
     )
-
-    # Apply seed to task URLs if dynamic HTML is enabled
-    # if ENABLE_DYNAMIC_HTML:
-    #     bt.logging.debug("[tasks] Applying seeds to task URLs (ENABLE_DYNAMIC_HTML=true)")
-    #     for task_with_project in interleaved_tasks:
-    #         task = task_with_project.task
-    #         task.assign_seed = True
-    #         if "?seed=" not in task.url:
-    #             task.assign_seed_to_url()
-    #     bt.logging.debug(f"[tasks] Seeds assigned to {len(interleaved_tasks)} tasks")
 
     return interleaved_tasks
 

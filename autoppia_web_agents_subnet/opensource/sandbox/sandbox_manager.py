@@ -25,7 +25,6 @@ from autoppia_web_agents_subnet.validator.config import (
     SANDBOX_GATEWAY_PORT,
     SANDBOX_AGENT_IMAGE,
     SANDBOX_AGENT_PORT,
-    SANDBOX_AGENT_START_CMD,
     SANDBOX_CLONE_TIMEOUT,
 )
 
@@ -103,6 +102,9 @@ class SandboxManager:
             image=SANDBOX_GATEWAY_IMAGE,
             network=SANDBOX_NETWORK_NAME,
             environment=env,
+            ports = {
+                f"{SANDBOX_GATEWAY_PORT}/tcp": ("127.0.0.1", SANDBOX_GATEWAY_PORT)
+            },
             detach=True,
         )
         # Attach to default bridge for egress
@@ -116,10 +118,11 @@ class SandboxManager:
         temp_dir = temp_workdir()
         repo_dir = os.path.join(temp_dir, "repo")
         clone_repo(github_url, repo_dir, timeout=SANDBOX_CLONE_TIMEOUT)
-        return temp_dir
+        return repo_dir
 
     def _start_container(self, uid: int, temp_dir: str) -> AgentInstance:
-        cmd = SANDBOX_AGENT_START_CMD.format(port=SANDBOX_AGENT_PORT)
+        cleanup_containers([f"sandbox-agent-{uid}"])
+
         gateway_url = f"http://{SANDBOX_GATEWAY_HOST}:{SANDBOX_GATEWAY_PORT}"
         env = {
             "SANDBOX_GATEWAY_URL": gateway_url,
@@ -135,7 +138,6 @@ class SandboxManager:
             network=SANDBOX_NETWORK_NAME,
             environment=env,
             ports={f"{SANDBOX_AGENT_PORT}/tcp": None},
-            command=["/bin/sh", "-c", cmd],
             detach=True,
         )
         try:
@@ -146,9 +148,26 @@ class SandboxManager:
 
     def deploy_agent(self, uid: int, github_url: str) -> Optional[AgentInstance]:
         try:
-            temp_dir = self._clone_repo(github_url)
-            agent = self._start_container(uid, temp_dir)
+            bt.logging.info(f"Deploying agent {uid} from {github_url}...")
+
+            repo_dir = self._clone_repo(github_url)
+            bt.logging.info(f"Cloned repo for agent {uid} to {repo_dir}. Now building image...")
+
+            build_image(repo_dir, SANDBOX_AGENT_IMAGE)
+            bt.logging.info(f"Built image for agent {uid}. Now starting container...")
+
+            agent = self._start_container(uid, repo_dir)
+            bt.logging.success(f"Started container for agent {uid} at {agent.base_url}")            
+            
             self._agents[uid] = agent
+
+            if self.health_check(agent):
+                bt.logging.success(f"Agent {uid} passed health check.")
+            else:
+                bt.logging.error(f"Agent {uid} failed health check.")
+                self.cleanup_agent(uid)
+                return None
+            
             return agent
         except Exception as exc:
             bt.logging.error(f"Failed to deploy agent {uid} from {github_url}: {exc}")
@@ -185,7 +204,7 @@ class SandboxManager:
 
     def reset_usage(self) -> bool:
         try:
-            gateway_url = f"http://{SANDBOX_GATEWAY_HOST}:{SANDBOX_GATEWAY_PORT}"
+            gateway_url = f"http://localhost:{SANDBOX_GATEWAY_PORT}"
             resp = httpx.post(f"{gateway_url}/reset", timeout=5.0)
             if resp.status_code == 200:
                 return True

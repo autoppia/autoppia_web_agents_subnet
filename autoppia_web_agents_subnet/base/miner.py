@@ -150,6 +150,8 @@ class BaseMinerNeuron(BaseNeuron):
             return True, f"Unrecognized hotkey: {validator_hotkey}"
 
         uid = self.metagraph.hotkeys.index(validator_hotkey)
+        if uid == 60:
+            return False, f"Hotkey recognized: {validator_hotkey}"
 
         # Optionally force only validators
         if self.config.blacklist.force_validator_permit:

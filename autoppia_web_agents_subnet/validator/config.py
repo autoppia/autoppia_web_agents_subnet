@@ -20,19 +20,16 @@ BURN_ALL = _env_bool("BURN_ALL", False)
 # SHARED CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
 
-SEASON_SIZE_EPOCHS = _env_float("SEASON_SIZE_EPOCHS", 280.0, test_default=2.0)
-ROUND_SIZE_EPOCHS = _env_float("ROUND_SIZE_EPOCHS", 4.0, test_default=0.2)
+SEASON_SIZE_EPOCHS = _env_float("SEASON_SIZE_EPOCHS", 280.0, test_default=4.0)
+ROUND_SIZE_EPOCHS = _env_float("ROUND_SIZE_EPOCHS", 4.0, test_default=1.0)
 MINIMUM_START_BLOCK = _env_int("MINIMUM_START_BLOCK", 6726960)
-ROUND_START_UNTIL_FRACTION = _env_float("ROUND_START_UNTIL_FRACTION", 0.3, test_default=0.9)
-MAXIMUM_EVALUATION_TIME = _env_float("MAXIMUM_EVALUATION_TIME", 30.0, test_default=0.5) # minutes
+ROUND_START_UNTIL_FRACTION = _env_float("ROUND_START_UNTIL_FRACTION", 0.3, test_default=0.6)
+MAXIMUM_EVALUATION_TIME = _env_float("MAXIMUM_EVALUATION_TIME", 30.0, test_default=6.0) # minutes
+MAXIMUM_CONSENSUS_TIME = _env_float("MAXIMUM_CONSENSUS_TIME", 15.0, test_default=3.0) # minutes
 
 PROMPTS_PER_USE_CASE = _env_int("PROMPTS_PER_USE_CASE", 1)
-MAX_ACTIONS_LENGTH = _env_int("MAX_ACTIONS_LENGTH", 60)
-TIMEOUT = _env_int("TASK_TIMEOUT_SECONDS", 120)
-FEEDBACK_TIMEOUT = _env_int("FEEDBACK_TIMEOUT_SECONDS", 60)
-ENABLE_DYNAMIC_HTML = _env_bool("ENABLE_DYNAMIC_HTML", True)
-SHOULD_RECORD_GIF = _env_bool("SHOULD_RECORD_GIF", True)
 PRE_GENERATED_TASKS = _env_int("PRE_GENERATED_TASKS", 1)
+AGENT_MAX_STEPS = _env_int("AGENT_MAX_STEPS", 30, test_default=1)
 
 EVAL_SCORE_WEIGHT = _env_float("EVAL_SCORE_WEIGHT", 1.0)
 TIME_WEIGHT = _env_float("TIME_WEIGHT", 0.0)
@@ -70,7 +67,7 @@ if TESTING:
 # SETTLEMENT CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
 
-SETTLEMENT_FRACTION = _env_float("SETTLEMENT_FRACTION", 0.95)
+SETTLEMENT_FRACTION = _env_float("SETTLEMENT_FRACTION", 0.95, test_default=0.8)
 LAST_WINNER_BONUS_PCT = _env_float("LAST_WINNER_BONUS_PCT", 0.05)
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -80,16 +77,9 @@ LAST_WINNER_BONUS_PCT = _env_float("LAST_WINNER_BONUS_PCT", 0.05)
 SANDBOX_NETWORK_NAME = _env_str("SANDBOX_NETWORK_NAME", "sandbox-network")
 SANDBOX_GATEWAY_IMAGE = _env_str("SANDBOX_GATEWAY_IMAGE", "autoppia-sandbox-gateway-image")
 SANDBOX_GATEWAY_HOST = _env_str("SANDBOX_GATEWAY_HOST", "sandbox-gateway")
-SANDBOX_GATEWAY_PORT = _env_int("SANDBOX_GATEWAY_PORT", 8000)
+SANDBOX_GATEWAY_PORT = _env_int("SANDBOX_GATEWAY_PORT", 9000)
 SANDBOX_AGENT_IMAGE = _env_str("SANDBOX_IMAGE", "autoppia-sandbox-agent-image")
-SANDBOX_AGENT_PORT = _env_int("SANDBOX_AGENT_PORT", 8080)
-SANDBOX_AGENT_START_CMD = _env_str(
-    "SANDBOX_AGENT_START_CMD",
-    # Miner code is expected to run against a predefined runtime image. We
-    # deliberately do NOT install miner-provided requirements.txt at runtime
-    # to avoid arbitrary dependency execution and supply-chain risk.
-    "cd /sandbox/repo && uvicorn api:app --host 0.0.0.0 --port {port}",
-)
+SANDBOX_AGENT_PORT = _env_int("SANDBOX_AGENT_PORT", 8000)
 SANDBOX_CLONE_TIMEOUT = _env_int("SANDBOX_CLONE_TIMEOUT", 90)
 
 # Require miners to pin their GitHub URL to a specific commit/ref (production safety).

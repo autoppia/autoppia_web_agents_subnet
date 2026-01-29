@@ -19,10 +19,16 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return _env_str(name, str(default)).strip().lower() in {"y", "yes", "t", "true", "on", "1"}
 
 
-def _env_int(name: str, default: int = 0) -> int:
+def _env_int(name: str, default: int = 0, *, test_default: Optional[int] = None) -> int:
     """
     Retrieve an integer environment variable, falling back to default for invalid values.
     """
+    TESTING = _env_bool("TESTING", False)
+    if TESTING:
+        if test_default is not None:
+            return int(_env_str(f"TEST_{name}", str(test_default)))
+        else:
+            return int(_env_str(f"TEST_{name}", str(default)))
     return int(_env_str(name, str(default)))
 
 

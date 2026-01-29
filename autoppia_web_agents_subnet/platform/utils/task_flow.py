@@ -7,7 +7,6 @@ import httpx
 import bittensor as bt
 from autoppia_web_agents_subnet.platform import models as iwa_models
 from autoppia_web_agents_subnet.platform import client as iwa_main
-from autoppia_web_agents_subnet.validator.config import TIMEOUT
 from .iwa_core import (
     log_iwap_phase,
     log_gif_event,

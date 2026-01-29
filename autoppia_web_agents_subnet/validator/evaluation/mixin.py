@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from autoppia_web_agents_subnet.validator.github_validation import normalize_and_validate_github_url
 from autoppia_web_agents_subnet.validator.evaluation.stateful_cua_eval import evaluate_with_stateful_cua
-from autoppia_web_agents_subnet.validator.config import MAXIMUM_EVALUATION_TIME
+from autoppia_web_agents_subnet.validator.config import (
+    MAXIMUM_EVALUATION_TIME, 
+    MAXIMUM_CONSENSUS_TIME,
+    AGENT_MAX_STEPS,
+)
 from autoppia_web_agents_subnet.validator.round_manager import RoundPhase
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
@@ -27,7 +31,7 @@ class ValidatorEvaluationMixin:
         agents_evaluated = 0
         while not self.agents_queue.empty():    
             wait_info = self.round_manager.get_wait_info(current_block)
-            if wait_info["minutes_to_settlement"] < MAXIMUM_EVALUATION_TIME:
+            if wait_info["minutes_to_settlement"] < (MAXIMUM_EVALUATION_TIME + MAXIMUM_CONSENSUS_TIME):
                 ColoredLogger.info("Stopping evaluation phase for settlement", ColoredLogger.YELLOW)
                 break
 
@@ -47,24 +51,15 @@ class ValidatorEvaluationMixin:
                 ColoredLogger.error(f"Agent not deployed correctly for uid {agent.uid}", ColoredLogger.RED)
                 continue
 
-            if not self.sandbox_manager.health_check(agent_instance):
-                ColoredLogger.error(f"Failed health checking of agent instance for uid {agent.uid}", ColoredLogger.RED)
-                continue
-
-            try:
-                self.sandbox_manager.reset_usage()
-            except Exception as e:
-                ColoredLogger.error(f"Error resetting usage: {e}", ColoredLogger.RED)
-                continue
-
             try:
                 scores = []
                 for task in season_tasks:
                     try:
                         score, _, _ = await evaluate_with_stateful_cua(
-                            task=task,
+                            task=task.task,
                             uid=agent.uid,
                             base_url=agent_instance.base_url,
+                            max_steps=AGENT_MAX_STEPS,
                         )
                         scores.append(score)
                     except Exception as e:
