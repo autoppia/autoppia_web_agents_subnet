@@ -116,7 +116,6 @@ def pytest_configure(config):
                 setattr(self, k, v)
 
     actions_module.ClickAction = _ClickActionStub  # type: ignore[attr-defined]
-    actions_module.AllActionsUnion = object  # type: ignore[attr-defined]
     sys.modules["autoppia_iwa.src.execution.actions.actions"] = actions_module
 
     base_module = types.ModuleType("autoppia_iwa.src.execution.actions.base")
