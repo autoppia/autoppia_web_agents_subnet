@@ -25,24 +25,75 @@ VALIDATOR_SIGNATURE_HEADER = "x-validator-signature"
 
 T = TypeVar("T")
 
+# Season calculation constants (must match backend config)
+BLOCKS_PER_EPOCH = 360.0
+SEASON_SIZE_EPOCHS = 280.0
+DZ_STARTING_BLOCK = 4493500
+
 
 def _uuid_suffix(length: int = 12) -> str:
     return uuid.uuid4().hex[:length]
 
 
-def generate_validator_round_id(round_number: Optional[int] = None) -> str:
+def _season_blocks() -> int:
+    """Calculate the number of blocks per season."""
+    return int(SEASON_SIZE_EPOCHS * BLOCKS_PER_EPOCH)
+
+
+def compute_season_number(current_block: int) -> int:
     """
-    Generate a unique validator round ID.
+    Calculate the season number based on the current block.
+    
+    Season 0 = before DZ_STARTING_BLOCK
+    Season 1+ = after DZ_STARTING_BLOCK, each season is SEASON_SIZE_EPOCHS epochs
+    """
+    base = int(DZ_STARTING_BLOCK)
+    if current_block <= base:
+        return 0
+    length = _season_blocks()
+    idx = (current_block - base) // length
+    return int(idx + 1)
+
+
+def compute_round_number_in_season(current_block: int, round_length: int) -> int:
+    """
+    Calculate the round number within the current season.
+    
+    Args:
+        current_block: Current blockchain block number
+        round_length: Length of a round in blocks
+        
+    Returns:
+        Round number within the season (1-indexed)
+    """
+    base = int(DZ_STARTING_BLOCK)
+    season_num = compute_season_number(current_block)
+    
+    if season_num == 0:
+        # Before starting block, just use simple calculation
+        return 1
+    
+    # Calculate blocks since the start of this season
+    season_start_block = base + (season_num - 1) * _season_blocks()
+    blocks_in_season = current_block - season_start_block
+    round_in_season = (blocks_in_season // round_length) + 1
+    
+    return int(round_in_season)
+
+
+def generate_validator_round_id(season_number: int, round_number_in_season: int) -> str:
+    """
+    Generate a unique validator round ID with season and round information.
 
     Args:
-        round_number: Optional round number to include in the ID (e.g., 1, 2, 3...)
+        season_number: Season number (e.g., 4, 5, 6...)
+        round_number_in_season: Round number within the season (e.g., 1, 2, 3...)
 
     Returns:
-        Round ID in format: validator_round_{number}_{random_id} or validator_round_{random_id}
+        Round ID in format: validator_round_{season}_{round}_{random_hash}
+        Example: validator_round_4_6_abc123def456
     """
-    if round_number is not None:
-        return f"validator_round_{round_number}_{_uuid_suffix()}"
-    return f"validator_round_{_uuid_suffix()}"
+    return f"validator_round_{season_number}_{round_number_in_season}_{_uuid_suffix()}"
 
 
 def generate_agent_run_id(miner_uid: Optional[int]) -> str:

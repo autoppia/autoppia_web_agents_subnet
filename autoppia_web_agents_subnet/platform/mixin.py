@@ -60,27 +60,29 @@ class ValidatorPlatformMixin:
 
     def _generate_validator_round_id(self, *, current_block: int) -> str:
         """
-        Generate a unique validator round ID with round number.
+        Generate a unique validator round ID with season and round information.
 
-        Calculates round number via round_manager.calculate_round(current_block).
+        Format: validator_round_{season}_{round_in_season}_{hash}
+        Example: validator_round_4_6_abc123def456
         """
         rm = getattr(self, "round_manager", None)
         if rm is None or not getattr(rm, "ROUND_BLOCK_LENGTH", 0):
             raise RuntimeError("Round manager is not initialized; cannot derive validator round id")
 
-        base_block = int(getattr(rm, "minimum_start_block", 0) or 0)
-        if current_block < base_block:
-            raise RuntimeError(f"Current block {current_block} predates configured minimum start block {base_block}")
-
         round_length = int(rm.ROUND_BLOCK_LENGTH)
         if round_length <= 0:
             raise RuntimeError("ROUND_BLOCK_LENGTH must be a positive integer")
 
-        blocks_since_start = current_block - base_block
-        round_index = blocks_since_start // round_length
-        round_number = int(round_index + 1)
+        # Calculate season and round within season
+        season_number = iwa_main.compute_season_number(current_block)
+        round_number_in_season = iwa_main.compute_round_number_in_season(
+            current_block, round_length
+        )
 
-        return iwa_main.generate_validator_round_id(round_number=round_number)
+        return iwa_main.generate_validator_round_id(
+            season_number=season_number,
+            round_number_in_season=round_number_in_season
+        )
 
     def _build_iwap_auth_headers(self) -> Dict[str, str]:
         hotkey = getattr(self.wallet.hotkey, "ss58_address", None)

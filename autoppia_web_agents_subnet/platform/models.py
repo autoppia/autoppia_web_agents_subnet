@@ -43,7 +43,8 @@ class ValidatorSnapshotIWAP:
 @dataclass
 class ValidatorRoundIWAP:
     validator_round_id: str
-    round_number: int
+    season_number: int
+    round_number_in_season: int
     validator_uid: int
     validator_hotkey: str
     validator_coldkey: Optional[str]

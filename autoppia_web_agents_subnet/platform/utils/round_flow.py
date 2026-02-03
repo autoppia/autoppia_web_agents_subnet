@@ -99,39 +99,28 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
         "target_epoch": boundaries.get("target_epoch"),
     }
 
-    # 🔍 DIAGNOSTIC: Log block and round calculation details
-    from autoppia_web_agents_subnet.validator.config import DZ_STARTING_BLOCK
-    blocks_since_start = current_block - DZ_STARTING_BLOCK
+    # 🔍 Calculate season and round within season
+    from autoppia_web_agents_subnet.platform import client as iwa_main
     round_blocks = int(ctx.round_manager.ROUND_BLOCK_LENGTH)
-    round_index = blocks_since_start // round_blocks
-    calculated_round = round_index + 1
+    
+    season_number = iwa_main.compute_season_number(current_block)
+    round_number_in_season = iwa_main.compute_round_number_in_season(current_block, round_blocks)
     
     bt.logging.info(
-        f"[IWAP] Round calculation: block={current_block:,} | "
-        f"DZ_STARTING_BLOCK={DZ_STARTING_BLOCK:,} | "
-        f"blocks_since_start={blocks_since_start:,} | "
-        f"round_blocks={round_blocks} | "
-        f"round_index={round_index} | "
-        f"calculated_round={calculated_round}"
+        f"[IWAP] Season calculation: block={current_block:,} | "
+        f"season_number={season_number} | "
+        f"round_number_in_season={round_number_in_season} | "
+        f"round_blocks={round_blocks}"
     )
     
-    round_number = await ctx.round_manager.calculate_round(current_block)
-    
-    # 🔍 VALIDATION: Ensure calculated round matches expected
-    if round_number != calculated_round:
-        bt.logging.warning(
-            f"[IWAP] Round number mismatch: calculate_round()={round_number} vs "
-            f"manual calculation={calculated_round} | "
-            f"Using calculate_round() result: {round_number}"
-        )
-    
-    try:
-        ctx._current_round_number = int(round_number)
-    except Exception:
-        pass
     miner_count = len(getattr(ctx, "active_miner_uids", []))
 
-    start_round_message = f"Calling start_round with round_number={round_number}, " f"tasks={n_tasks}, miners={miner_count}, " f"round_id={ctx.current_round_id}"
+    start_round_message = (
+        f"Calling start_round with season={season_number}, "
+        f"round_in_season={round_number_in_season}, "
+        f"tasks={n_tasks}, miners={miner_count}, "
+        f"round_id={ctx.current_round_id}"
+    )
     log_iwap_phase("Phase 1", start_round_message)
 
     # Try to authenticate with IWAP, but don't kill validator if it fails
@@ -172,7 +161,8 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
     
     validator_round = iwa_models.ValidatorRoundIWAP(
         validator_round_id=ctx.current_round_id,
-        round_number=round_number,
+        season_number=season_number,
+        round_number_in_season=round_number_in_season,
         validator_uid=int(ctx.uid),
         validator_hotkey=validator_identity.hotkey,
         validator_coldkey=validator_identity.coldkey,
