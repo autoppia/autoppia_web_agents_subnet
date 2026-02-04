@@ -47,8 +47,8 @@ class ValidatorRoundStartMixin:
         current_block = self.block
         self.round_manager.start_new_round(current_block)
 
-        # Configure per-round log file (data/logs/round-<id>.log).
-        round_id_for_log = getattr(self, "current_round_id", None) or f"round-{self.season_manager.season_number}-{self.round_manager.round_number}"
+        # Configure per-round log file (data/logs/season-<season>-round-<round>.log).
+        round_id_for_log = getattr(self, "current_round_id", None) or f"season-{self.season_manager.season_number}-round-{self.round_manager.round_number}"
         try:
             ColoredLogger.set_round_log_file(str(round_id_for_log))
         except Exception:
