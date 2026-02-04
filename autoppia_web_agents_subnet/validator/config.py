@@ -27,8 +27,9 @@ ROUND_START_UNTIL_FRACTION = _env_float("ROUND_START_UNTIL_FRACTION", 0.3, test_
 MAXIMUM_EVALUATION_TIME = _env_float("MAXIMUM_EVALUATION_TIME", 30.0, test_default=6.0) # minutes
 MAXIMUM_CONSENSUS_TIME = _env_float("MAXIMUM_CONSENSUS_TIME", 15.0, test_default=3.0) # minutes
 
-PROMPTS_PER_USE_CASE = _env_int("PROMPTS_PER_USE_CASE", 1)
-PRE_GENERATED_TASKS = _env_int("PRE_GENERATED_TASKS", 1)
+# TASKS_PER_SEASON: Number of tasks to generate for each season (generated only in round 1)
+# Tasks are distributed round-robin across all demo projects (1 task per project per cycle)
+TASKS_PER_SEASON = _env_int("TASKS_PER_SEASON", 1)
 AGENT_MAX_STEPS = _env_int("AGENT_MAX_STEPS", 30, test_default=1)
 
 EVAL_SCORE_WEIGHT = _env_float("EVAL_SCORE_WEIGHT", 1.0)

@@ -247,7 +247,7 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
         ROUND_SIZE_EPOCHS,
         SAFETY_BUFFER_EPOCHS,
         DZ_STARTING_BLOCK,
-        PRE_GENERATED_TASKS,
+        TASKS_PER_SEASON,
         AVG_TASK_DURATION_SECONDS,
         STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION,
         FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION,
@@ -283,7 +283,7 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
             "round_size_epochs": ROUND_SIZE_EPOCHS,
             "safety_buffer_epochs": SAFETY_BUFFER_EPOCHS,
             "dz_starting_block": DZ_STARTING_BLOCK,
-            "pre_generated_tasks": PRE_GENERATED_TASKS,
+            "tasks_per_season": TASKS_PER_SEASON,
             "avg_task_duration_seconds": AVG_TASK_DURATION_SECONDS,
         },
         "timing": {

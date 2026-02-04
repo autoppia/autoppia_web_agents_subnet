@@ -533,7 +533,7 @@ TESTING = true
 
 # Round Structure
 ROUND_SIZE_EPOCHS = 0.2                              # 14.4 minutes
-PRE_GENERATED_TASKS = 5                              # 5 tasks
+TASKS_PER_SEASON = 5                                 # 5 tasks per season
 DZ_STARTING_BLOCK = 6870000
 
 # Phase Timing (absolute % of round)
@@ -555,7 +555,7 @@ TESTING = false
 
 # Round Structure
 ROUND_SIZE_EPOCHS = 4.0                              # 4.8 hours (changed from 20.0)
-PRE_GENERATED_TASKS = 75                             # 75 tasks
+TASKS_PER_SEASON = 75                                # 75 tasks per season
 DZ_STARTING_BLOCK = 6870000
 
 # Phase Timing (absolute % of round)
