@@ -79,6 +79,15 @@ class Validator(
 
         # 1) Handshake & agent discovery
         await self._perform_handshake()
+        
+        # Initialize IWAP round after handshake (we now know how many miners participate)
+        current_block = self.block
+        season_tasks = await self.round_manager.get_round_tasks(current_block, self.season_manager)
+        n_tasks = len(season_tasks)
+        await self._iwap_start_round(current_block=current_block, n_tasks=n_tasks)
+        
+        # Register miners in IWAP (creates validator_round_miners records)
+        await self._iwap_register_miners()
 
         # 2) Evaluation phase
         agents_evaluated = await self._run_evaluation_phase()

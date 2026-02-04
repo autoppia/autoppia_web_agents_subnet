@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 import bittensor as bt
 
 from autoppia_web_agents_subnet.utils.log_colors import round_details_tag
@@ -48,8 +49,15 @@ class ValidatorRoundStartMixin:
         current_block = self.block
         self.round_manager.start_new_round(current_block)
 
+        # Generate validator round ID if not already set
+        if not hasattr(self, "current_round_id") or not self.current_round_id:
+            self.current_round_id = self._generate_validator_round_id(current_block=current_block)
+        
+        # Set round start timestamp
+        self.round_start_timestamp = time.time()
+
         # Configure per-round log file (data/logs/season-<season>-round-<round>.log).
-        round_id_for_log = getattr(self, "current_round_id", None) or f"season-{self.season_manager.season_number}-round-{self.round_manager.round_number}"
+        round_id_for_log = self.current_round_id
         try:
             ColoredLogger.set_round_log_file(str(round_id_for_log))
         except Exception:
@@ -169,6 +177,11 @@ class ValidatorRoundStartMixin:
             if resp is None or not getattr(resp, "agent_name", None) or not getattr(resp, "github_url", None):
                 continue
             
+            # Store handshake payload for IWAP registration
+            if not hasattr(self, "round_handshake_payloads"):
+                self.round_handshake_payloads = {}
+            self.round_handshake_payloads[uid] = resp
+            
             agent_info = AgentInfo(
                 uid=uid,
                 agent_name=getattr(resp, "agent_name", None),
@@ -190,6 +203,9 @@ class ValidatorRoundStartMixin:
             f"Handshake complete: {new_agents_count} new agents submitted "
             f"(min_stake={min_stake})"
         )
+        
+        # Set active_miner_uids based on agents that responded to handshake
+        self.active_miner_uids = list(self.agents_dict.keys())
 
     async def _wait_for_minimum_start_block(self) -> bool:
         """

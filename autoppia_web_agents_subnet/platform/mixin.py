@@ -25,6 +25,7 @@ from autoppia_web_agents_subnet.platform.utils.iwa_core import (
 from autoppia_web_agents_subnet.platform.utils.round_flow import (
     start_round_flow as _utils_start_round_flow,
     finish_round_flow as _utils_finish_round_flow,
+    register_participating_miners_in_iwap as _utils_register_participating_miners_in_iwap,
 )
 from autoppia_web_agents_subnet.platform.utils.task_flow import (
     submit_task_results as _utils_submit_task_results,
@@ -125,6 +126,16 @@ class ValidatorPlatformMixin:
 
     async def _iwap_start_round(self, *, current_block: int, n_tasks: int) -> None:
         await _utils_start_round_flow(self, current_block=current_block, n_tasks=n_tasks)
+    
+    async def _iwap_register_miners(self) -> None:
+        """
+        Register all participating miners in IWAP dashboard after handshake.
+        
+        Creates records for each miner that responded to handshake:
+        - validator_round_miners (miner identity and snapshot)
+        - miner_evaluation_runs (agent run for this round)
+        """
+        await _utils_register_participating_miners_in_iwap(self)
 
     async def _iwap_submit_task_results(
         self,
