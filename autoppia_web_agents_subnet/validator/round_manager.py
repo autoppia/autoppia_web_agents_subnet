@@ -102,31 +102,30 @@ class RoundManager:
         """Set the season start block (called by validator using SeasonManager)."""
         self.season_start_block = season_start_block
 
-    def sync_boundaries(self, current_block: int, season_start_block: int | None = None) -> None:
+    def sync_boundaries(self, current_block: int) -> None:
         """
         Calculate round boundaries within a season.
         
         Args:
             current_block: Current blockchain block number
-            season_start_block: Block number where the current season started
-                               (optional, uses self.season_start_block if not provided)
+            
+        Raises:
+            RuntimeError: If season_start_block has not been set via set_season_start_block()
         """
-        # Use provided season_start_block or fall back to stored value
-        if season_start_block is None:
-            if self.season_start_block is None:
-                # Fallback: use minimum_start_block if not set
-                season_start_block = self.minimum_start_block
-            else:
-                season_start_block = self.season_start_block
+        if self.season_start_block is None:
+            raise RuntimeError(
+                "season_start_block must be set before calling sync_boundaries(). "
+                "Call set_season_start_block() first (typically done in _start_round())."
+            )
         
-        effective_block = max(current_block, season_start_block)
+        effective_block = max(current_block, self.season_start_block)
 
         # Calculate round index within the season
-        blocks_since_season_start = effective_block - season_start_block
+        blocks_since_season_start = effective_block - self.season_start_block
         round_index = blocks_since_season_start // self.round_block_length
 
         # Calculate round boundaries
-        start_block = int(season_start_block + round_index * self.round_block_length)
+        start_block = int(self.season_start_block + round_index * self.round_block_length)
         settlement_block = int(start_block + int(self.round_block_length * self.settlement_fraction))
         target_block = int(start_block + self.round_block_length)
 
