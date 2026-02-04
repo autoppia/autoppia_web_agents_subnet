@@ -12,7 +12,6 @@ AGENT_NAME = _env_str("AGENT_NAME")
 GITHUB_URL = _env_str("GITHUB_URL")
 AGENT_IMAGE = _env_str("AGENT_IMAGE")
 AGENT_VERSION = _env_int("AGENT_VERSION", 1)
-HAS_RL = _env_bool("HAS_RL", False)
 
 from autoppia_web_agents_subnet.base.miner import BaseMinerNeuron
 from autoppia_web_agents_subnet.protocol import StartRoundSynapse
@@ -77,15 +76,8 @@ class Miner(BaseMinerNeuron):
                 ColoredLogger.error(f"  ❌ Failed to set agent_version: {e}", ColoredLogger.RED)
                 raise
 
-            try:
-                ColoredLogger.info(f"  Setting has_rl = {HAS_RL} (type: {type(HAS_RL)})", ColoredLogger.GRAY)
-                synapse.has_rl = HAS_RL
-            except Exception as e:
-                ColoredLogger.error(f"  ❌ Failed to set has_rl: {e}", ColoredLogger.RED)
-                raise
-
             ColoredLogger.success(
-                f"[StartRound] ✅ All fields set successfully! agent={agent_name or 'Unknown'} v{AGENT_VERSION} RL={HAS_RL}",
+                f"[StartRound] ✅ All fields set successfully! agent={agent_name or 'Unknown'} v{AGENT_VERSION}",
                 ColoredLogger.GREEN,
             )
 
@@ -95,7 +87,6 @@ class Miner(BaseMinerNeuron):
                 ColoredLogger.info(f"    - agent_name: {synapse.agent_name}", ColoredLogger.GRAY)
                 ColoredLogger.info(f"    - github_url: {synapse.github_url}", ColoredLogger.GRAY)
                 ColoredLogger.info(f"    - agent_version: {synapse.agent_version}", ColoredLogger.GRAY)
-                ColoredLogger.info(f"    - has_rl: {synapse.has_rl}", ColoredLogger.GRAY)
             except Exception as e:
                 ColoredLogger.warning(f"  ⚠️  Could not read synapse fields: {e}", ColoredLogger.YELLOW)
 

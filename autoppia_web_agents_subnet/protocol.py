@@ -39,7 +39,6 @@ class StartRoundSynapse(Synapse):
     github_url: Optional[str] = None
     agent_image: Optional[str] = None
     agent_version: Optional[int] = None
-    has_rl: bool = False
 
     model_config = {"extra": "allow", "arbitrary_types_allowed": True}
 
