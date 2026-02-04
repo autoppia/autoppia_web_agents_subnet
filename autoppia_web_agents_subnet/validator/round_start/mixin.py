@@ -174,7 +174,6 @@ class ValidatorRoundStartMixin:
                 agent_name=getattr(resp, "agent_name", None),
                 agent_image=getattr(resp, "agent_image", None),
                 github_url=getattr(resp, "github_url", None),
-                agent_version=getattr(resp, "agent_version", 1),                
             )
             ColoredLogger.info(agent_info.__repr__(), ColoredLogger.GREEN)
 

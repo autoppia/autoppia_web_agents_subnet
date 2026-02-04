@@ -307,7 +307,7 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
             miner_uid=miner_uid,
             miner_hotkey=miner_hotkey,
             is_sota=False,
-            version=getattr(handshake_payload, "agent_version", None),
+            version=None,
             started_at=now_ts,
             metadata={"handshake_note": getattr(handshake_payload, "note", None)},
         )

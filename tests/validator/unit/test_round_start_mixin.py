@@ -92,8 +92,8 @@ class TestHandshake:
         with patch('autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners') as mock_send:
             # Mock responses with agent info
             mock_responses = [
-                Mock(agent_name="agent1", github_url="https://github.com/test/agent1", agent_version=1, agent_image=None),
-                Mock(agent_name="agent2", github_url="https://github.com/test/agent2", agent_version=1, agent_image=None),
+                Mock(agent_name="agent1", github_url="https://github.com/test/agent1", agent_image=None),
+                Mock(agent_name="agent2", github_url="https://github.com/test/agent2", agent_image=None),
             ]
             mock_send.return_value = mock_responses
             
@@ -132,8 +132,8 @@ class TestHandshake:
         """Test that handshake populates agents_dict and agents_queue."""
         with patch('autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners') as mock_send:
             mock_responses = [
-                Mock(agent_name="agent1", github_url="https://github.com/test/agent1", agent_version=1, agent_image=None),
-                Mock(agent_name="agent2", github_url="https://github.com/test/agent2", agent_version=1, agent_image=None),
+                Mock(agent_name="agent1", github_url="https://github.com/test/agent1", agent_image=None),
+                Mock(agent_name="agent2", github_url="https://github.com/test/agent2", agent_image=None),
             ]
             mock_send.return_value = mock_responses
             
@@ -171,10 +171,10 @@ class TestHandshake:
         """Test that handshake skips responses with missing agent_name or github_url."""
         with patch('autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners') as mock_send:
             mock_responses = [
-                Mock(agent_name="agent1", github_url="https://github.com/test/agent1", agent_version=1, agent_image=None),
-                Mock(agent_name=None, github_url="https://github.com/test/agent2", agent_version=1, agent_image=None),  # Missing name
-                Mock(agent_name="agent3", github_url=None, agent_version=1, agent_image=None),  # Missing URL
-                Mock(agent_name="", github_url="https://github.com/test/agent4", agent_version=1, agent_image=None),  # Empty name
+                Mock(agent_name="agent1", github_url="https://github.com/test/agent1", agent_image=None),
+                Mock(agent_name=None, github_url="https://github.com/test/agent2", agent_image=None),  # Missing name
+                Mock(agent_name="agent3", github_url=None, agent_image=None),  # Missing URL
+                Mock(agent_name="", github_url="https://github.com/test/agent4", agent_image=None),  # Empty name
             ]
             mock_send.return_value = mock_responses
             

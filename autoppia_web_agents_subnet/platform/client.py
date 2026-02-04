@@ -643,7 +643,7 @@ def build_miner_snapshot(
 
     image_url = _normalized_optional(getattr(handshake_payload, "agent_image", None))
     github_url = _normalized_optional(getattr(handshake_payload, "github_url", None))
-    description = _normalized_optional(getattr(handshake_payload, "agent_version", None))
+    description = None
 
     return models.MinerSnapshotIWAP(
         validator_round_id=validator_round_id,
