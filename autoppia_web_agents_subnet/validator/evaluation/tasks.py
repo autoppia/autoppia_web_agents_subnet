@@ -34,9 +34,6 @@ async def _generate_task_for_project(project: WebProject) -> Task:
     """
     config = TaskGenerationConfig(
         prompts_per_use_case=1,
-        generate_global_tasks=True,
-        final_task_limit=1,
-        num_use_cases=1,
     )
     pipeline = TaskGenerationPipeline(web_project=project, config=config)
     tasks = await pipeline.generate()
