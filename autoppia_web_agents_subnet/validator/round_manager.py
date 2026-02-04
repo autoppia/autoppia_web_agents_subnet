@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Optional
 
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.validator.config import (
-    SEASON_SIZE_EPOCHS,
     ROUND_SIZE_EPOCHS,
     MINIMUM_START_BLOCK,
     SETTLEMENT_FRACTION,
@@ -66,16 +65,15 @@ class RoundManager:
     SECONDS_PER_BLOCK = 12
 
     def __init__(self):
-        self.season_size_epochs = SEASON_SIZE_EPOCHS
         self.round_size_epochs = ROUND_SIZE_EPOCHS
         self.minimum_start_block = MINIMUM_START_BLOCK
         self.settlement_fraction = SETTLEMENT_FRACTION
 
-        self.season_block_length = int(self.BLOCKS_PER_EPOCH * self.season_size_epochs)
         self.round_block_length = int(self.BLOCKS_PER_EPOCH * self.round_size_epochs)
 
         # Round boundaries
         self.round_number: int | None = None
+        self.season_start_block: int | None = None  # Set by validator using SeasonManager
 
         self.start_block: int | None = None
         self.settlement_block: int | None = None
@@ -100,18 +98,35 @@ class RoundManager:
     def epoch_to_block(cls, epoch: float) -> int:
         return int(epoch * cls.BLOCKS_PER_EPOCH)
 
-    def sync_boundaries(self, current_block: int) -> None:
-        base_block = int(self.minimum_start_block)
-        effective_block = max(current_block, base_block)
+    def set_season_start_block(self, season_start_block: int) -> None:
+        """Set the season start block (called by validator using SeasonManager)."""
+        self.season_start_block = season_start_block
 
-        blocks_since_base = effective_block - base_block
-        season_index = blocks_since_base // self.season_block_length
-        base_block = int(base_block + season_index * self.season_block_length)
+    def sync_boundaries(self, current_block: int, season_start_block: int | None = None) -> None:
+        """
+        Calculate round boundaries within a season.
+        
+        Args:
+            current_block: Current blockchain block number
+            season_start_block: Block number where the current season started
+                               (optional, uses self.season_start_block if not provided)
+        """
+        # Use provided season_start_block or fall back to stored value
+        if season_start_block is None:
+            if self.season_start_block is None:
+                # Fallback: use minimum_start_block if not set
+                season_start_block = self.minimum_start_block
+            else:
+                season_start_block = self.season_start_block
+        
+        effective_block = max(current_block, season_start_block)
 
-        blocks_since_base = effective_block - base_block
-        round_index = blocks_since_base // self.round_block_length
+        # Calculate round index within the season
+        blocks_since_season_start = effective_block - season_start_block
+        round_index = blocks_since_season_start // self.round_block_length
 
-        start_block = int(base_block + round_index * self.round_block_length)
+        # Calculate round boundaries
+        start_block = int(season_start_block + round_index * self.round_block_length)
         settlement_block = int(start_block + int(self.round_block_length * self.settlement_fraction))
         target_block = int(start_block + self.round_block_length)
 
@@ -180,6 +195,49 @@ class RoundManager:
     def calculate_round(self, current_block: int) -> int:
         self.sync_boundaries(current_block)
         return int(self.round_number or 0)
+
+    def get_round_number_in_season(self, current_block: int) -> int:
+        """
+        Calculate the current round number within the season.
+        
+        This uses the season_start_block to calculate which round we're in
+        within the current season.
+        
+        Args:
+            current_block: Current blockchain block number
+            
+        Returns:
+            Round number within the season (1-indexed)
+        """
+        if self.season_start_block is None:
+            # Fallback: calculate using minimum_start_block
+            season_start_block = self.minimum_start_block
+        else:
+            season_start_block = self.season_start_block
+        
+        effective_block = max(current_block, season_start_block)
+        blocks_since_season_start = effective_block - season_start_block
+        round_index = blocks_since_season_start // self.round_block_length
+        
+        return int(round_index + 1)
+
+    async def get_round_tasks(self, current_block: int, season_manager):
+        """
+        Get tasks for the current round.
+        
+        This encapsulates the logic of obtaining tasks from the SeasonManager:
+        - Round 1: Generate tasks and save to JSON (if not already saved)
+        - Round 2+: Load tasks from JSON
+        - All rounds execute ALL season tasks
+        
+        Args:
+            current_block: Current blockchain block number
+            season_manager: SeasonManager instance to get/generate tasks
+            
+        Returns:
+            List of TaskWithProject objects for this round (all season tasks)
+        """
+        return await season_manager.get_season_tasks(current_block, self)
 
     def blocks_until_allowed(self, current_block: int) -> int:
         return max(self.minimum_start_block - current_block, 0)

@@ -24,6 +24,9 @@ class ValidatorRoundStartMixin:
     async def _start_round(self) -> RoundStartResult:
         current_block = self.block
 
+        # Update season start block in RoundManager (from SeasonManager)
+        season_start_block = self.season_manager.get_season_start_block(current_block)
+        self.round_manager.set_season_start_block(season_start_block)
         self.round_manager.sync_boundaries(current_block)
         current_fraction = float(self.round_manager.fraction_elapsed(current_block))
 
@@ -34,7 +37,7 @@ class ValidatorRoundStartMixin:
             )
 
         if self.season_manager.should_start_new_season(current_block):
-            await self.season_manager.generate_season_tasks(current_block)
+            await self.season_manager.generate_season_tasks(current_block, self.round_manager)
             while not self.agents_queue.empty():
                 self.agents_queue.get()
             self.agents_dict = {}
