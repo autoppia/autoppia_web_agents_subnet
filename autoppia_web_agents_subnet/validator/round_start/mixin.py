@@ -24,7 +24,7 @@ class ValidatorRoundStartMixin:
     async def _start_round(self) -> RoundStartResult:
         current_block = self.block
 
-        # Update season start block in RoundManager (from SeasonManager)
+        # Configure season start block in RoundManager (from SeasonManager)
         season_start_block = self.season_manager.get_season_start_block(current_block)
         self.round_manager.set_season_start_block(season_start_block)
         self.round_manager.sync_boundaries(current_block)

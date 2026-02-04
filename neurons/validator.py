@@ -64,12 +64,6 @@ class Validator(
         """
         Forward pass for the validator.
         """
-        current_block = self.block
-        
-        # Configure season start block in RoundManager (from SeasonManager)
-        season_start_block = self.season_manager.get_season_start_block(current_block)
-        self.round_manager.set_season_start_block(season_start_block)
-        
         if await self._wait_for_minimum_start_block():
             return
         
