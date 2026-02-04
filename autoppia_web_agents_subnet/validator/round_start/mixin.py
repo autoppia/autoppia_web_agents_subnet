@@ -47,14 +47,8 @@ class ValidatorRoundStartMixin:
         current_block = self.block
         self.round_manager.start_new_round(current_block)
 
-        season_number = self.season_manager.season_number
-        round_number = self.round_manager.round_number
-        start_epoch = self.round_manager.start_epoch
-        target_epoch = self.round_manager.target_epoch
-        total_blocks = self.round_manager.target_block - current_block
-
         # Configure per-round log file (data/logs/round-<id>.log).
-        round_id_for_log = getattr(self, "current_round_id", None) or f"round-{season_number}-{round_number}"
+        round_id_for_log = getattr(self, "current_round_id", None) or f"round-{self.season_manager.season_number}-{self.round_manager.round_number}"
         try:
             ColoredLogger.set_round_log_file(str(round_id_for_log))
         except Exception:
@@ -64,14 +58,14 @@ class ValidatorRoundStartMixin:
 
         bt.logging.info("=" * 100)
         bt.logging.info(round_details_tag("🚀 ROUND START"))
-        bt.logging.info(round_details_tag(f"Season Number: {season_number}"))
-        bt.logging.info(round_details_tag(f"Round Number: {round_number}"))
-        bt.logging.info(round_details_tag(f"Round Start Epoch: {start_epoch:.2f}"))
-        bt.logging.info(round_details_tag(f"Round Target Epoch: {target_epoch:.2f}"))
+        bt.logging.info(round_details_tag(f"Season Number: {self.season_manager.season_number}"))
+        bt.logging.info(round_details_tag(f"Round Number: {self.round_manager.round_number}"))
+        bt.logging.info(round_details_tag(f"Round Start Epoch: {self.round_manager.start_epoch:.2f}"))
+        bt.logging.info(round_details_tag(f"Round Target Epoch: {self.round_manager.target_epoch:.2f}"))
         bt.logging.info(round_details_tag(f"Validator Round ID: {self.current_round_id}"))
         bt.logging.info(round_details_tag(f"Current Block: {current_block:,}"))
         bt.logging.info(round_details_tag(f"Duration: ~{wait_info['minutes_to_target']:.1f} minutes"))
-        bt.logging.info(round_details_tag(f"Total Blocks: {total_blocks}"))
+        bt.logging.info(round_details_tag(f"Total Blocks: {self.round_manager.target_block - current_block}"))
         bt.logging.info("=" * 100)
 
         return RoundStartResult(
