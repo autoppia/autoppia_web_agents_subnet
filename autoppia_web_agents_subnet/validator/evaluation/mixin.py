@@ -26,7 +26,10 @@ class ValidatorEvaluationMixin:
             note=f"Starting evaluation phase",
         )
         ColoredLogger.info("Starting evaluation phase", ColoredLogger.MAGENTA)
-        season_tasks = await self.season_manager.get_season_tasks(current_block)
+        
+        # Get season tasks (pass round_length for proper season/round calculation)
+        round_length = getattr(self.round_manager, 'round_block_length', 720)
+        season_tasks = await self.season_manager.get_season_tasks(current_block, round_length)
 
         agents_evaluated = 0
         while not self.agents_queue.empty():    
