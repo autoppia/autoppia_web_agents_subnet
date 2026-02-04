@@ -207,15 +207,18 @@ class RoundManager:
             
         Returns:
             Round number within the season (1-indexed)
+            
+        Raises:
+            RuntimeError: If season_start_block has not been set via set_season_start_block()
         """
         if self.season_start_block is None:
-            # Fallback: calculate using minimum_start_block
-            season_start_block = self.minimum_start_block
-        else:
-            season_start_block = self.season_start_block
+            raise RuntimeError(
+                "season_start_block must be set before calling get_round_number_in_season(). "
+                "Call set_season_start_block() first (typically done in _start_round())."
+            )
         
-        effective_block = max(current_block, season_start_block)
-        blocks_since_season_start = effective_block - season_start_block
+        effective_block = max(current_block, self.season_start_block)
+        blocks_since_season_start = effective_block - self.season_start_block
         round_index = blocks_since_season_start // self.round_block_length
         
         return int(round_index + 1)
