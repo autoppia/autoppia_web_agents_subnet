@@ -176,8 +176,9 @@ class SeasonManager:
         Get tasks for the current season.
         
         Flow:
-        - Round 1: Generate tasks and save to JSON
-        - Round > 1: Load tasks from JSON (in case of restart)
+        - Always try to load from JSON first (for any round, including restarts)
+        - If not found AND Round 1: Generate tasks and save
+        - If not found AND Round > 1: Error (tasks should exist from Round 1)
         
         Args:
             current_block: Current blockchain block number
@@ -188,6 +189,14 @@ class SeasonManager:
         
         ColoredLogger.info(f"🔍 Season {season_number}, Round {round_in_season}")
         
+        # Always try to load first (handles restarts in any round)
+        loaded = self.load_season_tasks(season_number)
+        
+        if loaded:
+            ColoredLogger.success(f"✅ Loaded {len(self.season_tasks)} tasks for season {season_number}")
+            return self.season_tasks
+        
+        # Not loaded - check if we should generate
         if round_in_season == 1:
             # Round 1: Generate tasks and save
             ColoredLogger.info(f"🌱 Round 1: Generating {TASKS_PER_SEASON} tasks for season {season_number}")
@@ -195,19 +204,14 @@ class SeasonManager:
             self.task_generated_season = season_number
             self.save_season_tasks(season_number)
             ColoredLogger.success(f"✅ Generated and saved {len(self.season_tasks)} tasks")
+            return self.season_tasks
         else:
-            # Round > 1: Try to load from JSON
-            ColoredLogger.info(f"🔄 Round {round_in_season}: Loading tasks from JSON...")
-            loaded = self.load_season_tasks(season_number)
-            
-            if not loaded:
-                ColoredLogger.warning(
-                    f"⚠️  No saved tasks found for season {season_number}. "
-                    f"Tasks are only generated in Round 1!"
-                )
-                return []
-        
-        return self.season_tasks
+            # Round > 1: Tasks should exist from Round 1
+            ColoredLogger.error(
+                f"❌ No saved tasks found for season {season_number} in Round {round_in_season}. "
+                f"Tasks are only generated in Round 1!"
+            )
+            return []
 
     async def generate_season_tasks(self, current_block: int, round_manager) -> List[TaskWithProject]:
         """Legacy method - kept for compatibility. Use get_season_tasks() instead."""
