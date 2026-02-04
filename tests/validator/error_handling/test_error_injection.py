@@ -131,7 +131,7 @@ class TestIPFSErrors:
         # Setup dummy validator
         dummy_validator.block = 1000
         dummy_validator.config.netuid = 99
-        dummy_validator.round_manager.calculate_round = AsyncMock(return_value=100)
+        dummy_validator.round_manager.calculate_round = Mock(return_value=100)
         dummy_validator.round_manager.get_current_boundaries = Mock(return_value={
             "round_start_epoch": 100,
             "round_target_epoch": 200
@@ -174,7 +174,7 @@ class TestIPFSErrors:
                 # Setup dummy validator
                 dummy_validator.block = 1000
                 dummy_validator.config.netuid = 99
-                dummy_validator.round_manager.calculate_round = AsyncMock(return_value=round_number)
+                dummy_validator.round_manager.calculate_round = Mock(return_value=round_number)
                 dummy_validator.metagraph.stake = [15000.0]
                 dummy_validator.metagraph.hotkeys = ["hotkey1"]
                 dummy_validator.metagraph.axons = [Mock(hotkey="hotkey1")]
@@ -206,7 +206,7 @@ class TestIPFSErrors:
             # Setup dummy validator
             dummy_validator.block = 1000
             dummy_validator.config.netuid = 99
-            dummy_validator.round_manager.calculate_round = AsyncMock(return_value=round_number)
+            dummy_validator.round_manager.calculate_round = Mock(return_value=round_number)
             dummy_validator.metagraph.stake = [15000.0]
             dummy_validator.metagraph.hotkeys = ["hotkey1"]
             dummy_validator.metagraph.axons = [Mock(hotkey="hotkey1")]
@@ -236,7 +236,7 @@ class TestAsyncSubtensorErrors:
         # Setup dummy validator
         dummy_validator.block = 1000
         dummy_validator.config.netuid = 99
-        dummy_validator.round_manager.calculate_round = AsyncMock(return_value=100)
+        dummy_validator.round_manager.calculate_round = Mock(return_value=100)
         dummy_validator.round_manager.get_current_boundaries = Mock(return_value={
             "round_start_epoch": 100,
             "round_target_epoch": 200
@@ -413,7 +413,7 @@ class TestNetworkErrors:
                    new=AsyncMock(side_effect=ConnectionError("Network unreachable"))):
             # Should raise exception (handshake doesn't catch network errors)
             with pytest.raises(ConnectionError):
-                await validator_with_agents._perform_handshake(total_prompts=0)
+                await validator_with_agents._perform_handshake()
 
     @pytest.mark.asyncio
     async def test_evaluation_handles_agent_timeout(

@@ -34,32 +34,47 @@ class ValidatorSettlementMixin:
         - Calculate and broadcast final weights (if not already done).
         - Wait for the next round boundary before exiting to the scheduler loop.
         """
-        st = await self._get_async_subtensor()
-        await publish_round_snapshot(
-            self, 
-            st=st, 
-            scores={str(int(uid)): float(agent.score) for uid, agent in (self.agents_dict or {}).items()}
-        )
+        self.should_update_weights = all(self.agents_dict[uid].evaluated for uid in self.agents_on_first_handshake)
 
-        await self._wait_until_specific_block(
-            target_block=self.round_manager.settlement_block,
-            target_description="round settlement block",
-        )
+        if not self.should_update_weights:
+            ColoredLogger.info(
+                "Not all agents from first handshake were evaluated; keeping original weights.",
+                ColoredLogger.CYAN,
+            )
+            self.set_weights()
+            self.round_manager.enter_phase(
+                RoundPhase.COMPLETE,
+                block=self.block,
+                note=f"Round finalized without weight update",
+                force=True,
+            )
+        else:
+            st = await self._get_async_subtensor()
+            await publish_round_snapshot(
+                self, 
+                st=st, 
+                scores={str(int(uid)): float(agent.score) for uid, agent in (self.agents_dict or {}).items()}
+            )
 
-        try:
-            scores, _ = await aggregate_scores_from_commitments(self, st=st)
-        except Exception as e:
-            ColoredLogger.error(f"Error aggregating scores from commitments: {e}", ColoredLogger.RED)
-            scores = {}
-            
-        await self._calculate_final_weights(scores=scores)
+            await self._wait_until_specific_block(
+                target_block=self.round_manager.settlement_block,
+                target_description="round settlement block",
+            )
 
-        self.round_manager.enter_phase(
-            RoundPhase.COMPLETE,
-            block=self.block,
-            note=f"Round finalized with tasks",
-            force=True,
-        )
+            try:
+                scores, _ = await aggregate_scores_from_commitments(self, st=st)
+            except Exception as e:
+                ColoredLogger.error(f"Error aggregating scores from commitments: {e}", ColoredLogger.RED)
+                scores = {}
+                
+            await self._calculate_final_weights(scores=scores)
+            self.round_manager.enter_phase(
+                RoundPhase.COMPLETE,
+                block=self.block,
+                note=f"Round finalized with weight update",
+                force=True,
+            )
+
         await self._wait_until_specific_block(
             target_block=self.round_manager.target_block,
             target_description="round end block",

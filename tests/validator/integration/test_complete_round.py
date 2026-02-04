@@ -43,7 +43,7 @@ class TestCompleteRound:
                             
                             # Run complete round
                             await validator._start_round()
-                            await validator._perform_handshake(total_prompts=0)
+                            await validator._perform_handshake()
                             agents_evaluated = await validator._run_evaluation_phase()
                             await validator._run_settlement_phase(agents_evaluated=agents_evaluated)
                             

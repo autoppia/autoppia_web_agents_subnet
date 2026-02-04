@@ -66,7 +66,7 @@ class TestConsensusScaling:
                 # Setup dummy validator
                 dummy_validator.block = 1000
                 dummy_validator.config.netuid = 99
-                dummy_validator.round_manager.calculate_round = AsyncMock(return_value=round_number)
+                dummy_validator.round_manager.calculate_round = Mock(return_value=round_number)
                 dummy_validator.metagraph.stake = [15000.0] * num_validators
                 dummy_validator.metagraph.hotkeys = [f"hotkey{i}" for i in range(num_validators)]
                 dummy_validator.metagraph.axons = [Mock(hotkey=f"hotkey{i}") for i in range(num_validators)]
@@ -138,7 +138,7 @@ class TestConsensusScaling:
             # Setup dummy validator
             dummy_validator.block = 1000
             dummy_validator.config.netuid = 99
-            dummy_validator.round_manager.calculate_round = AsyncMock(return_value=round_number)
+            dummy_validator.round_manager.calculate_round = Mock(return_value=round_number)
             dummy_validator.metagraph.stake = [15000.0] * num_validators
             dummy_validator.metagraph.hotkeys = [f"hotkey{i}" for i in range(num_validators)]
             dummy_validator.metagraph.axons = [Mock(hotkey=f"hotkey{i}") for i in range(num_validators)]
@@ -202,7 +202,7 @@ class TestConsensusScaling:
                     # Setup dummy validator
                     dummy_validator.block = 1000
                     dummy_validator.config.netuid = 99
-                    dummy_validator.round_manager.calculate_round = AsyncMock(return_value=round_number)
+                    dummy_validator.round_manager.calculate_round = Mock(return_value=round_number)
                     dummy_validator.metagraph.stake = [15000.0] * num_validators
                     dummy_validator.metagraph.hotkeys = [f"hotkey{i}" for i in range(num_validators)]
                     dummy_validator.metagraph.axons = [Mock(hotkey=f"hotkey{i}") for i in range(num_validators)]

@@ -75,11 +75,11 @@ class SandboxManager:
 
     def __init__(self):
         self.client = get_client()
-        ensure_network(SANDBOX_NETWORK_NAME, internal=True)
-        self._ensure_gateway()
         self._agents: Dict[int, AgentInstance] = {}
+        
+        ensure_network(SANDBOX_NETWORK_NAME, internal=True)
 
-    def _ensure_gateway(self):
+    def deploy_gateway(self):
         if not check_image(SANDBOX_GATEWAY_IMAGE):
             bt.logging.info("Sandbox gateway image not found; building...")
             gateway_ctx = os.path.join(os.path.dirname(__file__), "..", "gateway")

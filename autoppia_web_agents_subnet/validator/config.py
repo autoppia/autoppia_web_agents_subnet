@@ -9,12 +9,14 @@ from autoppia_web_agents_subnet.utils.env import (
 
 TESTING = _env_bool("TESTING", False)
 
+
 # ═══════════════════════════════════════════════════════════════════════════
 # BURN CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
 
 BURN_UID = _env_int("BURN_UID", 5)
 BURN_ALL = _env_bool("BURN_ALL", False)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SHARED CONFIGURATION
@@ -34,6 +36,7 @@ AGENT_MAX_STEPS = _env_int("AGENT_MAX_STEPS", 30, test_default=1)
 
 EVAL_SCORE_WEIGHT = _env_float("EVAL_SCORE_WEIGHT", 1.0)
 TIME_WEIGHT = _env_float("TIME_WEIGHT", 0.0)
+COST_WEIGHT = _env_float("COST_WEIGHT", 0.0)
 
 SAME_SOLUTION_PENALTY = _env_float("SAME_SOLUTION_PENALTY", 0.0)
 SAME_SOLUTION_SIM_THRESHOLD = _env_float("SAME_SOLUTION_SIM_THRESHOLD", 0.90)
@@ -43,7 +46,6 @@ VALIDATOR_IMAGE = _env_str("VALIDATOR_IMAGE")
 IWAP_VALIDATOR_AUTH_MESSAGE = _env_str("IWAP_VALIDATOR_AUTH_MESSAGE", "I am a honest validator")
 MAX_MINER_AGENT_NAME_LENGTH = _env_int("MAX_MINER_AGENT_NAME_LENGTH", 12)
 MIN_MINER_STAKE_TAO = _env_float("MIN_MINER_STAKE_TAO", 0.0, test_default=0.0)
-ENABLE_CHECKPOINT_SYSTEM = _env_bool("ENABLE_CHECKPOINT_SYSTEM", True)
 IPFS_API_URL = _env_str("IPFS_API_URL", "http://ipfs.metahash73.com:5001/api/v0")
 # Comma-separated gateways for fetch fallback
 IPFS_GATEWAYS = [
@@ -51,18 +53,7 @@ IPFS_GATEWAYS = [
     for gw in (_env_str("IPFS_GATEWAYS", "https://ipfs.io/ipfs,https://cloudflare-ipfs.com/ipfs") or "").split(",")
     if gw.strip()
 ]
-FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION = _env_float("FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION", 0.95)
-STOP_TASK_EVALUATION_AT_ROUND_FRACTION = _env_float("STOP_TASK_EVALUATION_AT_ROUND_FRACTION", 0.90)
-SKIP_ROUND_IF_STARTED_AFTER_FRACTION = _env_float("SKIP_ROUND_IF_STARTED_AFTER_FRACTION", 1.0)
 
-# Testing overrides
-if TESTING:
-    test_frac = os.getenv("TEST_FETCH_TASK_FRACTION")
-    if test_frac:
-        try:
-            FETCH_IPFS_VALIDATOR_PAYLOADS_AT_ROUND_FRACTION = float(test_frac)
-        except Exception:
-            pass
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SETTLEMENT CONFIGURATION
@@ -70,6 +61,7 @@ if TESTING:
 
 SETTLEMENT_FRACTION = _env_float("SETTLEMENT_FRACTION", 0.95, test_default=0.8)
 LAST_WINNER_BONUS_PCT = _env_float("LAST_WINNER_BONUS_PCT", 0.05)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SANDBOX / DEPLOYMENT CONFIGURATION
@@ -83,20 +75,15 @@ SANDBOX_AGENT_IMAGE = _env_str("SANDBOX_IMAGE", "autoppia-sandbox-agent-image")
 SANDBOX_AGENT_PORT = _env_int("SANDBOX_AGENT_PORT", 8000)
 SANDBOX_CLONE_TIMEOUT = _env_int("SANDBOX_CLONE_TIMEOUT", 90)
 
-# Require miners to pin their GitHub URL to a specific commit/ref (production safety).
-REQUIRE_PINNED_GITHUB_COMMIT = _env_bool("REQUIRE_PINNED_GITHUB_COMMIT", False)
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CONSENSUS CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
 
+CONSENSUS_VERSION = _env_int("CONSENSUS_VERSION", 1)
 ENABLE_DISTRIBUTED_CONSENSUS = _env_bool("ENABLE_DISTRIBUTED_CONSENSUS", True)
 MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO = _env_float("MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO", 10000.0)
 IWAP_API_BASE_URL = _env_str("IWAP_API_BASE_URL", "https://api-leaderboard.autoppia.com" if not TESTING else "https://dev-api-leaderboard.autoppia.com")
-
-CONSENSUS_VERIFY_ENABLED = _env_bool("CONSENSUS_VERIFY_ENABLED", False)
-CONSENSUS_VERIFY_SAMPLE_SIZE = _env_int("CONSENSUS_VERIFY_SAMPLE_SIZE", 1)
-CONSENSUS_VERIFY_SAMPLE_TOLERANCE = _env_float("CONSENSUS_VERIFY_SAMPLE_TOLERANCE", 1e-6)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

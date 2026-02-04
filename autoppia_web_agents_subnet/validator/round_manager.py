@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.validator.config import (
+    SEASON_SIZE_EPOCHS,
     ROUND_SIZE_EPOCHS,
     MINIMUM_START_BLOCK,
     SETTLEMENT_FRACTION,
@@ -64,22 +65,14 @@ class RoundManager:
     BLOCKS_PER_EPOCH = 360
     SECONDS_PER_BLOCK = 12
 
-    def __init__(
-        self,
-        round_size_epochs: float | None = None,
-        minimum_start_block: int | None = None,
-        settlement_fraction: float | None = None,
-        **_: Any,
-    ):
-        self.round_size_epochs = round_size_epochs or ROUND_SIZE_EPOCHS
-        self.minimum_start_block = (
-            MINIMUM_START_BLOCK if minimum_start_block is None else int(minimum_start_block)
-        )
-        self.settlement_fraction = (
-            SETTLEMENT_FRACTION if settlement_fraction is None else float(settlement_fraction)
-        )
+    def __init__(self):
+        self.season_size_epochs = SEASON_SIZE_EPOCHS
+        self.round_size_epochs = ROUND_SIZE_EPOCHS
+        self.minimum_start_block = MINIMUM_START_BLOCK
+        self.settlement_fraction = SETTLEMENT_FRACTION
 
-        self.round_block_length = int(self.BLOCKS_PER_EPOCH * max(self.round_size_epochs, 0.01))
+        self.season_block_length = int(self.BLOCKS_PER_EPOCH * self.season_size_epochs)
+        self.round_block_length = int(self.BLOCKS_PER_EPOCH * self.round_size_epochs)
 
         # Round boundaries
         self.round_number: int | None = None
@@ -110,6 +103,10 @@ class RoundManager:
     def sync_boundaries(self, current_block: int) -> None:
         base_block = int(self.minimum_start_block)
         effective_block = max(current_block, base_block)
+
+        blocks_since_base = effective_block - base_block
+        season_index = blocks_since_base // self.season_block_length
+        base_block = int(base_block + season_index * self.season_block_length)
 
         blocks_since_base = effective_block - base_block
         round_index = blocks_since_base // self.round_block_length
@@ -180,7 +177,7 @@ class RoundManager:
             self.sync_boundaries(current_block)
         return float((current_block - self.start_block) / self.round_block_length)
 
-    async def calculate_round(self, current_block: int) -> int:
+    def calculate_round(self, current_block: int) -> int:
         self.sync_boundaries(current_block)
         return int(self.round_number or 0)
 
