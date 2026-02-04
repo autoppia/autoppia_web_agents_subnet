@@ -549,7 +549,7 @@ async def finish_round_flow(
             # Round Manager always knows the current round
             current_block = getattr(ctx, "block", None)
             if current_block:
-                round_num = await ctx.round_manager.calculate_round(current_block)
+                round_num = ctx.round_manager.calculate_round(current_block)
         except Exception:
             # Fallback to stored value if calculation fails
             round_num = getattr(ctx, "_current_round_number", 0) or getattr(ctx, "current_round_number", 0)

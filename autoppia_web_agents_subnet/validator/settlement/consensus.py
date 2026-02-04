@@ -6,6 +6,7 @@ import bittensor as bt
 from bittensor import AsyncSubtensor  # type: ignore
 
 from autoppia_web_agents_subnet.validator.config import (
+    CONSENSUS_VERSION,
     ENABLE_DISTRIBUTED_CONSENSUS,
     MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO,
     IPFS_API_URL,
@@ -73,13 +74,16 @@ async def publish_round_snapshot(
     )
 
     current_block = self.block
-    round_number = await self.round_manager.calculate_round(current_block)
+    consensus_version = CONSENSUS_VERSION
+    season_number = self.season_manager.get_season_number(current_block)
+    round_number = self.round_manager.calculate_round(current_block)
     boundaries = self.round_manager.get_current_boundaries()
     start_epoch = int(boundaries["round_start_epoch"])
     target_epoch = int(boundaries["round_target_epoch"])    
     
     payload = {
-        "v": 2,
+        "v": int(consensus_version),
+        "s": int(season_number),
         "r": int(round_number),
         "es": start_epoch,
         "et": target_epoch,
@@ -197,7 +201,9 @@ async def aggregate_scores_from_commitments(
             return 0.0
 
     current_block = self.block
-    round_number = await self.round_manager.calculate_round(current_block)
+    consensus_version = CONSENSUS_VERSION
+    season_number = self.season_manager.get_season_number(current_block)
+    round_number = self.round_manager.calculate_round(current_block)
 
     # Fetch all plain commitments and select those for this round (v5 with CID)
     try:
@@ -221,12 +227,16 @@ async def aggregate_scores_from_commitments(
     weight_total: Dict[int, float] = {}
 
     included = 0
-    skipped_wrong_round_or_phase = 0
+    skipped_legacy_consensus_version = 0
+    skipped_wrong_season = 0
+    skipped_wrong_round = 0
     skipped_missing_cid = 0
     skipped_low_stake = 0
     skipped_ipfs = 0
     skipped_verification_fail = 0
-    skipped_wrong_round_or_phase_list: list[tuple[str, int, int]] = []  # (hk, round_number, phase)
+    skipped_legacy_consensus_version_list: list[tuple[str, int]] = []  # (hk, version)
+    skipped_wrong_season_list: list[tuple[str, int]] = []  # (hk, season_number)
+    skipped_wrong_round_list: list[tuple[str, int]] = []  # (hk, round_number)
     skipped_missing_cid_list: list[str] = []
     skipped_low_stake_list: list[tuple[str, float]] = []  # (hk, stake)
     skipped_ipfs_list: list[tuple[str, str]] = []  # (hk, cid)
@@ -240,11 +250,28 @@ async def aggregate_scores_from_commitments(
             bt.logging.info(f"[CONSENSUS] Skip {hk[:12]}... | Reason: entry is not dict")
             continue
 
+        entry_consensus_version = int(entry.get("v", -1))
+        if entry_consensus_version != consensus_version:
+            skipped_legacy_consensus_version += 1
+            skipped_legacy_consensus_version_list.append((hk, entry_consensus_version))
+            bt.logging.debug(
+                f"⏭️ Skip {hk[:10]}…: legacy consensus version (has v={entry_consensus_version}, need v={consensus_version})"
+            )
+            continue
+
+        entry_season_number = int(entry.get("s", -1))
+        if entry_season_number != season_number:
+            skipped_wrong_season += 1
+            skipped_wrong_season_list.append((hk, entry_season_number))
+            bt.logging.debug(
+                f"⏭️ Skip {hk[:10]}…: wrong season (has s={entry_season_number}, need s={season_number})"
+            )
+            continue
+
         entry_round_number = int(entry.get("r", -1))
-        entry_phase = int(entry.get("p", -1))
         if entry_round_number != round_number:
-            skipped_wrong_round_or_phase += 1
-            skipped_wrong_round_or_phase_list.append((hk, entry_round_number, entry_phase))
+            skipped_wrong_round += 1
+            skipped_wrong_round_list.append((hk, entry_round_number))
             bt.logging.debug(
                 f"⏭️ Skip {hk[:10]}…: wrong round (has r={entry_round_number}, need r={round_number})"
             )
@@ -323,16 +350,30 @@ async def aggregate_scores_from_commitments(
             f"[CONSENSUS] ✅ Aggregation complete | Validators: {included} | Miners: {len(result)} | Mode: {consensus_mode}"
         )
         bt.logging.info(
-            f"[CONSENSUS] Skipped | Wrong round or phase: {skipped_wrong_round_or_phase} | Missing CID: {skipped_missing_cid} | Low stake: {skipped_low_stake} | IPFS fail: {skipped_ipfs} | Verify fail: {skipped_verification_fail}"
+            f"[CONSENSUS] Skipped | "
+            f"Legacy consensus version: {skipped_legacy_consensus_version} | "
+            f"Wrong season: {skipped_wrong_season} | "
+            f"Wrong round: {skipped_wrong_round} | "
+            f"Missing CID: {skipped_missing_cid} | "
+            f"Low stake: {skipped_low_stake} | "
+            f"IPFS fail: {skipped_ipfs} | "
+            f"Verify fail: {skipped_verification_fail} | "
         )
+
         # Extra verbose logs to diagnose stake/epoch filtering
         try:
             if skipped_low_stake_list:
                 low_str = ", ".join([f"{hk[:10]}…({stake:.0f}τ)" for hk, stake in skipped_low_stake_list])
                 bt.logging.debug(f"   ⏭️ Low-stake excluded: {low_str}")
-            if skipped_wrong_round_or_phase_list:
-                wrong_str = ", ".join([f"{hk[:10]}…(r={rr},p={pp})" for hk, rr, pp in skipped_wrong_round_or_phase_list])
-                bt.logging.debug(f"   ⏭️ Wrong-round-or-phase excluded: {wrong_str}")
+            if skipped_legacy_consensus_version_list:
+                legacy_str = ", ".join([f"{hk[:10]}…(v={vv})" for hk, vv in skipped_legacy_consensus_version_list])
+                bt.logging.debug(f"   ⏭️ Legacy-version excluded: {legacy_str}")
+            if skipped_wrong_season_list:
+                season_str = ", ".join([f"{hk[:10]}…(s={ss})" for hk, ss in skipped_wrong_season_list])
+                bt.logging.debug(f"   ⏭️ Wrong-season excluded: {season_str}")
+            if skipped_wrong_round_list:
+                wrong_str = ", ".join([f"{hk[:10]}…(r={rr})" for hk, rr in skipped_wrong_round_list])
+                bt.logging.debug(f"   ⏭️ Wrong-round excluded: {wrong_str}")
             if skipped_missing_cid_list:
                 miss_str = ", ".join([f"{hk[:10]}…" for hk in skipped_missing_cid_list])
                 bt.logging.debug(f"   ⏭️ Missing-CID excluded: {miss_str}")
@@ -351,7 +392,15 @@ async def aggregate_scores_from_commitments(
     else:
         bt.logging.warning(f"[CONSENSUS] ⚠️ No validators included in aggregation")
         bt.logging.info(
-            f"[CONSENSUS] Reasons | Wrong round or phase: {skipped_wrong_round_or_phase} | Missing CID: {skipped_missing_cid} | Low stake: {skipped_low_stake} | IPFS fail: {skipped_ipfs} | Verify fail: {skipped_verification_fail} | Total commits: {len(commits or {})}"
+            f"[CONSENSUS] Reasons | "
+            f"Legacy consensus version: {skipped_legacy_consensus_version} | "
+            f"Wrong season: {skipped_wrong_season} | "
+            f"Wrong round: {skipped_wrong_round} | "
+            f"Missing CID: {skipped_missing_cid} | "
+            f"Low stake: {skipped_low_stake} | "
+            f"IPFS fail: {skipped_ipfs} | "
+            f"Verify fail: {skipped_verification_fail} | "
+            f"Total commits: {len(commits or {})}"
         )
 
     # Build details structure for reporting/visualization
@@ -363,7 +412,9 @@ async def aggregate_scores_from_commitments(
         "validators": validators_info,
         "scores_by_validator": scores_by_validator,
         "skips": {
-            "wrong_round_or_phase": skipped_wrong_round_or_phase_list,
+            "legacy_consensus_version": skipped_legacy_consensus_version_list,
+            "wrong_season": skipped_wrong_season_list,
+            "wrong_round": skipped_wrong_round_list,
             "missing_cid": skipped_missing_cid_list,
             "low_stake": skipped_low_stake_list,
             "ipfs_fail": skipped_ipfs_list,

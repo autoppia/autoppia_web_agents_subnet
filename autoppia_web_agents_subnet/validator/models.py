@@ -84,3 +84,4 @@ class AgentInfo:
     agent_image: Optional[str] = None
     agent_version: Optional[int] = None
     score: Optional[float] = 0.0
+    evaluated: bool = False

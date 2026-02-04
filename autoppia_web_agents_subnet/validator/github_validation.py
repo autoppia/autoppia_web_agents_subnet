@@ -4,10 +4,6 @@ from typing import Optional
 from urllib.parse import urlparse, parse_qs
 
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
-from autoppia_web_agents_subnet.validator.config import (
-    REQUIRE_PINNED_GITHUB_COMMIT,
-    TESTING,
-)
 
 
 def _normalize_github_ssh(url: str) -> str:
@@ -137,23 +133,10 @@ def normalize_and_validate_github_url(raw_url: Optional[str], *, miner_uid: Opti
         return None
 
     normalized = f"https://github.com/{owner}/{repo}"
-
-    is_pinned = _has_explicit_commit_pin(raw_url, parsed)
-    require_pin = bool(REQUIRE_PINNED_GITHUB_COMMIT and not TESTING)
-    if require_pin and not is_pinned:
-        ColoredLogger.warning(
-            f"Rejecting miner github_url without explicit commit pin{miner_tag}: {raw_url}",
-            ColoredLogger.YELLOW,
-        )
-        return None
-    if not require_pin and not is_pinned:
-        ColoredLogger.warning(
-            f"Miner github_url is not pinned to a specific commit (branch may move){miner_tag}: {raw_url}",
-            ColoredLogger.YELLOW,
-        )
     ColoredLogger.debug(
         f"Normalized miner github_url{miner_tag}: {raw_url} -> {normalized}",
         ColoredLogger.GRAY,
     )
+
     return normalized
 

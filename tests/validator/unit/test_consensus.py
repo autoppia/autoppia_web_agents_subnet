@@ -119,7 +119,7 @@ class TestScoreAggregation:
     async def test_aggregate_scores_filters_by_round(self, dummy_validator):
         """Test that aggregation only includes commitments for current round."""
         dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
-        dummy_validator.round_manager.calculate_round = AsyncMock(return_value=5)
+        dummy_validator.round_manager.calculate_round = Mock(return_value=5)
         
         # Mock commitments with different rounds
         mock_commits = {
@@ -142,7 +142,7 @@ class TestScoreAggregation:
     async def test_aggregation_filters_by_stake_threshold(self, dummy_validator):
         """Test that aggregation filters out validators below stake threshold."""
         dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
-        dummy_validator.round_manager.calculate_round = AsyncMock(return_value=5)
+        dummy_validator.round_manager.calculate_round = Mock(return_value=5)
         
         # Set up metagraph with stakes
         dummy_validator.metagraph.stake = [100.0, 50.0, 200.0]  # Only UIDs 0 and 2 meet threshold
@@ -169,7 +169,7 @@ class TestScoreAggregation:
     async def test_aggregation_handles_ipfs_download_failure(self, dummy_validator):
         """Test that aggregation handles IPFS download failures gracefully."""
         dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
-        dummy_validator.round_manager.calculate_round = AsyncMock(return_value=5)
+        dummy_validator.round_manager.calculate_round = Mock(return_value=5)
         
         mock_commits = {
             "hotkey1": {"r": 5, "c": "QmCID1"},
@@ -194,7 +194,7 @@ class TestScoreAggregation:
     async def test_aggregation_uses_stake_weighted_average(self, dummy_validator):
         """Test that aggregation uses stake-weighted average for scores."""
         dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
-        dummy_validator.round_manager.calculate_round = AsyncMock(return_value=5)
+        dummy_validator.round_manager.calculate_round = Mock(return_value=5)
         
         # Set up metagraph with different stakes (above MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO)
         dummy_validator.metagraph.stake = [10000.0, 20000.0]
@@ -224,7 +224,7 @@ class TestScoreAggregation:
     async def test_aggregation_uses_simple_average_when_all_stakes_zero(self, dummy_validator):
         """Test that aggregation uses simple average when all stakes are zero."""
         dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
-        dummy_validator.round_manager.calculate_round = AsyncMock(return_value=5)
+        dummy_validator.round_manager.calculate_round = Mock(return_value=5)
         
         # All stakes are zero
         dummy_validator.metagraph.stake = [0.0, 0.0]
@@ -254,7 +254,7 @@ class TestScoreAggregation:
     async def test_aggregation_returns_empty_dict_when_no_validators(self, dummy_validator):
         """Test that aggregation returns empty dict when no validators included."""
         dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
-        dummy_validator.round_manager.calculate_round = AsyncMock(return_value=5)
+        dummy_validator.round_manager.calculate_round = Mock(return_value=5)
         
         # No commitments
         with patch('autoppia_web_agents_subnet.validator.settlement.consensus.read_all_plain_commitments') as mock_read:
@@ -274,7 +274,7 @@ class TestCommitmentFiltering:
     async def test_filtering_excludes_wrong_round_numbers(self, dummy_validator):
         """Test that filtering excludes commitments with wrong round number."""
         dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
-        dummy_validator.round_manager.calculate_round = AsyncMock(return_value=5)
+        dummy_validator.round_manager.calculate_round = Mock(return_value=5)
         
         mock_commits = {
             "hotkey1": {"r": 5, "c": "QmCID1"},  # Correct round
@@ -296,7 +296,7 @@ class TestCommitmentFiltering:
     async def test_filtering_excludes_missing_cids(self, dummy_validator):
         """Test that filtering excludes commitments without CID."""
         dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
-        dummy_validator.round_manager.calculate_round = AsyncMock(return_value=5)
+        dummy_validator.round_manager.calculate_round = Mock(return_value=5)
         
         mock_commits = {
             "hotkey1": {"r": 5, "c": "QmCID1"},  # Has CID
@@ -318,7 +318,7 @@ class TestCommitmentFiltering:
     async def test_filtering_handles_invalid_payload_structures(self, dummy_validator):
         """Test that filtering handles invalid payload structures gracefully."""
         dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
-        dummy_validator.round_manager.calculate_round = AsyncMock(return_value=5)
+        dummy_validator.round_manager.calculate_round = Mock(return_value=5)
         
         mock_commits = {
             "hotkey1": {"r": 5, "c": "QmCID1"},

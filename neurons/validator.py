@@ -16,6 +16,7 @@ from autoppia_web_agents_subnet.validator.config import (
 from autoppia_web_agents_subnet.validator.round_manager import RoundManager
 from autoppia_web_agents_subnet.validator.season_manager import SeasonManager
 from autoppia_web_agents_subnet.validator.round_start.mixin import ValidatorRoundStartMixin
+from autoppia_web_agents_subnet.validator.round_start.types import StartRoundResult
 from autoppia_web_agents_subnet.validator.evaluation.mixin import ValidatorEvaluationMixin
 from autoppia_web_agents_subnet.validator.settlement.mixin import ValidatorSettlementMixin
 from autoppia_web_agents_subnet.platform.validator_mixin import ValidatorPlatformMixin
@@ -39,9 +40,12 @@ class Validator(
 
         self.agents_queue: queue.Queue[AgentInfo] = queue.Queue()
         self.agents_dict: dict[int, AgentInfo] = {}
+        self.agents_on_first_handshake: list[int] = []
+        self.should_update_weights: bool = False
 
         try:
             self.sandbox_manager = SandboxManager()
+            self.sandbox_manager.deploy_gateway()
         except Exception as e:
             import sys            
             bt.logging.warning(f"Sandbox manager failed to initialize: {e}")
@@ -64,9 +68,9 @@ class Validator(
             return
         
         bt.logging.info(f"🚀 Starting round-based forward (epochs per round: {ROUND_SIZE_EPOCHS:.1f})")
-        start_result = await self._start_round()
+        start_result: StartRoundResult = await self._start_round()
 
-        if not getattr(start_result, "continue_forward", True):
+        if not start_result.continue_forward:
             bt.logging.info(f"Round start skipped ({start_result.reason}); waiting for next boundary")
             await self._wait_until_specific_block(
                 target_block=self.round_manager.target_block,
@@ -80,7 +84,7 @@ class Validator(
             bt.logging.debug(f"Phase plan logging failed: {exc}")
 
         # 1) Handshake & agent discovery
-        await self._perform_handshake(total_prompts=0)
+        await self._perform_handshake()
 
         # 2) Evaluation phase
         agents_evaluated = await self._run_evaluation_phase()

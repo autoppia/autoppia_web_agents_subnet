@@ -68,7 +68,7 @@ class TestStakeEdgeCases:
             # Setup dummy validator for method call
             dummy_validator.block = 1000
             dummy_validator.config.netuid = 99
-            dummy_validator.round_manager.calculate_round = AsyncMock(return_value=round_number)
+            dummy_validator.round_manager.calculate_round = Mock(return_value=round_number)
             dummy_validator.metagraph.stake = [0.0, 0.0, 0.0]
             dummy_validator.metagraph.hotkeys = [f"hotkey{i}" for i in range(3)]
             dummy_validator.metagraph.axons = [Mock(hotkey=f"hotkey{i}") for i in range(3)]
@@ -200,7 +200,7 @@ class TestEmptyDataEdgeCases:
             # Setup dummy validator for method call
             dummy_validator.block = 1000
             dummy_validator.config.netuid = 99
-            dummy_validator.round_manager.calculate_round = AsyncMock(return_value=100)
+            dummy_validator.round_manager.calculate_round = Mock(return_value=100)
             
             # Should return empty dict
             result, _ = await aggregate_scores_from_commitments(
@@ -331,7 +331,7 @@ class TestMetagraphEdgeCases:
         validator_with_agents.dendrite.query = mock_query
         
         # Should not crash
-        await validator_with_agents._perform_handshake(total_prompts=0)
+        await validator_with_agents._perform_handshake()
         
         # No agents (validator excludes itself)
         assert len(validator_with_agents.agents_dict) == 0

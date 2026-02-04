@@ -97,7 +97,7 @@ class TestHandshake:
             ]
             mock_send.return_value = mock_responses
             
-            await dummy_validator._perform_handshake(total_prompts=0)
+            await dummy_validator._perform_handshake()
             
             # Should have called send_start_round_synapse_to_miners
             assert mock_send.call_count == 1
@@ -116,7 +116,7 @@ class TestHandshake:
             with patch('autoppia_web_agents_subnet.validator.round_start.mixin.MIN_MINER_STAKE_TAO', 100.0):
                 mock_send.return_value = []
                 
-                await dummy_validator._perform_handshake(total_prompts=0)
+                await dummy_validator._perform_handshake()
                 
                 # Should only send to UIDs with stake >= 100.0 (excluding validator UID 0)
                 call_args = mock_send.call_args
@@ -140,7 +140,7 @@ class TestHandshake:
             # Clear existing agents
             dummy_validator.agents_dict = {}
             
-            await dummy_validator._perform_handshake(total_prompts=0)
+            await dummy_validator._perform_handshake()
             
             # Should have populated agents_dict
             assert len(dummy_validator.agents_dict) > 0
@@ -155,7 +155,7 @@ class TestHandshake:
         with patch('autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners') as mock_send:
             mock_send.return_value = []
             
-            await dummy_validator._perform_handshake(total_prompts=0)
+            await dummy_validator._perform_handshake()
             
             # Validator UID should not be in candidate list
             call_args = mock_send.call_args
@@ -180,7 +180,7 @@ class TestHandshake:
             
             dummy_validator.agents_dict = {}
             
-            await dummy_validator._perform_handshake(total_prompts=0)
+            await dummy_validator._perform_handshake()
             
             # Should only add agent1 (valid response)
             # Note: actual count depends on UID filtering
@@ -245,7 +245,7 @@ class TestHandshakeEdgeCases:
         dummy_validator.metagraph = None
         
         # Should not raise exception
-        await dummy_validator._perform_handshake(total_prompts=0)
+        await dummy_validator._perform_handshake()
 
     async def test_handshake_with_empty_metagraph(self, dummy_validator):
         from tests.conftest import _bind_round_start_mixin
@@ -255,7 +255,7 @@ class TestHandshakeEdgeCases:
         dummy_validator.metagraph.n = 0
         
         # Should not raise exception
-        await dummy_validator._perform_handshake(total_prompts=0)
+        await dummy_validator._perform_handshake()
 
     async def test_handshake_with_no_eligible_miners(self, dummy_validator):
         from tests.conftest import _bind_round_start_mixin
@@ -268,4 +268,4 @@ class TestHandshakeEdgeCases:
         
         with patch('autoppia_web_agents_subnet.validator.round_start.mixin.MIN_MINER_STAKE_TAO', 100.0):
             # Should not raise exception
-            await dummy_validator._perform_handshake(total_prompts=0)
+            await dummy_validator._perform_handshake()
