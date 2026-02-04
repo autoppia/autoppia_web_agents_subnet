@@ -246,7 +246,7 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
     from autoppia_web_agents_subnet.validator.config import (
         ROUND_SIZE_EPOCHS,
         SAFETY_BUFFER_EPOCHS,
-        DZ_STARTING_BLOCK,
+        MINIMUM_START_BLOCK,
         TASKS_PER_SEASON,
         AVG_TASK_DURATION_SECONDS,
         STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION,
@@ -282,7 +282,7 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
         "round": {
             "round_size_epochs": ROUND_SIZE_EPOCHS,
             "safety_buffer_epochs": SAFETY_BUFFER_EPOCHS,
-            "dz_starting_block": DZ_STARTING_BLOCK,
+            "minimum_start_block": MINIMUM_START_BLOCK,
             "tasks_per_season": TASKS_PER_SEASON,
             "avg_task_duration_seconds": AVG_TASK_DURATION_SECONDS,
         },

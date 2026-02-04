@@ -18,7 +18,7 @@ from autoppia_web_agents_subnet.utils.commitments import read_all_plain_commitme
 from autoppia_web_agents_subnet.utils.ipfs_client import IPFSError, aget_json
 from autoppia_web_agents_subnet.validator.config import (
     AVG_TASK_DURATION_SECONDS,
-    DZ_STARTING_BLOCK,
+    MINIMUM_START_BLOCK,
     ENABLE_DISTRIBUTED_CONSENSUS,
     IPFS_API_URL,
     IPFS_GATEWAYS,
@@ -35,11 +35,11 @@ ROUND_MANAGER = RoundManager(
     round_size_epochs=ROUND_SIZE_EPOCHS,
     avg_task_duration_seconds=AVG_TASK_DURATION_SECONDS,
     safety_buffer_epochs=SAFETY_BUFFER_EPOCHS,
-    minimum_start_block=DZ_STARTING_BLOCK,
+    minimum_start_block=MINIMUM_START_BLOCK,
 )
 BLOCKS_PER_EPOCH = RoundManager.BLOCKS_PER_EPOCH
 ROUND_BLOCK_LENGTH = ROUND_MANAGER.ROUND_BLOCK_LENGTH
-BASE_START_BLOCK = DZ_STARTING_BLOCK if DZ_STARTING_BLOCK is not None else 0
+BASE_START_BLOCK = MINIMUM_START_BLOCK if MINIMUM_START_BLOCK is not None else 0
 SECONDS_PER_BLOCK = RoundManager.SECONDS_PER_BLOCK
 
 
