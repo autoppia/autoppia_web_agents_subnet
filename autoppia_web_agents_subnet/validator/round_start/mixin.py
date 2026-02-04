@@ -14,6 +14,7 @@ from autoppia_web_agents_subnet.validator.config import (
     MINIMUM_START_BLOCK,
     ROUND_START_UNTIL_FRACTION,
     MIN_MINER_STAKE_TAO,
+    SETTLEMENT_FRACTION,
 )
 from autoppia_web_agents_subnet.validator.round_start.synapse_handler import send_start_round_synapse_to_miners
 
@@ -55,6 +56,12 @@ class ValidatorRoundStartMixin:
             pass
 
         wait_info = self.round_manager.get_wait_info(current_block)
+        
+        # Calculate settlement block and ETA
+        settlement_block = self.round_manager.settlement_block
+        settlement_epoch = self.round_manager.settlement_epoch
+        blocks_to_settlement = max(settlement_block - current_block, 0) if settlement_block else 0
+        minutes_to_settlement = (blocks_to_settlement * self.round_manager.SECONDS_PER_BLOCK) / 60.0
 
         bt.logging.info("=" * 100)
         bt.logging.info(round_details_tag("🚀 ROUND START"))
@@ -66,6 +73,7 @@ class ValidatorRoundStartMixin:
         bt.logging.info(round_details_tag(f"Current Block: {current_block:,}"))
         bt.logging.info(round_details_tag(f"Duration: ~{wait_info['minutes_to_target']:.1f} minutes"))
         bt.logging.info(round_details_tag(f"Total Blocks: {self.round_manager.target_block - current_block}"))
+        bt.logging.info(round_details_tag(f"Settlement: {SETTLEMENT_FRACTION:.0%} — block {settlement_block:,} (epoch {settlement_epoch:.2f}) — ~{minutes_to_settlement:.1f}m"))
         bt.logging.info("=" * 100)
 
         return RoundStartResult(
