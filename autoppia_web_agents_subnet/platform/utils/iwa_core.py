@@ -331,7 +331,10 @@ def build_iwap_tasks(*, validator_round_id: str, tasks: List[TaskWithProject]) -
     for index, task_item in enumerate(tasks):
         task = task_item.task
         project = task_item.project
-        task_id = getattr(task, "id", None) or f"{validator_round_id}_task_{index:04d}"
+        # Always include validator_round_id in task_id to ensure uniqueness across rounds
+        # Even if task has an id from JSON, we need to make it unique per round
+        base_task_id = getattr(task, "id", None) or f"task_{index:04d}"
+        task_id = f"{validator_round_id}_{base_task_id}"
 
         specifications = {}
         if hasattr(task, "specifications") and task.specifications is not None:
