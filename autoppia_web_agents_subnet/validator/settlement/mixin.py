@@ -246,24 +246,35 @@ class ValidatorSettlementMixin:
         self.update_scores(rewards=final_rewards_array, uids=list(range(self.metagraph.n)))
         self.set_weights()
 
-        # finish_success = await self._finish_iwap_round(
-        #     avg_rewards=self.round_manager.final_aggregated_rewards or {},
-        #     final_weights={
-        #         uid: float(final_rewards_array[uid])
-        #         for uid in range(len(final_rewards_array))
-        #         if float(final_rewards_array[uid]) > 0.0
-        #     },
-        # )
+        # Send final results to IWAP
+        try:
+            # Count tasks completed (from agents_dict)
+            tasks_completed = 0
+            for agent in self.agents_dict.values():
+                if hasattr(agent, 'score') and agent.score > 0:
+                    tasks_completed += 1
+            
+            finish_success = await self._finish_iwap_round(
+                avg_rewards=valid_scores,
+                final_weights={
+                    uid: float(final_rewards_array[uid])
+                    for uid in range(len(final_rewards_array))
+                    if float(final_rewards_array[uid]) > 0.0
+                },
+                tasks_completed=tasks_completed,
+            )
+            
+            if finish_success:
+                ColoredLogger.success("✅ Final weights submitted to IWAP successfully", ColoredLogger.GREEN)
+            else:
+                ColoredLogger.warning(
+                    "⚠️ IWAP finish_round failed; weights set on-chain but dashboard not updated.",
+                    ColoredLogger.YELLOW,
+                )
+        except Exception as exc:
+            ColoredLogger.error(f"Error finishing IWAP round: {exc}", ColoredLogger.RED)
+            finish_success = False
 
-        # if finish_success:
-        #     ColoredLogger.success("✅ Final weights submitted successfully", ColoredLogger.GREEN)
-        # else:
-        #     ColoredLogger.warning(
-        #         "⚠️ IWAP finish_round failed; continuing locally.",
-        #         ColoredLogger.YELLOW,
-        #     )
-
-        finish_success = True  # Default to True since IWAP finish is commented out
         self._log_round_completion(
             color=ColoredLogger.GREEN if finish_success else ColoredLogger.YELLOW,
             reason="completed",
@@ -277,21 +288,6 @@ class ValidatorSettlementMixin:
         except Exception:
             pass
 
-    # async def _finish_iwap_round(
-    #     self,
-    #     *,
-    #     avg_rewards: Dict[int, float],
-    #     final_weights: Dict[int, float],
-    # ) -> bool:
-    #     """Bridge to IWAP client finish_round flow."""
-    #     try:
-    #         return await super()._finish_iwap_round(  # type: ignore[misc]
-    #             avg_rewards=avg_rewards,
-    #             final_weights=final_weights,
-    #         )
-    #     except Exception as exc:
-    #         bt.logging.warning(f"IWAP finish_round failed: {exc}")
-    #         return False
 
     def _log_round_completion(self, *, color: str, reason: str) -> None:
         """Small helper for consistent round completion logs."""

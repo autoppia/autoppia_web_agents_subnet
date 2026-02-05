@@ -11,7 +11,6 @@ from autoppia_web_agents_subnet.base.validator import BaseValidatorNeuron
 from autoppia_web_agents_subnet.bittensor_config import config
 from autoppia_web_agents_subnet.validator.config import (
     ROUND_SIZE_EPOCHS,
-    SETTLEMENT_FRACTION,
 )
 from autoppia_web_agents_subnet.validator.round_manager import RoundManager
 from autoppia_web_agents_subnet.validator.season_manager import SeasonManager
@@ -78,50 +77,23 @@ class Validator(
             )
             return
 
-        try:
-            self._log_phase_plan()
-        except Exception as exc:
-            bt.logging.debug(f"Phase plan logging failed: {exc}")
-
         # 1) Handshake & agent discovery
         await self._perform_handshake()
+        
+        # Initialize IWAP round after handshake (we now know how many miners participate)
+        current_block = self.block
+        season_tasks = await self.round_manager.get_round_tasks(current_block, self.season_manager)
+        n_tasks = len(season_tasks)
+        await self._iwap_start_round(current_block=current_block, n_tasks=n_tasks)
+        
+        # Register miners in IWAP (creates validator_round_miners records)
+        await self._iwap_register_miners()
 
         # 2) Evaluation phase
         agents_evaluated = await self._run_evaluation_phase()
 
         # 3) Settlement / weight update
         await self._run_settlement_phase(agents_evaluated=agents_evaluated)
-
-    def _log_phase_plan(self) -> None:
-        """
-        Print a concise Phase Plan:
-          Phase name — fraction — target block — ETA minutes
-        """
-        current_block = self.block
-        bounds = self.round_manager.get_round_boundaries(current_block)
-        start_block = int(bounds["round_start_block"])
-        target_block = int(bounds["round_target_block"])
-        total_blocks = max(target_block - start_block, 1)
-        spb = self.round_manager.SECONDS_PER_BLOCK
-
-        def _line(name: str, frac: float) -> str:
-            frac = max(0.0, min(1.0, float(frac)))
-            blk = start_block + int(total_blocks * frac)
-            remain_blocks = max(blk - current_block, 0)
-            eta_min = (remain_blocks * spb) / 60.0
-            return f"• {name}: {frac:.0%} — block {blk} — ~{eta_min:.1f}m"
-
-        bt.logging.info("Phase Plan (targets)")
-        try:
-            now_frac = min(max((current_block - start_block) / total_blocks, 0.0), 1.0)
-            end_eta_min = max((target_block - current_block), 0) * spb / 60.0
-            bt.logging.info(f"• Now: {now_frac:.0%} — block {current_block} — ~{end_eta_min:.1f}m to end")
-        except Exception:
-            pass
-
-        bt.logging.info(_line("Round start", 0.0))
-        bt.logging.info(_line("Settlement", SETTLEMENT_FRACTION))
-        bt.logging.info(_line("Round end", 1.0))
 
 
 if __name__ == "__main__":

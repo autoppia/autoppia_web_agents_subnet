@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 import bittensor as bt
 
 from autoppia_web_agents_subnet.utils.log_colors import round_details_tag
@@ -14,6 +15,7 @@ from autoppia_web_agents_subnet.validator.config import (
     MINIMUM_START_BLOCK,
     ROUND_START_UNTIL_FRACTION,
     MIN_MINER_STAKE_TAO,
+    SETTLEMENT_FRACTION,
 )
 from autoppia_web_agents_subnet.validator.round_start.synapse_handler import send_start_round_synapse_to_miners
 
@@ -24,6 +26,9 @@ class ValidatorRoundStartMixin:
     async def _start_round(self) -> RoundStartResult:
         current_block = self.block
 
+        # Configure season start block in RoundManager (from SeasonManager)
+        season_start_block = self.season_manager.get_season_start_block(current_block)
+        self.round_manager.set_season_start_block(season_start_block)
         self.round_manager.sync_boundaries(current_block)
         current_fraction = float(self.round_manager.fraction_elapsed(current_block))
 
@@ -34,7 +39,7 @@ class ValidatorRoundStartMixin:
             )
 
         if self.season_manager.should_start_new_season(current_block):
-            await self.season_manager.generate_season_tasks(current_block)
+            await self.season_manager.generate_season_tasks(current_block, self.round_manager)
             while not self.agents_queue.empty():
                 self.agents_queue.get()
             self.agents_dict = {}
@@ -44,31 +49,39 @@ class ValidatorRoundStartMixin:
         current_block = self.block
         self.round_manager.start_new_round(current_block)
 
-        season_number = self.season_manager.season_number
-        round_number = self.round_manager.round_number
-        start_epoch = self.round_manager.start_epoch
-        target_epoch = self.round_manager.target_epoch
-        total_blocks = self.round_manager.target_block - current_block
+        # Generate validator round ID if not already set
+        if not hasattr(self, "current_round_id") or not self.current_round_id:
+            self.current_round_id = self._generate_validator_round_id(current_block=current_block)
+        
+        # Set round start timestamp
+        self.round_start_timestamp = time.time()
 
-        # Configure per-round log file (data/logs/round-<id>.log).
-        round_id_for_log = getattr(self, "current_round_id", None) or f"round-{season_number}-{round_number}"
+        # Configure per-round log file (data/logs/season-<season>-round-<round>.log).
+        round_id_for_log = self.current_round_id
         try:
             ColoredLogger.set_round_log_file(str(round_id_for_log))
         except Exception:
             pass
 
         wait_info = self.round_manager.get_wait_info(current_block)
+        
+        # Calculate settlement block and ETA
+        settlement_block = self.round_manager.settlement_block
+        settlement_epoch = self.round_manager.settlement_epoch
+        blocks_to_settlement = max(settlement_block - current_block, 0) if settlement_block else 0
+        minutes_to_settlement = (blocks_to_settlement * self.round_manager.SECONDS_PER_BLOCK) / 60.0
 
         bt.logging.info("=" * 100)
         bt.logging.info(round_details_tag("🚀 ROUND START"))
-        bt.logging.info(round_details_tag(f"Season Number: {season_number}"))
-        bt.logging.info(round_details_tag(f"Round Number: {round_number}"))
-        bt.logging.info(round_details_tag(f"Round Start Epoch: {start_epoch:.2f}"))
-        bt.logging.info(round_details_tag(f"Round Target Epoch: {target_epoch:.2f}"))
+        bt.logging.info(round_details_tag(f"Season Number: {self.season_manager.season_number}"))
+        bt.logging.info(round_details_tag(f"Round Number: {self.round_manager.round_number}"))
+        bt.logging.info(round_details_tag(f"Round Start Epoch: {self.round_manager.start_epoch:.2f}"))
+        bt.logging.info(round_details_tag(f"Round Target Epoch: {self.round_manager.target_epoch:.2f}"))
         bt.logging.info(round_details_tag(f"Validator Round ID: {self.current_round_id}"))
         bt.logging.info(round_details_tag(f"Current Block: {current_block:,}"))
         bt.logging.info(round_details_tag(f"Duration: ~{wait_info['minutes_to_target']:.1f} minutes"))
-        bt.logging.info(round_details_tag(f"Total Blocks: {total_blocks}"))
+        bt.logging.info(round_details_tag(f"Total Blocks: {self.round_manager.target_block - current_block}"))
+        bt.logging.info(round_details_tag(f"Settlement: {SETTLEMENT_FRACTION:.0%} — block {settlement_block:,} (epoch {settlement_epoch:.2f}) — ~{minutes_to_settlement:.1f}m"))
         bt.logging.info("=" * 100)
 
         return RoundStartResult(
@@ -164,12 +177,16 @@ class ValidatorRoundStartMixin:
             if resp is None or not getattr(resp, "agent_name", None) or not getattr(resp, "github_url", None):
                 continue
             
+            # Store handshake payload for IWAP registration
+            if not hasattr(self, "round_handshake_payloads"):
+                self.round_handshake_payloads = {}
+            self.round_handshake_payloads[uid] = resp
+            
             agent_info = AgentInfo(
                 uid=uid,
                 agent_name=getattr(resp, "agent_name", None),
                 agent_image=getattr(resp, "agent_image", None),
                 github_url=getattr(resp, "github_url", None),
-                agent_version=getattr(resp, "agent_version", 1),                
             )
             ColoredLogger.info(agent_info.__repr__(), ColoredLogger.GREEN)
 
@@ -186,6 +203,9 @@ class ValidatorRoundStartMixin:
             f"Handshake complete: {new_agents_count} new agents submitted "
             f"(min_stake={min_stake})"
         )
+        
+        # Set active_miner_uids based on agents that responded to handshake
+        self.active_miner_uids = list(self.agents_dict.keys())
 
     async def _wait_for_minimum_start_block(self) -> bool:
         """

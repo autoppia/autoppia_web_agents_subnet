@@ -26,7 +26,6 @@ class StartRoundSynapse(Synapse):
       - agent_name: display name of the agent.
       - agent_image: URL (or data URI) to agent logo/avatar.
       - github_url: repository with miner/agent code.
-      - agent_version / capabilities: optional details.
     """
     # Request (validator -> miner)
     version: str = ""
@@ -38,8 +37,6 @@ class StartRoundSynapse(Synapse):
     agent_name: Optional[str] = None
     github_url: Optional[str] = None
     agent_image: Optional[str] = None
-    agent_version: Optional[int] = None
-    has_rl: bool = False
 
     model_config = {"extra": "allow", "arbitrary_types_allowed": True}
 

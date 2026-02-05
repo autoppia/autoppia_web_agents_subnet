@@ -264,8 +264,48 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
             level="success",
         )
 
+    # Note: register_participating_miners_in_iwap is called separately in validator.py 
+    # after handshake to avoid duplication
+
+
+async def register_participating_miners_in_iwap(ctx) -> None:
+    """
+    Register all miners that responded to handshake in IWAP dashboard.
+    
+    For each active miner:
+    - Sends miner identity (uid, hotkey, coldkey)
+    - Sends miner snapshot (agent_name, github_url, image_url)
+    - Creates agent_run record (agent_run_id, started_at)
+    
+    Creates records in:
+    - validator_round_miners (miner info)
+    - miner_evaluation_runs (agent_evaluation_runs)
+    
+    Skips registration if IWAP is in offline mode.
+    """
+    if not ctx.current_round_id:
+        return
+    
+    if getattr(ctx, "_iwap_offline_mode", False):
+        log_iwap_phase(
+            "Register Miners",
+            "⚠️ OFFLINE MODE: Skipping miner registration",
+            level="warning",
+        )
+        return
+    
+    if not hasattr(ctx, "active_miner_uids") or not ctx.active_miner_uids:
+        log_iwap_phase(
+            "Register Miners",
+            "No active miners to register",
+            level="info",
+        )
+        return
+    
+    validator_identity = build_validator_identity(ctx)
     coldkeys = getattr(ctx.metagraph, "coldkeys", [])
     now_ts = time.time()
+    
     for miner_uid in ctx.active_miner_uids:
         miner_hotkey = None
         try:
@@ -307,7 +347,7 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
             miner_uid=miner_uid,
             miner_hotkey=miner_hotkey,
             is_sota=False,
-            version=getattr(handshake_payload, "agent_version", None),
+            version=None,
             started_at=now_ts,
             metadata={"handshake_note": getattr(handshake_payload, "note", None)},
         )
@@ -325,35 +365,15 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
             except httpx.HTTPStatusError as exc:
                 status = exc.response.status_code if exc.response is not None else None
                 body = exc.response.text if exc.response is not None else ""
-                # If validator_round is missing on backend (e.g., after API reset), re-create and retry once.
+                # If validator_round is missing on backend (e.g., after API reset), skip retry
+                # The round should have been created in _iwap_start_round() before this
                 if status == 400 and "Validator round" in body and "not found" in body:
                     log_iwap_phase(
-                        "Phase 3",
-                        "start_agent_run failed due to missing round; re-submitting start_round + set_tasks and retrying",
-                        level="warning",
+                        "Register Miners",
+                        f"start_agent_run failed for miner_uid={miner_uid}: validator round not found. Skipping.",
+                        level="error",
                     )
-                    try:
-                        await ctx.iwap_client.start_round(
-                            validator_identity=validator_identity,
-                            validator_round=validator_round,
-                            validator_snapshot=validator_snapshot,
-                        )
-                    except Exception:
-                        pass
-                    try:
-                        await ctx.iwap_client.set_tasks(
-                            validator_round_id=ctx.current_round_id,
-                            tasks=list(ctx.current_round_tasks.values()),
-                        )
-                    except Exception:
-                        pass
-                    # Retry once
-                    await ctx.iwap_client.start_agent_run(
-                        validator_round_id=ctx.current_round_id,
-                        agent_run=agent_run,
-                        miner_identity=miner_identity,
-                        miner_snapshot=miner_snapshot,
-                    )
+                    continue
                 else:
                     raise
         except httpx.HTTPStatusError as exc:
@@ -556,10 +576,17 @@ async def finish_round_flow(
 
     # Build emission info (will be added to round_metadata)
     # alpha_price will be calculated by backend
-    from autoppia_web_agents_subnet.validator.config import BURN_AMOUNT_PERCENTAGE, BURN_UID
+    from autoppia_web_agents_subnet.validator.config import BURN_UID
+    
+    # BURN_AMOUNT_PERCENTAGE is not in config, use default 0.1 (10%)
+    burn_percentage = getattr(
+        __import__('autoppia_web_agents_subnet.validator.config', fromlist=['BURN_AMOUNT_PERCENTAGE']),
+        'BURN_AMOUNT_PERCENTAGE',
+        0.1  # Default 10% if not defined
+    )
     
     emission_info = {
-        "burn_percentage": float(BURN_AMOUNT_PERCENTAGE) * 100,  # Convert to percentage
+        "burn_percentage": float(burn_percentage) * 100,  # Convert to percentage
         "burn_recipient_uid": int(BURN_UID),
     }
 

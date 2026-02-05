@@ -42,7 +42,7 @@ Each round follows these steps (see `neurons/validator.py`):
 
 1. **Initialization & Task Generation**
    - `RoundManager.start_new_round()` anchors the round start, using `ROUND_SIZE_EPOCHS` (0.2 epochs by default in testing: ~14.4 min).
-   - Tasks are pre-generated (`PRE_GENERATED_TASKS`, 3 in testing) via `get_task_collection_interleaved`.
+   - Tasks are generated once per season (`TASKS_PER_SEASON`, 1 in testing) in Round 1 and reused for all rounds in that season. Tasks are distributed round-robin across all demo projects.
    - IWAP identities are registered (`IWAPClient.start_round`).
 
 2. **Phase 1 – Handshake**

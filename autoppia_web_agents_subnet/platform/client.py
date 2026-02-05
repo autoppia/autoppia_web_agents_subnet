@@ -14,7 +14,7 @@ from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Typ
 import httpx
 import bittensor as bt
 
-from autoppia_web_agents_subnet.validator.config import MAX_MINER_AGENT_NAME_LENGTH
+from autoppia_web_agents_subnet.validator.config import MAX_MINER_AGENT_NAME_LENGTH, MINIMUM_START_BLOCK
 
 from . import models
 
@@ -28,7 +28,6 @@ T = TypeVar("T")
 # Season calculation constants (must match backend config)
 BLOCKS_PER_EPOCH = 360.0
 SEASON_SIZE_EPOCHS = 280.0
-DZ_STARTING_BLOCK = 4493500
 
 
 def _uuid_suffix(length: int = 12) -> str:
@@ -44,10 +43,10 @@ def compute_season_number(current_block: int) -> int:
     """
     Calculate the season number based on the current block.
     
-    Season 0 = before DZ_STARTING_BLOCK
-    Season 1+ = after DZ_STARTING_BLOCK, each season is SEASON_SIZE_EPOCHS epochs
+    Season 0 = before MINIMUM_START_BLOCK
+    Season 1+ = after MINIMUM_START_BLOCK, each season is SEASON_SIZE_EPOCHS epochs
     """
-    base = int(DZ_STARTING_BLOCK)
+    base = int(MINIMUM_START_BLOCK)
     if current_block <= base:
         return 0
     length = _season_blocks()
@@ -66,7 +65,7 @@ def compute_round_number_in_season(current_block: int, round_length: int) -> int
     Returns:
         Round number within the season (1-indexed)
     """
-    base = int(DZ_STARTING_BLOCK)
+    base = int(MINIMUM_START_BLOCK)
     season_num = compute_season_number(current_block)
     
     if season_num == 0:
@@ -644,7 +643,7 @@ def build_miner_snapshot(
 
     image_url = _normalized_optional(getattr(handshake_payload, "agent_image", None))
     github_url = _normalized_optional(getattr(handshake_payload, "github_url", None))
-    description = _normalized_optional(getattr(handshake_payload, "agent_version", None))
+    description = None
 
     return models.MinerSnapshotIWAP(
         validator_round_id=validator_round_id,

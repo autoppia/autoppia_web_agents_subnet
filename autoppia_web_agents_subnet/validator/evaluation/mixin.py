@@ -1,6 +1,7 @@
 """Evaluation-phase helper mixin used in tests."""
 
 from __future__ import annotations
+from typing import Dict, List
 
 from autoppia_web_agents_subnet.validator.github_validation import normalize_and_validate_github_url
 from autoppia_web_agents_subnet.validator.evaluation.stateful_cua_eval import evaluate_with_stateful_cua
@@ -18,6 +19,13 @@ class ValidatorEvaluationMixin:
     async def _run_evaluation_phase(self) -> int:
         """
         Run the evaluation phase.
+        
+        Flow:
+        1. Deploy all available agents
+        2. For each task:
+           - Evaluate all deployed agents
+           - Send results to IWAP
+        3. Cleanup agents
         """                
         current_block = self.block
         self.round_manager.enter_phase(
@@ -26,8 +34,13 @@ class ValidatorEvaluationMixin:
             note=f"Starting evaluation phase",
         )
         ColoredLogger.info("Starting evaluation phase", ColoredLogger.MAGENTA)
-        season_tasks = await self.season_manager.get_season_tasks(current_block)
+        
+        # Get tasks for this round (all season tasks)
+        season_tasks = await self.round_manager.get_round_tasks(current_block, self.season_manager)
 
+        # Deploy all available agents first
+        deployed_agents = {}  # uid -> (agent_info, agent_instance)
+        
         agents_evaluated = 0
         while not self.agents_queue.empty():    
             wait_info = self.round_manager.get_wait_info(current_block)
@@ -50,34 +63,93 @@ class ValidatorEvaluationMixin:
             if agent_instance is None:
                 ColoredLogger.error(f"Agent not deployed correctly for uid {agent.uid}", ColoredLogger.RED)
                 continue
+            
+            deployed_agents[agent.uid] = (agent, agent_instance)
+            ColoredLogger.success(f"Deployed agent {agent.uid}", ColoredLogger.GREEN)
 
-            try:
-                scores = []
-                for task in season_tasks:
+        if not deployed_agents:
+            ColoredLogger.warning("No agents deployed for evaluation", ColoredLogger.YELLOW)
+            return 0
+
+        # Evaluate each task across all deployed agents
+        try:
+            for task_item in season_tasks:
+                ColoredLogger.info(f"Evaluating task {task_item.task.id} for {len(deployed_agents)} agents", ColoredLogger.CYAN)
+                
+                # Collect results from all agents for this task
+                task_solutions = []
+                eval_scores = []
+                execution_times = []
+                test_results_list = []
+                evaluation_results = []
+                rewards = []
+                
+                for uid, (agent, agent_instance) in deployed_agents.items():
                     try:
-                        score, _, _ = await evaluate_with_stateful_cua(
-                            task=task.task,
-                            uid=agent.uid,
+                        score, exec_time, task_solution = await evaluate_with_stateful_cua(
+                            task=task_item.task,
+                            uid=uid,
                             base_url=agent_instance.base_url,
                             max_steps=AGENT_MAX_STEPS,
                         )
-                        scores.append(score)
+                        
+                        task_solutions.append(task_solution)
+                        eval_scores.append(score)
+                        execution_times.append(exec_time)
+                        test_results_list.append([])  # Simplified - no detailed test results
+                        evaluation_results.append({})  # Simplified - no detailed evaluation metadata
+                        rewards.append(score)  # Simplified - reward = score
+                        
+                        ColoredLogger.info(
+                            f"  Agent {uid}: score={score:.3f}, time={exec_time:.2f}s",
+                            ColoredLogger.CYAN
+                        )
+                        
                     except Exception as e:
-                        ColoredLogger.error(f"Error evaluating task {task}: {e}", ColoredLogger.RED)
-                        continue
-
-                # Handle empty scores list
-                if len(scores) > 0:
-                    avg_score = sum(scores) / len(scores)
-                    agent.score = avg_score
-                else:
-                    agent.score = 0.0
-                    
-                self.agents_dict[agent.uid] = agent
+                        ColoredLogger.error(f"Error evaluating task {task_item.task.id} for agent {uid}: {e}", ColoredLogger.RED)
+                        # Add empty/zero results for failed evaluations
+                        task_solutions.append(None)
+                        eval_scores.append(0.0)
+                        execution_times.append(0.0)
+                        test_results_list.append([])
+                        evaluation_results.append({})
+                        rewards.append(0.0)
+                
+                # Send results to IWAP for this task
+                try:
+                    await self._iwap_submit_task_results(
+                        task_item=task_item,
+                        task_solutions=task_solutions,
+                        eval_scores=eval_scores,
+                        test_results_list=test_results_list,
+                        evaluation_results=evaluation_results,
+                        execution_times=execution_times,
+                        rewards=rewards,
+                    )
+                    ColoredLogger.success(
+                        f"✅ Sent results to IWAP for task {task_item.task.id}",
+                        ColoredLogger.GREEN
+                    )
+                except Exception as e:
+                    ColoredLogger.error(
+                        f"Failed to send results to IWAP for task {task_item.task.id}: {e}",
+                        ColoredLogger.RED
+                    )
+            
+            # Calculate average scores for each agent
+            for uid, (agent, _) in deployed_agents.items():
+                agent.score = 0.0  # Will be calculated from IWAP data
+                self.agents_dict[uid] = agent
                 agents_evaluated += 1
-            finally:
-                # Always cleanup, even if evaluation fails
-                self.sandbox_manager.cleanup_agent(agent.uid)
+                
+        finally:
+            # Cleanup all deployed agents
+            for uid in deployed_agents.keys():
+                try:
+                    self.sandbox_manager.cleanup_agent(uid)
+                    ColoredLogger.info(f"Cleaned up agent {uid}", ColoredLogger.CYAN)
+                except Exception as e:
+                    ColoredLogger.error(f"Error cleaning up agent {uid}: {e}", ColoredLogger.RED)
 
         ColoredLogger.info("Evaluation phase completed", ColoredLogger.MAGENTA)
         return agents_evaluated

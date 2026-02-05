@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document explains the round-based system implemented in the AutoPPIA Web Agents subnet. The system is designed to run long-duration rounds (e.g., 24 hours) with pre-generated tasks and dynamic task execution based on time remaining.
+This document explains the round-based system implemented in the AutoPPIA Web Agents subnet. The system is designed to run long-duration rounds (e.g., 24 hours) with season-based task generation (tasks generated once per season in Round 1) and dynamic task execution based on time remaining.
 
 ## Key Concepts
 
@@ -21,7 +21,7 @@ This document explains the round-based system implemented in the AutoPPIA Web Ag
 ### Forward
 
 - **Definition**: A single execution cycle that spans an entire round
-- **Process**: Pre-generate tasks → Execute dynamically → Accumulate scores → Set weights
+- **Process**: Get season tasks (generated in Round 1) → Execute dynamically → Accumulate scores → Set weights
 
 ## System Architecture
 
@@ -29,7 +29,7 @@ This document explains the round-based system implemented in the AutoPPIA Web Ag
 ┌─────────────────────────────────────────────────────────────┐
 │                    ROUND EXECUTION                          │
 ├─────────────────────────────────────────────────────────────┤
-│ 1. Pre-generate all tasks (120 tasks by default)           │
+│ 1. Get season tasks (generated in Round 1, reused for all rounds) │
 │ 2. Dynamic task execution loop:                            │
 │    - Send task to miners                                   │
 │    - Evaluate responses                                    │
@@ -49,7 +49,7 @@ This document explains the round-based system implemented in the AutoPPIA Web Ag
 ROUND_SIZE_EPOCHS = 20              # Round duration in epochs (~24h)
 SAFETY_BUFFER_EPOCHS = 0.5          # Safety buffer before target epoch
 AVG_TASK_DURATION_SECONDS = 600     # Average task execution time
-PRE_GENERATED_TASKS = 120           # Tasks to pre-generate
+TASKS_PER_SEASON = 120              # Tasks to generate per season (in Round 1)
 
 # Task Configuration
 PROMPTS_PER_USECASE = 1             # Prompts per use case
@@ -76,7 +76,7 @@ This ensures all tasks complete before the target epoch.
 
 ### Task Flow
 
-1. **Pre-generation**: Generate all tasks at round start
+1. **Season Task Generation**: Generate all tasks at Season start (Round 1), reuse for all rounds in season
 2. **Execution Loop**:
    - Send task to all active miners
    - Collect responses (actions)
@@ -135,7 +135,7 @@ WTA Result: [0.0, 1.0, 0.0]
 # Adjust these parameters in config.py
 ROUND_SIZE_EPOCHS = 4               # Longer/shorter rounds (prod default)
 SAFETY_BUFFER_EPOCHS = 0.5          # More/less safety margin
-PRE_GENERATED_TASKS = 120           # More/fewer tasks
+TASKS_PER_SEASON = 120              # More/fewer tasks per season
 ```
 
 ## Testing
@@ -158,7 +158,7 @@ python3 scripts/test_forward_simple.py --num-tasks 100 --num-miners 4 --round-ep
 
 ### Key Metrics
 
-- **Task Completion Rate**: `completed_tasks / pre_generated_tasks`
+- **Task Completion Rate**: `completed_tasks / tasks_per_season`
 - **Round Duration**: Actual time vs. configured time
 - **Safety Buffer Activation**: How often early stopping occurs
 - **WTA Accuracy**: Verification of winner selection
@@ -176,7 +176,7 @@ The system provides detailed logging for:
 
 ### Common Issues
 
-1. **Tasks Running Out**: Increase `PRE_GENERATED_TASKS`
+1. **Tasks Running Out**: Increase `TASKS_PER_SEASON`
 2. **Safety Buffer Too Early**: Adjust `SAFETY_BUFFER_EPOCHS`
 3. **Inaccurate Time Estimates**: Calibrate `AVG_TASK_DURATION_SECONDS`
 
@@ -185,11 +185,11 @@ The system provides detailed logging for:
 1. Measure actual task execution times in production
 2. Adjust `AVG_TASK_DURATION_SECONDS` accordingly
 3. Monitor safety buffer activation frequency
-4. Fine-tune `PRE_GENERATED_TASKS` based on completion rates
+4. Fine-tune `TASKS_PER_SEASON` based on completion rates
 
 ## Future Improvements
 
-1. **Dynamic Task Generation**: Generate tasks on-demand instead of pre-generation
+1. **Dynamic Task Generation**: Generate tasks on-demand instead of season-based generation
 2. **Adaptive Safety Buffer**: Adjust buffer based on network conditions
 3. **Multi-Round Optimization**: Learn from previous rounds to optimize parameters
 4. **Real-time Monitoring**: Dashboard for round progress and metrics
