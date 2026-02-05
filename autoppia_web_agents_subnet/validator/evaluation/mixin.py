@@ -3,12 +3,14 @@
 from __future__ import annotations
 from typing import Dict, List
 
-from autoppia_web_agents_subnet.validator.github_validation import normalize_and_validate_github_url
 from autoppia_web_agents_subnet.validator.evaluation.stateful_cua_eval import evaluate_with_stateful_cua
+from autoppia_web_agents_subnet.validator.evaluation.rewards import calculate_reward_for_task
 from autoppia_web_agents_subnet.validator.config import (
     MAXIMUM_EVALUATION_TIME, 
     MAXIMUM_CONSENSUS_TIME,
+    SCREENING_TASKS_FOR_EARLY_STOP,
     AGENT_MAX_STEPS,
+    COST_LIMIT_VALUE,
 )
 from autoppia_web_agents_subnet.validator.round_manager import RoundPhase
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
@@ -49,13 +51,10 @@ class ValidatorEvaluationMixin:
                 break
 
             agent = self.agents_queue.get()
-            normalized_github_url = normalize_and_validate_github_url(agent.github_url, miner_uid=agent.uid)
-            if normalized_github_url is None:
-                continue
 
             agent_instance = None
             try:
-                agent_instance = self.sandbox_manager.deploy_agent(agent.uid, normalized_github_url)
+                agent_instance = self.sandbox_manager.deploy_agent(agent.uid, agent.github_url)
             except Exception as e:
                 ColoredLogger.error(f"Error deploying agent {agent.uid}: {e}", ColoredLogger.RED)
                 continue
@@ -86,6 +85,9 @@ class ValidatorEvaluationMixin:
                 
                 for uid, (agent, agent_instance) in deployed_agents.items():
                     try:
+                        prev_usage = self.sandbox_manager.get_current_usage()
+                        prev_cost = getattr(prev_usage, "total_cost", 0.0)
+
                         score, exec_time, task_solution = await evaluate_with_stateful_cua(
                             task=task_item.task,
                             uid=uid,
@@ -103,8 +105,27 @@ class ValidatorEvaluationMixin:
                         ColoredLogger.info(
                             f"  Agent {uid}: score={score:.3f}, time={exec_time:.2f}s",
                             ColoredLogger.CYAN
-                        )
+                        )                        
                         
+                        after_usage = self.sandbox_manager.get_current_usage()
+                        after_cost = getattr(after_usage, "total_cost", COST_LIMIT_VALUE * 2)  # If we can't get cost, assume it's over the limit
+                        token_cost = max(after_cost - prev_cost, 0.0)
+
+                        reward = calculate_reward_for_task(
+                            eval_score=score,
+                            execution_time=exec_time,
+                            token_cost=token_cost,
+                        )
+
+                        if after_cost > COST_LIMIT_VALUE:
+                            ColoredLogger.warning(f"Agent {agent.uid} exceeded cost limit with estimated cost ${after_cost:.2f}, stopping evaluation", ColoredLogger.YELLOW)
+                            break
+
+                        eval_scores.append(reward)
+
+                        if len(eval_scores) >= SCREENING_TASKS_FOR_EARLY_STOP and sum(eval_scores) == 0.0:
+                            ColoredLogger.warning(f"Agent {agent.uid} is failing first {len(eval_scores)} tasks, stopping evaluation", ColoredLogger.YELLOW)
+                            break
                     except Exception as e:
                         ColoredLogger.error(f"Error evaluating task {task_item.task.id} for agent {uid}: {e}", ColoredLogger.RED)
                         # Add empty/zero results for failed evaluations

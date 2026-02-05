@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.validator.config import (
+    SEASON_SIZE_EPOCHS,
     ROUND_SIZE_EPOCHS,
     MINIMUM_START_BLOCK,
     SETTLEMENT_FRACTION,
@@ -64,10 +65,17 @@ class RoundManager:
     BLOCKS_PER_EPOCH = 360
     SECONDS_PER_BLOCK = 12
 
-    def __init__(self):
-        self.round_size_epochs = ROUND_SIZE_EPOCHS
-        self.minimum_start_block = MINIMUM_START_BLOCK
-        self.settlement_fraction = SETTLEMENT_FRACTION
+    def __init__(
+        self,
+        season_size_epochs: Optional[float] = None,
+        round_size_epochs: Optional[float] = None,
+        minimum_start_block: Optional[int] = None,
+        settlement_fraction: Optional[float] = None,
+    ):
+        self.season_size_epochs = season_size_epochs if season_size_epochs is not None else SEASON_SIZE_EPOCHS
+        self.round_size_epochs = round_size_epochs if round_size_epochs is not None else ROUND_SIZE_EPOCHS
+        self.minimum_start_block = minimum_start_block if minimum_start_block is not None else MINIMUM_START_BLOCK
+        self.settlement_fraction = settlement_fraction if settlement_fraction is not None else SETTLEMENT_FRACTION
 
         self.round_block_length = int(self.BLOCKS_PER_EPOCH * self.round_size_epochs)
 

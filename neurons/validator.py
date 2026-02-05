@@ -21,7 +21,7 @@ from autoppia_web_agents_subnet.validator.settlement.mixin import ValidatorSettl
 from autoppia_web_agents_subnet.platform.validator_mixin import ValidatorPlatformMixin
 
 from autoppia_iwa.src.bootstrap import AppBootstrap
-from autoppia_web_agents_subnet.opensource.sandbox.sandbox_manager import SandboxManager
+from autoppia_web_agents_subnet.opensource.sandbox_manager import SandboxManager
 from autoppia_web_agents_subnet.validator.models import AgentInfo
 
 

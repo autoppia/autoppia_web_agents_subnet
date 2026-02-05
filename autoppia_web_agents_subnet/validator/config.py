@@ -32,7 +32,17 @@ MAXIMUM_CONSENSUS_TIME = _env_float("MAXIMUM_CONSENSUS_TIME", 15.0, test_default
 # TASKS_PER_SEASON: Number of tasks to generate for each season (generated only in round 1)
 # Tasks are distributed round-robin across all demo projects (1 task per project per cycle)
 TASKS_PER_SEASON = _env_int("TASKS_PER_SEASON", 1)
+PROMPTS_PER_USE_CASE = _env_int("PROMPTS_PER_USE_CASE", 1)
+PRE_GENERATED_TASKS = _env_int("PRE_GENERATED_TASKS", 1)
+SCREENING_TASKS_FOR_EARLY_STOP = _env_int("SCREENING_TASKS_FOR_EARLY_STOP", 10)
 AGENT_MAX_STEPS = _env_int("AGENT_MAX_STEPS", 30, test_default=1)
+AGENT_STEP_TIMEOUT = _env_int("AGENT_STEP_TIMEOUT", 180) # seconds
+
+COST_LIMIT_ENABLED = _env_bool("COST_LIMIT_ENABLED", True)
+COST_LIMIT_VALUE = _env_float("COST_LIMIT_VALUE", 10.0)  # USD
+
+MAXIMUM_EXECUTION_TIME = _env_float("MAXIMUM_EXECUTION_TIME", 300.0)  # seconds
+MAXIMUM_TOKEN_COST = _env_float("MAXIMUM_TOKEN_COST", 0.1)  # USD
 
 EVAL_SCORE_WEIGHT = _env_float("EVAL_SCORE_WEIGHT", 1.0)
 TIME_WEIGHT = _env_float("TIME_WEIGHT", 0.0)

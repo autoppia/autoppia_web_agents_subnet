@@ -8,14 +8,16 @@ from typing import Dict, Optional
 import httpx
 import bittensor as bt
 
-from autoppia_web_agents_subnet.opensource.sandbox.utils_docker import (
+from autoppia_web_agents_subnet.opensource.utils_docker import (
     check_image,
     build_image,
     cleanup_containers,
-    clone_repo,
     ensure_network,
     get_client,
     stop_and_remove,
+)
+from autoppia_web_agents_subnet.opensource.utils_git import (
+    clone_repo,
     temp_workdir,
 )
 from autoppia_web_agents_subnet.validator.config import (
@@ -26,6 +28,8 @@ from autoppia_web_agents_subnet.validator.config import (
     SANDBOX_AGENT_IMAGE,
     SANDBOX_AGENT_PORT,
     SANDBOX_CLONE_TIMEOUT,
+    COST_LIMIT_ENABLED,
+    COST_LIMIT_VALUE,
 )
 
 
@@ -82,13 +86,13 @@ class SandboxManager:
     def deploy_gateway(self):
         if not check_image(SANDBOX_GATEWAY_IMAGE):
             bt.logging.info("Sandbox gateway image not found; building...")
-            gateway_ctx = os.path.join(os.path.dirname(__file__), "..", "gateway")
+            gateway_ctx = os.path.join(os.path.dirname(__file__), "gateway")
             build_image(gateway_ctx, SANDBOX_GATEWAY_IMAGE)
 
         cleanup_containers([SANDBOX_GATEWAY_HOST])
         env = {
-            "COST_LIMIT_ENABLED": os.getenv("COST_LIMIT_ENABLED", "true"),
-            "COST_LIMIT_VALUE": os.getenv("COST_LIMIT_VALUE", "10.0"),
+            "COST_LIMIT_ENABLED": str(COST_LIMIT_ENABLED),
+            "COST_LIMIT_VALUE": str(COST_LIMIT_VALUE),
             "SANDBOX_GATEWAY_PORT": str(SANDBOX_GATEWAY_PORT),
         }
         # Propagate API keys to the gateway
@@ -134,7 +138,7 @@ class SandboxManager:
         container = self.client.containers.run(
             image=SANDBOX_AGENT_IMAGE,
             name=f"sandbox-agent-{uid}",
-            volumes={temp_dir: {"bind": "/sandbox", "mode": "rw"}},
+            volumes={temp_dir: {"bind": "/app", "mode": "rw"}},
             network=SANDBOX_NETWORK_NAME,
             environment=env,
             ports={f"{SANDBOX_AGENT_PORT}/tcp": None},
@@ -149,12 +153,13 @@ class SandboxManager:
     def deploy_agent(self, uid: int, github_url: str) -> Optional[AgentInstance]:
         try:
             bt.logging.info(f"Deploying agent {uid} from {github_url}...")
+            if not check_image(SANDBOX_AGENT_IMAGE):
+                bt.logging.info("Sandbox agent image not found; building...")
+                sandbox_ctx = os.path.join(os.path.dirname(__file__), "sandbox")
+                build_image(sandbox_ctx, SANDBOX_AGENT_IMAGE)
 
             repo_dir = self._clone_repo(github_url)
             bt.logging.info(f"Cloned repo for agent {uid} to {repo_dir}. Now building image...")
-
-            build_image(repo_dir, SANDBOX_AGENT_IMAGE)
-            bt.logging.info(f"Built image for agent {uid}. Now starting container...")
 
             agent = self._start_container(uid, repo_dir)
             bt.logging.success(f"Started container for agent {uid} at {agent.base_url}")            
@@ -211,3 +216,14 @@ class SandboxManager:
         except Exception as e:
             return False
         return False
+
+    def get_current_usage(self) -> Dict[str, float]:
+        usage = {}
+        try:
+            gateway_url = f"http://localhost:{SANDBOX_GATEWAY_PORT}"
+            resp = httpx.get(f"{gateway_url}/usage", timeout=5.0)
+            if resp.status_code == 200:
+                usage = resp.json() or {}
+        except Exception as e:
+            return usage
+        return usage

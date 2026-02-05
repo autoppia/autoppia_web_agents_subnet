@@ -5,6 +5,8 @@ from typing import Tuple
 
 import bittensor as bt
 
+from autoppia_web_agents_subnet.validator.config import AGENT_STEP_TIMEOUT
+
 from autoppia_iwa.src.data_generation.tasks.classes import Task
 from autoppia_iwa.src.evaluation.stateful_evaluator import AsyncStatefulEvaluator, ScoreDetails
 from autoppia_iwa.src.web_agents.cua import ApifiedWebCUA
@@ -21,7 +23,12 @@ async def evaluate_with_stateful_cua(
     """
     Evaluate a sandboxed miner agent using AsyncStatefulEvaluator + ApifiedWebCUA.
     """
-    agent = ApifiedWebCUA(base_url=base_url, name=f"miner-{uid}", id=str(uid))
+    agent = ApifiedWebCUA( 
+        id=str(uid), 
+        name=f"miner-{uid}",
+        base_url=base_url, 
+        timeout=AGENT_STEP_TIMEOUT
+    )
     evaluator = AsyncStatefulEvaluator(task=task, web_agent_id=str(uid))
 
     start_ts = time.time()
