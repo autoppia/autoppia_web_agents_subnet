@@ -137,7 +137,7 @@ def clone_repo(
     cmd_clone = ["git", "clone", "--depth", "1", normalized_url, dst_dir]
     subprocess.run(cmd_clone, check=True, timeout=timeout)
 
-    if not ref:
+    if ref:
         cmd_fetch = ["git", "fetch", "--depth", "1", "origin", ref]
         subprocess.run(cmd_fetch, cwd=dst_dir, check=True, timeout=timeout)
 
