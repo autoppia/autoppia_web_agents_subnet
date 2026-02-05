@@ -28,6 +28,11 @@ MINIMUM_START_BLOCK = _env_int("MINIMUM_START_BLOCK", 7478200)
 ROUND_START_UNTIL_FRACTION = _env_float("ROUND_START_UNTIL_FRACTION", 0.3, test_default=0.6)
 MAXIMUM_EVALUATION_TIME = _env_float("MAXIMUM_EVALUATION_TIME", 30.0, test_default=6.0) # minutes
 MAXIMUM_CONSENSUS_TIME = _env_float("MAXIMUM_CONSENSUS_TIME", 15.0, test_default=3.0) # minutes
+SAFETY_BUFFER_EPOCHS = _env_float("SAFETY_BUFFER_EPOCHS", 0.02, test_default=0.02)
+AVG_TASK_DURATION_SECONDS = _env_float("AVG_TASK_DURATION_SECONDS", 600.0, test_default=600.0)
+STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION = _env_float("STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION", 0.90, test_default=0.65)
+FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION = _env_float("FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION", 0.95, test_default=0.75)
+SKIP_ROUND_IF_STARTED_AFTER_FRACTION = _env_float("SKIP_ROUND_IF_STARTED_AFTER_FRACTION", 0.30, test_default=0.95)
 
 # TASKS_PER_SEASON: Number of tasks to generate for each season (generated only in round 1)
 # Tasks are distributed round-robin across all demo projects (1 task per project per cycle)
@@ -36,6 +41,11 @@ PROMPTS_PER_USE_CASE = _env_int("PROMPTS_PER_USE_CASE", 1)
 SCREENING_TASKS_FOR_EARLY_STOP = _env_int("SCREENING_TASKS_FOR_EARLY_STOP", 10)
 AGENT_MAX_STEPS = _env_int("AGENT_MAX_STEPS", 30, test_default=1)
 AGENT_STEP_TIMEOUT = _env_int("AGENT_STEP_TIMEOUT", 180) # seconds
+MAX_ACTIONS_LENGTH = _env_int("MAX_ACTIONS_LENGTH", 30, test_default=30)
+TIMEOUT = _env_float("TIMEOUT", 180.0, test_default=180.0) # seconds
+FEEDBACK_TIMEOUT = _env_float("FEEDBACK_TIMEOUT", 30.0, test_default=30.0) # seconds
+ENABLE_DYNAMIC = _env_bool("ENABLE_DYNAMIC", False)
+SHOULD_RECORD_GIF = _env_bool("SHOULD_RECORD_GIF", False)
 
 COST_LIMIT_ENABLED = _env_bool("COST_LIMIT_ENABLED", True)
 COST_LIMIT_VALUE = _env_float("COST_LIMIT_VALUE", 10.0)  # USD
