@@ -181,6 +181,7 @@ class IWAPClient:
         validator_identity: models.ValidatorIdentityIWAP,
         validator_round: models.ValidatorRoundIWAP,
         validator_snapshot: models.ValidatorSnapshotIWAP,
+        force: bool = False,
     ) -> Dict[str, Any]:
         payload = {
             "validator_identity": validator_identity.to_payload(),
@@ -188,9 +189,20 @@ class IWAPClient:
             "validator_snapshot": validator_snapshot.to_payload(),
         }
         from autoppia_web_agents_subnet.platform.utils.iwa_core import log_iwap_phase
+        from autoppia_web_agents_subnet.validator.config import TESTING
 
-        log_iwap_phase("start_round", f"Preparing request for validator_round_id={validator_round.validator_round_id} round_number_in_season={validator_round.round_number_in_season}", level="debug")
-        return await self._post("/api/v1/validator-rounds/start", payload, context="start_round")
+        # In TESTING mode, automatically set force=true to bypass chain state checks
+        if TESTING:
+            force = True
+
+        log_iwap_phase("start_round", f"Preparing request for validator_round_id={validator_round.validator_round_id} round_number_in_season={validator_round.round_number_in_season} force={force}", level="debug")
+        
+        # Add force as query parameter
+        url = "/api/v1/validator-rounds/start"
+        if force:
+            url += "?force=true"
+        
+        return await self._post(url, payload, context="start_round")
 
     async def set_tasks(
         self,
