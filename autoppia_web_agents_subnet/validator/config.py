@@ -22,18 +22,17 @@ BURN_ALL = _env_bool("BURN_ALL", False)
 # SHARED CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
 
-SEASON_SIZE_EPOCHS = _env_float("SEASON_SIZE_EPOCHS", 280.0, test_default=4.0)
-ROUND_SIZE_EPOCHS = _env_float("ROUND_SIZE_EPOCHS", 4.0, test_default=1.0)
-MINIMUM_START_BLOCK = _env_int("MINIMUM_START_BLOCK", 6726960)
+SEASON_SIZE_EPOCHS = _env_float("SEASON_SIZE_EPOCHS", 280.0, test_default=2)
+ROUND_SIZE_EPOCHS = _env_float("ROUND_SIZE_EPOCHS", 4.0, test_default=0.5)
+MINIMUM_START_BLOCK = _env_int("MINIMUM_START_BLOCK", 7478200)
 ROUND_START_UNTIL_FRACTION = _env_float("ROUND_START_UNTIL_FRACTION", 0.3, test_default=0.6)
 MAXIMUM_EVALUATION_TIME = _env_float("MAXIMUM_EVALUATION_TIME", 30.0, test_default=6.0) # minutes
 MAXIMUM_CONSENSUS_TIME = _env_float("MAXIMUM_CONSENSUS_TIME", 15.0, test_default=3.0) # minutes
 
 # TASKS_PER_SEASON: Number of tasks to generate for each season (generated only in round 1)
 # Tasks are distributed round-robin across all demo projects (1 task per project per cycle)
-TASKS_PER_SEASON = _env_int("TASKS_PER_SEASON", 1)
+TASKS_PER_SEASON = _env_int("TASKS_PER_SEASON", 100, test_default=3)
 PROMPTS_PER_USE_CASE = _env_int("PROMPTS_PER_USE_CASE", 1)
-PRE_GENERATED_TASKS = _env_int("PRE_GENERATED_TASKS", 1)
 SCREENING_TASKS_FOR_EARLY_STOP = _env_int("SCREENING_TASKS_FOR_EARLY_STOP", 10)
 AGENT_MAX_STEPS = _env_int("AGENT_MAX_STEPS", 30, test_default=1)
 AGENT_STEP_TIMEOUT = _env_int("AGENT_STEP_TIMEOUT", 180) # seconds
