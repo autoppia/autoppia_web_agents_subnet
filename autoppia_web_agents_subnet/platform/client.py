@@ -26,8 +26,13 @@ VALIDATOR_SIGNATURE_HEADER = "x-validator-signature"
 T = TypeVar("T")
 
 # Season calculation constants (must match backend config)
+# Import from validator config to ensure consistency with TESTING mode
+from autoppia_web_agents_subnet.validator.config import (
+    SEASON_SIZE_EPOCHS,
+    MINIMUM_START_BLOCK as VALIDATOR_MINIMUM_START_BLOCK,
+)
+
 BLOCKS_PER_EPOCH = 360.0
-SEASON_SIZE_EPOCHS = 280.0
 
 
 def _uuid_suffix(length: int = 12) -> str:
@@ -46,7 +51,7 @@ def compute_season_number(current_block: int) -> int:
     Season 0 = before MINIMUM_START_BLOCK
     Season 1+ = after MINIMUM_START_BLOCK, each season is SEASON_SIZE_EPOCHS epochs
     """
-    base = int(MINIMUM_START_BLOCK)
+    base = int(VALIDATOR_MINIMUM_START_BLOCK)
     if current_block <= base:
         return 0
     length = _season_blocks()
@@ -65,7 +70,7 @@ def compute_round_number_in_season(current_block: int, round_length: int) -> int
     Returns:
         Round number within the season (1-indexed)
     """
-    base = int(MINIMUM_START_BLOCK)
+    base = int(VALIDATOR_MINIMUM_START_BLOCK)
     season_num = compute_season_number(current_block)
     
     if season_num == 0:
