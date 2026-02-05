@@ -209,13 +209,25 @@ class IWAPClient:
         *,
         validator_round_id: str,
         tasks: Iterable[models.TaskIWAP],
+        force: bool = False,
     ) -> Dict[str, Any]:
         task_payloads = [task.to_payload() for task in tasks]
         payload = {"tasks": task_payloads}
         from autoppia_web_agents_subnet.platform.utils.iwa_core import log_iwap_phase
+        from autoppia_web_agents_subnet.validator.config import TESTING
 
-        log_iwap_phase("set_tasks", f"Preparing request for validator_round_id={validator_round_id} tasks={len(task_payloads)}", level="debug")
-        return await self._post(f"/api/v1/validator-rounds/{validator_round_id}/tasks", payload, context="set_tasks")
+        # In TESTING mode, automatically set force=true to bypass chain state checks
+        if TESTING:
+            force = True
+
+        log_iwap_phase("set_tasks", f"Preparing request for validator_round_id={validator_round_id} tasks={len(task_payloads)} force={force}", level="debug")
+        
+        # Add force as query parameter
+        url = f"/api/v1/validator-rounds/{validator_round_id}/tasks"
+        if force:
+            url += "?force=true"
+        
+        return await self._post(url, payload, context="set_tasks")
 
     async def start_agent_run(
         self,
@@ -224,6 +236,7 @@ class IWAPClient:
         agent_run: models.AgentRunIWAP,
         miner_identity: models.MinerIdentityIWAP,
         miner_snapshot: models.MinerSnapshotIWAP,
+        force: bool = False,
     ) -> Dict[str, Any]:
         payload = {
             "agent_run": agent_run.to_payload(),
@@ -231,13 +244,20 @@ class IWAPClient:
             "miner_snapshot": miner_snapshot.to_payload(),
         }
         from autoppia_web_agents_subnet.platform.utils.iwa_core import log_iwap_phase
+        from autoppia_web_agents_subnet.validator.config import TESTING
 
-        log_iwap_phase("start_agent_run", f"Preparing request for validator_round_id={validator_round_id} agent_run_id={agent_run.agent_run_id} miner_uid={miner_identity.uid}", level="debug")
-        return await self._post(
-            f"/api/v1/validator-rounds/{validator_round_id}/agent-runs/start",
-            payload,
-            context="start_agent_run",
-        )
+        # In TESTING mode, automatically set force=true to bypass chain state checks
+        if TESTING:
+            force = True
+
+        log_iwap_phase("start_agent_run", f"Preparing request for validator_round_id={validator_round_id} agent_run_id={agent_run.agent_run_id} miner_uid={miner_identity.uid} force={force}", level="debug")
+        
+        # Add force as query parameter
+        url = f"/api/v1/validator-rounds/{validator_round_id}/agent-runs/start"
+        if force:
+            url += "?force=true"
+        
+        return await self._post(url, payload, context="start_agent_run")
 
     async def add_evaluation(
         self,
