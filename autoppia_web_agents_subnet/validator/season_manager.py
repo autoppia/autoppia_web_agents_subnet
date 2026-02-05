@@ -177,8 +177,7 @@ class SeasonManager:
         
         Flow:
         - Always try to load from JSON first (for any round, including restarts)
-        - If not found AND Round 1: Generate tasks and save
-        - If not found AND Round > 1: Error (tasks should exist from Round 1)
+        - If not found: Generate tasks and save (regardless of round number)
         
         Args:
             current_block: Current blockchain block number
@@ -196,22 +195,16 @@ class SeasonManager:
             ColoredLogger.success(f"✅ Loaded {len(self.season_tasks)} tasks for season {season_number}")
             return self.season_tasks
         
-        # Not loaded - check if we should generate
-        if round_in_season == 1:
-            # Round 1: Generate tasks and save
-            ColoredLogger.info(f"🌱 Round 1: Generating {TASKS_PER_SEASON} tasks for season {season_number}")
-            self.season_tasks = await generate_tasks(TASKS_PER_SEASON)
-            self.task_generated_season = season_number
-            self.save_season_tasks(season_number)
-            ColoredLogger.success(f"✅ Generated and saved {len(self.season_tasks)} tasks")
-            return self.season_tasks
-        else:
-            # Round > 1: Tasks should exist from Round 1
-            ColoredLogger.error(
-                f"❌ No saved tasks found for season {season_number} in Round {round_in_season}. "
-                f"Tasks are only generated in Round 1!"
-            )
-            return []
+        # Not loaded - generate tasks (regardless of round number)
+        ColoredLogger.info(
+            f"🌱 No tasks found in JSON for season {season_number} (Round {round_in_season}). "
+            f"Generating {TASKS_PER_SEASON} new tasks..."
+        )
+        self.season_tasks = await generate_tasks(TASKS_PER_SEASON)
+        self.task_generated_season = season_number
+        self.save_season_tasks(season_number)
+        ColoredLogger.success(f"✅ Generated and saved {len(self.season_tasks)} tasks")
+        return self.season_tasks
 
     async def generate_season_tasks(self, current_block: int, round_manager) -> List[TaskWithProject]:
         """Legacy method - kept for compatibility. Use get_season_tasks() instead."""

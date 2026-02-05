@@ -101,7 +101,7 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
 
     # 🔍 Calculate season and round within season
     from autoppia_web_agents_subnet.platform import client as iwa_main
-    round_blocks = int(ctx.round_manager.ROUND_BLOCK_LENGTH)
+    round_blocks = int(ctx.round_manager.round_block_length)
     
     season_number = iwa_main.compute_season_number(current_block)
     round_number_in_season = iwa_main.compute_round_number_in_season(current_block, round_blocks)

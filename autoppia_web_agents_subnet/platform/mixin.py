@@ -67,12 +67,12 @@ class ValidatorPlatformMixin:
         Example: validator_round_4_6_abc123def456
         """
         rm = getattr(self, "round_manager", None)
-        if rm is None or not getattr(rm, "ROUND_BLOCK_LENGTH", 0):
+        if rm is None or not getattr(rm, "round_block_length", 0):
             raise RuntimeError("Round manager is not initialized; cannot derive validator round id")
 
-        round_length = int(rm.ROUND_BLOCK_LENGTH)
+        round_length = int(rm.round_block_length)
         if round_length <= 0:
-            raise RuntimeError("ROUND_BLOCK_LENGTH must be a positive integer")
+            raise RuntimeError("round_block_length must be a positive integer")
 
         # Calculate season and round within season
         season_number = iwa_main.compute_season_number(current_block)
