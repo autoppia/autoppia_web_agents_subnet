@@ -99,15 +99,20 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
         "target_epoch": boundaries.get("target_epoch"),
     }
 
-    # 🔍 Calculate season and round within season
+    # Use round_start_block from boundaries (not current_block) for consistency
+    round_start_block = int(boundaries.get("round_start_block", current_block) or current_block)
+    
+    # 🔍 Calculate season and round within season using round_start_block
+    # CRITICAL: Must use round_start_block (not current_block) so backend validation passes
+    # The backend validates season_number against start_block, so they must match
     from autoppia_web_agents_subnet.platform import client as iwa_main
     round_blocks = int(ctx.round_manager.round_block_length)
     
-    season_number = iwa_main.compute_season_number(current_block)
-    round_number_in_season = iwa_main.compute_round_number_in_season(current_block, round_blocks)
+    season_number = iwa_main.compute_season_number(round_start_block)
+    round_number_in_season = iwa_main.compute_round_number_in_season(round_start_block, round_blocks)
     
     bt.logging.info(
-        f"[IWAP] Season calculation: block={current_block:,} | "
+        f"[IWAP] Season calculation: round_start_block={round_start_block:,} | "
         f"season_number={season_number} | "
         f"round_number_in_season={round_number_in_season} | "
         f"round_blocks={round_blocks}"
@@ -156,9 +161,6 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
         bt.logging.info("✅ Validator will proceed with: handshake → tasks → evaluations → SET WEIGHTS on-chain")
         return
 
-    # Use round_start_block from boundaries (not current_block) for consistency
-    round_start_block = int(boundaries.get("round_start_block", current_block) or current_block)
-    
     validator_round = iwa_models.ValidatorRoundIWAP(
         validator_round_id=ctx.current_round_id,
         season_number=season_number,
