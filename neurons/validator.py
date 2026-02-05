@@ -84,6 +84,14 @@ class Validator(
         current_block = self.block
         season_tasks = await self.round_manager.get_round_tasks(current_block, self.season_manager)
         n_tasks = len(season_tasks)
+        
+        # Build IWAP tasks before starting round
+        if season_tasks and self.current_round_id:
+            self.current_round_tasks = self._build_iwap_tasks(
+                validator_round_id=self.current_round_id,
+                tasks=season_tasks
+            )
+        
         await self._iwap_start_round(current_block=current_block, n_tasks=n_tasks)
         
         # Register miners in IWAP (creates validator_round_miners records)

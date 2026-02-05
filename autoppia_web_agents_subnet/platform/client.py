@@ -184,7 +184,7 @@ class IWAPClient:
         }
         from autoppia_web_agents_subnet.platform.utils.iwa_core import log_iwap_phase
 
-        log_iwap_phase("start_round", f"Preparing request for validator_round_id={validator_round.validator_round_id} round_number={validator_round.round_number}", level="debug")
+        log_iwap_phase("start_round", f"Preparing request for validator_round_id={validator_round.validator_round_id} round_number_in_season={validator_round.round_number_in_season}", level="debug")
         return await self._post("/api/v1/validator-rounds/start", payload, context="start_round")
 
     async def set_tasks(

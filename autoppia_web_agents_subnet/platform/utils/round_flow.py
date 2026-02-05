@@ -224,6 +224,19 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
             level="success",
         )
 
+    # Build IWAP tasks from season tasks
+    # Get season tasks from the validator (they should be available after get_round_tasks was called)
+    if not hasattr(ctx, "current_round_tasks") or not ctx.current_round_tasks:
+        # Try to get tasks from season_manager if available
+        if hasattr(ctx, "season_manager") and hasattr(ctx.season_manager, "season_tasks"):
+            season_tasks = ctx.season_manager.season_tasks
+            if season_tasks:
+                from autoppia_web_agents_subnet.platform.utils.iwa_core import build_iwap_tasks
+                ctx.current_round_tasks = build_iwap_tasks(
+                    validator_round_id=ctx.current_round_id,
+                    tasks=season_tasks
+                )
+
     task_count = len(ctx.current_round_tasks)
     set_tasks_message = f"Calling set_tasks with tasks={task_count} for round_id={ctx.current_round_id}"
     log_iwap_phase("Phase 2", set_tasks_message)
