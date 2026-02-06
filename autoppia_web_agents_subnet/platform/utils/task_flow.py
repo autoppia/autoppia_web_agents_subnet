@@ -29,11 +29,19 @@ async def submit_task_results(
         return
 
     task = task_item.task
-    task_id = getattr(task, "id", None)
-    if task_id is None:
+    base_task_id = getattr(task, "id", None)
+    if base_task_id is None:
         return
 
-    task_payload = ctx.current_round_tasks.get(task_id)
+    # Build the full task_id that matches what was stored in IWAP
+    # The task_id in IWAP includes the validator_round_id prefix
+    full_task_id = f"{ctx.current_round_id}_{base_task_id}"
+    
+    # Try to get task_payload using the full task_id first
+    task_payload = ctx.current_round_tasks.get(full_task_id)
+    # Fallback to base_task_id for backward compatibility
+    if task_payload is None:
+        task_payload = ctx.current_round_tasks.get(base_task_id)
     if task_payload is None:
         return
 
