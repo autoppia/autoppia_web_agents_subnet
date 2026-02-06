@@ -257,7 +257,12 @@ class IWAPClient:
         if force:
             url += "?force=true"
         
-        return await self._post(url, payload, context="start_agent_run")
+        response = await self._post(url, payload, context="start_agent_run")
+        # Backend may return existing agent_run_id if duplicate was detected
+        # Update agent_run.agent_run_id to match what backend returned
+        if isinstance(response, dict) and "agent_run_id" in response:
+            agent_run.agent_run_id = response["agent_run_id"]
+        return response
 
     async def add_evaluation(
         self,

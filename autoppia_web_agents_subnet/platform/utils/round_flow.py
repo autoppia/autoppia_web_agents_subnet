@@ -322,6 +322,19 @@ async def register_participating_miners_in_iwap(ctx) -> None:
     now_ts = time.time()
     
     for miner_uid in ctx.active_miner_uids:
+        # CRITICAL: Check if agent_run already exists for this miner in this round
+        # An agent run should be unique per (validator_round_id, miner_uid)
+        # If it already exists in current_agent_runs, skip creating a new one
+        existing_agent_run = ctx.current_agent_runs.get(miner_uid)
+        if existing_agent_run and existing_agent_run.validator_round_id == ctx.current_round_id:
+            log_iwap_phase(
+                "Register Miners",
+                f"Agent run already exists for miner_uid={miner_uid} in round {ctx.current_round_id}. "
+                f"Existing agent_run_id={existing_agent_run.agent_run_id}. Skipping registration.",
+                level="warning",
+            )
+            continue
+        
         miner_hotkey = None
         try:
             miner_hotkey = ctx.metagraph.hotkeys[miner_uid]
