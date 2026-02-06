@@ -131,8 +131,10 @@ async def submit_task_results(
                     level="debug",
                 )
 
-        task_solution_id = iwa_main.generate_task_solution_id(task_id, miner_uid)
-        evaluation_id = iwa_main.generate_evaluation_id(task_id, miner_uid)
+        # Use the full task_id from IWAP payload for generating IDs
+        iwap_task_id = task_payload.task_id
+        task_solution_id = iwa_main.generate_task_solution_id(iwap_task_id, miner_uid)
+        evaluation_id = iwa_main.generate_evaluation_id(iwap_task_id, miner_uid)
         
         # Ensure evaluation_meta is a dict
         if not isinstance(evaluation_meta, dict):
@@ -190,7 +192,7 @@ async def submit_task_results(
 
         task_solution_payload = iwa_models.TaskSolutionIWAP(
             solution_id=task_solution_id,
-            task_id=task_id,
+            task_id=iwap_task_id,  # Use the full task_id from IWAP payload
             agent_run_id=agent_run.agent_run_id,
             validator_round_id=ctx.current_round_id,
             validator_uid=int(ctx.uid),
@@ -205,7 +207,7 @@ async def submit_task_results(
             evaluation_id=evaluation_id,
             validator_round_id=ctx.current_round_id,
             agent_run_id=agent_run.agent_run_id,
-            task_id=task_id,
+            task_id=task_payload.task_id,  # Use the full task_id from IWAP payload
             task_solution_id=task_solution_id,
             validator_uid=int(ctx.uid),
             miner_uid=miner_uid,
@@ -220,15 +222,15 @@ async def submit_task_results(
             metadata=evaluation_metadata,
         )
 
-        if (miner_uid, task_id) in ctx._completed_pairs:
+        if (miner_uid, iwap_task_id) in ctx._completed_pairs:
             log_iwap_phase(
                 "Phase 4",
-                f"⏭️ Skipping add_evaluation for miner_uid={miner_uid}, task_id={task_id} (already completed)",
+                f"⏭️ Skipping add_evaluation for miner_uid={miner_uid}, task_id={iwap_task_id} (already completed)",
                 level="warning",
             )
             continue
 
-        add_evaluation_message = f"Calling add_evaluation for miner_uid={miner_uid}, task_id={task_id}, agent_run_id={agent_run.agent_run_id}"
+        add_evaluation_message = f"Calling add_evaluation for miner_uid={miner_uid}, task_id={iwap_task_id}, agent_run_id={agent_run.agent_run_id}"
         log_iwap_phase("Phase 4", add_evaluation_message)
 
         gif_to_upload: Optional[bytes] | Optional[str] = None
@@ -262,13 +264,13 @@ async def submit_task_results(
                     f"add_evaluation returned 409 for miner_uid={miner_uid}, task_id={task_id}; marking as completed",
                     level="warning",
                 )
-                ctx._completed_pairs.add((miner_uid, task_id))
+                ctx._completed_pairs.add((miner_uid, iwap_task_id))
             else:
                 # HTTP error - log but don't skip, try to retry or at least mark the attempt
-                add_evaluation_error = f"add_evaluation HTTP error for miner_uid={miner_uid}, task_id={task_id}: {exc}"
+                add_evaluation_error = f"add_evaluation HTTP error for miner_uid={miner_uid}, task_id={iwap_task_id}: {exc}"
                 log_iwap_phase("Phase 4", add_evaluation_error, level="error", exc_info=True)
                 bt.logging.error(
-                    f"❌ CRITICAL: HTTP error creating evaluation for miner_uid={miner_uid}, task_id={task_id}, agent_run_id={agent_run.agent_run_id}. "
+                    f"❌ CRITICAL: HTTP error creating evaluation for miner_uid={miner_uid}, task_id={iwap_task_id}, agent_run_id={agent_run.agent_run_id}. "
                     f"Status: {exc.response.status_code if exc.response else 'unknown'}. "
                     f"This evaluation MUST be created - retrying may be needed."
                 )
@@ -276,18 +278,18 @@ async def submit_task_results(
                 # The error is logged, but we can't proceed without a successful HTTP call
         except Exception as exc:
             # Any other error - log as critical
-            add_evaluation_error = f"add_evaluation failed for miner_uid={miner_uid}, task_id={task_id}: {exc}"
+            add_evaluation_error = f"add_evaluation failed for miner_uid={miner_uid}, task_id={iwap_task_id}: {exc}"
             log_iwap_phase("Phase 4", add_evaluation_error, level="error", exc_info=True)
             bt.logging.error(
-                f"❌ CRITICAL: Failed to create evaluation for miner_uid={miner_uid}, task_id={task_id}, agent_run_id={agent_run.agent_run_id}. "
+                f"❌ CRITICAL: Failed to create evaluation for miner_uid={miner_uid}, task_id={iwap_task_id}, agent_run_id={agent_run.agent_run_id}. "
                 f"Error: {type(exc).__name__}: {exc}. "
                 f"This will result in an agent_run without evaluations, which should NEVER happen."
             )
             # Don't continue - we've logged the error, but can't create evaluation if the call fails
         else:
-            add_evaluation_success = f"add_evaluation completed for miner_uid={miner_uid}, task_id={task_id}"
+            add_evaluation_success = f"add_evaluation completed for miner_uid={miner_uid}, task_id={iwap_task_id}"
             log_iwap_phase("Phase 4", add_evaluation_success, level="success")
-            ctx._completed_pairs.add((miner_uid, task_id))
+            ctx._completed_pairs.add((miner_uid, iwap_task_id))
 
             if gif_to_upload:
                 gif_bytes = extract_gif_bytes(gif_to_upload)
