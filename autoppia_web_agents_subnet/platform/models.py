@@ -203,6 +203,7 @@ class EvaluationResultIWAP:
     task_id: str
     task_solution_id: str
     validator_uid: int
+    validator_hotkey: str  # Required field for Evaluation model
     miner_uid: Optional[int]
     eval_score: float  # Evaluation score (tests/actions only, 0-1)
     reward: float  # Reward value (eval_score + time_score, used for consensus)

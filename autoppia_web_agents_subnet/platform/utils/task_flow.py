@@ -135,6 +135,7 @@ def prepare_evaluation_payload(
         task_id=task_payload.task_id,
         task_solution_id=task_solution_id,
         validator_uid=int(ctx.uid),
+        validator_hotkey=validator_hotkey,  # Required field
         miner_uid=miner_uid,
         eval_score=eval_score,
         reward=reward,
