@@ -57,6 +57,10 @@ class LLMGateway:
         output_tokens = usage.get("output_tokens", 10_000)
         self.usage_per_task[task_id].total_tokens += input_tokens + output_tokens
 
+        # Track provider (use the first provider encountered, or update if different)
+        if self.usage_per_task[task_id].provider is None:
+            self.usage_per_task[task_id].provider = provider
+
         logger.info(f"Used {input_tokens} input tokens, {output_tokens} output tokens")
         logger.info(f"Total token usage for task {task_id}: {self.usage_per_task[task_id].total_tokens}.")
 
@@ -106,7 +110,8 @@ async def get_usage_for_task(task_id: str):
     return {
         "task_id": task_id,
         "total_tokens": usage.total_tokens,
-        "total_cost": usage.total_cost
+        "total_cost": usage.total_cost,
+        "provider": usage.provider
     }
 
 

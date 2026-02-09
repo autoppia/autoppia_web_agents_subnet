@@ -213,6 +213,10 @@ class EvaluationResultIWAP:
     stats: Optional[Dict[str, Any]] = None
     gif_recording: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+    # LLM usage tracking
+    llm_cost: Optional[float] = None  # Total cost in USD for LLM usage
+    llm_tokens: Optional[int] = None  # Total tokens used
+    llm_provider: Optional[str] = None  # LLM provider used (e.g., "openai", "chutes")
 
     def to_payload(self) -> Dict[str, Any]:
         data = asdict(self)

@@ -26,6 +26,9 @@ def prepare_evaluation_payload(
     test_results_data: List[Any],
     exec_time: float,
     reward: float,
+    llm_cost: Optional[float] = None,
+    llm_tokens: Optional[int] = None,
+    llm_provider: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Prepare a single evaluation payload for submission to IWAP.
@@ -44,6 +47,9 @@ def prepare_evaluation_payload(
         test_results_data: Test results list
         exec_time: Execution time
         reward: Calculated reward value
+        llm_cost: Total LLM cost in USD (optional)
+        llm_tokens: Total LLM tokens used (optional)
+        llm_provider: LLM provider used, e.g., "openai", "chutes" (optional)
     
     Returns:
         Dict containing task, task_solution, evaluation, and evaluation_result
@@ -139,6 +145,9 @@ def prepare_evaluation_payload(
         stats=evaluation_meta.get("stats"),
         gif_recording=None,
         metadata=evaluation_metadata,
+        llm_cost=llm_cost,
+        llm_tokens=llm_tokens,
+        llm_provider=llm_provider,
     )
     
     return {

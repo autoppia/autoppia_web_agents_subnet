@@ -6,6 +6,7 @@ class TokenUsage(BaseModel):
     """Token usage tracking"""
     total_tokens: int = 0 
     total_cost: float = 0.0
+    provider: Optional[str] = None  # LLM provider used (e.g., "openai", "chutes")
 
 
 class ProviderConfig(BaseModel):
