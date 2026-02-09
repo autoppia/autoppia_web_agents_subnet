@@ -192,23 +192,46 @@ class ValidatorEvaluationMixin:
                 ColoredLogger.warning(f"Task {base_task_id} not found in current round tasks", ColoredLogger.YELLOW)
                 continue
             
-            # Extract actions from eval_metadata
-            # The evaluator should store actions in eval_metadata['execution_history'] or similar
-            actions = []
-            if 'execution_history' in eval_data['eval_metadata']:
-                execution_history = eval_data['eval_metadata']['execution_history']
-                if isinstance(execution_history, list):
-                    for step in execution_history:
-                        if isinstance(step, dict) and 'action' in step:
-                            actions.append(step['action'])
+            # Handle eval_metadata - it can be a TaskSolution object or a dict
+            eval_metadata = eval_data['eval_metadata']
             
-            # Create solution object with extracted actions
+            # Extract solution and actions
+            solution = None
+            actions = []
+            test_results_data = []
+            evaluation_meta_dict = {}
+            
+            # Check if eval_metadata is a TaskSolution object
             from autoppia_iwa.src.web_agents.classes import TaskSolution
-            solution = TaskSolution(
-                task_id=base_task_id,
-                actions=actions,
-                web_agent_id=str(agent_uid)
-            )
+            if isinstance(eval_metadata, TaskSolution):
+                # Use the TaskSolution directly
+                solution = eval_metadata
+                actions = getattr(solution, 'actions', []) or []
+            elif isinstance(eval_metadata, dict):
+                # Extract from dict
+                evaluation_meta_dict = eval_metadata
+                # Extract actions from execution_history if present
+                if 'execution_history' in eval_metadata:
+                    execution_history = eval_metadata['execution_history']
+                    if isinstance(execution_history, list):
+                        for step in execution_history:
+                            if isinstance(step, dict) and 'action' in step:
+                                actions.append(step['action'])
+                # Extract test_results
+                test_results_data = eval_metadata.get('test_results', [])
+                # Create solution object with extracted actions
+                solution = TaskSolution(
+                    task_id=base_task_id,
+                    actions=actions,
+                    web_agent_id=str(agent_uid)
+                )
+            else:
+                # Fallback: create empty solution
+                solution = TaskSolution(
+                    task_id=base_task_id,
+                    actions=[],
+                    web_agent_id=str(agent_uid)
+                )
             
             evaluation_payload = prepare_evaluation_payload(
                 ctx=self,
@@ -217,8 +240,8 @@ class ValidatorEvaluationMixin:
                 miner_uid=agent_uid,
                 solution=solution,
                 eval_score=eval_data['score'],
-                evaluation_meta=eval_data['eval_metadata'],
-                test_results_data=eval_data['eval_metadata'].get('test_results', []),
+                evaluation_meta=evaluation_meta_dict if isinstance(eval_metadata, dict) else {},
+                test_results_data=test_results_data,
                 exec_time=eval_data['exec_time'],
                 reward=eval_data['reward'],
                 llm_cost=eval_data.get('cost'),
