@@ -77,12 +77,15 @@ class ValidatorEvaluationMixin:
                     return_exceptions=True
                 )
 
+                # Prepare batch data for IWAP submission
+                batch_eval_data = []  # Store (task_item, score, exec_time, cost, reward, eval_result)
+                
                 for task_item, eval_result in zip(batch_tasks, eval_results):
                     if isinstance(eval_result, Exception):
                         ColoredLogger.error(f"Error evaluating agent {agent.uid} on task {task_item.task.id}: {eval_result}", ColoredLogger.RED)
                         continue
 
-                    score, exec_time, _ = eval_result                    
+                    score, exec_time, eval_metadata = eval_result                    
                     usage_for_task = self.sandbox_manager.get_usage_for_task(task_id=task_item.task.id)
                     cost = usage_for_task.get("total_cost", 0.0) if usage_for_task else 0.0
                     ColoredLogger.info(
@@ -96,6 +99,33 @@ class ValidatorEvaluationMixin:
                         token_cost=cost,
                     )
                     rewards.append(reward)
+                    
+                    # Store evaluation data for batch submission
+                    batch_eval_data.append({
+                        'task_item': task_item,
+                        'score': score,
+                        'exec_time': exec_time,
+                        'cost': cost,
+                        'reward': reward,
+                        'eval_metadata': eval_metadata or {},
+                    })
+                
+                # Submit batch evaluations to IWAP
+                if batch_eval_data:
+                    try:
+                        await self._submit_batch_evaluations_to_iwap(
+                            agent_uid=agent.uid,
+                            batch_eval_data=batch_eval_data,
+                        )
+                        ColoredLogger.info(
+                            f"✅ Submitted {len(batch_eval_data)} evaluations to IWAP for agent {agent.uid}",
+                            ColoredLogger.GREEN
+                        )
+                    except Exception as e:
+                        ColoredLogger.error(
+                            f"Failed to submit batch evaluations to IWAP for agent {agent.uid}: {e}",
+                            ColoredLogger.RED
+                        )
 
                 if len(rewards) >= SCREENING_TASKS_FOR_EARLY_STOP and sum(rewards) == 0.0:
                     ColoredLogger.warning(f"Agent {agent.uid} is failing first {len(rewards)} tasks, stopping evaluation", ColoredLogger.YELLOW)
@@ -104,6 +134,112 @@ class ValidatorEvaluationMixin:
 
         ColoredLogger.info("Evaluation phase completed", ColoredLogger.MAGENTA)
         return agents_evaluated
+    
+    async def _submit_batch_evaluations_to_iwap(
+        self,
+        *,
+        agent_uid: int,
+        batch_eval_data: list,
+    ) -> None:
+        """
+        Submit a batch of evaluations to IWAP for a single agent.
+        
+        This method prepares evaluation payloads for all tasks in the batch
+        and sends them in a single HTTP request to IWAP.
+        
+        Args:
+            agent_uid: The UID of the agent being evaluated
+            batch_eval_data: List of dicts containing evaluation data:
+                - task_item: Task with project
+                - score: Evaluation score
+                - exec_time: Execution time
+                - cost: Token cost
+                - reward: Calculated reward
+                - eval_metadata: Evaluation metadata dict
+        """
+        if not hasattr(self, 'current_round_id') or not self.current_round_id:
+            ColoredLogger.warning("No current round ID, skipping IWAP submission", ColoredLogger.YELLOW)
+            return
+        
+        if not hasattr(self, 'current_agent_runs') or agent_uid not in self.current_agent_runs:
+            ColoredLogger.warning(f"No agent run found for agent {agent_uid}, skipping IWAP submission", ColoredLogger.YELLOW)
+            return
+        
+        agent_run = self.current_agent_runs[agent_uid]
+        
+        # Prepare all evaluation payloads
+        from autoppia_web_agents_subnet.platform.utils.task_flow import prepare_evaluation_payload
+        
+        evaluations_batch = []
+        for eval_data in batch_eval_data:
+            task_item = eval_data['task_item']
+            
+            # Get task payload from current round tasks
+            base_task_id = getattr(task_item.task, "id", None)
+            if base_task_id is None:
+                continue
+            
+            # Build the full task_id that matches what was stored in IWAP
+            full_task_id = f"{self.current_round_id}_{base_task_id}"
+            task_payload = self.current_round_tasks.get(full_task_id)
+            if task_payload is None:
+                task_payload = self.current_round_tasks.get(base_task_id)
+            if task_payload is None:
+                ColoredLogger.warning(f"Task {base_task_id} not found in current round tasks", ColoredLogger.YELLOW)
+                continue
+            
+            # Extract actions from eval_metadata
+            # The evaluator should store actions in eval_metadata['execution_history'] or similar
+            actions = []
+            if 'execution_history' in eval_data['eval_metadata']:
+                execution_history = eval_data['eval_metadata']['execution_history']
+                if isinstance(execution_history, list):
+                    for step in execution_history:
+                        if isinstance(step, dict) and 'action' in step:
+                            actions.append(step['action'])
+            
+            # Create solution object with extracted actions
+            from autoppia_iwa.src.web_agents.classes import TaskSolution
+            solution = TaskSolution(
+                task_id=base_task_id,
+                actions=actions,
+                web_agent_id=str(agent_uid)
+            )
+            
+            evaluation_payload = prepare_evaluation_payload(
+                ctx=self,
+                task_payload=task_payload,
+                agent_run=agent_run,
+                miner_uid=agent_uid,
+                solution=solution,
+                eval_score=eval_data['score'],
+                evaluation_meta=eval_data['eval_metadata'],
+                test_results_data=eval_data['eval_metadata'].get('test_results', []),
+                exec_time=eval_data['exec_time'],
+                reward=eval_data['reward'],
+            )
+            
+            evaluations_batch.append(evaluation_payload)
+        
+        if not evaluations_batch:
+            ColoredLogger.warning("No evaluations to submit in batch", ColoredLogger.YELLOW)
+            return
+        
+        # Submit batch to IWAP
+        if hasattr(self, 'iwap_client') and self.iwap_client:
+            try:
+                result = await self.iwap_client.add_evaluations_batch(
+                    validator_round_id=self.current_round_id,
+                    agent_run_id=agent_run.agent_run_id,
+                    evaluations=evaluations_batch,
+                )
+                ColoredLogger.info(
+                    f"Batch submission result: {result.get('message', 'Success')}",
+                    ColoredLogger.GREEN
+                )
+            except Exception as e:
+                ColoredLogger.error(f"Failed to submit batch: {e}", ColoredLogger.RED)
+                raise
         
         
         

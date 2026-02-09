@@ -14,6 +14,141 @@ from .iwa_core import (
 )
 
 
+def prepare_evaluation_payload(
+    *,
+    ctx,
+    task_payload,
+    agent_run,
+    miner_uid: int,
+    solution,
+    eval_score: float,
+    evaluation_meta: Dict[str, Any],
+    test_results_data: List[Any],
+    exec_time: float,
+    reward: float,
+) -> Dict[str, Any]:
+    """
+    Prepare a single evaluation payload for submission to IWAP.
+    
+    This function extracts the common logic for building task, task_solution,
+    and evaluation payloads from the raw evaluation data.
+    
+    Args:
+        ctx: Validator context
+        task_payload: IWAP task payload
+        agent_run: Agent run model
+        miner_uid: Miner UID
+        solution: Task solution from miner
+        eval_score: Evaluation score
+        evaluation_meta: Evaluation metadata dict
+        test_results_data: Test results list
+        exec_time: Execution time
+        reward: Calculated reward value
+    
+    Returns:
+        Dict containing task, task_solution, evaluation, and evaluation_result
+    """
+    validator_hotkey = ctx.wallet.hotkey.ss58_address
+    
+    miner_hotkey = None
+    try:
+        miner_hotkey = ctx.metagraph.hotkeys[miner_uid]
+    except Exception:
+        miner_hotkey = None
+    
+    # Handle None solution (miner didn't respond)
+    if solution is None:
+        raw_actions = []
+    else:
+        raw_actions = getattr(solution, "actions", []) or []
+    
+    actions_payload: List[Dict[str, Any]] = []
+    for action in raw_actions:
+        if hasattr(action, "model_dump"):
+            actions_payload.append(action.model_dump(mode="json", exclude_none=True))
+        elif hasattr(action, "__dict__"):
+            actions_payload.append(dict(action.__dict__))
+        else:
+            actions_payload.append({"type": getattr(action, "type", "unknown")})
+    
+    # Use the full task_id from IWAP payload for generating IDs
+    iwap_task_id = task_payload.task_id
+    task_solution_id = iwa_main.generate_task_solution_id(iwap_task_id, miner_uid)
+    evaluation_id = iwa_main.generate_evaluation_id(iwap_task_id, miner_uid)
+    
+    # Ensure evaluation_meta is a dict
+    if not isinstance(evaluation_meta, dict):
+        evaluation_meta = {}
+    evaluation_metadata = dict(evaluation_meta)
+    
+    # Remove fields that are already in specific EvaluationResultIWAP fields
+    evaluation_metadata.pop("gif_recording", None)
+    evaluation_metadata.pop("final_score", None)
+    evaluation_metadata.pop("eval_score", None)
+    evaluation_metadata.pop("reward", None)
+    evaluation_metadata.pop("version_ok", None)
+    evaluation_metadata.pop("notes", None)
+    evaluation_metadata.pop("error_message", None)
+    evaluation_metadata.pop("feedback", None)
+    evaluation_metadata.pop("execution_history", None)
+    evaluation_metadata.pop("test_results", None)
+    evaluation_metadata.pop("raw_score", None)
+    evaluation_metadata.pop("evaluation_time", None)
+    evaluation_metadata.pop("stats", None)
+    
+    # Mark timeout in metadata if execution time reaches TIMEOUT
+    try:
+        from autoppia_web_agents_subnet.validator.config import TIMEOUT
+        is_timeout = False
+        if exec_time is not None and TIMEOUT is not None:
+            is_timeout = float(exec_time) >= float(TIMEOUT)
+        if evaluation_metadata.get("timeout") is True:
+            is_timeout = True
+        if is_timeout:
+            evaluation_metadata["timeout"] = True
+    except Exception:
+        pass
+    
+    task_solution_payload = iwa_models.TaskSolutionIWAP(
+        solution_id=task_solution_id,
+        task_id=iwap_task_id,
+        agent_run_id=agent_run.agent_run_id,
+        validator_round_id=ctx.current_round_id,
+        validator_uid=int(ctx.uid),
+        validator_hotkey=validator_hotkey,
+        miner_uid=miner_uid,
+        miner_hotkey=miner_hotkey,
+        actions=actions_payload,
+        recording=getattr(solution, "recording", None) if solution is not None else None,
+    )
+    
+    evaluation_result_payload = iwa_models.EvaluationResultIWAP(
+        evaluation_id=evaluation_id,
+        validator_round_id=ctx.current_round_id,
+        agent_run_id=agent_run.agent_run_id,
+        task_id=task_payload.task_id,
+        task_solution_id=task_solution_id,
+        validator_uid=int(ctx.uid),
+        miner_uid=miner_uid,
+        eval_score=eval_score,
+        reward=reward,
+        test_results=test_results_data or [],
+        execution_history=evaluation_meta.get("execution_history", []),
+        feedback=evaluation_meta.get("feedback"),
+        evaluation_time=evaluation_meta.get("evaluation_time", exec_time),
+        stats=evaluation_meta.get("stats"),
+        gif_recording=None,
+        metadata=evaluation_metadata,
+    )
+    
+    return {
+        "task": task_payload.to_payload(),
+        "task_solution": task_solution_payload.to_payload(),
+        "evaluation": evaluation_result_payload.to_payload(),
+        "evaluation_result": evaluation_result_payload.to_payload(),
+    }
+
+
 async def submit_task_results(
     ctx,
     *,

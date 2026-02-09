@@ -354,6 +354,47 @@ class IWAPClient:
                 context="add_evaluation",
             )
 
+    async def add_evaluations_batch(
+        self,
+        *,
+        validator_round_id: str,
+        agent_run_id: str,
+        evaluations: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """
+        Submit multiple evaluations in a single batch request.
+        
+        This is more efficient than calling add_evaluation multiple times:
+        - Single HTTP request instead of N requests
+        - Atomic transaction (all or nothing)
+        - Reduced network overhead
+        
+        Args:
+            validator_round_id: The validator round ID
+            agent_run_id: The agent run ID
+            evaluations: List of evaluation payloads, each containing:
+                - task: TaskIWAP
+                - task_solution: TaskSolutionIWAP
+                - evaluation: EvaluationIWAP
+                - evaluation_result: Dict (optional)
+        
+        Returns:
+            Dict with batch results including number of evaluations created
+        """
+        from autoppia_web_agents_subnet.platform.utils.iwa_core import log_iwap_phase
+        
+        log_iwap_phase(
+            "add_evaluations_batch",
+            f"Preparing batch request for validator_round_id={validator_round_id} agent_run_id={agent_run_id} count={len(evaluations)}",
+            level="debug"
+        )
+        
+        return await self._post(
+            f"/api/v1/validator-rounds/{validator_round_id}/agent-runs/{agent_run_id}/evaluations/batch",
+            evaluations,
+            context="add_evaluations_batch",
+        )
+
     async def finish_round(
         self,
         *,
