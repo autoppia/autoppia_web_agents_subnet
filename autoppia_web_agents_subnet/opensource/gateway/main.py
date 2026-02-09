@@ -8,7 +8,7 @@ from fastapi import FastAPI, Request, HTTPException, Response
 from models import TokenUsage, DEFAULT_PROVIDER_CONFIGS
 from config import (
     COST_LIMIT_ENABLED,
-    COST_LIMIT_VALUE,
+    COST_LIMIT_PER_TASK,
     OPENAI_API_KEY,
     CHUTES_API_KEY
 )
@@ -23,7 +23,8 @@ class LLMGateway:
     def __init__(self): 
         self.providers = DEFAULT_PROVIDER_CONFIGS.copy()
         self.http_client = httpx.AsyncClient(timeout=60.0)
-        self.current_usage = TokenUsage() 
+        self.allowed_task_ids = set()
+        self.usage_per_task: dict[str, TokenUsage] = {}
     
     def detect_provider(self, request: Request) -> Optional[str]:
         """Detect LLM provider from request"""
@@ -36,19 +37,28 @@ class LLMGateway:
         logger.error(f"Unsupported provider.")
         return None
 
-    def get_current_usage(self) -> float:
-        return self.current_usage
+    def detect_task_id(self, request: Request) -> Optional[str]:
+        """Detect task ID from request for usage tracking"""
+        task_id = request.headers.get("IWA-Task-ID", "")
+        if task_id in self.allowed_task_ids:
+            return task_id
+
+        logger.error(f"Missing or invalid task ID for usage tracking.")
+        return None
+
+    def get_usage_for_task(self, task_id: str) -> TokenUsage:
+        return self.usage_per_task.get(task_id, TokenUsage())
     
-    def update_usage(self, provider: str, response_data: dict) -> None:
-        """Update token usage"""  
+    def update_usage_for_task(self, provider: str, task_id: str, response_data: dict) -> None:
+        """Update token usage for a specific task"""  
         usage = response_data.get("usage", {})
 
         input_tokens = usage.get("input_tokens", 10_000)
         output_tokens = usage.get("output_tokens", 10_000)
-        self.current_usage.total_tokens += input_tokens + output_tokens
+        self.usage_per_task[task_id].total_tokens += input_tokens + output_tokens
 
         logger.info(f"Used {input_tokens} input tokens, {output_tokens} output tokens")
-        logger.info(f"Total token usage: {self.current_usage.total_tokens}.")
+        logger.info(f"Total token usage for task {task_id}: {self.usage_per_task[task_id].total_tokens}.")
 
         model = response_data.get("model", "")
         provider_config = self.providers[provider]
@@ -59,16 +69,20 @@ class LLMGateway:
         
         input_cost = (input_tokens / 1_000_000) * input_price
         output_cost = (output_tokens / 1_000_000) * output_price
-        self.current_usage.total_cost += input_cost + output_cost
+        self.usage_per_task[task_id].total_cost += input_cost + output_cost
 
         logger.info(f"Used ${input_cost:.4f} input, ${output_cost:.4f} output")
-        logger.info(f"Total cost usage: ${self.current_usage.total_cost:.4f}.")
+        logger.info(f"Total cost usage for task {task_id}: ${self.usage_per_task[task_id].total_cost:.4f}.")
 
-    def reset_usage(self) -> None:
-        self.current_usage = TokenUsage()    
+    def set_allowed_task_ids(self, task_ids: Optional[list[str]] = None):
+        """Set allowed task IDs for limiting other requests and tracking usage."""
+        if task_ids is None:
+            task_ids = []
+        self.allowed_task_ids = set(task_ids)
+        self.usage_per_task = {task_id: TokenUsage() for task_id in task_ids}
     
-    def is_cost_exceeded(self) -> bool:
-        return self.current_usage.total_cost >= COST_LIMIT_VALUE
+    def is_cost_exceeded(self, task_id: str) -> bool:
+        return self.usage_per_task[task_id].total_cost >= COST_LIMIT_PER_TASK
 
 
 # Initialize the gateway
@@ -85,21 +99,28 @@ async def health_check():
     return {"status": "healthy"}
 
 
-@app.get("/usage")
-async def get_usage():
-    """Get current usage statistics"""
-    current_usage = gateway.get_current_usage()
+@app.get("/usage/{task_id}")
+async def get_usage_for_task(task_id: str):
+    """Get usage for a specific task ID"""
+    usage = gateway.get_usage_for_task(task_id)
     return {
-        "total_tokens": current_usage.total_tokens,
-        "total_cost": current_usage.total_cost
+        "task_id": task_id,
+        "total_tokens": usage.total_tokens,
+        "total_cost": usage.total_cost
     }
 
 
-@app.post("/reset")
-async def reset_usage():
-    """Reset current usage for new agent evaluation"""
-    gateway.reset_usage()
-    return {"status": "reset", "message": "Usage has been reset for new evaluation"}
+@app.post("/set-allowed-task-ids")
+async def set_allowed_task_ids(request: Request):
+    """Set allowed task IDs for limiting other requests and tracking usage."""
+    try:
+        body = await request.json()
+        task_ids = body.get("task_ids", [])
+        gateway.set_allowed_task_ids(task_ids=task_ids)
+    except Exception as e:
+        logger.error(f"Error setting allowed task IDs: {e}")
+        raise HTTPException(status_code=400, detail=f"Error setting allowed task IDs: {e}")
+    return {"status": "allowed task IDs set"}
 
 
 @app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
@@ -110,12 +131,17 @@ async def proxy_request(request: Request, path: str):
         provider = gateway.detect_provider(request)
         if not provider:
             raise HTTPException(status_code=400, detail="Unsupported provider!")
+
+        # Detect task ID for usage tracking        
+        task_id = gateway.detect_task_id(request)
+        if not task_id:
+            raise HTTPException(status_code=400, detail="Task ID not found!")
         
-        if COST_LIMIT_ENABLED and gateway.is_cost_exceeded():
-            current_usage = gateway.get_current_usage()
+        if COST_LIMIT_ENABLED and gateway.is_cost_exceeded(task_id):
+            current_usage = gateway.get_usage_for_task(task_id)
             raise HTTPException(
                 status_code=402,
-                detail=f"Cost limit exceeded. Current: ${current_usage.total_cost:.2f}, Limit: ${COST_LIMIT_VALUE:.2f}"
+                detail=f"Cost limit exceeded. Current: ${current_usage.total_cost:.2f}, Limit: ${COST_LIMIT_PER_TASK:.2f}"
             )
         
         provider_config = gateway.providers[provider]
@@ -145,15 +171,15 @@ async def proxy_request(request: Request, path: str):
         if response.status_code == 200:
             try:                      
                 response_data = response.json()
-                gateway.update_usage(provider, response_data)
+                gateway.update_usage_for_task(provider, task_id, response_data)
             except (json.JSONDecodeError, ValueError):
                 pass
 
         # Return response with cost headers
         response_headers = dict(response.headers)
-        current_usage = gateway.get_current_usage()
+        current_usage = gateway.get_usage_for_task(task_id)
         response_headers["X-Current-Cost"] = str(current_usage.total_cost)
-        response_headers["X-Cost-Limit"] = str(COST_LIMIT_VALUE)
+        response_headers["X-Cost-Limit"] = str(COST_LIMIT_PER_TASK)
         
         return Response(
             content=response.content,

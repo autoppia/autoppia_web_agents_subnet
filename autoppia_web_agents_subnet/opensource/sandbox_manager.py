@@ -207,23 +207,22 @@ class SandboxManager:
         for uid in list(self._agents.keys()):
             self.cleanup_agent(uid)
 
-    def reset_usage(self) -> bool:
+    def set_allowed_task_ids(self, task_ids: list[str]) -> bool:
         try:
             gateway_url = f"http://localhost:{SANDBOX_GATEWAY_PORT}"
-            resp = httpx.post(f"{gateway_url}/reset", timeout=5.0)
+            resp = httpx.post(f"{gateway_url}/set-allowed-task-ids", json={"task_ids": task_ids}, timeout=5.0)
             if resp.status_code == 200:
                 return True
         except Exception as e:
             return False
         return False
 
-    def get_current_usage(self) -> Dict[str, float]:
-        usage = {}
+    def get_usage_for_task(self, task_id: str) -> Optional[dict]:
         try:
             gateway_url = f"http://localhost:{SANDBOX_GATEWAY_PORT}"
-            resp = httpx.get(f"{gateway_url}/usage", timeout=5.0)
+            resp = httpx.get(f"{gateway_url}/usage/{task_id}", timeout=5.0)
             if resp.status_code == 200:
-                usage = resp.json() or {}
+                return resp.json()
         except Exception as e:
-            return usage
-        return usage
+            return None
+        return None

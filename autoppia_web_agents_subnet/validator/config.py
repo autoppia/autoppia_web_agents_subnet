@@ -38,6 +38,7 @@ SKIP_ROUND_IF_STARTED_AFTER_FRACTION = _env_float("SKIP_ROUND_IF_STARTED_AFTER_F
 # Tasks are distributed round-robin across all demo projects (1 task per project per cycle)
 TASKS_PER_SEASON = _env_int("TASKS_PER_SEASON", 100, test_default=3)
 PROMPTS_PER_USE_CASE = _env_int("PROMPTS_PER_USE_CASE", 1)
+CONCURRENT_EVALUATION_NUM = _env_int("CONCURRENT_EVALUATION_NUM", 5)
 SCREENING_TASKS_FOR_EARLY_STOP = _env_int("SCREENING_TASKS_FOR_EARLY_STOP", 10)
 AGENT_MAX_STEPS = _env_int("AGENT_MAX_STEPS", 30, test_default=1)
 AGENT_STEP_TIMEOUT = _env_int("AGENT_STEP_TIMEOUT", 180) # seconds
