@@ -89,9 +89,9 @@ class ValidatorEvaluationMixin:
                     usage_for_task = self.sandbox_manager.get_usage_for_task(task_id=task_item.task.id)
                     cost = usage_for_task.get("total_cost", 0.0) if usage_for_task else 0.0
                     tokens = usage_for_task.get("total_tokens", 0) if usage_for_task else 0
-                    provider = usage_for_task.get("provider") if usage_for_task else None
+                    
                     ColoredLogger.info(
-                        f"  Agent {agent.uid}: score={score:.3f}, time={exec_time:.2f}s, cost=${cost:.4f}, tokens={tokens}, provider={provider}",
+                        f"  Agent {agent.uid}: score={score:.3f}, time={exec_time:.2f}s, cost=${cost:.4f}, tokens={tokens}",
                         ColoredLogger.CYAN
                     )
 
@@ -109,7 +109,6 @@ class ValidatorEvaluationMixin:
                         'exec_time': exec_time,
                         'cost': cost,
                         'tokens': tokens,
-                        'provider': provider,
                         'reward': reward,
                         'task_solution': task_solution,
                     })

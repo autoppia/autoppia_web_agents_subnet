@@ -5,7 +5,7 @@ from typing import Optional
 import httpx
 from fastapi import FastAPI, Request, HTTPException, Response
 
-from models import TokenUsage, DEFAULT_PROVIDER_CONFIGS
+from models import LLMUsage, DEFAULT_PROVIDER_CONFIGS
 from config import (
     COST_LIMIT_ENABLED,
     COST_LIMIT_PER_TASK,
@@ -24,7 +24,7 @@ class LLMGateway:
         self.providers = DEFAULT_PROVIDER_CONFIGS.copy()
         self.http_client = httpx.AsyncClient(timeout=60.0)
         self.allowed_task_ids = set()
-        self.usage_per_task: dict[str, TokenUsage] = {}
+        self.usage_per_task: dict[str, LLMUsage] = {}
     
     def detect_provider(self, request: Request) -> Optional[str]:
         """Detect LLM provider from request"""
@@ -46,8 +46,8 @@ class LLMGateway:
         logger.error(f"Missing or invalid task ID for usage tracking.")
         return None
 
-    def get_usage_for_task(self, task_id: str) -> TokenUsage:
-        return self.usage_per_task.get(task_id, TokenUsage())
+    def get_usage_for_task(self, task_id: str) -> LLMUsage:
+        return self.usage_per_task.get(task_id, LLMUsage())
     
     def update_usage_for_task(self, provider: str, task_id: str, response_data: dict) -> None:
         """Update token usage for a specific task"""  
@@ -55,14 +55,7 @@ class LLMGateway:
 
         input_tokens = usage.get("input_tokens", 10_000)
         output_tokens = usage.get("output_tokens", 10_000)
-        self.usage_per_task[task_id].total_tokens += input_tokens + output_tokens
-
-        # Track provider (use the first provider encountered, or update if different)
-        if self.usage_per_task[task_id].provider is None:
-            self.usage_per_task[task_id].provider = provider
-
-        logger.info(f"Used {input_tokens} input tokens, {output_tokens} output tokens")
-        logger.info(f"Total token usage for task {task_id}: {self.usage_per_task[task_id].total_tokens}.")
+        total_tokens = input_tokens + output_tokens
 
         model = response_data.get("model", "")
         provider_config = self.providers[provider]
@@ -73,17 +66,16 @@ class LLMGateway:
         
         input_cost = (input_tokens / 1_000_000) * input_price
         output_cost = (output_tokens / 1_000_000) * output_price
-        self.usage_per_task[task_id].total_cost += input_cost + output_cost
+        total_cost = input_cost + output_cost
 
-        logger.info(f"Used ${input_cost:.4f} input, ${output_cost:.4f} output")
-        logger.info(f"Total cost usage for task {task_id}: ${self.usage_per_task[task_id].total_cost:.4f}.")
+        self.usage_per_task[task_id].add_usage(provider, model, total_tokens, total_cost)
 
     def set_allowed_task_ids(self, task_ids: Optional[list[str]] = None):
         """Set allowed task IDs for limiting other requests and tracking usage."""
         if task_ids is None:
             task_ids = []
         self.allowed_task_ids = set(task_ids)
-        self.usage_per_task = {task_id: TokenUsage() for task_id in task_ids}
+        self.usage_per_task = {task_id: LLMUsage() for task_id in task_ids}
     
     def is_cost_exceeded(self, task_id: str) -> bool:
         return self.usage_per_task[task_id].total_cost >= COST_LIMIT_PER_TASK
@@ -111,7 +103,10 @@ async def get_usage_for_task(task_id: str):
         "task_id": task_id,
         "total_tokens": usage.total_tokens,
         "total_cost": usage.total_cost,
-        "provider": usage.provider
+        "usage_details": {
+            "tokens": usage.tokens,
+            "cost": usage.cost
+        }
     }
 
 

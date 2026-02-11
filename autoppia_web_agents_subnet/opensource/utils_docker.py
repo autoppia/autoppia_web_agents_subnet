@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import os
-import subprocess
-import tempfile
 from typing import Iterable
 
 import docker

@@ -1,12 +1,28 @@
 from typing import Dict, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
-class TokenUsage(BaseModel):
+class LLMUsage(BaseModel):
     """Token usage tracking"""
-    total_tokens: int = 0 
-    total_cost: float = 0.0
-    provider: Optional[str] = None  # LLM provider used (e.g., "openai", "chutes")
+    tokens: dict[str, dict[str, int]] = Field(default_factory=dict)  # provider -> model -> tokens
+    cost: dict[str, dict[str, float]] = Field(default_factory=dict)   # provider -> model -> cost
+
+    def add_usage(self, provider: str, model: str, tokens: int, cost: float):
+        if provider not in self.tokens:
+            self.tokens[provider] = {}
+        if provider not in self.cost:
+            self.cost[provider] = {}
+
+        self.tokens[provider][model] = self.tokens[provider].get(model, 0) + tokens
+        self.cost[provider][model] = self.cost[provider].get(model, 0.0) + cost
+
+    @property
+    def total_tokens(self) -> int:
+        return sum(tokens for provider in self.tokens.values() for tokens in provider.values())
+
+    @property
+    def total_cost(self) -> float:
+        return sum(cost for provider in self.cost.values() for cost in provider.values())
 
 
 class ProviderConfig(BaseModel):

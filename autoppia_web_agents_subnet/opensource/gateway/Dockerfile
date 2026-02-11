@@ -18,4 +18,4 @@ ENV SANDBOX_GATEWAY_PORT=8000
 
 EXPOSE ${SANDBOX_GATEWAY_PORT}
 
-CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${SANDBOX_GATEWAY_PORT}"]
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${SANDBOX_GATEWAY_PORT} --log-level debug"]
