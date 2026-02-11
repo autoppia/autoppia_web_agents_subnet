@@ -121,7 +121,7 @@ async def test_complete_batch_flow_simulation(complete_flow_context):
             'exec_time': exec_time,
             'cost': 0.01 * i,
             'reward': reward,
-            'eval_metadata': {
+            'task_solution': {
                 'test_results': [{"passed": True, "test_id": f"test_{i}"}],
                 'feedback': f"Task {i} completed successfully",
             },
@@ -151,8 +151,8 @@ async def test_complete_batch_flow_simulation(complete_flow_context):
             miner_uid=153,
             solution=solution,
             eval_score=eval_data['score'],
-            evaluation_meta=eval_data['eval_metadata'],
-            test_results_data=eval_data['eval_metadata'].get('test_results', []),
+            evaluation_meta=eval_data['task_solution'] if isinstance(eval_data['task_solution'], dict) else {},
+            test_results_data=eval_data['task_solution'].get('test_results', []) if isinstance(eval_data['task_solution'], dict) else [],
             exec_time=eval_data['exec_time'],
             reward=eval_data['reward'],
         )

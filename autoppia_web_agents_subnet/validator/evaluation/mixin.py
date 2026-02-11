@@ -85,7 +85,7 @@ class ValidatorEvaluationMixin:
                         ColoredLogger.error(f"Error evaluating agent {agent.uid} on task {task_item.task.id}: {eval_result}", ColoredLogger.RED)
                         continue
 
-                    score, exec_time, eval_metadata = eval_result                    
+                    score, exec_time, task_solution = eval_result                    
                     usage_for_task = self.sandbox_manager.get_usage_for_task(task_id=task_item.task.id)
                     cost = usage_for_task.get("total_cost", 0.0) if usage_for_task else 0.0
                     tokens = usage_for_task.get("total_tokens", 0) if usage_for_task else 0
@@ -111,7 +111,7 @@ class ValidatorEvaluationMixin:
                         'tokens': tokens,
                         'provider': provider,
                         'reward': reward,
-                        'eval_metadata': eval_metadata or {},
+                        'task_solution': task_solution,
                     })
                 
                 # Submit batch evaluations to IWAP
@@ -159,7 +159,7 @@ class ValidatorEvaluationMixin:
                 - exec_time: Execution time
                 - cost: Token cost
                 - reward: Calculated reward
-                - eval_metadata: Evaluation metadata dict
+                - task_solution: TaskSolution from evaluate_with_stateful_cua
         """
         if not hasattr(self, 'current_round_id') or not self.current_round_id:
             ColoredLogger.warning("No current round ID, skipping IWAP submission", ColoredLogger.YELLOW)
@@ -192,8 +192,8 @@ class ValidatorEvaluationMixin:
                 ColoredLogger.warning(f"Task {base_task_id} not found in current round tasks", ColoredLogger.YELLOW)
                 continue
             
-            # Handle eval_metadata - it can be a TaskSolution object or a dict
-            eval_metadata = eval_data['eval_metadata']
+            # task_solution comes from evaluate_with_stateful_cua (TaskSolution); support dict for backwards compat
+            task_solution = eval_data['task_solution']
             
             # Extract solution and actions
             solution = None
@@ -201,24 +201,22 @@ class ValidatorEvaluationMixin:
             test_results_data = []
             evaluation_meta_dict = {}
             
-            # Check if eval_metadata is a TaskSolution object
             from autoppia_iwa.src.web_agents.classes import TaskSolution
-            if isinstance(eval_metadata, TaskSolution):
-                # Use the TaskSolution directly
-                solution = eval_metadata
+            if isinstance(task_solution, TaskSolution):
+                solution = task_solution
                 actions = getattr(solution, 'actions', []) or []
-            elif isinstance(eval_metadata, dict):
-                # Extract from dict
-                evaluation_meta_dict = eval_metadata
+            elif isinstance(task_solution, dict):
+                # Legacy: dict form (e.g. execution_history, test_results)
+                evaluation_meta_dict = task_solution
                 # Extract actions from execution_history if present
-                if 'execution_history' in eval_metadata:
-                    execution_history = eval_metadata['execution_history']
+                if 'execution_history' in task_solution:
+                    execution_history = task_solution['execution_history']
                     if isinstance(execution_history, list):
                         for step in execution_history:
                             if isinstance(step, dict) and 'action' in step:
                                 actions.append(step['action'])
                 # Extract test_results
-                test_results_data = eval_metadata.get('test_results', [])
+                test_results_data = task_solution.get('test_results', [])
                 # Create solution object with extracted actions
                 solution = TaskSolution(
                     task_id=base_task_id,
@@ -240,7 +238,7 @@ class ValidatorEvaluationMixin:
                 miner_uid=agent_uid,
                 solution=solution,
                 eval_score=eval_data['score'],
-                evaluation_meta=evaluation_meta_dict if isinstance(eval_metadata, dict) else {},
+                evaluation_meta=evaluation_meta_dict if isinstance(task_solution, dict) else {},
                 test_results_data=test_results_data,
                 exec_time=eval_data['exec_time'],
                 reward=eval_data['reward'],

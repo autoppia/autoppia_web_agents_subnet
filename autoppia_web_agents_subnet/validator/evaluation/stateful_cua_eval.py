@@ -10,7 +10,7 @@ from autoppia_web_agents_subnet.validator.config import AGENT_STEP_TIMEOUT
 from autoppia_iwa.src.data_generation.tasks.classes import Task
 from autoppia_iwa.src.evaluation.stateful_evaluator import AsyncStatefulEvaluator, ScoreDetails
 from autoppia_iwa.src.web_agents.cua import ApifiedWebCUA
-from autoppia_iwa.src.web_agents.classes import TaskSolution
+from autoppia_iwa.src.web_agents.classes import TaskSolution, replace_credentials_in_action, sanitize_snapshot_html
 
 
 async def evaluate_with_stateful_cua(
@@ -41,12 +41,13 @@ async def evaluate_with_stateful_cua(
 
         while step_index < max_steps and not bool(final_score.success):
             snapshot = step_result.snapshot
-            html = snapshot.html or ""
+            html = sanitize_snapshot_html(snapshot.html or "", str(uid))
             current_url = snapshot.url or task.url
 
             try:
+                # Send task WITH placeholders to agent - agent should return actions with placeholders
                 actions = await agent.act(
-                    task=task,
+                    task=task,  # Send task with placeholders, NOT replaced
                     snapshot_html=html,
                     url=current_url,
                     step_index=step_index,
@@ -58,6 +59,8 @@ async def evaluate_with_stateful_cua(
             # Single-step semantics: execute at most one action per loop.
             if actions:
                 action = actions[0]
+                # Replace credential placeholders in action BEFORE evaluating
+                replace_credentials_in_action(action, str(uid))
                 step_result = await evaluator.step(action)
             else:
                 step_result = await evaluator.step(None)
