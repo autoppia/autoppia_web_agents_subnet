@@ -130,11 +130,17 @@ class SandboxManager:
         gateway_url = f"http://{SANDBOX_GATEWAY_HOST}:{SANDBOX_GATEWAY_PORT}"
         env = {
             "SANDBOX_GATEWAY_URL": gateway_url,
+            "OPENAI_BASE_URL": f"{gateway_url}/openai/v1",
+            "CHUTES_BASE_URL": f"{gateway_url}/chutes/v1",
             "SANDBOX_AGENT_PORT": str(SANDBOX_AGENT_PORT),
-            "HTTP_PROXY": gateway_url,
-            "HTTPS_PROXY": gateway_url,
             "SANDBOX_AGENT_UID": str(uid),
         }
+        # Propagate API keys to the gateway
+        for key in ("OPENAI_API_KEY", "CHUTES_API_KEY"):
+            val = os.getenv(key)
+            if val:
+                env[key] = val
+        
         container = self.client.containers.run(
             image=SANDBOX_AGENT_IMAGE,
             name=f"sandbox-agent-{uid}",

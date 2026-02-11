@@ -26,12 +26,10 @@ class LLMGateway:
         self.allowed_task_ids = set()
         self.usage_per_task: dict[str, LLMUsage] = {}
     
-    def detect_provider(self, request: Request) -> Optional[str]:
-        """Detect LLM provider from request"""
-        host = request.headers.get("host", "")
-        
+    def detect_provider(self, path: str) -> Optional[str]:
+        """Detect LLM provider from request"""        
         for provider in self.providers.keys():
-            if provider in host:
+            if path.startswith(provider):
                 return provider
         
         logger.error(f"Unsupported provider.")
@@ -69,6 +67,8 @@ class LLMGateway:
         total_cost = input_cost + output_cost
 
         self.usage_per_task[task_id].add_usage(provider, model, total_tokens, total_cost)
+        logger.info(f"Updated usage for task: {task_id}")
+        logger.info(f"Provider: {provider} | Model: {model} | Tokens: {total_tokens} | Cost: {total_cost}")
 
     def set_allowed_task_ids(self, task_ids: Optional[list[str]] = None):
         """Set allowed task IDs for limiting other requests and tracking usage."""
@@ -128,7 +128,7 @@ async def proxy_request(request: Request, path: str):
     """Main proxy endpoint for LLM requests"""
     try:
         # Detect provider
-        provider = gateway.detect_provider(request)
+        provider = gateway.detect_provider(path)
         if not provider:
             raise HTTPException(status_code=400, detail="Unsupported provider!")
 
@@ -145,7 +145,7 @@ async def proxy_request(request: Request, path: str):
             )
         
         provider_config = gateway.providers[provider]
-        url = f"{provider_config.base_url}/{path}"
+        url = f"{provider_config.base_url}{path.removeprefix(provider)}"
         
         # Forward the request
         headers = {}

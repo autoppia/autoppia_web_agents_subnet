@@ -94,6 +94,7 @@ class ValidatorEvaluationMixin:
                         f"  Agent {agent.uid}: score={score:.3f}, time={exec_time:.2f}s, cost=${cost:.4f}, tokens={tokens}",
                         ColoredLogger.CYAN
                     )
+                    ColoredLogger.debug(f"    Task solution: {task_solution}", ColoredLogger.BLUE)
 
                     reward = calculate_reward_for_task(
                         eval_score=score,
