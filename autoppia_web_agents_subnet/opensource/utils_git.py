@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -7,6 +8,8 @@ import tempfile
 import time
 from typing import Optional, Tuple
 from urllib.parse import urlparse
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
@@ -88,6 +91,8 @@ def normalize_and_validate_github_url(
         return None, None
 
     owner, repo = segments[0], segments[1]
+    if repo.endswith(".git"):
+        repo = repo[:-4]
     if not owner or not repo:
         ColoredLogger.warning(
             f"Rejecting miner github_url with invalid owner/repo{miner_tag}: {raw_url}",
@@ -117,6 +122,51 @@ def normalize_and_validate_github_url(
     return normalized, ref
 
 
+def _github_repo_preflight_size_bytes(normalized_url: str, *, timeout: float = 5.0) -> Optional[int]:
+    """
+    Best-effort GitHub REST API preflight to estimate repo size before cloning.
+
+    GitHub returns `size` in KB for a repository (not including git history), which is
+    useful to quickly reject obviously-too-large repos before running `git clone`.
+
+    If the API request fails (rate limit, private repo, etc.), returns None and the
+    caller should fall back to on-disk enforcement during/after clone.
+    """
+    try:
+        parsed = urlparse(normalized_url)
+        segments = [s for s in (parsed.path or "").strip("/").split("/") if s]
+        if len(segments) < 2:
+            return None
+        owner, repo = segments[0], segments[1]
+        if repo.endswith(".git"):
+            repo = repo[:-4]
+    except Exception:
+        return None
+
+    api_url = f"https://api.github.com/repos/{owner}/{repo}"
+
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "autoppia-sandbox-preflight",
+    }
+    token = os.getenv("GITHUB_TOKEN") or os.getenv("GITHUB_API_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    try:
+        req = Request(api_url, headers=headers, method="GET")
+        with urlopen(req, timeout=timeout) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        size_kb = payload.get("size")
+        if size_kb is None:
+            return None
+        return int(size_kb) * 1024
+    except (HTTPError, URLError, TimeoutError, ValueError):
+        return None
+    except Exception:
+        return None
+
+
 def clone_repo(
     raw_url: str,
     dst_dir: str,
@@ -134,6 +184,17 @@ def clone_repo(
     normalized_url, ref = normalize_and_validate_github_url(raw_url)
     if normalized_url is None:
         raise RuntimeError(f"Invalid GitHub URL: {raw_url}")
+
+    preflight_bytes = _github_repo_preflight_size_bytes(normalized_url, timeout=5.0)
+    if preflight_bytes is not None:
+        ColoredLogger.info(
+            f"GitHub preflight size for {normalized_url}: {preflight_bytes} bytes",
+            ColoredLogger.BLUE,
+        )
+        if preflight_bytes > max_bytes:
+            raise RuntimeError(
+                f"Sandbox repo too large per GitHub API preflight (bytes={preflight_bytes}, limit={max_bytes})",
+            )
     
     os.makedirs(dst_dir, exist_ok=True)    
     cmd_clone = [
