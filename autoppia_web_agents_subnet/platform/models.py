@@ -116,7 +116,6 @@ class TaskIWAP:
     prompt: str
     specifications: Dict[str, Any]
     tests: List[Dict[str, Any]]
-    relevant_data: Dict[str, Any]
     use_case: Dict[str, Any]
     web_project_id: Optional[str] = None
     web_version: Optional[str] = None
@@ -139,7 +138,6 @@ class TaskIWAP:
         data = asdict(self)
         data["specifications"] = make_json_serializable(self.specifications or {})
         data["tests"] = make_json_serializable(self.tests or [])
-        data["relevant_data"] = make_json_serializable(self.relevant_data or {})
         data["use_case"] = make_json_serializable(self.use_case or {})
         # All fields are now clean, just serialize and return
         return _drop_nones(data)

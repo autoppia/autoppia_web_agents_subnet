@@ -361,10 +361,6 @@ def build_iwap_tasks(*, validator_round_id: str, tasks: List[TaskWithProject]) -
             elif hasattr(use_case, "model_dump"):
                 use_case_payload = use_case.model_dump(mode="json", exclude_none=True)
 
-        relevant_data = getattr(task, "relevant_data", {}) or {}
-        if not isinstance(relevant_data, dict):
-            relevant_data = {"value": relevant_data}
-
         task_model = iwa_models.TaskIWAP(
             task_id=task_id,
             validator_round_id=validator_round_id,
@@ -375,7 +371,6 @@ def build_iwap_tasks(*, validator_round_id: str, tasks: List[TaskWithProject]) -
             prompt=getattr(task, "prompt", ""),
             specifications=specifications,
             tests=tests,
-            relevant_data=relevant_data,
             use_case=use_case_payload,
         )
         task_map[task_id] = task_model

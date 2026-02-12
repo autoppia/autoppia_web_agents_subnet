@@ -68,7 +68,6 @@ def mock_ctx():
         prompt="Test task 1",
         specifications={},
         tests=[],
-        relevant_data={},
         use_case={},
     )
     
@@ -82,7 +81,6 @@ def mock_ctx():
         prompt="Test task 2",
         specifications={},
         tests=[],
-        relevant_data={},
         use_case={},
     )
     
