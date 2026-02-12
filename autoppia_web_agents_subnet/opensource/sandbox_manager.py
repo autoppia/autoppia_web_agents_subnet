@@ -80,6 +80,26 @@ def _pick_host_log_dir() -> str:
     return fallback
 
 
+def _ensure_writable_file(path: str, mode: int = 0o666) -> None:
+    """
+    Ensure an existing file is writable by non-root containers.
+
+    This avoids failures when a previous run created log files as root (0644),
+    then we later run containers as an unprivileged user.
+    """
+    try:
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        if not os.path.exists(path):
+            # Create the file if missing; permissions will be set next.
+            with open(path, "a", encoding="utf-8"):
+                pass
+        os.chmod(path, mode)
+    except Exception:
+        pass
+
+
 class AgentInstance:
     def __init__(self, uid: int, container, temp_dir: str, port: int):
         self.uid = uid
@@ -146,6 +166,7 @@ class SandboxManager:
             build_image(self.gateway_ctx, self.gateway_image)
 
         cleanup_containers([SANDBOX_GATEWAY_HOST])
+        _ensure_writable_file(os.path.join(self.host_log_dir, "gateway.log"))
         env = {
             "COST_LIMIT_ENABLED": str(COST_LIMIT_ENABLED),
             "COST_LIMIT_PER_TASK": str(COST_LIMIT_VALUE),
