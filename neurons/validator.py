@@ -47,7 +47,7 @@ class Validator(
             self.sandbox_manager.deploy_gateway()
         except Exception as e:
             import sys            
-            bt.logging.warning(f"Sandbox manager failed to initialize: {e}")
+            bt.logging.error(f"Sandbox manager failed to initialize/deploy gateway: {e}")
             sys.exit(1)
 
         # Season manager for task generation

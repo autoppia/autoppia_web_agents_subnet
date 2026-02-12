@@ -22,6 +22,8 @@ def _csv_env(name: str) -> set[str]:
 
 # Optional restrictions to keep cost-accounting reliable.
 # If empty, all models/paths are allowed.
+DEFAULT_GATEWAY_ALLOWED_PROVIDERS = {"openai", "chutes"}
+GATEWAY_ALLOWED_PROVIDERS = _csv_env("GATEWAY_ALLOWED_PROVIDERS") or set(DEFAULT_GATEWAY_ALLOWED_PROVIDERS)
 OPENAI_ALLOWED_MODELS = _csv_env("OPENAI_ALLOWED_MODELS")
 CHUTES_ALLOWED_MODELS = _csv_env("CHUTES_ALLOWED_MODELS")
 

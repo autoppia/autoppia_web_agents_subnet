@@ -34,13 +34,10 @@ class ValidatorSettlementMixin:
         if not isinstance(agents_dict, dict):
             agents_dict = {}
 
-        handshake_uids = getattr(self, "agents_on_first_handshake", [])
-        try:
-            if isinstance(handshake_uids, (str, bytes, dict)):
-                handshake_uids = []
-            else:
-                handshake_uids = list(handshake_uids)
-        except Exception:
+        raw_handshake_uids = getattr(self, "agents_on_first_handshake", [])
+        if isinstance(raw_handshake_uids, (list, tuple, set)):
+            handshake_uids = [uid for uid in raw_handshake_uids if isinstance(uid, int)]
+        else:
             handshake_uids = []
 
         self.should_update_weights = all(
@@ -115,9 +112,20 @@ class ValidatorSettlementMixin:
             note=f"Waiting for target {target_description} to reach block {target_block}",
         )
         last_log_time = time.time()
+        # Prevent indefinite hangs if chain reads fail persistently.
+        blocks_to_wait = max(target_block - current_block, 0)
+        expected_wait_s = max(60, blocks_to_wait * self.round_manager.SECONDS_PER_BLOCK)
+        deadline = time.monotonic() + max(expected_wait_s * 3, 300)
+        consecutive_errors = 0
         while True:
+            if time.monotonic() > deadline:
+                raise TimeoutError(
+                    f"Timed out waiting for {target_description} at block {target_block}; "
+                    f"last observed block={current_block}"
+                )
             try:
                 current_block = self.subtensor.get_current_block()
+                consecutive_errors = 0
                 if current_block >= target_block:
                     ColoredLogger.success(
                         f"🎯 Target {target_description} reached at block {target_block}",
@@ -127,17 +135,23 @@ class ValidatorSettlementMixin:
 
                 blocks_remaining = max(target_block - current_block, 0)
                 minutes_remaining = (blocks_remaining * self.round_manager.SECONDS_PER_BLOCK) / 60
+                now = time.time()
 
-                if time.time() - last_log_time >= 12:
+                if now - last_log_time >= 12:
                     ColoredLogger.info(
                         (
                             f"Waiting — {target_description} — ~{minutes_remaining:.1f}m left — holding until block {target_block}"
                         ),
                         ColoredLogger.BLUE,
                     )
-                    last_log_time = time.time()
+                    last_log_time = now
             except Exception as exc:
-                bt.logging.debug(f"Failed to read current block during finalize wait: {exc}")
+                consecutive_errors += 1
+                bt.logging.warning(f"Failed to read current block during finalize wait: {exc}")
+                if consecutive_errors >= 5:
+                    raise RuntimeError(
+                        f"Failed to read current block 5 times while waiting for {target_description}"
+                    ) from exc
 
             await asyncio.sleep(12)
 

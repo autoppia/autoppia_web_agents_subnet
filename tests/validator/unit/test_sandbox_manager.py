@@ -6,6 +6,7 @@ Note: Some tests require Docker and are marked with @pytest.mark.requires_docker
 """
 
 import pytest
+import os
 from unittest.mock import Mock, patch, MagicMock
 
 
@@ -328,40 +329,65 @@ class TestGateway:
     def test_gateway_is_initialized_with_correct_target(self):
         """Test that gateway is initialized with correct target URL."""
         from autoppia_web_agents_subnet.opensource.sandbox_manager import SandboxManager
-        with patch("autoppia_web_agents_subnet.opensource.sandbox_manager.get_client") as mock_client:
-            with patch("autoppia_web_agents_subnet.opensource.sandbox_manager.ensure_network"):
-                with patch("autoppia_web_agents_subnet.opensource.sandbox_manager.cleanup_containers"):
-                    with patch(
-                        "autoppia_web_agents_subnet.opensource.sandbox_manager.check_image",
-                        return_value=True,
-                    ):
-                        mock_docker = MagicMock()
-                        mock_client.return_value = mock_docker
+        with patch.dict(
+            os.environ,
+            {"OPENAI_API_KEY": "test-openai", "CHUTES_API_KEY": "test-chutes"},
+            clear=False,
+        ):
+            with patch("autoppia_web_agents_subnet.opensource.sandbox_manager.get_client") as mock_client:
+                with patch("autoppia_web_agents_subnet.opensource.sandbox_manager.ensure_network"):
+                    with patch("autoppia_web_agents_subnet.opensource.sandbox_manager.cleanup_containers"):
+                        with patch(
+                            "autoppia_web_agents_subnet.opensource.sandbox_manager.check_image",
+                            return_value=True,
+                        ):
+                            with patch.object(SandboxManager, "_wait_for_gateway_health", return_value=True):
+                                mock_docker = MagicMock()
+                                mock_client.return_value = mock_docker
 
-                        manager = SandboxManager()
-                        manager.deploy_gateway()
+                                manager = SandboxManager()
+                                manager.deploy_gateway()
 
-                        # Should have created gateway container
-                        mock_docker.containers.run.assert_called()
-                        call_kwargs = mock_docker.containers.run.call_args[1]
-                        assert call_kwargs["name"] == "sandbox-gateway"
+                                # Should have created gateway container
+                                mock_docker.containers.run.assert_called()
+                                call_kwargs = mock_docker.containers.run.call_args[1]
+                                assert call_kwargs["name"] == "sandbox-gateway"
 
     def test_gateway_container_is_created_on_sandbox_network(self):
         """Test that gateway container is created on sandbox network."""
         from autoppia_web_agents_subnet.opensource.sandbox_manager import SandboxManager
-        with patch("autoppia_web_agents_subnet.opensource.sandbox_manager.get_client") as mock_client:
-            with patch("autoppia_web_agents_subnet.opensource.sandbox_manager.ensure_network"):
-                with patch("autoppia_web_agents_subnet.opensource.sandbox_manager.cleanup_containers"):
-                    with patch(
-                        "autoppia_web_agents_subnet.opensource.sandbox_manager.check_image",
-                        return_value=True,
-                    ):
-                        mock_docker = MagicMock()
-                        mock_client.return_value = mock_docker
+        with patch.dict(
+            os.environ,
+            {"OPENAI_API_KEY": "test-openai", "CHUTES_API_KEY": "test-chutes"},
+            clear=False,
+        ):
+            with patch("autoppia_web_agents_subnet.opensource.sandbox_manager.get_client") as mock_client:
+                with patch("autoppia_web_agents_subnet.opensource.sandbox_manager.ensure_network"):
+                    with patch("autoppia_web_agents_subnet.opensource.sandbox_manager.cleanup_containers"):
+                        with patch(
+                            "autoppia_web_agents_subnet.opensource.sandbox_manager.check_image",
+                            return_value=True,
+                        ):
+                            with patch.object(SandboxManager, "_wait_for_gateway_health", return_value=True):
+                                mock_docker = MagicMock()
+                                mock_client.return_value = mock_docker
 
-                        manager = SandboxManager()
+                                manager = SandboxManager()
+                                manager.deploy_gateway()
+
+                                # Check network configuration
+                                call_kwargs = mock_docker.containers.run.call_args[1]
+                                assert call_kwargs["network"] == "sandbox-network"
+
+    def test_gateway_requires_provider_keys_for_allowed_providers(self):
+        """Test that gateway deployment fails fast when provider keys are missing."""
+        from autoppia_web_agents_subnet.opensource.sandbox_manager import SandboxManager
+        with patch.dict(os.environ, {}, clear=True):
+            with patch("autoppia_web_agents_subnet.opensource.sandbox_manager.get_client") as mock_client:
+                with patch("autoppia_web_agents_subnet.opensource.sandbox_manager.ensure_network"):
+                    mock_docker = MagicMock()
+                    mock_client.return_value = mock_docker
+
+                    manager = SandboxManager()
+                    with pytest.raises(RuntimeError, match="Missing API keys"):
                         manager.deploy_gateway()
-
-                        # Check network configuration
-                        call_kwargs = mock_docker.containers.run.call_args[1]
-                        assert call_kwargs["network"] == "sandbox-network"

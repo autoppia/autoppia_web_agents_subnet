@@ -81,8 +81,12 @@ class ValidatorEvaluationMixin:
                         ColoredLogger.YELLOW,
                     )
                     continue
-            except Exception:
-                pass
+            except Exception as exc:
+                ColoredLogger.warning(
+                    f"Skipping agent {getattr(agent, 'uid', '?')}: github_url pre-validation failed: {exc}",
+                    ColoredLogger.YELLOW,
+                )
+                continue
             try:
                 agent_instance = self.sandbox_manager.deploy_agent(agent.uid, agent.github_url)
             except Exception as e:
@@ -101,9 +105,17 @@ class ValidatorEvaluationMixin:
                         tid = getattr(getattr(task_item, "task", None), "id", None)
                         if tid is not None:
                             task_ids.append(str(tid))
-                    setter(task_ids=task_ids)
-            except Exception:
-                pass
+                    ok = setter(task_ids=task_ids)
+                    if ok is False:
+                        ColoredLogger.warning(
+                            f"Gateway rejected allowed task ids for agent {agent.uid}; cost accounting may be incomplete",
+                            ColoredLogger.YELLOW,
+                        )
+            except Exception as exc:
+                ColoredLogger.warning(
+                    f"Failed to set allowed task ids for agent {agent.uid}: {exc}",
+                    ColoredLogger.YELLOW,
+                )
             
             rewards: list[float] = []
             batch_size = int(getattr(validator_config, "CONCURRENT_EVALUATION_NUM", 1) or 1)
@@ -227,18 +239,9 @@ class ValidatorEvaluationMixin:
 
             # Update agent score/evaluated state and increment the counter.
             avg_reward = (sum(rewards) / len(rewards)) if rewards else 0.0
-            try:
-                agent.score = float(avg_reward)
-            except Exception:
-                pass
-            try:
-                agent.evaluated = True
-            except Exception:
-                pass
-            try:
-                self.agents_dict[agent.uid] = agent
-            except Exception:
-                pass
+            agent.score = float(avg_reward)
+            agent.evaluated = True
+            self.agents_dict[agent.uid] = agent
             agents_evaluated += 1
 
 

@@ -2,6 +2,7 @@ import sys
 import types
 import os
 from pathlib import Path
+import importlib
 
 # Set TESTING environment variable before any imports
 os.environ["TESTING"] = "True"
@@ -10,8 +11,27 @@ os.environ["BURN_ALL"] = "False"
 
 # Ensure repo root is on sys.path so autoppia_web_agents_subnet imports work in tests
 ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+if str(ROOT) in sys.path:
+    sys.path.remove(str(ROOT))
+sys.path.insert(0, str(ROOT))
+
+# Pytest can preload the top-level repo package from ROOT.parent
+# (/repo/__init__.py), which shadows the real package directory
+# (/repo/autoppia_web_agents_subnet). Force the correct package.
+WRONG_TOP_LEVEL_INIT = ROOT / "__init__.py"
+REAL_PACKAGE_INIT = ROOT / "autoppia_web_agents_subnet" / "__init__.py"
+loaded = sys.modules.get("autoppia_web_agents_subnet")
+loaded_file = Path(getattr(loaded, "__file__", "")).resolve() if loaded and getattr(loaded, "__file__", None) else None
+if loaded and loaded_file == WRONG_TOP_LEVEL_INIT.resolve():
+    del sys.modules["autoppia_web_agents_subnet"]
+
+pkg = importlib.import_module("autoppia_web_agents_subnet")
+pkg_file = Path(getattr(pkg, "__file__", "")).resolve() if getattr(pkg, "__file__", None) else None
+if pkg_file != REAL_PACKAGE_INIT.resolve():
+    raise RuntimeError(
+        f"autoppia_web_agents_subnet loaded from unexpected path: {pkg_file} "
+        f"(expected {REAL_PACKAGE_INIT.resolve()})"
+    )
 
 
 def _ensure_module(name: str) -> types.ModuleType:

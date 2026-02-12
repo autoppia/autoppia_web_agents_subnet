@@ -37,6 +37,12 @@ from autoppia_web_agents_subnet.validator.config import (
 )
 
 
+_PROVIDER_TO_API_KEY_ENV = {
+    "openai": "OPENAI_API_KEY",
+    "chutes": "CHUTES_API_KEY",
+}
+
+
 def _fingerprint_ctx(ctx_dir: str) -> str:
     """Stable-ish fingerprint for a build context to force rebuilds on changes."""
     h = hashlib.sha256()
@@ -64,6 +70,13 @@ def _tag_with_fingerprint(image: str, fp: str) -> str:
         repo, tag = image.rsplit(":", 1)
         return f"{repo}:{tag}-{fp}"
     return f"{image}:{fp}"
+
+
+def _csv_env(name: str) -> set[str]:
+    raw = (os.getenv(name) or "").strip()
+    if not raw:
+        return set()
+    return {part.strip().lower() for part in raw.split(",") if part.strip()}
 
 def _pick_host_log_dir() -> str:
     preferred = os.getenv("SANDBOX_LOG_DIR") or "/var/log/autoppia-sandbox"
@@ -161,6 +174,8 @@ class SandboxManager:
         ensure_network(SANDBOX_NETWORK_NAME, internal=True)
 
     def deploy_gateway(self):
+        self._validate_gateway_provider_keys()
+
         if not check_image(self.gateway_image):
             bt.logging.info("Sandbox gateway image not found; building...")
             build_image(self.gateway_ctx, self.gateway_image)
@@ -207,6 +222,57 @@ class SandboxManager:
             bridge.connect(self.gateway_container)
         except Exception:
             pass
+
+        if not self._wait_for_gateway_health():
+            try:
+                stop_and_remove(self.gateway_container)
+            except Exception:
+                pass
+            raise RuntimeError(
+                f"Gateway failed health check at http://127.0.0.1:{SANDBOX_GATEWAY_PORT}/health"
+            )
+
+    def _get_allowed_gateway_providers(self) -> set[str]:
+        allowed = _csv_env("GATEWAY_ALLOWED_PROVIDERS")
+        if allowed:
+            return allowed
+        return set(_PROVIDER_TO_API_KEY_ENV.keys())
+
+    def _validate_gateway_provider_keys(self) -> None:
+        allowed_providers = self._get_allowed_gateway_providers()
+        unknown = sorted(p for p in allowed_providers if p not in _PROVIDER_TO_API_KEY_ENV)
+        if unknown:
+            raise RuntimeError(
+                f"Unknown providers in GATEWAY_ALLOWED_PROVIDERS: {', '.join(unknown)}"
+            )
+
+        missing_key_envs: list[str] = []
+        for provider in sorted(allowed_providers):
+            env_name = _PROVIDER_TO_API_KEY_ENV[provider]
+            if not (os.getenv(env_name) or "").strip():
+                missing_key_envs.append(env_name)
+
+        if missing_key_envs:
+            providers = ", ".join(sorted(allowed_providers))
+            missing = ", ".join(missing_key_envs)
+            raise RuntimeError(
+                f"Missing API keys for allowed gateway providers ({providers}). "
+                f"Set: {missing}"
+            )
+
+    def _wait_for_gateway_health(self, timeout: int = 20, retry_interval: float = 1.0) -> bool:
+        health_url = f"http://127.0.0.1:{SANDBOX_GATEWAY_PORT}/health"
+        deadline = time.time() + timeout
+
+        while time.time() < deadline:
+            try:
+                response = httpx.get(health_url, timeout=3.0)
+                if response.status_code < 400:
+                    return True
+            except Exception:
+                pass
+            time.sleep(retry_interval)
+        return False
 
     def _clone_repo(self, github_url: str) -> str:
         temp_dir = temp_workdir()
@@ -330,7 +396,11 @@ class SandboxManager:
             )
             if resp.status_code == 200:
                 return True
+            bt.logging.error(
+                f"Gateway set-allowed-task-ids failed: status={resp.status_code} body={resp.text[:300]}"
+            )
         except Exception as e:
+            bt.logging.error(f"Gateway set-allowed-task-ids request failed: {e}")
             return False
         return False
 
@@ -344,6 +414,10 @@ class SandboxManager:
             )
             if resp.status_code == 200:
                 return resp.json()
+            bt.logging.error(
+                f"Gateway usage lookup failed for task_id={task_id}: status={resp.status_code} body={resp.text[:300]}"
+            )
         except Exception as e:
+            bt.logging.error(f"Gateway usage lookup request failed for task_id={task_id}: {e}")
             return None
         return None

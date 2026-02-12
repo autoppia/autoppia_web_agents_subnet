@@ -15,6 +15,7 @@ from config import (
     OPENAI_API_KEY,
     CHUTES_API_KEY,
     SANDBOX_GATEWAY_ADMIN_TOKEN,
+    GATEWAY_ALLOWED_PROVIDERS,
     OPENAI_ALLOWED_MODELS,
     CHUTES_ALLOWED_MODELS,
     OPENAI_ALLOWED_PATHS,
@@ -40,6 +41,16 @@ class LLMGateway:
     
     def __init__(self): 
         self.providers = DEFAULT_PROVIDER_CONFIGS.copy()
+        unknown = sorted(set(GATEWAY_ALLOWED_PROVIDERS) - set(self.providers.keys()))
+        if unknown:
+            logger.warning(f"Ignoring unknown providers in GATEWAY_ALLOWED_PROVIDERS: {unknown}")
+        self.providers = {
+            name: cfg
+            for name, cfg in self.providers.items()
+            if name in GATEWAY_ALLOWED_PROVIDERS
+        }
+        if not self.providers:
+            raise RuntimeError("No gateway providers enabled")
         self.http_client = httpx.AsyncClient(timeout=60.0)
         self.allowed_task_ids = set()
         self.usage_per_task: dict[str, LLMUsage] = {}
@@ -385,20 +396,27 @@ async def proxy_request(request: Request, path: str):
 
         body = await request.body()
         parsed_body = None
-        try:
-            if body and request.headers.get("content-type", "").startswith("application/json"):
+        if request.method in ("POST", "PUT", "PATCH"):
+            content_type = (request.headers.get("content-type") or "").lower()
+            if not content_type.startswith("application/json"):
+                raise HTTPException(status_code=400, detail="Content-Type must be application/json")
+            if not body:
+                raise HTTPException(status_code=400, detail="Missing JSON body")
+            try:
                 parsed_body = json.loads(body.decode("utf-8"))
-                # Disallow streaming: usage accounting (and cost limiting) relies on a
-                # usage object in the final JSON response.
-                if isinstance(parsed_body, dict) and parsed_body.get("stream") is True:
-                    raise HTTPException(status_code=400, detail="Streaming is not supported")
-        except UnicodeDecodeError:
-            pass
-        except json.JSONDecodeError:
-            pass
+            except UnicodeDecodeError as exc:
+                raise HTTPException(status_code=400, detail=f"Invalid UTF-8 JSON body: {exc}") from exc
+            except json.JSONDecodeError as exc:
+                raise HTTPException(status_code=400, detail=f"Invalid JSON body: {exc}") from exc
+            if not isinstance(parsed_body, dict):
+                raise HTTPException(status_code=400, detail="JSON body must be an object")
+            # Disallow streaming: usage accounting (and cost limiting) relies on a
+            # usage object in the final JSON response.
+            if parsed_body.get("stream") is True:
+                raise HTTPException(status_code=400, detail="Streaming is not supported")
 
         # Enforce per-provider model allowlist and (optionally) strict pricing.
-        if request.method in ("POST", "PUT", "PATCH") and isinstance(parsed_body, dict):
+        if request.method in ("POST", "PUT", "PATCH"):
             model = str(parsed_body.get("model") or "")
             if not model:
                 raise HTTPException(status_code=400, detail="Missing model")
@@ -424,8 +442,11 @@ async def proxy_request(request: Request, path: str):
             try:                      
                 response_data = response.json()
                 gateway.update_usage_for_task(provider, task_id, response_data)
-            except (json.JSONDecodeError, ValueError):
-                pass
+            except (json.JSONDecodeError, ValueError) as exc:
+                logger.warning(
+                    f"Provider returned non-JSON 200 response; skipping usage update "
+                    f"(provider={provider}, task_id={task_id}): {exc}"
+                )
 
         # Return response with cost headers
         response_headers = dict(response.headers)
