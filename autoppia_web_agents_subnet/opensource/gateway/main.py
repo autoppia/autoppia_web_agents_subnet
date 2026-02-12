@@ -13,8 +13,15 @@ from config import (
     CHUTES_API_KEY
 )
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler("/app/logs/gateway.log"),    
+        logging.StreamHandler()             
+    ]
+)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 class LLMGateway:
@@ -37,18 +44,20 @@ class LLMGateway:
 
     def detect_task_id(self, request: Request) -> Optional[str]:
         """Detect task ID from request for usage tracking"""
-        task_id = request.headers.get("IWA-Task-ID", "")
+        task_id = request.headers.get("iwa-task-id", "")
         if task_id in self.allowed_task_ids:
             return task_id
 
         logger.error(f"Missing or invalid task ID for usage tracking.")
+        logger.error(f"Task ID: {task_id}")
         return None
 
     def get_usage_for_task(self, task_id: str) -> LLMUsage:
         return self.usage_per_task.get(task_id, LLMUsage())
     
     def update_usage_for_task(self, provider: str, task_id: str, response_data: dict) -> None:
-        """Update token usage for a specific task"""  
+        """Update token usage for a specific task""" 
+        logger.info(f"LLM Response: {response_data}") 
         usage = response_data.get("usage", {})
 
         input_tokens = usage.get("input_tokens", 10_000)

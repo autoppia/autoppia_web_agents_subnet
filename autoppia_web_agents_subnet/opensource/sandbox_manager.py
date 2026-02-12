@@ -104,6 +104,9 @@ class SandboxManager:
         self.gateway_container = self.client.containers.run(
             name=SANDBOX_GATEWAY_HOST,
             image=SANDBOX_GATEWAY_IMAGE,
+            volumes={
+                "/var/log/autoppia-sandbox": {"bind": "/app/logs", "mode": "rw"}
+            },
             network=SANDBOX_NETWORK_NAME,
             environment=env,
             ports = {
@@ -144,7 +147,10 @@ class SandboxManager:
         container = self.client.containers.run(
             image=SANDBOX_AGENT_IMAGE,
             name=f"sandbox-agent-{uid}",
-            volumes={temp_dir: {"bind": "/app", "mode": "rw"}},
+            volumes={
+                temp_dir: {"bind": "/app", "mode": "rw"},
+                "/var/log/autoppia-sandbox": {"bind": "/app/logs", "mode": "rw"}
+            },
             network=SANDBOX_NETWORK_NAME,
             environment=env,
             ports={f"{SANDBOX_AGENT_PORT}/tcp": None},
@@ -165,7 +171,7 @@ class SandboxManager:
                 build_image(sandbox_ctx, SANDBOX_AGENT_IMAGE)
 
             repo_dir = self._clone_repo(github_url)
-            bt.logging.info(f"Cloned repo for agent {uid} to {repo_dir}. Now building image...")
+            bt.logging.info(f"Cloned repo for agent {uid} to {repo_dir}.")
 
             agent = self._start_container(uid, repo_dir)
             bt.logging.success(f"Started container for agent {uid} at {agent.base_url}")            

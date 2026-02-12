@@ -59,6 +59,10 @@ class ValidatorEvaluationMixin:
             if agent_instance is None:
                 ColoredLogger.error(f"Agent not deployed correctly for uid {agent.uid}", ColoredLogger.RED)
                 continue
+
+            self.sandbox_manager.set_allowed_task_ids(
+                task_ids=[task_item.task.id for task_item in season_tasks]
+            )
             
             rewards = []
             batch_size = CONCURRENT_EVALUATION_NUM
