@@ -271,7 +271,10 @@ def clone_repo(
         cmd_fetch = ["git", "fetch", "--depth", "1", "origin", ref]
         subprocess.run(cmd_fetch, cwd=dst_dir, check=True, timeout=timeout)
 
-        cmd_checkout = ["git", "checkout", ref]
+        # Fetching a named ref updates FETCH_HEAD, but does not always create a
+        # local branch ref (especially after --single-branch clones). Checkout
+        # from FETCH_HEAD to reliably pin the requested branch/tag/commit.
+        cmd_checkout = ["git", "checkout", "-B", ref, "FETCH_HEAD"]
         subprocess.run(cmd_checkout, cwd=dst_dir, check=True, timeout=timeout)
 
     # Ensure cloned repo is readable by non-root users inside the sandbox
