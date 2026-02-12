@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import tempfile
+import time
 from typing import Optional, Tuple
 from urllib.parse import urlparse
 
@@ -134,8 +136,75 @@ def clone_repo(
         raise RuntimeError(f"Invalid GitHub URL: {raw_url}")
     
     os.makedirs(dst_dir, exist_ok=True)    
-    cmd_clone = ["git", "clone", "--depth", "1", normalized_url, dst_dir]
-    subprocess.run(cmd_clone, check=True, timeout=timeout)
+    cmd_clone = [
+        "git",
+        "clone",
+        "--depth",
+        "1",
+        "--single-branch",
+        # Partial clone to reduce risk of giant blobs filling disk during clone.
+        "--filter=blob:limit=5m",
+        normalized_url,
+        dst_dir,
+    ]
+
+    # Avoid interactive prompts and skip LFS downloads (which can be huge).
+    env = os.environ.copy()
+    env.setdefault("GIT_TERMINAL_PROMPT", "0")
+    env.setdefault("GIT_LFS_SKIP_SMUDGE", "1")
+
+    # Run clone as a subprocess we can kill if it grows beyond our limits.
+    proc = subprocess.Popen(
+        cmd_clone,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    start = time.time()
+    try:
+        while True:
+            rc = proc.poll()
+            if rc is not None:
+                if rc != 0:
+                    raise RuntimeError(f"git clone failed with exit code {rc}")
+                break
+
+            if (time.time() - start) > timeout:
+                raise TimeoutError("Clone timeout")
+
+            # Fail fast on disk blowups while cloning (not only after clone completes).
+            try:
+                out = subprocess.check_output(["du", "-sb", dst_dir], stderr=subprocess.DEVNULL, text=True).strip()
+                size_bytes = int(out.split()[0]) if out else 0
+                if size_bytes > max_bytes:
+                    raise RuntimeError(
+                        f"Sandbox repo exceeded size limit during clone (bytes={size_bytes}, limit={max_bytes})."
+                    )
+            except FileNotFoundError:
+                # du not available; fall back to post-clone walk only.
+                pass
+            except subprocess.CalledProcessError:
+                # Ignore transient errors during clone (e.g. dir not fully ready).
+                pass
+            except (ValueError, IndexError):
+                pass
+
+            time.sleep(0.2)
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+        try:
+            proc.wait(timeout=2)
+        except Exception:
+            pass
+        # Best-effort cleanup.
+        try:
+            shutil.rmtree(dst_dir, ignore_errors=True)
+        except Exception:
+            pass
+        raise
 
     if ref:
         cmd_fetch = ["git", "fetch", "--depth", "1", "origin", ref]

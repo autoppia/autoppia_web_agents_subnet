@@ -42,6 +42,8 @@ class ValidatorEvaluationMixin:
         
         agents_evaluated = 0
         while not self.agents_queue.empty():    
+            # Refresh block each loop iteration so settlement cutoff checks don't drift.
+            current_block = self.block
             wait_info = self.round_manager.get_wait_info(current_block)
             if wait_info["minutes_to_settlement"] < (MAXIMUM_EVALUATION_TIME + MAXIMUM_CONSENSUS_TIME):
                 ColoredLogger.info("Stopping evaluation phase for settlement", ColoredLogger.YELLOW)

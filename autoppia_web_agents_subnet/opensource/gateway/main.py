@@ -61,19 +61,33 @@ class LLMGateway:
     
     def update_usage_for_task(self, provider: str, task_id: str, response_data: dict) -> None:
         """Update token usage for a specific task""" 
-        logger.info(f"LLM Response: {response_data}") 
-        usage = response_data.get("usage", {})
+        usage = response_data.get("usage") or {}
 
-        input_tokens = usage.get("input_tokens", 10_000)
-        output_tokens = usage.get("output_tokens", 10_000)
+        # Support both OpenAI-style {prompt_tokens, completion_tokens} and
+        # Responses API-style {input_tokens, output_tokens}.
+        input_tokens = usage.get("input_tokens")
+        output_tokens = usage.get("output_tokens")
+        if input_tokens is None and output_tokens is None:
+            input_tokens = usage.get("prompt_tokens")
+            output_tokens = usage.get("completion_tokens")
+        if input_tokens is None and output_tokens is None:
+            total = usage.get("total_tokens")
+            if total is not None:
+                input_tokens, output_tokens = total, 0
+            else:
+                input_tokens, output_tokens = 0, 0
+                logger.warning(f"Missing usage in provider response (provider={provider}, task_id={task_id}).")
+
+        input_tokens = int(input_tokens or 0)
+        output_tokens = int(output_tokens or 0)
         total_tokens = input_tokens + output_tokens
 
-        model = response_data.get("model", "")
+        model = str(response_data.get("model", "") or "")
         provider_config = self.providers[provider]
         pricing = provider_config.pricing.get(model, {})
         
-        input_price = pricing.get("input", 10.0)
-        output_price = pricing.get("output", 40.0)
+        input_price = float(pricing.get("input", provider_config.default_input_price))
+        output_price = float(pricing.get("output", provider_config.default_output_price))
         
         input_cost = (input_tokens / 1_000_000) * input_price
         output_cost = (output_tokens / 1_000_000) * output_price
@@ -188,6 +202,17 @@ async def proxy_request(request: Request, path: str):
             headers["Authorization"] = f"Bearer {CHUTES_API_KEY}"
 
         body = await request.body()
+        # Disallow streaming: usage accounting (and cost limiting) relies on a
+        # usage object in the final JSON response.
+        try:
+            if body and request.headers.get("content-type", "").startswith("application/json"):
+                parsed = json.loads(body.decode("utf-8"))
+                if isinstance(parsed, dict) and parsed.get("stream") is True:
+                    raise HTTPException(status_code=400, detail="Streaming is not supported")
+        except UnicodeDecodeError:
+            pass
+        except json.JSONDecodeError:
+            pass
         
         response = await gateway.http_client.request(
             method=request.method,

@@ -65,6 +65,20 @@ def _tag_with_fingerprint(image: str, fp: str) -> str:
         return f"{repo}:{tag}-{fp}"
     return f"{image}:{fp}"
 
+def _pick_host_log_dir() -> str:
+    preferred = os.getenv("SANDBOX_LOG_DIR") or "/var/log/autoppia-sandbox"
+    fallback = os.getenv("SANDBOX_LOG_DIR_FALLBACK") or "/tmp/autoppia-sandbox-logs"
+    for candidate in (preferred, fallback):
+        try:
+            os.makedirs(candidate, exist_ok=True)
+            # Ensure non-root containers can write logs regardless of host uid/gid.
+            os.chmod(candidate, 0o777)
+            if os.access(candidate, os.W_OK):
+                return candidate
+        except Exception:
+            continue
+    return fallback
+
 
 class AgentInstance:
     def __init__(self, uid: int, container, temp_dir: str, port: int):
@@ -122,6 +136,7 @@ class SandboxManager:
         # Admin token is used to protect privileged gateway endpoints from
         # untrusted miner containers on the same Docker network.
         self.gateway_admin_token = os.getenv("SANDBOX_GATEWAY_ADMIN_TOKEN") or secrets.token_urlsafe(32)
+        self.host_log_dir = _pick_host_log_dir()
 
         ensure_network(SANDBOX_NETWORK_NAME, internal=True)
 
@@ -148,13 +163,21 @@ class SandboxManager:
             name=SANDBOX_GATEWAY_HOST,
             image=self.gateway_image,
             volumes={
-                "/var/log/autoppia-sandbox": {"bind": "/app/logs", "mode": "rw"}
+                self.host_log_dir: {"bind": "/app/logs", "mode": "rw"},
             },
             network=SANDBOX_NETWORK_NAME,
             environment=env,
             ports = {
                 f"{SANDBOX_GATEWAY_PORT}/tcp": ("127.0.0.1", SANDBOX_GATEWAY_PORT)
             },
+            # Hardening: the gateway should not need to write outside its log dir and /tmp.
+            read_only=True,
+            tmpfs={"/tmp": "rw,nosuid,nodev,noexec,size=256m"},
+            cap_drop=["ALL"],
+            security_opt=["no-new-privileges:true"],
+            pids_limit=512,
+            mem_limit=os.getenv("SANDBOX_GATEWAY_MEM_LIMIT", "1g"),
+            init=True,
             detach=True,
         )
         # Attach to default bridge for egress
@@ -182,17 +205,32 @@ class SandboxManager:
             "SANDBOX_AGENT_UID": str(uid),
         }
 
+        # Ensure the nested mountpoint exists inside the bind-mounted repo dir
+        # so Docker can mount /app/logs even when /app itself is read-only.
+        try:
+            os.makedirs(os.path.join(temp_dir, "logs"), exist_ok=True)
+        except Exception:
+            pass
+
         container = self.client.containers.run(
             image=self.sandbox_image,
             name=f"sandbox-agent-{uid}",
             volumes={
-                temp_dir: {"bind": "/app", "mode": "rw"},
-                "/var/log/autoppia-sandbox": {"bind": "/app/logs", "mode": "rw"}
+                # Untrusted code: mount repo read-only and provide only /tmp + /app/logs as writable locations.
+                temp_dir: {"bind": "/app", "mode": "ro"},
+                self.host_log_dir: {"bind": "/app/logs", "mode": "rw"},
             },
             network=SANDBOX_NETWORK_NAME,
             environment=env,
             # Publish on loopback only to avoid exposing miner APIs externally.
             ports={f"{SANDBOX_AGENT_PORT}/tcp": ("127.0.0.1", None)},
+            read_only=True,
+            tmpfs={"/tmp": "rw,nosuid,nodev,noexec,size=512m"},
+            cap_drop=["ALL"],
+            security_opt=["no-new-privileges:true"],
+            pids_limit=int(os.getenv("SANDBOX_AGENT_PIDS_LIMIT", "768")),
+            mem_limit=os.getenv("SANDBOX_AGENT_MEM_LIMIT", "2g"),
+            init=True,
             detach=True,
         )
         try:
