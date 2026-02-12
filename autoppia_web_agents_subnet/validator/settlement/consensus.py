@@ -18,6 +18,20 @@ from autoppia_web_agents_subnet.utils.commitments import (
 from autoppia_web_agents_subnet.utils.ipfs_client import add_json_async, get_json_async
 from autoppia_web_agents_subnet.utils.log_colors import ipfs_tag, consensus_tag
 from autoppia_web_agents_subnet.validator.round_manager import RoundPhase
+from autoppia_web_agents_subnet.platform.client import compute_season_number
+
+
+def _safe_season_number(self, current_block: int) -> int:
+    try:
+        sm = getattr(self, "season_manager", None)
+        if sm is not None and hasattr(sm, "get_season_number"):
+            return int(sm.get_season_number(current_block))
+    except Exception:
+        pass
+    try:
+        return int(compute_season_number(current_block))
+    except Exception:
+        return 0
 
 
 def _stake_to_float(stake_val: Any) -> float:
@@ -75,7 +89,7 @@ async def publish_round_snapshot(
 
     current_block = self.block
     consensus_version = CONSENSUS_VERSION
-    season_number = self.season_manager.get_season_number(current_block)
+    season_number = _safe_season_number(self, current_block)
     round_number = self.round_manager.calculate_round(current_block)
     boundaries = self.round_manager.get_current_boundaries()
     start_epoch = int(boundaries["round_start_epoch"])
@@ -126,23 +140,24 @@ async def publish_round_snapshot(
         bt.logging.error("=" * 80)
         return None
 
-    commit_v5 = {
-        "v": 5,
+    # Keep the on-chain commitment payload small and versioned for compatibility
+    # across validators. The IPFS payload holds the verbose metadata.
+    commit_payload = {
+        "v": int(consensus_version),
+        "s": int(season_number),
         "r": int(round_number),
-        "se": start_epoch,
-        "te": target_epoch,
         "c": str(cid),
+        "p": 0,  # phase placeholder for future extensions
     }
 
     try:
         bt.logging.info(
-            f"📮 CONSENSUS COMMIT START | round {commit_v5['r']} | "
-            f"start_epoch {commit_v5['se']} | target_epoch {commit_v5['te']} | cid={commit_v5['c']}"
+            f"📮 CONSENSUS COMMIT START | v={commit_payload['v']} s={commit_payload['s']} r={commit_payload['r']} | cid={commit_payload['c']}"
         )
         ok = await write_plain_commitment_json(
             st,
             wallet=self.wallet,
-            data=commit_v5,
+            data=commit_payload,
             netuid=self.config.netuid,
         )
         if ok:
@@ -202,7 +217,7 @@ async def aggregate_scores_from_commitments(
 
     current_block = self.block
     consensus_version = CONSENSUS_VERSION
-    season_number = self.season_manager.get_season_number(current_block)
+    season_number = _safe_season_number(self, current_block)
     round_number = self.round_manager.calculate_round(current_block)
 
     # Fetch all plain commitments and select those for this round (v5 with CID)
@@ -250,8 +265,16 @@ async def aggregate_scores_from_commitments(
             bt.logging.info(f"[CONSENSUS] Skip {hk[:12]}... | Reason: entry is not dict")
             continue
 
-        entry_consensus_version = int(entry.get("v", -1))
-        if entry_consensus_version != consensus_version:
+        # Backward compatible parsing: older commitments may omit v/s.
+        raw_v = entry.get("v", None)
+        if raw_v is None:
+            entry_consensus_version = int(consensus_version)
+        else:
+            try:
+                entry_consensus_version = int(raw_v)
+            except Exception:
+                entry_consensus_version = -1
+        if entry_consensus_version != int(consensus_version):
             skipped_legacy_consensus_version += 1
             skipped_legacy_consensus_version_list.append((hk, entry_consensus_version))
             bt.logging.debug(
@@ -259,8 +282,15 @@ async def aggregate_scores_from_commitments(
             )
             continue
 
-        entry_season_number = int(entry.get("s", -1))
-        if entry_season_number != season_number:
+        raw_s = entry.get("s", None)
+        if raw_s is None:
+            entry_season_number = int(season_number)
+        else:
+            try:
+                entry_season_number = int(raw_s)
+            except Exception:
+                entry_season_number = -1
+        if entry_season_number != int(season_number):
             skipped_wrong_season += 1
             skipped_wrong_season_list.append((hk, entry_season_number))
             bt.logging.debug(

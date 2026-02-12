@@ -5,7 +5,7 @@ Tests season calculations, task generation, and caching.
 """
 
 import pytest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 from autoppia_web_agents_subnet.validator.season_manager import SeasonManager
 from autoppia_web_agents_subnet.validator.models import TaskWithProject
 
@@ -17,17 +17,20 @@ class TestSeasonBoundaries:
     def test_get_season_number_calculates_correctly(self):
         """Test that get_season_number calculates season from block number."""
         manager = SeasonManager()
-        # With TESTING=True: SEASON_SIZE_EPOCHS=2.0, MINIMUM_START_BLOCK=6726960
-        # season_block_length = 360 * 2 = 720 blocks per season
+        base = int(manager.minimum_start_block)
+        season_len = int(manager.season_block_length)
 
-        # First season (blocks 6726960-6727679)
-        assert manager.get_season_number(6726960) == 1
-        assert manager.get_season_number(6727000) == 1
-        assert manager.get_season_number(6727679) == 1
+        # Season 0: before base
+        assert manager.get_season_number(base - 1) == 0
 
-        # Second season (blocks 6727680-6728399)
-        assert manager.get_season_number(6727680) == 2
-        assert manager.get_season_number(6728000) == 2
+        # Season 1: [base, base+season_len)
+        assert manager.get_season_number(base) == 1
+        assert manager.get_season_number(base + (season_len // 2)) == 1
+        assert manager.get_season_number(base + season_len - 1) == 1
+
+        # Season 2: [base+season_len, base+2*season_len)
+        assert manager.get_season_number(base + season_len) == 2
+        assert manager.get_season_number(base + season_len + (season_len // 2)) == 2
 
     def test_season_block_length_uses_season_size_epochs(self):
         """Test that season_block_length is calculated from SEASON_SIZE_EPOCHS."""
@@ -41,9 +44,9 @@ class TestSeasonBoundaries:
         """Test that season boundaries start from minimum_start_block."""
         manager = SeasonManager()
         
-        # Before minimum_start_block should still be season 1
-        season_num = manager.get_season_number(500)
-        assert season_num == 1
+        # Before minimum_start_block should be season 0
+        season_num = manager.get_season_number(manager.minimum_start_block - 1)
+        assert season_num == 0
         
         # At minimum_start_block should be season 1
         season_num = manager.get_season_number(manager.minimum_start_block)
@@ -55,50 +58,67 @@ class TestSeasonBoundaries:
 class TestTaskGeneration:
     """Test task generation and caching."""
 
-    async def test_generate_season_tasks_creates_correct_number(self):
+    async def test_generate_season_tasks_creates_correct_number(self, tmp_path, monkeypatch):
         """Test that generate_season_tasks creates the expected number of tasks."""
+        monkeypatch.setattr(SeasonManager, "TASKS_DIR", tmp_path)
         manager = SeasonManager()
+
+        from autoppia_iwa.src.demo_webs.config import demo_web_projects
+        from autoppia_iwa.src.data_generation.tasks.classes import Task
+        project = demo_web_projects[0]
         
         with patch('autoppia_web_agents_subnet.validator.season_manager.generate_tasks') as mock_gen:
             # Mock generate_tasks to return a list of TaskWithProject
             mock_tasks = [
-                TaskWithProject(project=None, task=None) for _ in range(5)
+                TaskWithProject(project=project, task=Task(url=f"https://example.com/{i}", prompt=f"prompt-{i}", tests=[]))
+                for i in range(5)
             ]
             mock_gen.return_value = mock_tasks
             
-            tasks = await manager.generate_season_tasks(1000)
+            tasks = await manager.generate_season_tasks(manager.minimum_start_block)
             
             assert len(tasks) == 5
             assert manager.task_generated_season == 1
 
-    async def test_get_season_tasks_returns_cached_tasks_within_season(self):
+    async def test_get_season_tasks_returns_cached_tasks_within_season(self, tmp_path, monkeypatch):
         """Test that get_season_tasks returns cached tasks without regenerating."""
+        monkeypatch.setattr(SeasonManager, "TASKS_DIR", tmp_path)
         manager = SeasonManager()
+
+        from autoppia_iwa.src.demo_webs.config import demo_web_projects
+        from autoppia_iwa.src.data_generation.tasks.classes import Task
+        project = demo_web_projects[0]
         
         with patch('autoppia_web_agents_subnet.validator.season_manager.generate_tasks') as mock_gen:
-            mock_tasks = [TaskWithProject(project=None, task=None) for _ in range(3)]
+            mock_tasks = [
+                TaskWithProject(project=project, task=Task(url=f"https://example.com/{i}", prompt=f"prompt-{i}", tests=[]))
+                for i in range(3)
+            ]
             mock_gen.return_value = mock_tasks
             
             # First call generates tasks
-            tasks1 = await manager.get_season_tasks(1000)
+            tasks1 = await manager.get_season_tasks(manager.minimum_start_block)
             assert mock_gen.call_count == 1
             
             # Second call in same season should use cache
-            tasks2 = await manager.get_season_tasks(1500)
+            tasks2 = await manager.get_season_tasks(manager.minimum_start_block + 1)
             assert mock_gen.call_count == 1  # Not called again
             assert tasks1 == tasks2
 
-    async def test_task_generated_season_is_stored_correctly(self):
+    async def test_task_generated_season_is_stored_correctly(self, tmp_path, monkeypatch):
         """Test that task_generated_season tracks which season tasks were generated for."""
+        monkeypatch.setattr(SeasonManager, "TASKS_DIR", tmp_path)
         manager = SeasonManager()
+        base = int(manager.minimum_start_block)
+        season_len = int(manager.season_block_length)
         
         with patch('autoppia_web_agents_subnet.validator.season_manager.generate_tasks') as mock_gen:
             mock_gen.return_value = []
             
-            await manager.generate_season_tasks(6726960)
+            await manager.generate_season_tasks(base)
             assert manager.task_generated_season == 1
             
-            await manager.generate_season_tasks(6727680)
+            await manager.generate_season_tasks(base + season_len)
             assert manager.task_generated_season == 2
 
 
@@ -109,42 +129,53 @@ class TestSeasonTransitions:
     def test_should_start_new_season_detects_transitions(self):
         """Test that should_start_new_season returns True when season changes."""
         manager = SeasonManager()
+        base = int(manager.minimum_start_block)
+        season_len = int(manager.season_block_length)
         
         # No tasks generated yet
-        assert manager.should_start_new_season(6726960) is True
+        assert manager.should_start_new_season(base) is True
         
         # Mark season 1 as generated
         manager.task_generated_season = 1
         
         # Still in season 1
-        assert manager.should_start_new_season(6727000) is False
+        assert manager.should_start_new_season(base + 1) is False
         
         # Moved to season 2
-        assert manager.should_start_new_season(6727680) is True
+        assert manager.should_start_new_season(base + season_len) is True
 
     @pytest.mark.asyncio
-    async def test_new_season_regenerates_tasks(self):
+    async def test_new_season_regenerates_tasks(self, tmp_path, monkeypatch):
         """Test that moving to a new season triggers task regeneration."""
+        monkeypatch.setattr(SeasonManager, "TASKS_DIR", tmp_path)
         manager = SeasonManager()
+        base = int(manager.minimum_start_block)
+        season_len = int(manager.season_block_length)
+
+        from autoppia_iwa.src.demo_webs.config import demo_web_projects
+        from autoppia_iwa.src.data_generation.tasks.classes import Task
+        project = demo_web_projects[0]
         
         with patch('autoppia_web_agents_subnet.validator.season_manager.generate_tasks') as mock_gen:
-            mock_gen.return_value = [TaskWithProject(project=None, task=None)]
+            mock_gen.return_value = [TaskWithProject(project=project, task=Task(url="https://example.com", prompt="p", tests=[]))]
             
             # Generate tasks for season 1
-            await manager.get_season_tasks(6726960)
+            await manager.get_season_tasks(base)
             assert mock_gen.call_count == 1
             
             # Move to season 2 - should regenerate
-            await manager.get_season_tasks(6727680)
+            await manager.get_season_tasks(base + season_len)
             assert mock_gen.call_count == 2
 
     def test_season_number_increments_correctly(self):
         """Test that season_number increments as blocks progress."""
         manager = SeasonManager()
+        base = int(manager.minimum_start_block)
+        season_len = int(manager.season_block_length)
         
-        season1 = manager.get_season_number(6726960)
-        season2 = manager.get_season_number(6727680)
-        season3 = manager.get_season_number(6728400)
+        season1 = manager.get_season_number(base)
+        season2 = manager.get_season_number(base + season_len)
+        season3 = manager.get_season_number(base + 2 * season_len)
         
         assert season2 == season1 + 1
         assert season3 == season2 + 1

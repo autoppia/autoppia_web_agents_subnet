@@ -52,7 +52,8 @@ def compute_season_number(current_block: int) -> int:
     Season 1+ = after MINIMUM_START_BLOCK, each season is SEASON_SIZE_EPOCHS epochs
     """
     base = int(VALIDATOR_MINIMUM_START_BLOCK)
-    if current_block <= base:
+    # Base block is the first block of season 1.
+    if current_block < base:
         return 0
     length = _season_blocks()
     idx = (current_block - base) // length

@@ -8,11 +8,7 @@ import bittensor as bt
 import numpy as np
 
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
-from autoppia_web_agents_subnet.validator.config import (
-    BURN_ALL,
-    BURN_UID,
-    LAST_WINNER_BONUS_PCT,
-)
+from autoppia_web_agents_subnet.validator import config as validator_config
 from autoppia_web_agents_subnet.validator.round_manager import RoundPhase
 from autoppia_web_agents_subnet.validator.visualization.round_table import (
     render_round_summary_table,
@@ -34,7 +30,22 @@ class ValidatorSettlementMixin:
         - Calculate and broadcast final weights (if not already done).
         - Wait for the next round boundary before exiting to the scheduler loop.
         """
-        self.should_update_weights = all(self.agents_dict[uid].evaluated for uid in self.agents_on_first_handshake)
+        agents_dict = getattr(self, "agents_dict", None)
+        if not isinstance(agents_dict, dict):
+            agents_dict = {}
+
+        handshake_uids = getattr(self, "agents_on_first_handshake", [])
+        try:
+            if isinstance(handshake_uids, (str, bytes, dict)):
+                handshake_uids = []
+            else:
+                handshake_uids = list(handshake_uids)
+        except Exception:
+            handshake_uids = []
+
+        self.should_update_weights = all(
+            bool(getattr(agents_dict.get(uid), "evaluated", False)) for uid in handshake_uids
+        )
 
         if not self.should_update_weights:
             ColoredLogger.info(
@@ -136,7 +147,11 @@ class ValidatorSettlementMixin:
         )
 
         if weights is None:
-            burn_idx = int(BURN_UID) if 0 <= int(BURN_UID) < n else min(5, n - 1)
+            try:
+                burn_uid = int(getattr(validator_config, "BURN_UID", 5))
+            except Exception:
+                burn_uid = 5
+            burn_idx = burn_uid if 0 <= burn_uid < n else min(5, n - 1)
             weights = np.zeros(n, dtype=np.float32)
             weights[burn_idx] = 1.0
             success_message = success_message or f"✅ Burn complete (weight to UID {burn_idx})"
@@ -190,7 +205,7 @@ class ValidatorSettlementMixin:
 
         burn_reason: Optional[str] = None
 
-        if BURN_ALL:
+        if bool(getattr(validator_config, "BURN_ALL", False)):
             ColoredLogger.warning(
                 "🔥 BURN_ALL enabled: forcing burn and skipping consensus",
                 ColoredLogger.RED,
@@ -211,7 +226,7 @@ class ValidatorSettlementMixin:
                 avg_rewards_array[int(uid)] = float(score)
 
         try:
-            bonus_pct = max(float(LAST_WINNER_BONUS_PCT), 0.0)
+            bonus_pct = max(float(getattr(validator_config, "LAST_WINNER_BONUS_PCT", 0.0)), 0.0)
         except Exception:
             bonus_pct = 0.0
         if bonus_pct > 0.0 and getattr(self, "_last_round_winner_uid", None) is not None:

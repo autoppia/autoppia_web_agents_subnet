@@ -37,7 +37,8 @@ class TestIPFSPublishing:
                     mock_add.assert_called_once()
                     payload = mock_add.call_args[0][0]
                     
-                    assert payload['v'] == 2
+                    from autoppia_web_agents_subnet.validator.config import CONSENSUS_VERSION
+                    assert payload['v'] == CONSENSUS_VERSION
                     assert 'r' in payload
                     assert payload['scores'] == scores
                     assert payload['hk'] == "test_hotkey"

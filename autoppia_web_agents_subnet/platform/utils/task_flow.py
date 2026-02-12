@@ -355,6 +355,7 @@ async def submit_task_results(
             task_id=task_payload.task_id,  # Use the full task_id from IWAP payload
             task_solution_id=task_solution_id,
             validator_uid=int(ctx.uid),
+            validator_hotkey=validator_hotkey,
             miner_uid=miner_uid,
             eval_score=eval_score,  # Evaluation score (tests/actions only)
             reward=reward_value,  # Reward (eval_score + time_score)

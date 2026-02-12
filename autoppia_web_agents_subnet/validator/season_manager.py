@@ -16,9 +16,6 @@ from autoppia_web_agents_subnet.validator.config import (
     MINIMUM_START_BLOCK,
     TASKS_PER_SEASON,
 )
-from autoppia_web_agents_subnet.platform.client import (
-    compute_season_number,
-)
 
 # IWA imports for Task serialization
 from autoppia_iwa.src.data_generation.tasks.classes import Task
@@ -52,9 +49,20 @@ class SeasonManager:
         self.TASKS_DIR.mkdir(parents=True, exist_ok=True)
 
     def get_season_number(self, current_block: int) -> int:
-        """Calculate the current season number."""
-        self.season_number = compute_season_number(current_block)
-        return self.season_number
+        """
+        Calculate the current season number.
+
+        Season 0: blocks before minimum_start_block
+        Season 1+: blocks from minimum_start_block onward, each season is season_block_length
+        """
+        base = int(self.minimum_start_block)
+        if current_block < base:
+            self.season_number = 0
+            return 0
+
+        idx = int((current_block - base) // int(self.season_block_length))
+        self.season_number = int(idx + 1)
+        return int(self.season_number)
 
     def get_season_start_block(self, current_block: int) -> int:
         """
@@ -171,7 +179,7 @@ class SeasonManager:
             ColoredLogger.error(f"Failed to load season tasks: {e}")
             return False
 
-    async def get_season_tasks(self, current_block: int, round_manager) -> List[TaskWithProject]:
+    async def get_season_tasks(self, current_block: int, round_manager=None) -> List[TaskWithProject]:
         """
         Get tasks for the current season.
         
@@ -184,9 +192,20 @@ class SeasonManager:
             round_manager: RoundManager instance to get round number in season
         """
         season_number = self.get_season_number(current_block)
-        round_in_season = round_manager.get_round_number_in_season(current_block)
+        round_in_season = 1
+        if round_manager is not None:
+            try:
+                round_in_season = int(round_manager.get_round_number_in_season(current_block))
+            except Exception:
+                round_in_season = 1
         
         ColoredLogger.info(f"🔍 Season {season_number}, Round {round_in_season}")
+
+        # In-memory cache: if we already have tasks for this season in this
+        # process, don't hit disk again.
+        if self.task_generated_season == season_number and self.season_tasks:
+            ColoredLogger.success(f"✅ Using cached {len(self.season_tasks)} tasks for season {season_number}")
+            return self.season_tasks
         
         # Always try to load first (handles restarts in any round)
         loaded = self.load_season_tasks(season_number)
@@ -206,7 +225,7 @@ class SeasonManager:
         ColoredLogger.success(f"✅ Generated and saved {len(self.season_tasks)} tasks")
         return self.season_tasks
 
-    async def generate_season_tasks(self, current_block: int, round_manager) -> List[TaskWithProject]:
+    async def generate_season_tasks(self, current_block: int, round_manager=None) -> List[TaskWithProject]:
         """Legacy method - kept for compatibility. Use get_season_tasks() instead."""
         return await self.get_season_tasks(current_block, round_manager)
 

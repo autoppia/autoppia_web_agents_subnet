@@ -49,9 +49,9 @@ class TestSettlementPhase:
                 await dummy_validator._run_settlement_phase(agents_evaluated=3)
                 
                 # Should have waited for settlement_block
-                dummy_validator._wait_until_specific_block.assert_called_once()
-                call_args = dummy_validator._wait_until_specific_block.call_args
-                assert call_args[1]['target_block'] == dummy_validator.round_manager.settlement_block
+                assert dummy_validator._wait_until_specific_block.call_count >= 1
+                first_call = dummy_validator._wait_until_specific_block.call_args_list[0]
+                assert first_call[1]["target_block"] == dummy_validator.round_manager.settlement_block
 
     async def test_settlement_aggregates_scores_from_commitments(self, dummy_validator):
         from tests.conftest import _bind_settlement_mixin

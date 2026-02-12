@@ -5,6 +5,8 @@ from pathlib import Path
 
 # Set TESTING environment variable before any imports
 os.environ["TESTING"] = "True"
+# Tests should be deterministic regardless of a developer's shell env.
+os.environ["BURN_ALL"] = "False"
 
 # Ensure repo root is on sys.path so autoppia_web_agents_subnet imports work in tests
 ROOT = Path(__file__).resolve().parents[1]
@@ -60,6 +62,21 @@ def pytest_configure(config):
         def nested_model_dump(self):
             return {"url": self.url, "prompt": self.prompt, "tests": self.tests, "id": self.id}
 
+        def serialize(self):
+            return self.nested_model_dump()
+
+        @classmethod
+        def deserialize(cls, data):
+            task = cls(
+                url=(data or {}).get("url", "https://example.com"),
+                prompt=(data or {}).get("prompt", "prompt"),
+                tests=(data or {}).get("tests", []),
+            )
+            tid = (data or {}).get("id")
+            if tid:
+                task.id = tid
+            return task
+
         def assign_seed_to_url(self):
             if self._seed_value is None:
                 self._seed_value = 0
@@ -83,6 +100,19 @@ def pytest_configure(config):
             self.web_agent_id = web_agent_id
 
     web_agents_pkg.TaskSolution = TaskSolutionStub  # type: ignore[attr-defined]
+
+    # The validator imports a couple of helper utilities from this module.
+    # Provide no-op implementations for tests.
+    def _sanitize_snapshot_html(html: str, uid: str) -> str:  # noqa: ARG001
+        return html
+
+    def _replace_credentials_in_action(action, uid: str) -> None:  # noqa: ANN001,ARG001
+        # In production this replaces placeholder tokens with per-uid credentials.
+        # Tests don't need this behavior.
+        return None
+
+    web_agents_pkg.sanitize_snapshot_html = _sanitize_snapshot_html  # type: ignore[attr-defined]
+    web_agents_pkg.replace_credentials_in_action = _replace_credentials_in_action  # type: ignore[attr-defined]
     sys.modules["autoppia_iwa.src.web_agents.classes"] = web_agents_pkg
 
     # Minimal stub for CUA interfaces (only needed for imports; tests patch
@@ -232,6 +262,7 @@ def round_manager(mock_validator_config):
     from autoppia_web_agents_subnet.validator.round_manager import RoundManager
     
     return RoundManager(
+        season_size_epochs=mock_validator_config["season_size_epochs"],
         round_size_epochs=mock_validator_config["round_size_epochs"],
         minimum_start_block=mock_validator_config["minimum_start_block"],
         settlement_fraction=mock_validator_config["settlement_fraction"],
@@ -293,6 +324,7 @@ def dummy_validator(mock_validator_config):
     
     # Managers
     validator.round_manager = RoundManager(
+        season_size_epochs=mock_validator_config["season_size_epochs"],
         round_size_epochs=mock_validator_config["round_size_epochs"],
         minimum_start_block=mock_validator_config["minimum_start_block"],
         settlement_fraction=mock_validator_config["settlement_fraction"],

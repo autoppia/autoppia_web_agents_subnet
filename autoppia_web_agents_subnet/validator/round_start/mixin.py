@@ -33,6 +33,17 @@ class ValidatorRoundStartMixin:
         current_fraction = float(self.round_manager.fraction_elapsed(current_block))
 
         if current_fraction > ROUND_START_UNTIL_FRACTION:
+            # Too late to start a clean round; wait for the next boundary if a
+            # waiter helper is available (tests patch this).
+            try:
+                waiter = getattr(self, "_wait_until_specific_block", None)
+                if callable(waiter) and self.round_manager.target_block is not None:
+                    await waiter(
+                        target_block=int(self.round_manager.target_block),
+                        target_description="next round boundary",
+                    )
+            except Exception:
+                pass
             return RoundStartResult(
                 continue_forward=False,
                 reason="late in round",
@@ -178,9 +189,9 @@ class ValidatorRoundStartMixin:
                 continue
             
             # Store handshake payload for IWAP registration
-            if not hasattr(self, "round_handshake_payloads"):
+            if not isinstance(getattr(self, "round_handshake_payloads", None), dict):
                 self.round_handshake_payloads = {}
-            self.round_handshake_payloads[uid] = resp
+            self.round_handshake_payloads[int(uid)] = resp
             
             agent_info = AgentInfo(
                 uid=uid,

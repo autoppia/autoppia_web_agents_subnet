@@ -24,7 +24,7 @@ BURN_ALL = _env_bool("BURN_ALL", False)
 
 SEASON_SIZE_EPOCHS = _env_float("SEASON_SIZE_EPOCHS", 280.0, test_default=2)
 ROUND_SIZE_EPOCHS = _env_float("ROUND_SIZE_EPOCHS", 4.0, test_default=0.5)
-MINIMUM_START_BLOCK = _env_int("MINIMUM_START_BLOCK", 7478200)
+MINIMUM_START_BLOCK = _env_int("MINIMUM_START_BLOCK", 7478200, test_default=1000)
 ROUND_START_UNTIL_FRACTION = _env_float("ROUND_START_UNTIL_FRACTION", 0.3, test_default=0.6)
 MAXIMUM_EVALUATION_TIME = _env_float("MAXIMUM_EVALUATION_TIME", 30.0, test_default=6.0) # minutes
 MAXIMUM_CONSENSUS_TIME = _env_float("MAXIMUM_CONSENSUS_TIME", 15.0, test_default=3.0) # minutes

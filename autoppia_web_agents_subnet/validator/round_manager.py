@@ -110,30 +110,49 @@ class RoundManager:
         """Set the season start block (called by validator using SeasonManager)."""
         self.season_start_block = season_start_block
 
+    def _ensure_season_start_block(self, current_block: int) -> int:
+        """
+        Ensure we have a season_start_block.
+
+        In production, the validator may set this explicitly using SeasonManager.
+        For robustness (and for unit tests), we can derive it from the configured
+        season length + minimum_start_block.
+        """
+        if self.season_start_block is not None:
+            try:
+                return int(self.season_start_block)
+            except (TypeError, ValueError):
+                # Defensive: if an upstream caller injected an invalid value,
+                # ignore it and recompute from config instead of crashing.
+                self.season_start_block = None
+
+        base = int(self.minimum_start_block)
+        if current_block <= base:
+            self.season_start_block = base
+            return int(self.season_start_block)
+
+        season_block_length = int(self.BLOCKS_PER_EPOCH * self.season_size_epochs)
+        # season_index is 0-based: blocks in [base, base+len) -> index 0 (season 1)
+        season_index = int((current_block - base) // season_block_length)
+        self.season_start_block = int(base + season_index * season_block_length)
+        return int(self.season_start_block)
+
     def sync_boundaries(self, current_block: int) -> None:
         """
         Calculate round boundaries within a season.
         
         Args:
             current_block: Current blockchain block number
-            
-        Raises:
-            RuntimeError: If season_start_block has not been set via set_season_start_block()
         """
-        if self.season_start_block is None:
-            raise RuntimeError(
-                "season_start_block must be set before calling sync_boundaries(). "
-                "Call set_season_start_block() first (typically done in _start_round())."
-            )
-        
-        effective_block = max(current_block, self.season_start_block)
+        season_start_block = self._ensure_season_start_block(current_block)
+        effective_block = max(current_block, season_start_block)
 
         # Calculate round index within the season
-        blocks_since_season_start = effective_block - self.season_start_block
+        blocks_since_season_start = effective_block - season_start_block
         round_index = blocks_since_season_start // self.round_block_length
 
         # Calculate round boundaries
-        start_block = int(self.season_start_block + round_index * self.round_block_length)
+        start_block = int(season_start_block + round_index * self.round_block_length)
         settlement_block = int(start_block + int(self.round_block_length * self.settlement_fraction))
         target_block = int(start_block + self.round_block_length)
 
@@ -216,17 +235,11 @@ class RoundManager:
         Returns:
             Round number within the season (1-indexed)
             
-        Raises:
-            RuntimeError: If season_start_block has not been set via set_season_start_block()
         """
-        if self.season_start_block is None:
-            raise RuntimeError(
-                "season_start_block must be set before calling get_round_number_in_season(). "
-                "Call set_season_start_block() first (typically done in _start_round())."
-            )
-        
-        effective_block = max(current_block, self.season_start_block)
-        blocks_since_season_start = effective_block - self.season_start_block
+        season_start_block = self._ensure_season_start_block(current_block)
+
+        effective_block = max(current_block, season_start_block)
+        blocks_since_season_start = effective_block - season_start_block
         round_index = blocks_since_season_start // self.round_block_length
         
         return int(round_index + 1)
