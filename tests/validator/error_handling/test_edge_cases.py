@@ -154,7 +154,9 @@ class TestEmptyDataEdgeCases:
             return_value=[]
         )
         
-        validator_with_agents.sandbox_manager.deploy_agent = AsyncMock(return_value=True)
+        mock_instance = Mock()
+        mock_instance.base_url = "http://localhost:8001"
+        validator_with_agents.sandbox_manager.deploy_agent = Mock(return_value=mock_instance)
         validator_with_agents.sandbox_manager.cleanup_agent = Mock()
         
         # Should not crash

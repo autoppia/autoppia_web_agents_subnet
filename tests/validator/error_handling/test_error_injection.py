@@ -313,9 +313,7 @@ class TestSandboxErrors:
         validator_with_agents.agents_queue.put(agent)
         
         # Mock deployment to fail
-        validator_with_agents.sandbox_manager.deploy_agent = AsyncMock(
-            return_value=False
-        )
+        validator_with_agents.sandbox_manager.deploy_agent = Mock(return_value=None)
         
         # Should not crash
         await validator_with_agents._run_evaluation_phase()
@@ -343,9 +341,7 @@ class TestSandboxErrors:
         validator_with_agents.agents_queue.put(agent)
         
         # Mock deployment to raise exception
-        validator_with_agents.sandbox_manager.deploy_agent = AsyncMock(
-            side_effect=Exception("Docker error")
-        )
+        validator_with_agents.sandbox_manager.deploy_agent = Mock(side_effect=Exception("Docker error"))
         
         # Should not crash
         await validator_with_agents._run_evaluation_phase()
