@@ -91,7 +91,18 @@ class ValidatorSettlementMixin:
             target_description="round end block",
         )
 
-        self.round_manager.log_phase_history()  
+        self.round_manager.log_phase_history()
+
+        # Always reset IWAP in-memory state at the end of the round so the next
+        # round starts clean. Some settlement paths (e.g. burn/no rewards, or
+        # skipping weight updates) intentionally bypass IWAP finish_round, which
+        # otherwise performs this reset.
+        try:
+            reset = getattr(self, "_reset_iwap_round_state", None)
+            if callable(reset):
+                reset()
+        except Exception:
+            pass
 
     async def _wait_until_specific_block(self, target_block: int, target_description: str) -> None:
         current_block = self.block

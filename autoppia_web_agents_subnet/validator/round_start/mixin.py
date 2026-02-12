@@ -60,9 +60,10 @@ class ValidatorRoundStartMixin:
         current_block = self.block
         self.round_manager.start_new_round(current_block)
 
-        # Generate validator round ID if not already set
-        if not hasattr(self, "current_round_id") or not self.current_round_id:
-            self.current_round_id = self._generate_validator_round_id(current_block=current_block)
+        # Always generate a fresh IWAP round id for the new round. Some settlement
+        # code paths (e.g. burn/no-op) may skip IWAP finish/reset, so relying on
+        # "only if not set" can cause stale IDs to leak into subsequent rounds.
+        self.current_round_id = self._generate_validator_round_id(current_block=current_block)
         
         # Set round start timestamp
         self.round_start_timestamp = time.time()
