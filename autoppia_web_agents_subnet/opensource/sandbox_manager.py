@@ -3,6 +3,10 @@ from __future__ import annotations
 import os
 import shutil
 import time
+
+import hashlib
+import secrets
+from pathlib import Path
 from typing import Dict, Optional
 
 import httpx
@@ -31,6 +35,35 @@ from autoppia_web_agents_subnet.validator.config import (
     COST_LIMIT_ENABLED,
     COST_LIMIT_VALUE,
 )
+
+
+def _fingerprint_ctx(ctx_dir: str) -> str:
+    """Stable-ish fingerprint for a build context to force rebuilds on changes."""
+    h = hashlib.sha256()
+    base = Path(ctx_dir)
+
+    # Hash all files under the context directory (small contexts; deterministic order).
+    for fp in sorted(base.rglob('*')):
+        if not fp.is_file():
+            continue
+        if '__pycache__' in fp.parts or '.git' in fp.parts:
+            continue
+        rel = str(fp.relative_to(base)).replace('\\', '/')
+        h.update(rel.encode('utf-8'))
+        try:
+            h.update(fp.read_bytes())
+        except OSError:
+            continue
+
+    return h.hexdigest()[:12]
+
+
+def _tag_with_fingerprint(image: str, fp: str) -> str:
+    # If an explicit tag exists, append the fingerprint to it.
+    if ":" in image:
+        repo, tag = image.rsplit(":", 1)
+        return f"{repo}:{tag}-{fp}"
+    return f"{image}:{fp}"
 
 
 class AgentInstance:
@@ -80,20 +113,30 @@ class SandboxManager:
     def __init__(self):
         self.client = get_client()
         self._agents: Dict[int, AgentInstance] = {}
-        
+
+        self.base_dir = os.path.dirname(__file__)
+        self.sandbox_ctx = os.path.join(self.base_dir, 'sandbox')
+        self.gateway_ctx = os.path.join(self.base_dir, 'gateway')
+        self.sandbox_image = _tag_with_fingerprint(SANDBOX_AGENT_IMAGE, _fingerprint_ctx(self.sandbox_ctx))
+        self.gateway_image = _tag_with_fingerprint(SANDBOX_GATEWAY_IMAGE, _fingerprint_ctx(self.gateway_ctx))
+        # Admin token is used to protect privileged gateway endpoints from
+        # untrusted miner containers on the same Docker network.
+        self.gateway_admin_token = os.getenv("SANDBOX_GATEWAY_ADMIN_TOKEN") or secrets.token_urlsafe(32)
+
         ensure_network(SANDBOX_NETWORK_NAME, internal=True)
 
     def deploy_gateway(self):
-        if not check_image(SANDBOX_GATEWAY_IMAGE):
+        if not check_image(self.gateway_image):
             bt.logging.info("Sandbox gateway image not found; building...")
-            gateway_ctx = os.path.join(os.path.dirname(__file__), "gateway")
-            build_image(gateway_ctx, SANDBOX_GATEWAY_IMAGE)
+            build_image(self.gateway_ctx, self.gateway_image)
 
         cleanup_containers([SANDBOX_GATEWAY_HOST])
         env = {
             "COST_LIMIT_ENABLED": str(COST_LIMIT_ENABLED),
+            "COST_LIMIT_PER_TASK": str(COST_LIMIT_VALUE),
             "COST_LIMIT_VALUE": str(COST_LIMIT_VALUE),
             "SANDBOX_GATEWAY_PORT": str(SANDBOX_GATEWAY_PORT),
+            "SANDBOX_GATEWAY_ADMIN_TOKEN": str(self.gateway_admin_token),
         }
         # Propagate API keys to the gateway
         for key in ("OPENAI_API_KEY", "CHUTES_API_KEY"):
@@ -103,7 +146,7 @@ class SandboxManager:
                 
         self.gateway_container = self.client.containers.run(
             name=SANDBOX_GATEWAY_HOST,
-            image=SANDBOX_GATEWAY_IMAGE,
+            image=self.gateway_image,
             volumes={
                 "/var/log/autoppia-sandbox": {"bind": "/app/logs", "mode": "rw"}
             },
@@ -138,14 +181,9 @@ class SandboxManager:
             "SANDBOX_AGENT_PORT": str(SANDBOX_AGENT_PORT),
             "SANDBOX_AGENT_UID": str(uid),
         }
-        # Propagate API keys to the gateway
-        for key in ("OPENAI_API_KEY", "CHUTES_API_KEY"):
-            val = os.getenv(key)
-            if val:
-                env[key] = val
-        
+
         container = self.client.containers.run(
-            image=SANDBOX_AGENT_IMAGE,
+            image=self.sandbox_image,
             name=f"sandbox-agent-{uid}",
             volumes={
                 temp_dir: {"bind": "/app", "mode": "rw"},
@@ -153,7 +191,8 @@ class SandboxManager:
             },
             network=SANDBOX_NETWORK_NAME,
             environment=env,
-            ports={f"{SANDBOX_AGENT_PORT}/tcp": None},
+            # Publish on loopback only to avoid exposing miner APIs externally.
+            ports={f"{SANDBOX_AGENT_PORT}/tcp": ("127.0.0.1", None)},
             detach=True,
         )
         try:
@@ -165,10 +204,9 @@ class SandboxManager:
     def deploy_agent(self, uid: int, github_url: str) -> Optional[AgentInstance]:
         try:
             bt.logging.info(f"Deploying agent {uid} from {github_url}...")
-            if not check_image(SANDBOX_AGENT_IMAGE):
+            if not check_image(self.sandbox_image):
                 bt.logging.info("Sandbox agent image not found; building...")
-                sandbox_ctx = os.path.join(os.path.dirname(__file__), "sandbox")
-                build_image(sandbox_ctx, SANDBOX_AGENT_IMAGE)
+                build_image(self.sandbox_ctx, self.sandbox_image)
 
             repo_dir = self._clone_repo(github_url)
             bt.logging.info(f"Cloned repo for agent {uid} to {repo_dir}.")
@@ -219,10 +257,18 @@ class SandboxManager:
         for uid in list(self._agents.keys()):
             self.cleanup_agent(uid)
 
+    def _gateway_admin_headers(self) -> dict:
+        return {"X-Admin-Token": str(self.gateway_admin_token)}
+
     def set_allowed_task_ids(self, task_ids: list[str]) -> bool:
         try:
             gateway_url = f"http://localhost:{SANDBOX_GATEWAY_PORT}"
-            resp = httpx.post(f"{gateway_url}/set-allowed-task-ids", json={"task_ids": task_ids}, timeout=5.0)
+            resp = httpx.post(
+                f"{gateway_url}/set-allowed-task-ids",
+                headers=self._gateway_admin_headers(),
+                json={"task_ids": task_ids},
+                timeout=5.0,
+            )
             if resp.status_code == 200:
                 return True
         except Exception as e:
@@ -232,7 +278,11 @@ class SandboxManager:
     def get_usage_for_task(self, task_id: str) -> Optional[dict]:
         try:
             gateway_url = f"http://localhost:{SANDBOX_GATEWAY_PORT}"
-            resp = httpx.get(f"{gateway_url}/usage/{task_id}", timeout=5.0)
+            resp = httpx.get(
+                f"{gateway_url}/usage/{task_id}",
+                headers=self._gateway_admin_headers(),
+                timeout=5.0,
+            )
             if resp.status_code == 200:
                 return resp.json()
         except Exception as e:

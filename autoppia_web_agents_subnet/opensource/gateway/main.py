@@ -4,13 +4,15 @@ from typing import Optional
 
 import httpx
 from fastapi import FastAPI, Request, HTTPException, Response
+import secrets
 
 from models import LLMUsage, DEFAULT_PROVIDER_CONFIGS
 from config import (
     COST_LIMIT_ENABLED,
     COST_LIMIT_PER_TASK,
     OPENAI_API_KEY,
-    CHUTES_API_KEY
+    CHUTES_API_KEY,
+    SANDBOX_GATEWAY_ADMIN_TOKEN,
 )
 
 logging.basicConfig(
@@ -36,7 +38,9 @@ class LLMGateway:
     def detect_provider(self, path: str) -> Optional[str]:
         """Detect LLM provider from request"""        
         for provider in self.providers.keys():
-            if path.startswith(provider):
+            # Require an exact provider match or a slash-delimited prefix.
+            # This prevents SSRF-style host override via paths like "openai@evil.com/...".
+            if path == provider or path.startswith(f"{provider}/"):
                 return provider
         
         logger.error(f"Unsupported provider.")
@@ -97,6 +101,13 @@ app = FastAPI(
     description="Simple gateway for LLM requests with cost limiting"
 )
 
+def _require_admin(request: Request) -> None:
+    if not SANDBOX_GATEWAY_ADMIN_TOKEN:
+        raise HTTPException(status_code=500, detail="Gateway admin token not configured")
+    token = request.headers.get("x-admin-token", "")
+    if not secrets.compare_digest(token, SANDBOX_GATEWAY_ADMIN_TOKEN):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
 
 @app.get("/health")
 async def health_check():
@@ -105,8 +116,10 @@ async def health_check():
 
 
 @app.get("/usage/{task_id}")
-async def get_usage_for_task(task_id: str):
+async def get_usage_for_task(task_id: str, request: Request):
     """Get usage for a specific task ID"""
+    # Usage is validator-only. Prevent miners from probing cost state.
+    _require_admin(request)
     usage = gateway.get_usage_for_task(task_id)
     return {
         "task_id": task_id,
@@ -122,6 +135,7 @@ async def get_usage_for_task(task_id: str):
 @app.post("/set-allowed-task-ids")
 async def set_allowed_task_ids(request: Request):
     """Set allowed task IDs for limiting other requests and tracking usage."""
+    _require_admin(request)
     try:
         body = await request.json()
         task_ids = body.get("task_ids", [])
@@ -154,7 +168,14 @@ async def proxy_request(request: Request, path: str):
             )
         
         provider_config = gateway.providers[provider]
-        url = f"{provider_config.base_url}{path.removeprefix(provider)}"
+        suffix = path.removeprefix(provider)
+        if suffix and not suffix.startswith("/"):
+            raise HTTPException(status_code=400, detail="Invalid provider path")
+
+        # Build upstream URL ensuring the scheme/host always come from the trusted provider config.
+        # This prevents authority-section injection like "https://api.openai.com@evil.com/..." .
+        base = httpx.URL(provider_config.base_url)
+        url = str(base.copy_with(raw_path=suffix.encode("utf-8") if suffix else b""))
         
         # Forward the request
         headers = {}
