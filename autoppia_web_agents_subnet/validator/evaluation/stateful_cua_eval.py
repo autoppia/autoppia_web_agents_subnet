@@ -10,7 +10,7 @@ from autoppia_web_agents_subnet.validator.config import AGENT_STEP_TIMEOUT
 from autoppia_iwa.src.data_generation.tasks.classes import Task
 from autoppia_iwa.src.evaluation.stateful_evaluator import AsyncStatefulEvaluator, ScoreDetails
 from autoppia_iwa.src.web_agents.cua import ApifiedWebCUA
-from autoppia_iwa.src.web_agents.classes import TaskSolution, replace_credentials_in_action, sanitize_snapshot_html
+from autoppia_iwa.src.web_agents.classes import TaskSolution, sanitize_snapshot_html
 
 
 async def evaluate_with_stateful_cua(
@@ -59,8 +59,6 @@ async def evaluate_with_stateful_cua(
             # Single-step semantics: execute at most one action per loop.
             if actions:
                 action = actions[0]
-                # Replace credential placeholders in action BEFORE evaluating
-                replace_credentials_in_action(action, str(uid))
                 step_result = await evaluator.step(action)
             else:
                 step_result = await evaluator.step(None)

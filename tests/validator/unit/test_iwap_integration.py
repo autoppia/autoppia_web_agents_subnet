@@ -189,7 +189,6 @@ async def test_submit_task_results_success():
             tests=[],
             is_web_real=True,
             specifications={},
-            relevant_data={},
             use_case="test",
         )
     }
