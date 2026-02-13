@@ -191,33 +191,67 @@ class ValidatorSettlementMixin:
         self.update_scores(rewards=weights, uids=all_uids)
         self.set_weights()
 
-        # final_weights = {
-        #     uid: float(weights[uid]) for uid in range(len(weights)) if float(weights[uid]) > 0.0
-        # }
+        # Best-effort: still close the IWAP round even when we burn (e.g. all miners failed),
+        # otherwise the dashboard can remain stuck in "started" forever.
+        try:
+            final_weights = {
+                uid: float(weights[uid]) for uid in range(len(weights)) if float(weights[uid]) > 0.0
+            }
+        except Exception:
+            final_weights = {}
 
-        # finish_success = await self._finish_iwap_round(
-        #     avg_rewards=self.round_manager.final_aggregated_rewards or {},
-        #     final_weights=final_weights,
-        # )
+        avg_rewards: Dict[int, float] = {}
+        try:
+            run_uids = list(getattr(self, "current_agent_runs", {}).keys() or [])
+        except Exception:
+            run_uids = []
+        if not run_uids:
+            try:
+                run_uids = list(getattr(self, "active_miner_uids", []) or [])
+            except Exception:
+                run_uids = []
 
-        # round_reason = reason
-        # log_color = success_color if finish_success else ColoredLogger.YELLOW
-        # if finish_success:
-        #     ColoredLogger.success(success_message, success_color)
-        # else:
-        #     bt.logging.warning(
-        #         f"IWAP finish_round failed during burn-all ({reason}); continuing without remote acknowledgement."
-        #     )
-        #     ColoredLogger.warning(
-        #         "⚠️ IWAP finish_round did not complete; proceeding locally.",
-        #         ColoredLogger.YELLOW,
-        #     )
-        #     round_reason = f"{reason} — IWAP finish failed"
+        try:
+            agents_dict = getattr(self, "agents_dict", None) or {}
+        except Exception:
+            agents_dict = {}
 
-        # self._log_round_completion(
-        #     color=log_color,
-        #     reason=round_reason,
-        # )
+        for uid in run_uids:
+            try:
+                info = agents_dict.get(int(uid))
+            except Exception:
+                info = None
+            try:
+                avg_rewards[int(uid)] = float(getattr(info, "score", 0.0) or 0.0)
+            except Exception:
+                avg_rewards[int(uid)] = 0.0
+
+        tasks_total = 0
+        try:
+            tasks_total = len(getattr(self, "current_round_tasks", {}) or {})
+        except Exception:
+            tasks_total = 0
+
+        finish_success = False
+        try:
+            finish_success = await self._finish_iwap_round(
+                avg_rewards=avg_rewards,
+                final_weights=final_weights,
+                tasks_completed=int(tasks_total or 0),
+            )
+        except Exception as exc:
+            bt.logging.warning(
+                f"IWAP finish_round failed during burn-all ({reason}) ({type(exc).__name__}: {exc}); continuing locally."
+            )
+            finish_success = False
+
+        if finish_success:
+            ColoredLogger.success(success_message or "✅ Burn complete", success_color)
+        else:
+            ColoredLogger.warning(
+                f"⚠️ IWAP finish_round did not complete during burn-all ({reason}); proceeding locally.",
+                ColoredLogger.YELLOW,
+            )
 
     async def _calculate_final_weights(self, scores: Dict[int, float]):
         """Calculate averages, apply WTA, and set final on-chain weights."""
