@@ -95,10 +95,15 @@ class ValidatorEvaluationMixin:
 
         # Round-based rate limiting metadata.
         round_number = 0
+        season_number = None
         try:
             round_number = int(getattr(getattr(self, "round_manager", None), "round_number", 0) or 0)
         except Exception:
             round_number = 0
+        try:
+            season_number = int(getattr(getattr(self, "season_manager", None), "season_number", 0) or 0)
+        except Exception:
+            season_number = None
 
         def _finalize_agent(agent: object, *, score: float) -> None:
             """
@@ -117,6 +122,11 @@ class ValidatorEvaluationMixin:
                 pass
             try:
                 agent.last_evaluated_round = round_number  # type: ignore[attr-defined]
+            except Exception:
+                pass
+            try:
+                if season_number:
+                    agent.last_evaluated_season = season_number  # type: ignore[attr-defined]
             except Exception:
                 pass
             # Clear any stale pending submission once we've processed the agent in this round.
@@ -215,7 +225,7 @@ class ValidatorEvaluationMixin:
                 ColoredLogger.error(f"Error deploying agent {agent.uid}: {e}", ColoredLogger.RED)
                 _finalize_agent(agent, score=0.0)
                 continue
-                
+
             if agent_instance is None:
                 ColoredLogger.error(f"Agent not deployed correctly for uid {agent.uid}", ColoredLogger.RED)
                 _finalize_agent(agent, score=0.0)
@@ -539,9 +549,6 @@ class ValidatorEvaluationMixin:
                 test_results_data=test_results_data,
                 exec_time=eval_data["exec_time"],
                 reward=eval_data["reward"],
-                llm_cost=eval_data.get("cost"),
-                llm_tokens=eval_data.get("tokens"),
-                llm_provider=eval_data.get("provider"),
             )
 
             evaluations_batch.append(evaluation_payload)
@@ -558,7 +565,17 @@ class ValidatorEvaluationMixin:
                     agent_run_id=agent_run.agent_run_id,
                     evaluations=evaluations_batch,
                 )
-                ColoredLogger.info(f"Batch submission result: {result.get('message', 'Success')}", ColoredLogger.GREEN)
+                created = int(result.get("evaluations_created") or 0) if isinstance(result, dict) else 0
+                total = int(result.get("total_requested") or len(evaluations_batch)) if isinstance(result, dict) else len(evaluations_batch)
+                if created < total:
+                    ColoredLogger.error(
+                        f"Batch submission incomplete: created={created} total={total} message={result.get('message')}",
+                        ColoredLogger.RED,
+                    )
+                    if isinstance(result, dict) and result.get("errors"):
+                        ColoredLogger.error(f"Batch errors: {result.get('errors')}", ColoredLogger.RED)
+                else:
+                    ColoredLogger.info(f"Batch submission result: {result.get('message', 'Success')}", ColoredLogger.GREEN)
             except Exception as e:
                 ColoredLogger.error(f"Failed to submit batch: {e}", ColoredLogger.RED)
                 raise

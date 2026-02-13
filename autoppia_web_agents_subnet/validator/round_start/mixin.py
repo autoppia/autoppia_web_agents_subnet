@@ -122,7 +122,7 @@ class ValidatorRoundStartMixin:
         # code paths (e.g. burn/no-op) may skip IWAP finish/reset, so relying on
         # "only if not set" can cause stale IDs to leak into subsequent rounds.
         self.current_round_id = self._generate_validator_round_id(current_block=current_block)
-        
+
         # Set round start timestamp
         self.round_start_timestamp = time.time()
 
@@ -134,7 +134,7 @@ class ValidatorRoundStartMixin:
             pass
 
         wait_info = self.round_manager.get_wait_info(current_block)
-        
+
         # Calculate settlement block and ETA
         settlement_block = self.round_manager.settlement_block
         settlement_epoch = self.round_manager.settlement_epoch
@@ -157,7 +157,7 @@ class ValidatorRoundStartMixin:
         return RoundStartResult(
             continue_forward=True,
             reason="Round Started Successfully",
-        ) 
+        )
 
     async def _perform_handshake(self) -> None:
         """
@@ -199,14 +199,10 @@ class ValidatorRoundStartMixin:
             if stake_val >= min_stake:
                 candidate_uids.append(uid)
             else:
-                bt.logging.debug(
-                    f"[handshake] Skipping uid={uid} stake={stake_val:.4f} < MIN_MINER_STAKE_TAO={min_stake:.4f}"
-                )
+                bt.logging.debug(f"[handshake] Skipping uid={uid} stake={stake_val:.4f} < MIN_MINER_STAKE_TAO={min_stake:.4f}")
 
         if not candidate_uids:
-            bt.logging.warning(
-                f"No miners meet MIN_MINER_STAKE_TAO={min_stake:.4f}; active_miner_uids will be empty"
-            )
+            bt.logging.warning(f"No miners meet MIN_MINER_STAKE_TAO={min_stake:.4f}; active_miner_uids will be empty")
             return
 
         # Optional: restrict to the top N miners by stake to bound evaluation work.
@@ -230,14 +226,8 @@ class ValidatorRoundStartMixin:
         # Log a compact summary of candidate stakes.
         try:
             sample = candidate_uids[:10]
-            sample_str = ", ".join(
-                f"{uid}:{float(stakes[uid]) if uid < len(stakes) else 0.0:.4f}"
-                for uid in sample
-            )
-            bt.logging.info(
-                f"[handshake] Candidates meeting MIN_MINER_STAKE_TAO={min_stake:.4f}: "
-                f"{len(candidate_uids)} miners (sample: {sample_str})"
-            )
+            sample_str = ", ".join(f"{uid}:{float(stakes[uid]) if uid < len(stakes) else 0.0:.4f}" for uid in sample)
+            bt.logging.info(f"[handshake] Candidates meeting MIN_MINER_STAKE_TAO={min_stake:.4f}: {len(candidate_uids)} miners (sample: {sample_str})")
         except Exception:
             pass
 
@@ -332,12 +322,12 @@ class ValidatorRoundStartMixin:
 
             # Miner provided the required handshake fields; treat as active for IWAP.
             active_handshake_uids.append(int(uid))
-            
+
             # Store handshake payload for IWAP registration
             if not isinstance(getattr(self, "round_handshake_payloads", None), dict):
                 self.round_handshake_payloads = {}
             self.round_handshake_payloads[int(uid)] = resp
-            
+
             normalized_repo, ref = normalize_and_validate_github_url(
                 raw_github_url,
                 miner_uid=uid,
@@ -408,29 +398,45 @@ class ValidatorRoundStartMixin:
                             commit_sha = resolve_remote_ref_commit(normalized_repo, ref)
                     except Exception:
                         commit_sha = None
+                if commit_sha and normalized_repo:
+                    commit_url = f"{normalized_repo}/commit/{commit_sha}"
+                    try:
+                        agent_info.github_url = commit_url
+                    except Exception:
+                        pass
+                    try:
+                        setattr(resp, "github_url", commit_url)
+                    except Exception:
+                        pass
 
                 # Do not re-evaluate if the submission commit didn't change.
                 # If we cannot resolve a commit hash, be conservative and re-evaluate.
                 if normalized_repo and commit_sha and existing_repo == normalized_repo and _commits_match(existing_commit, commit_sha):
-                    # Keep score/evaluated, but allow display metadata to update.
-                    try:
-                        existing.agent_name = agent_info.agent_name
-                        existing.agent_image = agent_info.agent_image
-                        existing.github_url = agent_info.github_url
-                        if not getattr(existing, "normalized_repo", None):
-                            existing.normalized_repo = normalized_repo
-                        # Clear any stale pending submission (we are already on this commit).
-                        existing.pending_github_url = None
-                        existing.pending_agent_name = None
-                        existing.pending_agent_image = None
-                        existing.pending_normalized_repo = None
-                        existing.pending_ref = None
-                        existing.pending_received_round = None
-                    except Exception:
+                    current_season = int(getattr(getattr(self, "season_manager", None), "season_number", 0) or 0)
+                    last_season = getattr(existing, "last_evaluated_season", None)
+                    if current_season and last_season is not None and int(last_season) != int(current_season):
+                        # New season -> tasks changed, force re-evaluation even if commit unchanged.
                         pass
-                    self.agents_dict[uid] = existing
-                    continue
-                
+                    else:
+                        # Keep score/evaluated, but allow display metadata to update.
+                        try:
+                            existing.agent_name = agent_info.agent_name
+                            existing.agent_image = agent_info.agent_image
+                            existing.github_url = agent_info.github_url
+                            if not getattr(existing, "normalized_repo", None):
+                                existing.normalized_repo = normalized_repo
+                            # Clear any stale pending submission (we are already on this commit).
+                            existing.pending_github_url = None
+                            existing.pending_agent_name = None
+                            existing.pending_agent_image = None
+                            existing.pending_normalized_repo = None
+                            existing.pending_ref = None
+                            existing.pending_received_round = None
+                        except Exception:
+                            pass
+                        self.agents_dict[uid] = existing
+                        continue
+
                 # Submission changed (or unknown): enqueue for evaluation, but do
                 # not clobber the previously evaluated score/commit until new
                 # evaluation completes.
@@ -463,11 +469,8 @@ class ValidatorRoundStartMixin:
                 self.agents_on_first_handshake.append(uid)
             new_agents_count += 1
 
-        bt.logging.info(
-            f"Handshake complete: {new_agents_count} new agents submitted "
-            f"(min_stake={min_stake})"
-        )
-        
+        bt.logging.info(f"Handshake complete: {new_agents_count} new agents submitted (min_stake={min_stake})")
+
         # Only miners that responded this round should be treated as "active"
         # for IWAP registration and per-round reporting. Keeping this bounded
         # avoids expensive IWAP loops when we handshake a wide UID window.
@@ -496,10 +499,7 @@ class ValidatorRoundStartMixin:
         target_epoch = rm.block_to_epoch(MINIMUM_START_BLOCK)
 
         eta = f"~{hours_remaining:.1f}h" if hours_remaining >= 1 else f"~{minutes_remaining:.0f}m"
-        bt.logging.warning(
-            f"🔒 Locked until block {MINIMUM_START_BLOCK:,} (epoch {target_epoch:.2f}) | "
-            f"now {current_block:,} (epoch {current_epoch:.2f}) | ETA {eta}"
-        )
+        bt.logging.warning(f"🔒 Locked until block {MINIMUM_START_BLOCK:,} (epoch {target_epoch:.2f}) | now {current_block:,} (epoch {current_epoch:.2f}) | ETA {eta}")
 
         wait_seconds = min(max(seconds_remaining, 30), 600)
         rm.enter_phase(
@@ -510,4 +510,4 @@ class ValidatorRoundStartMixin:
         bt.logging.warning(f"💤 Rechecking in {wait_seconds:.0f}s...")
 
         await asyncio.sleep(wait_seconds)
-        return True 
+        return True

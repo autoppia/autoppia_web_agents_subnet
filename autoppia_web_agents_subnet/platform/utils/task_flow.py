@@ -131,8 +131,6 @@ def prepare_evaluation_payload(
 
     # Build llm_usage for backend (evaluation_llm_usage table); backend also accepts scalar llm_* for compat
     llm_usage: Optional[List[Dict[str, Any]]] = evaluation_meta.get("llm_usage") if isinstance(evaluation_meta.get("llm_usage"), list) else None
-    if not llm_usage and (llm_cost is not None or llm_tokens is not None or llm_provider is not None):
-        llm_usage = [{"provider": llm_provider, "model": None, "tokens": llm_tokens, "cost": llm_cost}]
 
     evaluation_result_payload = iwa_models.EvaluationResultIWAP(
         evaluation_id=evaluation_id,
@@ -152,9 +150,6 @@ def prepare_evaluation_payload(
         stats=evaluation_meta.get("stats"),
         gif_recording=None,
         metadata=evaluation_metadata,
-        llm_cost=llm_cost,
-        llm_tokens=llm_tokens,
-        llm_provider=llm_provider,
         llm_usage=llm_usage,
     )
 
@@ -361,11 +356,6 @@ async def submit_task_results(
 
         # Build llm_usage for backend (same as prepare_evaluation_payload)
         llm_usage_inner: Optional[List[Dict[str, Any]]] = evaluation_meta.get("llm_usage") if isinstance(evaluation_meta.get("llm_usage"), list) else None
-        llm_cost_inner = evaluation_meta.get("cost")
-        llm_tokens_inner = evaluation_meta.get("tokens")
-        llm_provider_inner = evaluation_meta.get("provider")
-        if not llm_usage_inner and (llm_cost_inner is not None or llm_tokens_inner is not None or llm_provider_inner is not None):
-            llm_usage_inner = [{"provider": llm_provider_inner, "model": None, "tokens": llm_tokens_inner, "cost": llm_cost_inner}]
 
         evaluation_result_payload = iwa_models.EvaluationResultIWAP(
             evaluation_id=evaluation_id,
@@ -385,9 +375,6 @@ async def submit_task_results(
             stats=evaluation_meta.get("stats"),
             gif_recording=None,
             metadata=evaluation_metadata,
-            llm_cost=llm_cost_inner,
-            llm_tokens=llm_tokens_inner,
-            llm_provider=llm_provider_inner,
             llm_usage=llm_usage_inner,
         )
 
