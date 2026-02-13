@@ -268,6 +268,7 @@ class ValidatorRoundStartMixin:
         new_agents_count = 0
         current_round = int(getattr(self.round_manager, "round_number", 0) or 0)
         cooldown_rounds = int(EVALUATION_COOLDOWN_ROUNDS)
+        responded_uids: list[int] = []
 
         for idx, uid in enumerate(candidate_uids):
             resp = responses[idx] if idx < len(responses) else None
@@ -294,6 +295,7 @@ class ValidatorRoundStartMixin:
                         new_agents_count += 1
                 continue
 
+            responded_uids.append(int(uid))
             agent_name = getattr(resp, "agent_name", None)
             raw_github_url = getattr(resp, "github_url", None)
             agent_image = getattr(resp, "agent_image", None)
@@ -464,8 +466,10 @@ class ValidatorRoundStartMixin:
             f"(min_stake={min_stake})"
         )
         
-        # Set active_miner_uids based on agents that responded to handshake
-        self.active_miner_uids = list(self.agents_dict.keys())
+        # Only miners that responded this round should be treated as "active"
+        # for IWAP registration and per-round reporting. Keeping this bounded
+        # avoids expensive IWAP loops when we handshake a wide UID window.
+        self.active_miner_uids = responded_uids
 
     async def _wait_for_minimum_start_block(self) -> bool:
         """
