@@ -196,6 +196,46 @@ class ValidatorEvaluationMixin:
                         except Exception:
                             tokens = 0
 
+                        # Build per-provider/model usage list for backend (evaluation_llm_usage)
+                        llm_usage: list[dict] = []
+                        try:
+                            usage_details = (usage_for_task or {}).get("usage_details") or {}
+                            tokens_map = usage_details.get("tokens") or {}
+                            cost_map = usage_details.get("cost") or {}
+                            for provider, models in tokens_map.items():
+                                if not isinstance(models, dict):
+                                    continue
+                                for model, tk in models.items():
+                                    try:
+                                        tk_val = int(tk or 0)
+                                    except Exception:
+                                        tk_val = 0
+                                    try:
+                                        cost_val = float((cost_map.get(provider) or {}).get(model) or 0.0)
+                                    except Exception:
+                                        cost_val = 0.0
+                                    llm_usage.append(
+                                        {
+                                            "provider": provider,
+                                            "model": model,
+                                            "tokens": tk_val,
+                                            "cost": cost_val,
+                                        }
+                                    )
+                        except Exception:
+                            llm_usage = []
+
+                        if usage_for_task and not llm_usage:
+                            ColoredLogger.warning(
+                                f"LLM usage details missing or unparseable for task {task_item.task.id}: keys={list((usage_for_task or {}).keys())}",
+                                ColoredLogger.YELLOW,
+                            )
+                        elif llm_usage:
+                            ColoredLogger.info(
+                                f"LLM usage parsed for task {task_item.task.id}: {llm_usage}",
+                                ColoredLogger.CYAN,
+                            )
+
                         try:
                             score_f = float(score)
                         except Exception:
@@ -224,6 +264,7 @@ class ValidatorEvaluationMixin:
                                 "tokens": tokens,
                                 "reward": reward,
                                 "task_solution": task_solution,
+                                "llm_usage": llm_usage,
                             }
                         )
 
@@ -368,6 +409,10 @@ class ValidatorEvaluationMixin:
                 # Fallback: create empty solution
                 solution = TaskSolution(task_id=base_task_id, actions=[], web_agent_id=str(agent_uid))
 
+            evaluation_meta_dict = evaluation_meta_dict if isinstance(task_solution, dict) else {}
+            if isinstance(eval_data.get("llm_usage"), list):
+                evaluation_meta_dict["llm_usage"] = eval_data.get("llm_usage")
+
             evaluation_payload = prepare_evaluation_payload(
                 ctx=self,
                 task_payload=task_payload,
@@ -375,7 +420,7 @@ class ValidatorEvaluationMixin:
                 miner_uid=agent_uid,
                 solution=solution,
                 eval_score=eval_data["score"],
-                evaluation_meta=evaluation_meta_dict if isinstance(task_solution, dict) else {},
+                evaluation_meta=evaluation_meta_dict,
                 test_results_data=test_results_data,
                 exec_time=eval_data["exec_time"],
                 reward=eval_data["reward"],
