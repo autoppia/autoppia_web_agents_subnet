@@ -17,6 +17,7 @@ from autoppia_web_agents_subnet.opensource.utils_docker import (
     build_image,
     cleanup_containers,
     ensure_network,
+    garbage_collect_stale_containers,
     get_client,
     stop_and_remove,
 )
@@ -172,6 +173,12 @@ class SandboxManager:
         self.host_log_dir = _pick_host_log_dir()
 
         ensure_network(SANDBOX_NETWORK_NAME, internal=True)
+        # Best-effort cleanup of stale Docker build intermediates (from older versions),
+        # throttled and scoped to non-running containers.
+        try:
+            garbage_collect_stale_containers()
+        except Exception:
+            pass
 
     def deploy_gateway(self):
         self._validate_gateway_provider_keys()
@@ -375,6 +382,12 @@ class SandboxManager:
         stop_and_remove(agent.container)
         try:
             shutil.rmtree(agent.temp_dir, ignore_errors=True)
+        except Exception:
+            pass
+        # Best-effort container garbage collection so validators don't accumulate
+        # stopped/created intermediates over time.
+        try:
+            garbage_collect_stale_containers()
         except Exception:
             pass
 
