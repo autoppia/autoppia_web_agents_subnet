@@ -84,7 +84,8 @@ def _normalize_github_ssh(url: str) -> str:
 def normalize_and_validate_github_url(
         raw_url: Optional[str], 
         *, 
-        miner_uid: Optional[int] = None
+        miner_uid: Optional[int] = None,
+        require_ref: bool = False,
     ) -> Tuple[Optional[str], Optional[str]]:
     """
     Normalize and validate a GitHub URL, extracting an optional ref (branch/commit).
@@ -158,20 +159,43 @@ def normalize_and_validate_github_url(
         ColoredLogger.BLUE,
     )
 
-    if len(segments) < 4:
-        ColoredLogger.info(
-            f"Commit hash or branch not specified in github_url{miner_tag}; defaulting to main branch: {raw_url}",
-            ColoredLogger.BLUE,
-        )
+    # Accept bare repo URLs only when not enforcing strict pinning.
+    if len(segments) == 2:
+        if require_ref:
+            ColoredLogger.warning(
+                f"Rejecting miner github_url without explicit ref/commit{miner_tag}: {raw_url}",
+                ColoredLogger.YELLOW,
+            )
+            return None, None
         return normalized, None
 
-    ref = segments[3]
-    ColoredLogger.info(
-        f"Extracted ref from github_url{miner_tag}: {raw_url} -> {ref}",
-        ColoredLogger.BLUE,
-    )
+    # Only accept explicit ref URLs:
+    #   - /tree/<ref> (branch/tag/commitish; may include slashes)
+    #   - /commit/<sha>
+    if len(segments) >= 4:
+        kind = (segments[2] or "").lower()
+        if kind == "tree":
+            ref = "/".join(segments[3:]).strip()
+            if not ref:
+                return None, None
+            return normalized, ref
+        if kind == "commit":
+            ref = (segments[3] or "").strip()
+            if not ref:
+                return None, None
+            return normalized, ref
 
-    return normalized, ref
+        ColoredLogger.warning(
+            f"Rejecting miner github_url with unsupported path{miner_tag}: {raw_url}",
+            ColoredLogger.YELLOW,
+        )
+        return None, None
+
+    ColoredLogger.warning(
+        f"Rejecting miner github_url with unsupported path{miner_tag}: {raw_url}",
+        ColoredLogger.YELLOW,
+    )
+    return None, None
 
 
 def _github_repo_preflight_size_bytes(normalized_url: str, *, timeout: float = 5.0) -> Optional[int]:

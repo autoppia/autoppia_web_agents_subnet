@@ -40,19 +40,19 @@ def agent_responses() -> List[Dict[str, Any]]:
         {
             "uid": 1,
             "agent_name": "test_agent_1",
-            "github_url": "https://github.com/test/agent1",
+            "github_url": "https://github.com/test/agent1/tree/main",
             "version": "1.0.0",
         },
         {
             "uid": 2,
             "agent_name": "test_agent_2",
-            "github_url": "https://github.com/test/agent2",
+            "github_url": "https://github.com/test/agent2/tree/main",
             "version": "1.0.1",
         },
         {
             "uid": 3,
             "agent_name": "test_agent_3",
-            "github_url": "https://github.com/test/agent3",
+            "github_url": "https://github.com/test/agent3/tree/main",
             "version": "1.1.0",
         },
     ]
@@ -67,7 +67,7 @@ def invalid_agent_responses() -> List[Dict[str, Any]]:
         {
             "uid": 4,
             # Missing agent_name
-            "github_url": "https://github.com/test/agent4",
+            "github_url": "https://github.com/test/agent4/tree/main",
         },
         {
             "uid": 5,
@@ -77,7 +77,7 @@ def invalid_agent_responses() -> List[Dict[str, Any]]:
         {
             "uid": 6,
             "agent_name": "",  # Empty agent_name
-            "github_url": "https://github.com/test/agent6",
+            "github_url": "https://github.com/test/agent6/tree/main",
         },
     ]
 

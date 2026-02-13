@@ -394,7 +394,7 @@ class TestConcurrencyEdgeCases:
             agent = AgentInfo(
                 uid=i,
                 agent_name=f"Agent{i}",
-                github_url=f"https://github.com/test/agent{i}",
+                github_url=f"https://github.com/test/agent{i}/tree/main",
                 score=0.0
             )
             
@@ -420,8 +420,12 @@ class TestConcurrencyEdgeCases:
             'autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua',
             new=mock_evaluate
         ):
-            # Should handle gracefully
-            await validator_with_agents._run_evaluation_phase()
+            with patch(
+                "autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit",
+                return_value="deadbeef",
+            ):
+                # Should handle gracefully
+                await validator_with_agents._run_evaluation_phase()
         
         # Should have evaluated agents
         evaluated = sum(1 for a in validator_with_agents.agents_dict.values() if a.score > 0)

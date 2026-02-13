@@ -202,7 +202,7 @@ class TestHandshake:
         existing = AgentInfo(
             uid=1,
             agent_name="agent1",
-            github_url="https://github.com/test/agent1",
+            github_url="https://github.com/test/agent1/tree/main",
             agent_image=None,
             score=0.42,
             evaluated=True,
@@ -214,7 +214,7 @@ class TestHandshake:
         with patch('autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners') as mock_send, \
              patch('autoppia_web_agents_subnet.validator.round_start.mixin.resolve_remote_ref_commit') as mock_resolve:
             mock_send.return_value = [
-                Mock(agent_name="agent1", github_url="https://github.com/test/agent1", agent_image=None),
+                Mock(agent_name="agent1", github_url="https://github.com/test/agent1/tree/main", agent_image=None),
             ]
             mock_resolve.return_value = "deadbeef"
 
@@ -239,7 +239,7 @@ class TestHandshake:
         existing = AgentInfo(
             uid=1,
             agent_name="agent1",
-            github_url="https://github.com/test/agent1",
+            github_url="https://github.com/test/agent1/tree/main",
             agent_image=None,
             score=0.42,
             evaluated=True,
@@ -251,7 +251,7 @@ class TestHandshake:
         with patch('autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners') as mock_send, \
              patch('autoppia_web_agents_subnet.validator.round_start.mixin.resolve_remote_ref_commit') as mock_resolve:
             mock_send.return_value = [
-                Mock(agent_name="agent1", github_url="https://github.com/test/agent1", agent_image=None),
+                Mock(agent_name="agent1", github_url="https://github.com/test/agent1/tree/main", agent_image=None),
             ]
             mock_resolve.return_value = "new"
 

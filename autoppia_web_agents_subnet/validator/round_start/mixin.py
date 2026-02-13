@@ -20,8 +20,29 @@ from autoppia_web_agents_subnet.validator.config import (
     ROUND_START_UNTIL_FRACTION,
     MIN_MINER_STAKE_TAO,
     SETTLEMENT_FRACTION,
+    REQUIRE_MINER_GITHUB_REF,
 )
 from autoppia_web_agents_subnet.validator.round_start.synapse_handler import send_start_round_synapse_to_miners
+
+
+def _commits_match(a: str | None, b: str | None) -> bool:
+    """
+    Treat short git hashes as equal to their full-length prefix.
+
+    This helps skip re-evaluation when miners submit GitHub /commit/<sha> URLs
+    that may use a shortened SHA.
+    """
+    if not a or not b:
+        return False
+    a_s = str(a).strip()
+    b_s = str(b).strip()
+    if not a_s or not b_s:
+        return False
+    if a_s == b_s:
+        return True
+    if len(a_s) >= 7 and len(b_s) >= 7 and (a_s.startswith(b_s) or b_s.startswith(a_s)):
+        return True
+    return False
 
 
 class ValidatorRoundStartMixin:
@@ -190,7 +211,42 @@ class ValidatorRoundStartMixin:
 
         for idx, uid in enumerate(candidate_uids):
             resp = responses[idx] if idx < len(responses) else None
-            if resp is None or not getattr(resp, "agent_name", None) or not getattr(resp, "github_url", None):
+            if resp is None:
+                continue
+
+            agent_name = getattr(resp, "agent_name", None)
+            raw_github_url = getattr(resp, "github_url", None)
+            agent_image = getattr(resp, "agent_image", None)
+
+            if not agent_name or not raw_github_url:
+                # Strict: an explicit submission is required. Treat missing fields
+                # as an invalid submission for this uid.
+                existing = self.agents_dict.get(uid)
+                if isinstance(existing, AgentInfo):
+                    try:
+                        existing.agent_name = agent_name or getattr(existing, "agent_name", "")
+                        existing.agent_image = agent_image
+                        existing.github_url = raw_github_url or ""
+                        existing.normalized_repo = None
+                        existing.git_commit = None
+                        existing.score = 0.0
+                        existing.evaluated = True
+                    except Exception:
+                        pass
+                    self.agents_dict[uid] = existing
+                else:
+                    self.agents_dict[uid] = AgentInfo(
+                        uid=uid,
+                        agent_name=agent_name or "",
+                        agent_image=agent_image,
+                        github_url=raw_github_url or "",
+                        normalized_repo=None,
+                        git_commit=None,
+                        score=0.0,
+                        evaluated=True,
+                    )
+                    if self.round_manager.round_number == 1:
+                        self.agents_on_first_handshake.append(uid)
                 continue
             
             # Store handshake payload for IWAP registration
@@ -198,8 +254,42 @@ class ValidatorRoundStartMixin:
                 self.round_handshake_payloads = {}
             self.round_handshake_payloads[int(uid)] = resp
             
-            raw_github_url = getattr(resp, "github_url", None)
-            normalized_repo, ref = normalize_and_validate_github_url(raw_github_url, miner_uid=uid)
+            normalized_repo, ref = normalize_and_validate_github_url(
+                raw_github_url,
+                miner_uid=uid,
+                require_ref=bool(REQUIRE_MINER_GITHUB_REF),
+            )
+
+            # Strict submission policy: if miner didn't provide a valid repo + ref/commit URL,
+            # mark as evaluated with zero and do not enqueue expensive evaluation work.
+            if normalized_repo is None:
+                existing = self.agents_dict.get(uid)
+                if isinstance(existing, AgentInfo):
+                    try:
+                        existing.agent_name = agent_name
+                        existing.agent_image = agent_image
+                        existing.github_url = raw_github_url or ""
+                        existing.normalized_repo = None
+                        existing.git_commit = None
+                        existing.score = 0.0
+                        existing.evaluated = True
+                    except Exception:
+                        pass
+                    self.agents_dict[uid] = existing
+                else:
+                    self.agents_dict[uid] = AgentInfo(
+                        uid=uid,
+                        agent_name=agent_name,
+                        agent_image=agent_image,
+                        github_url=raw_github_url or "",
+                        normalized_repo=None,
+                        git_commit=None,
+                        score=0.0,
+                        evaluated=True,
+                    )
+                    if self.round_manager.round_number == 1:
+                        self.agents_on_first_handshake.append(uid)
+                continue
 
             # Resolve commit only when we have a previous commit to compare against.
             commit_sha: str | None = None
@@ -224,11 +314,20 @@ class ValidatorRoundStartMixin:
 
                 existing_commit = getattr(existing, "git_commit", None)
                 if normalized_repo and existing_commit and existing_repo == normalized_repo:
-                    commit_sha = resolve_remote_ref_commit(normalized_repo, ref)
+                    try:
+                        # If miner submitted a pinned commit URL, we can use that SHA directly
+                        # without hitting the network (and without relying on ls-remote, which
+                        # typically only resolves refs, not arbitrary commit objects).
+                        if "/commit/" in str(raw_github_url or "") and ref:
+                            commit_sha = str(ref)
+                        else:
+                            commit_sha = resolve_remote_ref_commit(normalized_repo, ref)
+                    except Exception:
+                        commit_sha = None
 
                 # Do not re-evaluate if the submission commit didn't change.
                 # If we cannot resolve a commit hash, be conservative and re-evaluate.
-                if normalized_repo and commit_sha and existing_repo == normalized_repo and existing_commit == commit_sha:
+                if normalized_repo and commit_sha and existing_repo == normalized_repo and _commits_match(existing_commit, commit_sha):
                     # Keep score/evaluated, but allow display metadata to update.
                     try:
                         existing.agent_name = agent_info.agent_name

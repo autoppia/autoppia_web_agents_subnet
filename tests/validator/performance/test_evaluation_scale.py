@@ -48,7 +48,7 @@ class TestEvaluationScaling:
             agent_info = AgentInfo(
                 uid=i,
                 agent_name=f"Agent{i}",
-                github_url=f"https://github.com/test/agent{i}",
+                github_url=f"https://github.com/test/agent{i}/tree/main",
                 score=0.0
             )
             
@@ -71,27 +71,31 @@ class TestEvaluationScaling:
         
         # Patch normalize_and_validate_github_url to always return valid URL
         with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url',
-                   return_value="https://github.com/test/agent"):
+                   return_value=("https://github.com/test/agent", "main")):
             with patch(
                 'autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua',
                 new=fast_evaluate
             ):
-                start_time = time.time()
-                
-                # Run evaluation
-                await validator_with_agents._run_evaluation_phase()
-                
-                elapsed = time.time() - start_time
-                
-                # Should complete in reasonable time (< 10 seconds with mocked evaluation)
-                assert elapsed < 10.0, f"Evaluation took {elapsed:.2f}s, expected < 10s"
-                
-                # All agents should be evaluated
-                evaluated_count = sum(
-                    1 for agent in validator_with_agents.agents_dict.values()
-                    if agent.score > 0
-                )
-                assert evaluated_count > 0, f"No agents were evaluated"
+                with patch(
+                    "autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit",
+                    return_value="deadbeef",
+                ):
+                    start_time = time.time()
+                    
+                    # Run evaluation
+                    await validator_with_agents._run_evaluation_phase()
+                    
+                    elapsed = time.time() - start_time
+                    
+                    # Should complete in reasonable time (< 10 seconds with mocked evaluation)
+                    assert elapsed < 10.0, f"Evaluation took {elapsed:.2f}s, expected < 10s"
+                    
+                    # All agents should be evaluated
+                    evaluated_count = sum(
+                        1 for agent in validator_with_agents.agents_dict.values()
+                        if agent.score > 0
+                    )
+                    assert evaluated_count > 0, f"No agents were evaluated"
 
     @pytest.mark.asyncio
     async def test_evaluation_memory_usage_stays_bounded(
@@ -118,7 +122,7 @@ class TestEvaluationScaling:
             agent_info = AgentInfo(
                 uid=i,
                 agent_name=f"Agent{i}",
-                github_url=f"https://github.com/test/agent{i}",
+                github_url=f"https://github.com/test/agent{i}/tree/main",
                 score=0.0
             )
             
@@ -140,12 +144,16 @@ class TestEvaluationScaling:
         validator_with_agents.sandbox_manager.cleanup_agent = Mock()
         
         with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url',
-                   return_value="https://github.com/test/agent"):
+                   return_value=("https://github.com/test/agent", "main")):
             with patch(
                 'autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua',
                 new=mock_evaluate
             ):
-                await validator_with_agents._run_evaluation_phase()
+                with patch(
+                    "autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit",
+                    return_value="deadbeef",
+                ):
+                    await validator_with_agents._run_evaluation_phase()
         
         final_memory = process.memory_info().rss / 1024 / 1024  # MB
         memory_increase = final_memory - initial_memory
@@ -222,16 +230,20 @@ class TestEvaluationScaling:
             return (0.8, None, None)
         
         with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url',
-                   return_value="https://github.com/test/agent"):
+                   return_value=("https://github.com/test/agent", "main")):
             with patch(
                 'autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua',
                 new=mock_evaluate
             ):
                 # Run both evaluations concurrently
-                await asyncio.gather(
-                    validator1._run_evaluation_phase(),
-                    validator2._run_evaluation_phase()
-                )
+                with patch(
+                    "autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit",
+                    return_value="deadbeef",
+                ):
+                    await asyncio.gather(
+                        validator1._run_evaluation_phase(),
+                        validator2._run_evaluation_phase()
+                    )
         
         # Verify no cross-contamination
         for uid, agent in validator1.agents_dict.items():
@@ -271,7 +283,7 @@ class TestEvaluationThroughput:
                 agent_info = AgentInfo(
                     uid=i,
                     agent_name=f"Agent{i}",
-                    github_url=f"https://github.com/test/agent{i}",
+                    github_url=f"https://github.com/test/agent{i}/tree/main",
                     score=0.0
                 )
                 
@@ -314,14 +326,18 @@ class TestEvaluationThroughput:
                 return mock_evaluate
             
             with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url',
-                       return_value="https://github.com/test/agent"):
+                       return_value=("https://github.com/test/agent", "main")):
                 with patch(
                     'autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua',
                     new=make_mock_evaluate(task_count)
                 ):
-                    start_time = time.time()
-                    await validator_with_agents._run_evaluation_phase()
-                    elapsed = time.time() - start_time
+                    with patch(
+                        "autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit",
+                        return_value="deadbeef",
+                    ):
+                        start_time = time.time()
+                        await validator_with_agents._run_evaluation_phase()
+                        elapsed = time.time() - start_time
                     
                     results[task_count] = elapsed
         
@@ -351,7 +367,7 @@ class TestEvaluationThroughput:
             agent_info = AgentInfo(
                 uid=i,
                 agent_name=f"Agent{i}",
-                github_url=f"https://github.com/test/agent{i}",
+                github_url=f"https://github.com/test/agent{i}/tree/main",
                 score=0.0
             )
             
@@ -376,14 +392,18 @@ class TestEvaluationThroughput:
             return (0.8, None, None)
         
         with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url',
-                   return_value="https://github.com/test/agent"):
+                   return_value=("https://github.com/test/agent", "main")):
             with patch(
                 'autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua',
                 new=mock_evaluate
             ):
-                start_time = time.time()
-                await validator_with_agents._run_evaluation_phase()
-                total_time = time.time() - start_time
+                with patch(
+                    "autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit",
+                    return_value="deadbeef",
+                ):
+                    start_time = time.time()
+                    await validator_with_agents._run_evaluation_phase()
+                    total_time = time.time() - start_time
         
         # Verify deployments happened
         assert len(deployment_times) > 0, "No deployments tracked"

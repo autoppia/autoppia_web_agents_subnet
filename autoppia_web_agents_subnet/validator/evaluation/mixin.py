@@ -9,7 +9,10 @@ from autoppia_web_agents_subnet.validator.evaluation.rewards import calculate_re
 from autoppia_web_agents_subnet.validator import config as validator_config
 from autoppia_web_agents_subnet.validator.round_manager import RoundPhase
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
-from autoppia_web_agents_subnet.opensource.utils_git import normalize_and_validate_github_url
+from autoppia_web_agents_subnet.opensource.utils_git import (
+    normalize_and_validate_github_url,
+    resolve_remote_ref_commit,
+)
 
 
 class ValidatorEvaluationMixin:
@@ -106,12 +109,18 @@ class ValidatorEvaluationMixin:
             agent_instance = None
             # Pre-validate GitHub URL to avoid expensive docker/git work for
             # obviously invalid miner submissions.
+            raw_github_url = getattr(agent, "github_url", None)
+            require_ref = bool(getattr(validator_config, "REQUIRE_MINER_GITHUB_REF", False))
             try:
                 validated = normalize_and_validate_github_url(
-                    getattr(agent, "github_url", None),
+                    raw_github_url,
                     miner_uid=getattr(agent, "uid", None),
+                    require_ref=require_ref,
                 )
-                normalized_url = validated[0] if isinstance(validated, tuple) else validated
+                if isinstance(validated, tuple):
+                    normalized_url, ref = validated
+                else:
+                    normalized_url, ref = validated, None
                 if not normalized_url:
                     ColoredLogger.warning(
                         f"Skipping agent {getattr(agent, 'uid', '?')}: invalid github_url={getattr(agent, 'github_url', None)}",
@@ -121,6 +130,42 @@ class ValidatorEvaluationMixin:
                     agent.evaluated = True
                     self.agents_dict[agent.uid] = agent
                     continue
+
+                # Strict: ensure the submitted ref exists / repo is reachable via git
+                # before spending resources cloning/building.
+                raw_s = str(raw_github_url or "")
+                is_commit_url = "/commit/" in raw_s
+                if is_commit_url:
+                    # We can't ls-remote a commit hash directly, but we can at least
+                    # ensure the repo is reachable.
+                    if resolve_remote_ref_commit(str(normalized_url), "HEAD") is None:
+                        ColoredLogger.warning(
+                            f"Skipping agent {getattr(agent, 'uid', '?')}: git ls-remote failed (repo unreachable)",
+                            ColoredLogger.YELLOW,
+                        )
+                        agent.score = 0.0
+                        agent.evaluated = True
+                        self.agents_dict[agent.uid] = agent
+                        continue
+                else:
+                    if require_ref and not ref:
+                        ColoredLogger.warning(
+                            f"Skipping agent {getattr(agent, 'uid', '?')}: missing required ref in github_url={raw_s}",
+                            ColoredLogger.YELLOW,
+                        )
+                        agent.score = 0.0
+                        agent.evaluated = True
+                        self.agents_dict[agent.uid] = agent
+                        continue
+                    if ref and resolve_remote_ref_commit(str(normalized_url), str(ref)) is None:
+                        ColoredLogger.warning(
+                            f"Skipping agent {getattr(agent, 'uid', '?')}: git ls-remote failed for ref={ref}",
+                            ColoredLogger.YELLOW,
+                        )
+                        agent.score = 0.0
+                        agent.evaluated = True
+                        self.agents_dict[agent.uid] = agent
+                        continue
             except Exception as exc:
                 ColoredLogger.warning(
                     f"Skipping agent {getattr(agent, 'uid', '?')}: github_url pre-validation failed: {exc}",

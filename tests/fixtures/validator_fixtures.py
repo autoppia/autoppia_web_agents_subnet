@@ -133,7 +133,7 @@ def validator_with_agents(dummy_validator: Mock) -> Mock:
         agent = AgentInfo(
             uid=uid,
             agent_name=f"test_agent_{uid}",
-            github_url=f"https://github.com/test/agent{uid}",
+            github_url=f"https://github.com/test/agent{uid}/tree/main",
             score=0.0,
         )
         dummy_validator.agents_dict[uid] = agent

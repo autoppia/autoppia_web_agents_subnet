@@ -37,15 +37,19 @@ class TestCompleteRound:
                 with patch('autoppia_web_agents_subnet.validator.settlement.mixin.publish_round_snapshot'):
                     with patch('autoppia_web_agents_subnet.validator.settlement.mixin.aggregate_scores_from_commitments') as mock_aggregate:
                         with patch('autoppia_web_agents_subnet.validator.round_start.synapse_handler.dendrite_with_retries', new_callable=AsyncMock, return_value=[]) as mock_dendrite:
-                            mock_normalize.return_value = "https://github.com/test/agent"
+                            mock_normalize.return_value = ("https://github.com/test/agent", "main")
                             mock_eval.return_value = (0.8, None, None)
                             mock_aggregate.return_value = ({1: 0.8, 2: 0.6, 3: 0.9}, None)
-                            
-                            # Run complete round
-                            await validator._start_round()
-                            await validator._perform_handshake()
-                            agents_evaluated = await validator._run_evaluation_phase()
-                            await validator._run_settlement_phase(agents_evaluated=agents_evaluated)
+
+                            with patch(
+                                "autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit",
+                                return_value="deadbeef",
+                            ):
+                                # Run complete round
+                                await validator._start_round()
+                                await validator._perform_handshake()
+                                agents_evaluated = await validator._run_evaluation_phase()
+                                await validator._run_settlement_phase(agents_evaluated=agents_evaluated)
                             
                             # Check phases
                             phases = [t.phase for t in validator.round_manager.phase_history]
@@ -77,13 +81,17 @@ class TestCompleteRound:
                 with patch('autoppia_web_agents_subnet.validator.settlement.mixin.publish_round_snapshot'):
                     with patch('autoppia_web_agents_subnet.validator.settlement.mixin.aggregate_scores_from_commitments') as mock_aggregate:
                         with patch('autoppia_web_agents_subnet.validator.round_start.synapse_handler.dendrite_with_retries', new_callable=AsyncMock, return_value=[]):
-                            mock_normalize.return_value = "https://github.com/test/agent"
+                            mock_normalize.return_value = ("https://github.com/test/agent", "main")
                             mock_eval.return_value = (0.8, None, None)
                             mock_aggregate.return_value = ({1: 0.8, 2: 0.6, 3: 0.9}, None)
-                            
-                            # Run evaluation
-                            await validator._start_round()
-                            agents_evaluated = await validator._run_evaluation_phase()
+
+                            with patch(
+                                "autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit",
+                                return_value="deadbeef",
+                            ):
+                                # Run evaluation
+                                await validator._start_round()
+                                agents_evaluated = await validator._run_evaluation_phase()
                             
                             # Should have evaluated agents
                             assert agents_evaluated > 0
@@ -155,10 +163,14 @@ class TestErrorHandling:
         validator.sandbox_manager.deploy_agent = Mock(return_value=None)  # Deployment fails
         
         with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize:
-            mock_normalize.return_value = "https://github.com/test/agent"
-            
-            # Should not raise exception
-            agents_evaluated = await validator._run_evaluation_phase()
+            mock_normalize.return_value = ("https://github.com/test/agent", "main")
+
+            with patch(
+                "autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit",
+                return_value="deadbeef",
+            ):
+                # Should not raise exception
+                agents_evaluated = await validator._run_evaluation_phase()
             
             # Should handle failure gracefully
             assert agents_evaluated == 0
@@ -176,13 +188,17 @@ class TestErrorHandling:
         validator.sandbox_manager.deploy_agent = Mock(side_effect=Exception("Docker error"))
         
         with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize:
-            mock_normalize.return_value = "https://github.com/test/agent"
-            
-            # Should not raise exception
-            try:
-                await validator._run_evaluation_phase()
-            except Exception:
-                pytest.fail("Should handle deployment failure gracefully")
+            mock_normalize.return_value = ("https://github.com/test/agent", "main")
+
+            with patch(
+                "autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit",
+                return_value="deadbeef",
+            ):
+                # Should not raise exception
+                try:
+                    await validator._run_evaluation_phase()
+                except Exception:
+                    pytest.fail("Should handle deployment failure gracefully")
 
     async def test_round_handles_ipfs_failure(self, validator_with_agents):
         from tests.conftest import _bind_evaluation_mixin, _bind_settlement_mixin, _bind_round_start_mixin

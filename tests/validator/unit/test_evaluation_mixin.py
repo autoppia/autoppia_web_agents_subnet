@@ -30,8 +30,10 @@ class TestEvaluationPhase:
         validator_with_agents.sandbox_manager.cleanup_agent = Mock()
         
         with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua') as mock_eval:
-            with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize:
-                mock_normalize.return_value = "https://github.com/test/agent"
+            with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize, \
+                 patch('autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit') as mock_ls_remote:
+                mock_normalize.return_value = ("https://github.com/test/agent", "main")
+                mock_ls_remote.return_value = "deadbeef"
                 mock_eval.return_value = (0.8, None, None)
                 
                 agents_evaluated = await validator_with_agents._run_evaluation_phase()
@@ -78,8 +80,10 @@ class TestEvaluationPhase:
         
         type(validator_with_agents).block = property(lambda self: track_block())
         
-        with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize:
-            mock_normalize.return_value = "https://github.com/test/agent"
+        with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize, \
+             patch('autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit') as mock_ls_remote:
+            mock_normalize.return_value = ("https://github.com/test/agent", "main")
+            mock_ls_remote.return_value = "deadbeef"
             
             await validator_with_agents._run_evaluation_phase()
             
@@ -128,8 +132,10 @@ class TestEvaluationPhase:
         with patch('autoppia_web_agents_subnet.validator.config.EARLY_STOP_BEHIND_BEST', True):
             with patch('autoppia_web_agents_subnet.validator.config.CONCURRENT_EVALUATION_NUM', 1):
                 with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua') as mock_eval:
-                    with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize:
-                        mock_normalize.return_value = "https://github.com/test/agent"
+                    with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize, \
+                         patch('autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit') as mock_ls_remote:
+                        mock_normalize.return_value = ("https://github.com/test/agent", "main")
+                        mock_ls_remote.return_value = "deadbeef"
                         mock_eval.return_value = (0.0, 0.0, None)
 
                         await validator_with_agents._run_evaluation_phase()
@@ -157,8 +163,10 @@ class TestAgentDeployment:
         validator_with_agents.sandbox_manager.cleanup_agent = Mock()
         
         with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua') as mock_eval:
-            with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize:
-                mock_normalize.return_value = "https://github.com/test/agent"
+            with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize, \
+                 patch('autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit') as mock_ls_remote:
+                mock_normalize.return_value = ("https://github.com/test/agent", "main")
+                mock_ls_remote.return_value = "deadbeef"
                 mock_eval.return_value = (0.8, None, None)
                 
                 await validator_with_agents._run_evaluation_phase()
@@ -191,8 +199,10 @@ class TestAgentDeployment:
         validator_with_agents.sandbox_manager = Mock()
         validator_with_agents.sandbox_manager.deploy_agent = Mock(return_value=None)  # Deployment fails
         
-        with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize:
-            mock_normalize.return_value = "https://github.com/test/agent"
+        with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize, \
+             patch('autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit') as mock_ls_remote:
+            mock_normalize.return_value = ("https://github.com/test/agent", "main")
+            mock_ls_remote.return_value = "deadbeef"
             
             agents_evaluated = await validator_with_agents._run_evaluation_phase()
             
@@ -213,8 +223,10 @@ class TestAgentDeployment:
         validator_with_agents.sandbox_manager.cleanup_agent = Mock()
         
         with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua') as mock_eval:
-            with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize:
-                mock_normalize.return_value = "https://github.com/test/agent"
+            with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize, \
+                 patch('autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit') as mock_ls_remote:
+                mock_normalize.return_value = ("https://github.com/test/agent", "main")
+                mock_ls_remote.return_value = "deadbeef"
                 mock_eval.return_value = (0.8, None, None)
                 
                 await validator_with_agents._run_evaluation_phase()
@@ -242,8 +254,10 @@ class TestScoreCalculation:
         validator_with_agents.sandbox_manager.cleanup_agent = Mock()
         
         with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua') as mock_eval:
-            with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize:
-                mock_normalize.return_value = "https://github.com/test/agent"
+            with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize, \
+                 patch('autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit') as mock_ls_remote:
+                mock_normalize.return_value = ("https://github.com/test/agent", "main")
+                mock_ls_remote.return_value = "deadbeef"
                 # Return different scores for each task (3 agents * 5 tasks = 15 evaluations)
                 # Agent 1: 0.8, 0.6, 1.0, 0.4, 0.7 (avg = 0.7)
                 # Agent 2: 0.5, 0.5, 0.5, 0.5, 0.5 (avg = 0.5)
@@ -276,8 +290,10 @@ class TestScoreCalculation:
         validator_with_agents.sandbox_manager.cleanup_agent = Mock()
         
         with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua') as mock_eval:
-            with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize:
-                mock_normalize.return_value = "https://github.com/test/agent"
+            with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize, \
+                 patch('autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit') as mock_ls_remote:
+                mock_normalize.return_value = ("https://github.com/test/agent", "main")
+                mock_ls_remote.return_value = "deadbeef"
                 mock_eval.return_value = (0.75, None, None)
                 
                 # Initial scores should be 0.0
@@ -301,8 +317,10 @@ class TestScoreCalculation:
         validator_with_agents.sandbox_manager.deploy_agent = Mock(return_value=mock_instance)
         validator_with_agents.sandbox_manager.cleanup_agent = Mock()
         
-        with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize:
-            mock_normalize.return_value = "https://github.com/test/agent"
+        with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize, \
+             patch('autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit') as mock_ls_remote:
+            mock_normalize.return_value = ("https://github.com/test/agent", "main")
+            mock_ls_remote.return_value = "deadbeef"
             
             # Should handle empty task list without crashing
             try:
@@ -324,8 +342,10 @@ class TestScoreCalculation:
         validator_with_agents.sandbox_manager.cleanup_agent = Mock()
         
         with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua') as mock_eval:
-            with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize:
-                mock_normalize.return_value = "https://github.com/test/agent"
+            with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize, \
+                 patch('autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit') as mock_ls_remote:
+                mock_normalize.return_value = ("https://github.com/test/agent", "main")
+                mock_ls_remote.return_value = "deadbeef"
                 mock_eval.side_effect = Exception("Evaluation failed")
                 
                 # Should handle exception and continue

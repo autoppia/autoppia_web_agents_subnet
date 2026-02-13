@@ -305,7 +305,7 @@ class TestSandboxErrors:
         agent = MagicMock()
         agent.uid = 1
         agent.agent_name = "TestAgent"
-        agent.github_url = "https://github.com/test/agent"
+        agent.github_url = "https://github.com/test/agent/tree/main"
         agent.score = 0.0
         
         validator_with_agents.agents_dict = {1: agent}
@@ -333,7 +333,7 @@ class TestSandboxErrors:
         agent = MagicMock()
         agent.uid = 1
         agent.agent_name = "TestAgent"
-        agent.github_url = "https://github.com/test/agent"
+        agent.github_url = "https://github.com/test/agent/tree/main"
         agent.score = 0.0
         
         validator_with_agents.agents_dict = {1: agent}
@@ -361,7 +361,7 @@ class TestSandboxErrors:
         agent = MagicMock()
         agent.uid = 1
         agent.agent_name = "TestAgent"
-        agent.github_url = "https://github.com/test/agent"
+        agent.github_url = "https://github.com/test/agent/tree/main"
         agent.score = 0.0
         
         validator_with_agents.agents_dict = {1: agent}
@@ -379,8 +379,12 @@ class TestSandboxErrors:
             'autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua',
             new=AsyncMock(side_effect=Exception("Evaluation error"))
         ):
-            # Should not crash
-            await validator_with_agents._run_evaluation_phase()
+            with patch(
+                "autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit",
+                return_value="deadbeef",
+            ):
+                # Should not crash
+                await validator_with_agents._run_evaluation_phase()
         
         # Agent score should remain 0
         assert agent.score == 0.0

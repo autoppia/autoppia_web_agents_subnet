@@ -358,7 +358,7 @@ class TestStressTests:
                 agent = AgentInfo(
                     uid=i,
                     agent_name=f"Agent{i}",
-                    github_url=f"https://github.com/test/agent{i}",
+                    github_url=f"https://github.com/test/agent{i}/tree/main",
                     score=0.0
                 )
                 validator.agents_dict[i] = agent
@@ -366,12 +366,16 @@ class TestStressTests:
             
             # Mock evaluation
             with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url',
-                       return_value="https://github.com/test/agent"):
+                       return_value=("https://github.com/test/agent", "main")):
                 with patch(
                     'autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua',
                     new=AsyncMock(return_value=(0.8, None, None))
                 ):
-                    await validator._run_evaluation_phase()
+                    with patch(
+                        "autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit",
+                        return_value="deadbeef",
+                    ):
+                        await validator._run_evaluation_phase()
             
             # Clear for next round
             validator.agents_dict.clear()
@@ -421,7 +425,7 @@ class TestStressTests:
             agent_info = AgentInfo(
                 uid=i,
                 agent_name=f"Agent{i}",
-                github_url=f"https://github.com/test/agent{i}",
+                github_url=f"https://github.com/test/agent{i}/tree/main",
                 score=0.0
             )
             
@@ -443,9 +447,13 @@ class TestStressTests:
             'autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua',
             new=mock_evaluate
         ):
-            start_time = time.time()
-            await validator_with_agents._run_evaluation_phase()
-            elapsed = time.time() - start_time
+            with patch(
+                "autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit",
+                return_value="deadbeef",
+            ):
+                start_time = time.time()
+                await validator_with_agents._run_evaluation_phase()
+                elapsed = time.time() - start_time
         
         # Should complete in reasonable time
         assert elapsed < 5.0, f"Evaluation took {elapsed:.2f}s, expected < 5s"
