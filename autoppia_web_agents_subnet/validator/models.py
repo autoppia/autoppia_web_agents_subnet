@@ -84,3 +84,6 @@ class AgentInfo:
     agent_image: Optional[str] = None
     score: Optional[float] = 0.0
     evaluated: bool = False
+    # Best-effort submission identity: the commit of the submitted repo/ref (resolved by validator).
+    normalized_repo: Optional[str] = None
+    git_commit: Optional[str] = None

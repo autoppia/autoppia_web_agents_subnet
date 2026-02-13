@@ -206,13 +206,17 @@ class TestHandshake:
             agent_image=None,
             score=0.42,
             evaluated=True,
+            normalized_repo="https://github.com/test/agent1",
+            git_commit="deadbeef",
         )
         dummy_validator.agents_dict = {1: existing}
 
-        with patch('autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners') as mock_send:
+        with patch('autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners') as mock_send, \
+             patch('autoppia_web_agents_subnet.validator.round_start.mixin.resolve_remote_ref_commit') as mock_resolve:
             mock_send.return_value = [
                 Mock(agent_name="agent1", github_url="https://github.com/test/agent1", agent_image=None),
             ]
+            mock_resolve.return_value = "deadbeef"
 
             # Handshake should not enqueue unchanged submissions.
             dummy_validator.agents_queue.put.reset_mock()
@@ -221,6 +225,43 @@ class TestHandshake:
             dummy_validator.agents_queue.put.assert_not_called()
             assert dummy_validator.agents_dict[1].score == 0.42
             assert dummy_validator.agents_dict[1].evaluated is True
+
+    async def test_handshake_reenqueues_when_submission_commit_changes(self, dummy_validator):
+        from tests.conftest import _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+
+        dummy_validator.uid = 0
+        dummy_validator.metagraph.n = 2
+        dummy_validator.metagraph.stake = [15000.0, 15000.0]
+        dummy_validator.metagraph.axons = [Mock(ip="127.0.0.1", port=8000), Mock(ip="127.0.0.1", port=8001)]
+
+        from autoppia_web_agents_subnet.validator.models import AgentInfo
+        existing = AgentInfo(
+            uid=1,
+            agent_name="agent1",
+            github_url="https://github.com/test/agent1",
+            agent_image=None,
+            score=0.42,
+            evaluated=True,
+            normalized_repo="https://github.com/test/agent1",
+            git_commit="old",
+        )
+        dummy_validator.agents_dict = {1: existing}
+
+        with patch('autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners') as mock_send, \
+             patch('autoppia_web_agents_subnet.validator.round_start.mixin.resolve_remote_ref_commit') as mock_resolve:
+            mock_send.return_value = [
+                Mock(agent_name="agent1", github_url="https://github.com/test/agent1", agent_image=None),
+            ]
+            mock_resolve.return_value = "new"
+
+            dummy_validator.agents_queue.put.reset_mock()
+            await dummy_validator._perform_handshake()
+
+            dummy_validator.agents_queue.put.assert_called_once()
+            # Preserve existing evaluated score until new evaluation completes.
+            assert dummy_validator.agents_dict[1].score == 0.42
+            assert dummy_validator.agents_dict[1].git_commit == "old"
 
 
 @pytest.mark.unit

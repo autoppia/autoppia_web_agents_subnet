@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import time
+import subprocess
 
 import hashlib
 import secrets
@@ -115,11 +116,12 @@ def _ensure_writable_file(path: str, mode: int = 0o666) -> None:
 
 
 class AgentInstance:
-    def __init__(self, uid: int, container, temp_dir: str, port: int):
+    def __init__(self, uid: int, container, temp_dir: str, port: int, git_commit: Optional[str] = None):
         self.uid = uid
         self.container = container
         self.temp_dir = temp_dir
         self.port = port
+        self.git_commit = git_commit
 
     @property
     def base_url(self) -> str:
@@ -287,7 +289,7 @@ class SandboxManager:
         clone_repo(github_url, repo_dir, timeout=SANDBOX_CLONE_TIMEOUT)
         return repo_dir
 
-    def _start_container(self, uid: int, temp_dir: str) -> AgentInstance:
+    def _start_container(self, uid: int, temp_dir: str, *, git_commit: Optional[str] = None) -> AgentInstance:
         cleanup_containers([f"sandbox-agent-{uid}"])
 
         gateway_url = f"http://{SANDBOX_GATEWAY_HOST}:{SANDBOX_GATEWAY_PORT}"
@@ -331,7 +333,13 @@ class SandboxManager:
             container.reload()
         except Exception:
             pass
-        return AgentInstance(uid=uid, container=container, temp_dir=temp_dir, port=SANDBOX_AGENT_PORT)
+        return AgentInstance(
+            uid=uid,
+            container=container,
+            temp_dir=temp_dir,
+            port=SANDBOX_AGENT_PORT,
+            git_commit=git_commit,
+        )
 
     def deploy_agent(self, uid: int, github_url: str) -> Optional[AgentInstance]:
         try:
@@ -343,7 +351,21 @@ class SandboxManager:
             repo_dir = self._clone_repo(github_url)
             bt.logging.info(f"Cloned repo for agent {uid} to {repo_dir}.")
 
-            agent = self._start_container(uid, repo_dir)
+            # Capture the exact commit that will be executed (pins the evaluated code).
+            git_commit = None
+            try:
+                out = subprocess.check_output(
+                    ["git", "-C", repo_dir, "rev-parse", "HEAD"],
+                    text=True,
+                    timeout=5,
+                    stderr=subprocess.DEVNULL,
+                ).strip()
+                if out:
+                    git_commit = out
+            except Exception:
+                git_commit = None
+
+            agent = self._start_container(uid, repo_dir, git_commit=git_commit)
             bt.logging.success(f"Started container for agent {uid} at {agent.base_url}")            
             
             self._agents[uid] = agent

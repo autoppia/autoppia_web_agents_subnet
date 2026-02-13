@@ -118,6 +118,20 @@ class ValidatorEvaluationMixin:
                 ColoredLogger.error(f"Agent not deployed correctly for uid {agent.uid}", ColoredLogger.RED)
                 continue
 
+            # Persist the exact evaluated code identity for future "skip re-eval"
+            # checks (resolved during clone, not from miner-provided metadata).
+            try:
+                if normalized_url:
+                    agent.normalized_repo = str(normalized_url)
+            except Exception:
+                pass
+            try:
+                commit = getattr(agent_instance, "git_commit", None)
+                if commit:
+                    agent.git_commit = str(commit)
+            except Exception:
+                pass
+
             try:
                 setter = getattr(self.sandbox_manager, "set_allowed_task_ids", None)
                 if callable(setter):

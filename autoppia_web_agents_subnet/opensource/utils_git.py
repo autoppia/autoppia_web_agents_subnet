@@ -13,6 +13,58 @@ from urllib.error import HTTPError, URLError
 
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
+def resolve_remote_ref_commit(
+    normalized_url: str,
+    ref: Optional[str],
+    *,
+    timeout: float = 8.0,
+) -> Optional[str]:
+    """
+    Resolve the commit hash for a given repo/ref without cloning.
+
+    This uses `git ls-remote` so validators do not need a GitHub API token.
+    If `ref` is None, it resolves `HEAD` (default branch).
+    Returns the commit hash, or None on failure.
+    """
+    if not normalized_url:
+        return None
+
+    target = (ref or "HEAD").strip() or "HEAD"
+
+    env = os.environ.copy()
+    env.setdefault("GIT_TERMINAL_PROMPT", "0")
+    env.setdefault("GIT_LFS_SKIP_SMUDGE", "1")
+
+    try:
+        proc = subprocess.run(
+            ["git", "ls-remote", normalized_url, target],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except Exception:
+        return None
+
+    if proc.returncode != 0:
+        return None
+
+    lines = [ln.strip() for ln in (proc.stdout or "").splitlines() if ln.strip()]
+    if not lines:
+        return None
+
+    # Prefer an exact ref match when possible; otherwise fall back to the first line.
+    if ref:
+        for suffix in (f"refs/heads/{ref}", f"refs/tags/{ref}", ref):
+            for ln in lines:
+                parts = ln.split()
+                if len(parts) >= 2 and parts[1] == suffix:
+                    return parts[0]
+
+    parts = lines[0].split()
+    return parts[0] if parts else None
+
 
 def _normalize_github_ssh(url: str) -> str:
     """

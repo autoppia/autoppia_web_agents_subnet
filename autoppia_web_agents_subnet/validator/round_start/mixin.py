@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import time
 import bittensor as bt
-from urllib.parse import urlparse
 
 from autoppia_web_agents_subnet.utils.log_colors import round_details_tag
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
@@ -12,6 +11,10 @@ from autoppia_web_agents_subnet.protocol import StartRoundSynapse
 from autoppia_web_agents_subnet.validator.models import AgentInfo
 from autoppia_web_agents_subnet.validator.round_manager import RoundPhase
 from autoppia_web_agents_subnet.validator.round_start.types import RoundStartResult
+from autoppia_web_agents_subnet.opensource.utils_git import (
+    normalize_and_validate_github_url,
+    resolve_remote_ref_commit,
+)
 from autoppia_web_agents_subnet.validator.config import (
     MINIMUM_START_BLOCK,
     ROUND_START_UNTIL_FRACTION,
@@ -106,53 +109,6 @@ class ValidatorRoundStartMixin:
         """
         Perform StartRound handshake and collect new submitted agents
         """
-        def _submission_key(raw_url: str | None) -> tuple[str, str | None]:
-            """
-            Best-effort canonicalization for "is the submitted code the same?" checks.
-
-            We intentionally ignore transient fields like score/evaluated. Miners should
-            update the github_url (ideally including a branch/ref) to trigger re-eval.
-            """
-            if not raw_url:
-                return ("", None)
-            url = raw_url.strip()
-            if not url:
-                return ("", None)
-
-            # Handle common SSH-style GitHub URL.
-            if url.startswith("git@github.com:"):
-                path = url[len("git@github.com:") :].strip()
-                if path.endswith(".git"):
-                    path = path[:-4]
-                url = f"https://github.com/{path}"
-
-            # Prefix bare hosts with https://
-            if not url.startswith(("http://", "https://")):
-                url = f"https://{url}"
-
-            try:
-                parsed = urlparse(url)
-            except Exception:
-                return (url, None)
-
-            host = (parsed.netloc or "").lower()
-            if host.startswith("www."):
-                host = host[4:]
-            if host != "github.com":
-                return (url, None)
-
-            path = (parsed.path or "").strip().rstrip("/")
-            segments = [seg for seg in path.split("/") if seg]
-            if len(segments) < 2:
-                return (url, None)
-
-            owner, repo = segments[0], segments[1]
-            if repo.endswith(".git"):
-                repo = repo[:-4]
-            normalized = f"https://github.com/{owner}/{repo}"
-            ref = segments[3] if len(segments) >= 4 else None
-            return (normalized, ref)
-
         # Guard: metagraph must be available.
         metagraph = getattr(self, "metagraph", None)
         if metagraph is None:
@@ -242,28 +198,59 @@ class ValidatorRoundStartMixin:
                 self.round_handshake_payloads = {}
             self.round_handshake_payloads[int(uid)] = resp
             
+            raw_github_url = getattr(resp, "github_url", None)
+            normalized_repo, ref = normalize_and_validate_github_url(raw_github_url, miner_uid=uid)
+            if normalized_repo is None:
+                continue
+
+            # Resolve commit only when we have a previous commit to compare against.
+            commit_sha: str | None = None
             agent_info = AgentInfo(
                 uid=uid,
                 agent_name=getattr(resp, "agent_name", None),
                 agent_image=getattr(resp, "agent_image", None),
-                github_url=getattr(resp, "github_url", None),
+                github_url=raw_github_url,
+                normalized_repo=normalized_repo,
+                git_commit=None,
             )
             ColoredLogger.info(agent_info.__repr__(), ColoredLogger.GREEN)
 
             existing = self.agents_dict.get(uid)
             if isinstance(existing, AgentInfo):
-                # Do not re-evaluate if the code submission (repo/ref) didn't change.
-                if _submission_key(getattr(existing, "github_url", None)) == _submission_key(agent_info.github_url):
+                existing_repo = getattr(existing, "normalized_repo", None)
+                if not existing_repo:
+                    try:
+                        existing_repo, _ = normalize_and_validate_github_url(getattr(existing, "github_url", None), miner_uid=uid)
+                    except Exception:
+                        existing_repo = None
+
+                existing_commit = getattr(existing, "git_commit", None)
+                if existing_commit and existing_repo == normalized_repo:
+                    commit_sha = resolve_remote_ref_commit(normalized_repo, ref)
+
+                # Do not re-evaluate if the submission commit didn't change.
+                # If we cannot resolve a commit hash, be conservative and re-evaluate.
+                if commit_sha and existing_repo == normalized_repo and existing_commit == commit_sha:
                     # Keep score/evaluated, but allow display metadata to update.
                     try:
                         existing.agent_name = agent_info.agent_name
                         existing.agent_image = agent_info.agent_image
                         existing.github_url = agent_info.github_url
+                        if not getattr(existing, "normalized_repo", None):
+                            existing.normalized_repo = normalized_repo
                     except Exception:
                         pass
                     self.agents_dict[uid] = existing
                     continue
+                
+                # Submission changed (or unknown): enqueue for evaluation, but do
+                # not clobber the previously evaluated score/commit until new
+                # evaluation completes.
+                self.agents_queue.put(agent_info)
+                new_agents_count += 1
+                continue
 
+            # New uid: track it immediately and enqueue for evaluation.
             self.agents_dict[uid] = agent_info
             self.agents_queue.put(agent_info)
             if self.round_manager.round_number == 1:
