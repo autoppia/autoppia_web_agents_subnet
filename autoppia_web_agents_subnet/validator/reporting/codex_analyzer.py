@@ -171,7 +171,7 @@ def _generate_intelligent_analysis(report: RoundReport, context: dict) -> Option
                     failing_webs.append(web_name)
                 elif rate < 30:
                     low_success_webs.append(f"{web_name} ({rate_str})")
-            except:
+            except ValueError:
                 pass
 
         if failing_webs:
