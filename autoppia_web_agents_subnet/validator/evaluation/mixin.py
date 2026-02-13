@@ -56,6 +56,19 @@ class ValidatorEvaluationMixin:
 
         total_tasks = len(season_tasks)
 
+        # Capture which uids are pending (re-)evaluation so early-stop does not
+        # rely on stale scores for miners whose submissions are being updated.
+        uids_pending_eval: set[int] = set()
+        try:
+            q = getattr(getattr(self, "agents_queue", None), "queue", None)
+            if q is not None:
+                for item in list(q):
+                    uid = getattr(item, "uid", None)
+                    if isinstance(uid, int):
+                        uids_pending_eval.add(uid)
+        except Exception:
+            uids_pending_eval = set()
+
         # Track best known score among already-evaluated miners so we can
         # early-stop miners that cannot possibly win (WTA settlement).
         best_score_so_far = 0.0
@@ -64,6 +77,9 @@ class ValidatorEvaluationMixin:
             if isinstance(agents_dict, dict) and agents_dict:
                 for info in agents_dict.values():
                     if not getattr(info, "evaluated", False):
+                        continue
+                    uid = getattr(info, "uid", None)
+                    if isinstance(uid, int) and uid in uids_pending_eval:
                         continue
                     try:
                         score = float(getattr(info, "score", 0.0) or 0.0)
@@ -101,21 +117,33 @@ class ValidatorEvaluationMixin:
                         f"Skipping agent {getattr(agent, 'uid', '?')}: invalid github_url={getattr(agent, 'github_url', None)}",
                         ColoredLogger.YELLOW,
                     )
+                    agent.score = 0.0
+                    agent.evaluated = True
+                    self.agents_dict[agent.uid] = agent
                     continue
             except Exception as exc:
                 ColoredLogger.warning(
                     f"Skipping agent {getattr(agent, 'uid', '?')}: github_url pre-validation failed: {exc}",
                     ColoredLogger.YELLOW,
                 )
+                agent.score = 0.0
+                agent.evaluated = True
+                self.agents_dict[agent.uid] = agent
                 continue
             try:
                 agent_instance = self.sandbox_manager.deploy_agent(agent.uid, agent.github_url)
             except Exception as e:
                 ColoredLogger.error(f"Error deploying agent {agent.uid}: {e}", ColoredLogger.RED)
+                agent.score = 0.0
+                agent.evaluated = True
+                self.agents_dict[agent.uid] = agent
                 continue
-
+                
             if agent_instance is None:
                 ColoredLogger.error(f"Agent not deployed correctly for uid {agent.uid}", ColoredLogger.RED)
+                agent.score = 0.0
+                agent.evaluated = True
+                self.agents_dict[agent.uid] = agent
                 continue
 
             # Persist the exact evaluated code identity for future "skip re-eval"

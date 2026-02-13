@@ -200,8 +200,6 @@ class ValidatorRoundStartMixin:
             
             raw_github_url = getattr(resp, "github_url", None)
             normalized_repo, ref = normalize_and_validate_github_url(raw_github_url, miner_uid=uid)
-            if normalized_repo is None:
-                continue
 
             # Resolve commit only when we have a previous commit to compare against.
             commit_sha: str | None = None
@@ -225,12 +223,12 @@ class ValidatorRoundStartMixin:
                         existing_repo = None
 
                 existing_commit = getattr(existing, "git_commit", None)
-                if existing_commit and existing_repo == normalized_repo:
+                if normalized_repo and existing_commit and existing_repo == normalized_repo:
                     commit_sha = resolve_remote_ref_commit(normalized_repo, ref)
 
                 # Do not re-evaluate if the submission commit didn't change.
                 # If we cannot resolve a commit hash, be conservative and re-evaluate.
-                if commit_sha and existing_repo == normalized_repo and existing_commit == commit_sha:
+                if normalized_repo and commit_sha and existing_repo == normalized_repo and existing_commit == commit_sha:
                     # Keep score/evaluated, but allow display metadata to update.
                     try:
                         existing.agent_name = agent_info.agent_name
