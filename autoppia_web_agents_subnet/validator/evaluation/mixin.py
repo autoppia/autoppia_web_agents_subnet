@@ -11,28 +11,29 @@ from autoppia_web_agents_subnet.validator.round_manager import RoundPhase
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.opensource.utils_git import normalize_and_validate_github_url
 
+
 class ValidatorEvaluationMixin:
     """Mixin for evaluation phase."""
 
     async def _run_evaluation_phase(self) -> int:
         """
         Run the evaluation phase.
-        
+
         Flow:
         1. Deploy all available agents
         2. For each task:
            - Evaluate all deployed agents
            - Send results to IWAP
         3. Cleanup agents
-        """                
+        """
         current_block = self.block
         self.round_manager.enter_phase(
             RoundPhase.EVALUATION,
             block=current_block,
-            note=f"Starting evaluation phase",
+            note="Starting evaluation phase",
         )
         ColoredLogger.info("Starting evaluation phase", ColoredLogger.MAGENTA)
-        
+
         # Get tasks for this round (all season tasks)
         season_tasks = None
         getter = getattr(self.round_manager, "get_round_tasks", None)
@@ -52,9 +53,9 @@ class ValidatorEvaluationMixin:
                 season_tasks = res
             except Exception:
                 season_tasks = []
-        
+
         agents_evaluated = 0
-        while not self.agents_queue.empty():    
+        while not self.agents_queue.empty():
             # Refresh block each loop iteration so settlement cutoff checks don't drift.
             current_block = self.block
             wait_info = self.round_manager.get_wait_info(current_block)
@@ -92,7 +93,7 @@ class ValidatorEvaluationMixin:
             except Exception as e:
                 ColoredLogger.error(f"Error deploying agent {agent.uid}: {e}", ColoredLogger.RED)
                 continue
-                
+
             if agent_instance is None:
                 ColoredLogger.error(f"Agent not deployed correctly for uid {agent.uid}", ColoredLogger.RED)
                 continue
@@ -116,15 +117,15 @@ class ValidatorEvaluationMixin:
                     f"Failed to set allowed task ids for agent {agent.uid}: {exc}",
                     ColoredLogger.YELLOW,
                 )
-            
+
             rewards: list[float] = []
             batch_size = int(getattr(validator_config, "CONCURRENT_EVALUATION_NUM", 1) or 1)
             max_steps = int(getattr(validator_config, "AGENT_MAX_STEPS", 30) or 30)
             screening = int(getattr(validator_config, "SCREENING_TASKS_FOR_EARLY_STOP", 0) or 0)
-            
+
             try:
                 for i in range(0, len(season_tasks), batch_size):
-                    batch_tasks = season_tasks[i:i + batch_size]
+                    batch_tasks = season_tasks[i : i + batch_size]
                     eval_results = await asyncio.gather(
                         *[
                             evaluate_with_stateful_cua(
@@ -174,6 +175,43 @@ class ValidatorEvaluationMixin:
                         except Exception:
                             tokens = 0
 
+                        # Build llm_usage list from gateway usage_details (provider -> model -> value) for IWAP
+                        llm_usage_list = []
+                        primary_provider = None
+                        primary_model = None
+                        details = (usage_for_task or {}).get("usage_details") or {}
+                        tokens_by_provider_model = details.get("tokens") or {}
+                        cost_by_provider_model = details.get("cost") or {}
+                        for provider, models in tokens_by_provider_model.items():
+                            if not isinstance(models, dict):
+                                continue
+                            for model, tok in models.items():
+                                c = (cost_by_provider_model.get(provider) or {}).get(model)
+                                if c is None:
+                                    c = 0.0
+                                try:
+                                    tok_int = int(tok)
+                                except Exception:
+                                    tok_int = 0
+                                try:
+                                    c_float = float(c)
+                                except Exception:
+                                    c_float = 0.0
+                                llm_usage_list.append(
+                                    {
+                                        "provider": provider,
+                                        "model": model or None,
+                                        "tokens": tok_int,
+                                        "cost": c_float,
+                                    }
+                                )
+                                if primary_provider is None:
+                                    primary_provider = provider
+                                    primary_model = model or None
+                        # If gateway only returned aggregates (no usage_details), keep single entry from scalars
+                        if not llm_usage_list and (cost > 0 or tokens > 0):
+                            llm_usage_list = [{"provider": None, "model": None, "tokens": tokens, "cost": cost}]
+
                         try:
                             score_f = float(score)
                         except Exception:
@@ -192,7 +230,7 @@ class ValidatorEvaluationMixin:
                         )
                         rewards.append(reward)
 
-                        # Store evaluation data for batch submission
+                        # Store evaluation data for batch submission (llm_usage has provider/model per entry)
                         batch_eval_data.append(
                             {
                                 "task_item": task_item,
@@ -202,6 +240,9 @@ class ValidatorEvaluationMixin:
                                 "tokens": tokens,
                                 "reward": reward,
                                 "task_solution": task_solution,
+                                "llm_usage": llm_usage_list,
+                                "provider": primary_provider,
+                                "model": primary_model,
                             }
                         )
 
@@ -244,10 +285,9 @@ class ValidatorEvaluationMixin:
             self.agents_dict[agent.uid] = agent
             agents_evaluated += 1
 
-
         ColoredLogger.info("Evaluation phase completed", ColoredLogger.MAGENTA)
         return agents_evaluated
-    
+
     async def _submit_batch_evaluations_to_iwap(
         self,
         *,
@@ -256,10 +296,10 @@ class ValidatorEvaluationMixin:
     ) -> None:
         """
         Submit a batch of evaluations to IWAP for a single agent.
-        
+
         This method prepares evaluation payloads for all tasks in the batch
         and sends them in a single HTTP request to IWAP.
-        
+
         Args:
             agent_uid: The UID of the agent being evaluated
             batch_eval_data: List of dicts containing evaluation data:
@@ -270,28 +310,28 @@ class ValidatorEvaluationMixin:
                 - reward: Calculated reward
                 - task_solution: TaskSolution from evaluate_with_stateful_cua
         """
-        if not hasattr(self, 'current_round_id') or not self.current_round_id:
+        if not hasattr(self, "current_round_id") or not self.current_round_id:
             ColoredLogger.warning("No current round ID, skipping IWAP submission", ColoredLogger.YELLOW)
             return
-        
-        if not hasattr(self, 'current_agent_runs') or agent_uid not in self.current_agent_runs:
+
+        if not hasattr(self, "current_agent_runs") or agent_uid not in self.current_agent_runs:
             ColoredLogger.warning(f"No agent run found for agent {agent_uid}, skipping IWAP submission", ColoredLogger.YELLOW)
             return
-        
+
         agent_run = self.current_agent_runs[agent_uid]
-        
+
         # Prepare all evaluation payloads
         from autoppia_web_agents_subnet.platform.utils.task_flow import prepare_evaluation_payload
-        
+
         evaluations_batch = []
         for eval_data in batch_eval_data:
-            task_item = eval_data['task_item']
-            
+            task_item = eval_data["task_item"]
+
             # Get task payload from current round tasks
             base_task_id = getattr(task_item.task, "id", None)
             if base_task_id is None:
                 continue
-            
+
             # Build the full task_id that matches what was stored in IWAP
             full_task_id = f"{self.current_round_id}_{base_task_id}"
             task_payload = self.current_round_tasks.get(full_task_id)
@@ -300,83 +340,73 @@ class ValidatorEvaluationMixin:
             if task_payload is None:
                 ColoredLogger.warning(f"Task {base_task_id} not found in current round tasks", ColoredLogger.YELLOW)
                 continue
-            
+
             # task_solution comes from evaluate_with_stateful_cua (TaskSolution); support dict for backwards compat
-            task_solution = eval_data['task_solution']
-            
+            task_solution = eval_data["task_solution"]
+
             # Extract solution and actions
             solution = None
             actions = []
             test_results_data = []
             evaluation_meta_dict = {}
-            
+
             from autoppia_iwa.src.web_agents.classes import TaskSolution
+
             if isinstance(task_solution, TaskSolution):
                 solution = task_solution
-                actions = getattr(solution, 'actions', []) or []
+                actions = getattr(solution, "actions", []) or []
             elif isinstance(task_solution, dict):
                 # Legacy: dict form (e.g. execution_history, test_results)
                 evaluation_meta_dict = task_solution
                 # Extract actions from execution_history if present
-                if 'execution_history' in task_solution:
-                    execution_history = task_solution['execution_history']
+                if "execution_history" in task_solution:
+                    execution_history = task_solution["execution_history"]
                     if isinstance(execution_history, list):
                         for step in execution_history:
-                            if isinstance(step, dict) and 'action' in step:
-                                actions.append(step['action'])
+                            if isinstance(step, dict) and "action" in step:
+                                actions.append(step["action"])
                 # Extract test_results
-                test_results_data = task_solution.get('test_results', [])
+                test_results_data = task_solution.get("test_results", [])
                 # Create solution object with extracted actions
-                solution = TaskSolution(
-                    task_id=base_task_id,
-                    actions=actions,
-                    web_agent_id=str(agent_uid)
-                )
+                solution = TaskSolution(task_id=base_task_id, actions=actions, web_agent_id=str(agent_uid))
             else:
                 # Fallback: create empty solution
-                solution = TaskSolution(
-                    task_id=base_task_id,
-                    actions=[],
-                    web_agent_id=str(agent_uid)
-                )
-            
+                solution = TaskSolution(task_id=base_task_id, actions=[], web_agent_id=str(agent_uid))
+
+            evaluation_meta_for_payload = dict(evaluation_meta_dict) if isinstance(task_solution, dict) else {}
+            evaluation_meta_for_payload["llm_usage"] = eval_data.get("llm_usage") or []
+
             evaluation_payload = prepare_evaluation_payload(
                 ctx=self,
                 task_payload=task_payload,
                 agent_run=agent_run,
                 miner_uid=agent_uid,
                 solution=solution,
-                eval_score=eval_data['score'],
-                evaluation_meta=evaluation_meta_dict if isinstance(task_solution, dict) else {},
+                eval_score=eval_data["score"],
+                evaluation_meta=evaluation_meta_for_payload,
                 test_results_data=test_results_data,
-                exec_time=eval_data['exec_time'],
-                reward=eval_data['reward'],
-                llm_cost=eval_data.get('cost'),
-                llm_tokens=eval_data.get('tokens'),
-                llm_provider=eval_data.get('provider'),
+                exec_time=eval_data["exec_time"],
+                reward=eval_data["reward"],
+                llm_cost=eval_data.get("cost"),
+                llm_tokens=eval_data.get("tokens"),
+                llm_provider=eval_data.get("provider"),
             )
-            
+
             evaluations_batch.append(evaluation_payload)
-        
+
         if not evaluations_batch:
             ColoredLogger.warning("No evaluations to submit in batch", ColoredLogger.YELLOW)
             return
-        
+
         # Submit batch to IWAP
-        if hasattr(self, 'iwap_client') and self.iwap_client:
+        if hasattr(self, "iwap_client") and self.iwap_client:
             try:
                 result = await self.iwap_client.add_evaluations_batch(
                     validator_round_id=self.current_round_id,
                     agent_run_id=agent_run.agent_run_id,
                     evaluations=evaluations_batch,
                 )
-                ColoredLogger.info(
-                    f"Batch submission result: {result.get('message', 'Success')}",
-                    ColoredLogger.GREEN
-                )
+                ColoredLogger.info(f"Batch submission result: {result.get('message', 'Success')}", ColoredLogger.GREEN)
             except Exception as e:
                 ColoredLogger.error(f"Failed to submit batch: {e}", ColoredLogger.RED)
                 raise
-        
-        
-        
