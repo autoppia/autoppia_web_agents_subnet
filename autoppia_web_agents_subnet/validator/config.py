@@ -66,6 +66,14 @@ SAME_SOLUTION_SIM_THRESHOLD = _env_float("SAME_SOLUTION_SIM_THRESHOLD", 0.90)
 # accepting bare repo URLs (which implicitly track the default branch).
 REQUIRE_MINER_GITHUB_REF = _env_bool("REQUIRE_MINER_GITHUB_REF", True)
 
+# Evaluation resource controls:
+# 1) Per-round stake window: only handshake/evaluate the top N miners by stake.
+#    Set to 0 to disable.
+MAX_MINERS_PER_ROUND_BY_STAKE = _env_int("MAX_MINERS_PER_ROUND_BY_STAKE", 10)
+# 2) Cooldown: minimum number of rounds between evaluations for the same miner.
+#    Set to 0 to disable.
+EVALUATION_COOLDOWN_ROUNDS = _env_int("EVALUATION_COOLDOWN_ROUNDS", 2)
+
 # Early stop: abort evaluating a miner when it can no longer beat the current best
 # possible average reward (winner-takes-all settlement), saving time and cost.
 EARLY_STOP_BEHIND_BEST = _env_bool("EARLY_STOP_BEHIND_BEST", False)

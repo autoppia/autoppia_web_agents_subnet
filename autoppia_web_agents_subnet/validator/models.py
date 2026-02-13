@@ -87,3 +87,12 @@ class AgentInfo:
     # Best-effort submission identity: the commit of the submitted repo/ref (resolved by validator).
     normalized_repo: Optional[str] = None
     git_commit: Optional[str] = None
+    # Rate limiting / scheduling metadata (validator-side).
+    last_evaluated_round: Optional[int] = None
+    # Pending submission captured during cooldown (not yet evaluated).
+    pending_github_url: Optional[str] = None
+    pending_agent_name: Optional[str] = None
+    pending_agent_image: Optional[str] = None
+    pending_normalized_repo: Optional[str] = None
+    pending_ref: Optional[str] = None
+    pending_received_round: Optional[int] = None

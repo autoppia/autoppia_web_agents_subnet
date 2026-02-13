@@ -21,6 +21,8 @@ from autoppia_web_agents_subnet.validator.config import (
     MIN_MINER_STAKE_TAO,
     SETTLEMENT_FRACTION,
     REQUIRE_MINER_GITHUB_REF,
+    MAX_MINERS_PER_ROUND_BY_STAKE,
+    EVALUATION_COOLDOWN_ROUNDS,
 )
 from autoppia_web_agents_subnet.validator.round_start.synapse_handler import send_start_round_synapse_to_miners
 
@@ -43,6 +45,37 @@ def _commits_match(a: str | None, b: str | None) -> bool:
     if len(a_s) >= 7 and len(b_s) >= 7 and (a_s.startswith(b_s) or b_s.startswith(a_s)):
         return True
     return False
+
+
+def _clear_queue_best_effort(q: object) -> None:
+    """
+    Clear a queue.Queue without assuming it's always a real queue in unit tests.
+    """
+    try:
+        inner = getattr(q, "queue", None)
+        if inner is not None and hasattr(inner, "clear"):
+            inner.clear()
+            return
+    except Exception:
+        pass
+
+    # Fallback: drain via get_nowait() if available.
+    try:
+        empty = getattr(q, "empty", None)
+        get_nowait = getattr(q, "get_nowait", None)
+        if callable(empty) and callable(get_nowait):
+            while not empty():
+                get_nowait()
+    except Exception:
+        pass
+
+
+def _is_cooldown_active(*, current_round: int, last_evaluated_round: int | None, cooldown_rounds: int) -> bool:
+    if cooldown_rounds <= 0:
+        return False
+    if not isinstance(last_evaluated_round, int):
+        return False
+    return (current_round - last_evaluated_round) < cooldown_rounds
 
 
 class ValidatorRoundStartMixin:
@@ -130,6 +163,13 @@ class ValidatorRoundStartMixin:
         """
         Perform StartRound handshake and collect new submitted agents
         """
+        # Each round we rebuild the evaluation queue from scratch (based on the
+        # current stake window + cooldown) to keep evaluation cost/time bounded.
+        try:
+            _clear_queue_best_effort(getattr(self, "agents_queue", None))
+        except Exception:
+            pass
+
         # Guard: metagraph must be available.
         metagraph = getattr(self, "metagraph", None)
         if metagraph is None:
@@ -168,6 +208,24 @@ class ValidatorRoundStartMixin:
                 f"No miners meet MIN_MINER_STAKE_TAO={min_stake:.4f}; active_miner_uids will be empty"
             )
             return
+
+        # Optional: restrict to the top N miners by stake to bound evaluation work.
+        max_by_stake = int(MAX_MINERS_PER_ROUND_BY_STAKE)
+        if max_by_stake > 0 and len(candidate_uids) > max_by_stake:
+            try:
+                candidate_uids = sorted(
+                    candidate_uids,
+                    key=lambda uid: float(stakes[uid]) if uid < len(stakes) else 0.0,
+                    reverse=True,
+                )[:max_by_stake]
+            except Exception:
+                candidate_uids = candidate_uids[:max_by_stake]
+
+        # Expose the eligible window for the evaluation phase (and for logs).
+        try:
+            self.round_candidate_uids = list(candidate_uids)
+        except Exception:
+            pass
 
         # Log a compact summary of candidate stakes.
         try:
@@ -208,10 +266,32 @@ class ValidatorRoundStartMixin:
         )
 
         new_agents_count = 0
+        current_round = int(getattr(self.round_manager, "round_number", 0) or 0)
+        cooldown_rounds = int(EVALUATION_COOLDOWN_ROUNDS)
 
         for idx, uid in enumerate(candidate_uids):
             resp = responses[idx] if idx < len(responses) else None
             if resp is None:
+                # If we have a pending submission recorded during cooldown, we
+                # can evaluate it once the cooldown expires even if the miner
+                # fails to respond in this round.
+                existing = self.agents_dict.get(uid)
+                if isinstance(existing, AgentInfo) and existing.pending_github_url:
+                    if not _is_cooldown_active(
+                        current_round=current_round,
+                        last_evaluated_round=getattr(existing, "last_evaluated_round", None),
+                        cooldown_rounds=cooldown_rounds,
+                    ):
+                        pending_info = AgentInfo(
+                            uid=uid,
+                            agent_name=existing.pending_agent_name or existing.agent_name,
+                            agent_image=existing.pending_agent_image or existing.agent_image,
+                            github_url=existing.pending_github_url,
+                            normalized_repo=existing.pending_normalized_repo,
+                            git_commit=None,
+                        )
+                        self.agents_queue.put(pending_info)
+                        new_agents_count += 1
                 continue
 
             agent_name = getattr(resp, "agent_name", None)
@@ -335,6 +415,13 @@ class ValidatorRoundStartMixin:
                         existing.github_url = agent_info.github_url
                         if not getattr(existing, "normalized_repo", None):
                             existing.normalized_repo = normalized_repo
+                        # Clear any stale pending submission (we are already on this commit).
+                        existing.pending_github_url = None
+                        existing.pending_agent_name = None
+                        existing.pending_agent_image = None
+                        existing.pending_normalized_repo = None
+                        existing.pending_ref = None
+                        existing.pending_received_round = None
                     except Exception:
                         pass
                     self.agents_dict[uid] = existing
@@ -343,6 +430,24 @@ class ValidatorRoundStartMixin:
                 # Submission changed (or unknown): enqueue for evaluation, but do
                 # not clobber the previously evaluated score/commit until new
                 # evaluation completes.
+                if _is_cooldown_active(
+                    current_round=current_round,
+                    last_evaluated_round=getattr(existing, "last_evaluated_round", None),
+                    cooldown_rounds=cooldown_rounds,
+                ):
+                    # Store pending submission and skip enqueuing for now.
+                    try:
+                        existing.pending_github_url = agent_info.github_url
+                        existing.pending_agent_name = agent_info.agent_name
+                        existing.pending_agent_image = agent_info.agent_image
+                        existing.pending_normalized_repo = agent_info.normalized_repo
+                        existing.pending_ref = ref
+                        existing.pending_received_round = current_round
+                    except Exception:
+                        pass
+                    self.agents_dict[uid] = existing
+                    continue
+
                 self.agents_queue.put(agent_info)
                 new_agents_count += 1
                 continue

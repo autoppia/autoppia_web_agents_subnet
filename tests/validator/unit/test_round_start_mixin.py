@@ -263,6 +263,80 @@ class TestHandshake:
             assert dummy_validator.agents_dict[1].score == 0.42
             assert dummy_validator.agents_dict[1].git_commit == "old"
 
+    async def test_handshake_limits_candidates_to_top_stake_window(self, dummy_validator):
+        from tests.conftest import _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+
+        dummy_validator.uid = 0
+        dummy_validator.metagraph.n = 6
+        dummy_validator.metagraph.stake = [0.0, 1.0, 10.0, 5.0, 2.0, 8.0]
+        dummy_validator.metagraph.axons = [Mock(ip="127.0.0.1", port=8000 + i) for i in range(6)]
+
+        with patch('autoppia_web_agents_subnet.validator.round_start.mixin.MIN_MINER_STAKE_TAO', 0.0), \
+             patch('autoppia_web_agents_subnet.validator.round_start.mixin.MAX_MINERS_PER_ROUND_BY_STAKE', 2), \
+             patch('autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners', new_callable=AsyncMock) as mock_send:
+            mock_send.return_value = [
+                Mock(agent_name="agent2", github_url="https://github.com/test/agent2/tree/main", agent_image=None),
+                Mock(agent_name="agent5", github_url="https://github.com/test/agent5/tree/main", agent_image=None),
+            ]
+
+            await dummy_validator._perform_handshake()
+
+            # Only top-2 stake miners (uids 2 and 5) should be contacted.
+            miner_axons = mock_send.call_args.kwargs["miner_axons"]
+            assert [axon.port for axon in miner_axons] == [8002, 8005]
+
+    async def test_handshake_rate_limits_resubmissions_by_round_cooldown(self, dummy_validator):
+        from tests.conftest import _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+
+        dummy_validator.uid = 0
+        dummy_validator.metagraph.n = 2
+        dummy_validator.metagraph.stake = [15000.0, 15000.0]
+        dummy_validator.metagraph.axons = [Mock(ip="127.0.0.1", port=8000), Mock(ip="127.0.0.1", port=8001)]
+
+        # Set current round so cooldown math is deterministic.
+        dummy_validator.round_manager.round_number = 5
+
+        from autoppia_web_agents_subnet.validator.models import AgentInfo
+        existing = AgentInfo(
+            uid=1,
+            agent_name="agent1",
+            github_url="https://github.com/test/agent1/tree/main",
+            agent_image=None,
+            score=0.42,
+            evaluated=True,
+            normalized_repo="https://github.com/test/agent1",
+            git_commit="old",
+            last_evaluated_round=4,  # cooldown should block in round 5
+        )
+        dummy_validator.agents_dict = {1: existing}
+
+        with patch('autoppia_web_agents_subnet.validator.round_start.mixin.EVALUATION_COOLDOWN_ROUNDS', 2), \
+             patch('autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners', new_callable=AsyncMock) as mock_send, \
+             patch('autoppia_web_agents_subnet.validator.round_start.mixin.resolve_remote_ref_commit') as mock_resolve:
+            mock_send.return_value = [
+                Mock(agent_name="agent1", github_url="https://github.com/test/agent1/tree/main", agent_image=None),
+            ]
+            mock_resolve.return_value = "new"
+
+            dummy_validator.agents_queue.put.reset_mock()
+            await dummy_validator._perform_handshake()
+
+            # Cooldown blocks evaluation enqueue, but stores a pending submission.
+            dummy_validator.agents_queue.put.assert_not_called()
+            assert dummy_validator.agents_dict[1].pending_github_url == "https://github.com/test/agent1/tree/main"
+
+            # Next eligible round: if miner does not respond, pending submission is enqueued.
+            dummy_validator.round_manager.round_number = 6
+            mock_send.return_value = [None]
+            dummy_validator.agents_queue.put.reset_mock()
+            await dummy_validator._perform_handshake()
+            dummy_validator.agents_queue.put.assert_called_once()
+            pending_agent_info = dummy_validator.agents_queue.put.call_args.args[0]
+            assert pending_agent_info.uid == 1
+            assert pending_agent_info.github_url == "https://github.com/test/agent1/tree/main"
+
 
 @pytest.mark.unit
 @pytest.mark.asyncio

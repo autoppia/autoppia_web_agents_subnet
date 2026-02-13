@@ -93,6 +93,50 @@ class ValidatorEvaluationMixin:
         except Exception:
             best_score_so_far = 0.0
 
+        # Round-based rate limiting metadata.
+        round_number = 0
+        try:
+            round_number = int(getattr(getattr(self, "round_manager", None), "round_number", 0) or 0)
+        except Exception:
+            round_number = 0
+
+        def _finalize_agent(agent: object, *, score: float) -> None:
+            """
+            Mark an AgentInfo-like object as evaluated and persist it in agents_dict.
+            """
+            try:
+                agent.score = float(score)  # type: ignore[attr-defined]
+            except Exception:
+                try:
+                    agent.score = 0.0  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+            try:
+                agent.evaluated = True  # type: ignore[attr-defined]
+            except Exception:
+                pass
+            try:
+                agent.last_evaluated_round = round_number  # type: ignore[attr-defined]
+            except Exception:
+                pass
+            # Clear any stale pending submission once we've processed the agent in this round.
+            for attr in (
+                "pending_github_url",
+                "pending_agent_name",
+                "pending_agent_image",
+                "pending_normalized_repo",
+                "pending_ref",
+                "pending_received_round",
+            ):
+                try:
+                    setattr(agent, attr, None)
+                except Exception:
+                    pass
+            try:
+                self.agents_dict[agent.uid] = agent  # type: ignore[attr-defined]
+            except Exception:
+                pass
+
         agents_evaluated = 0
         while not self.agents_queue.empty():
             # Refresh block each loop iteration so settlement cutoff checks don't drift.
@@ -126,9 +170,7 @@ class ValidatorEvaluationMixin:
                         f"Skipping agent {getattr(agent, 'uid', '?')}: invalid github_url={getattr(agent, 'github_url', None)}",
                         ColoredLogger.YELLOW,
                     )
-                    agent.score = 0.0
-                    agent.evaluated = True
-                    self.agents_dict[agent.uid] = agent
+                    _finalize_agent(agent, score=0.0)
                     continue
 
                 # Strict: ensure the submitted ref exists / repo is reachable via git
@@ -143,9 +185,7 @@ class ValidatorEvaluationMixin:
                             f"Skipping agent {getattr(agent, 'uid', '?')}: git ls-remote failed (repo unreachable)",
                             ColoredLogger.YELLOW,
                         )
-                        agent.score = 0.0
-                        agent.evaluated = True
-                        self.agents_dict[agent.uid] = agent
+                        _finalize_agent(agent, score=0.0)
                         continue
                 else:
                     if require_ref and not ref:
@@ -153,42 +193,32 @@ class ValidatorEvaluationMixin:
                             f"Skipping agent {getattr(agent, 'uid', '?')}: missing required ref in github_url={raw_s}",
                             ColoredLogger.YELLOW,
                         )
-                        agent.score = 0.0
-                        agent.evaluated = True
-                        self.agents_dict[agent.uid] = agent
+                        _finalize_agent(agent, score=0.0)
                         continue
                     if ref and resolve_remote_ref_commit(str(normalized_url), str(ref)) is None:
                         ColoredLogger.warning(
                             f"Skipping agent {getattr(agent, 'uid', '?')}: git ls-remote failed for ref={ref}",
                             ColoredLogger.YELLOW,
                         )
-                        agent.score = 0.0
-                        agent.evaluated = True
-                        self.agents_dict[agent.uid] = agent
+                        _finalize_agent(agent, score=0.0)
                         continue
             except Exception as exc:
                 ColoredLogger.warning(
                     f"Skipping agent {getattr(agent, 'uid', '?')}: github_url pre-validation failed: {exc}",
                     ColoredLogger.YELLOW,
                 )
-                agent.score = 0.0
-                agent.evaluated = True
-                self.agents_dict[agent.uid] = agent
+                _finalize_agent(agent, score=0.0)
                 continue
             try:
                 agent_instance = self.sandbox_manager.deploy_agent(agent.uid, agent.github_url)
             except Exception as e:
                 ColoredLogger.error(f"Error deploying agent {agent.uid}: {e}", ColoredLogger.RED)
-                agent.score = 0.0
-                agent.evaluated = True
-                self.agents_dict[agent.uid] = agent
+                _finalize_agent(agent, score=0.0)
                 continue
                 
             if agent_instance is None:
                 ColoredLogger.error(f"Agent not deployed correctly for uid {agent.uid}", ColoredLogger.RED)
-                agent.score = 0.0
-                agent.evaluated = True
-                self.agents_dict[agent.uid] = agent
+                _finalize_agent(agent, score=0.0)
                 continue
 
             # Persist the exact evaluated code identity for future "skip re-eval"
@@ -401,9 +431,7 @@ class ValidatorEvaluationMixin:
 
             # Update agent score/evaluated state and increment the counter.
             avg_reward = (sum(rewards) / float(total_tasks)) if total_tasks > 0 else 0.0
-            agent.score = float(avg_reward)
-            agent.evaluated = True
-            self.agents_dict[agent.uid] = agent
+            _finalize_agent(agent, score=float(avg_reward))
             agents_evaluated += 1
             if agent.score > best_score_so_far:
                 best_score_so_far = float(agent.score)
