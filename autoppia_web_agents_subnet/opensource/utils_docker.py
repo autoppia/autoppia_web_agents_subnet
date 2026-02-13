@@ -107,7 +107,9 @@ def garbage_collect_stale_containers(
     - Only targets non-running containers (created/exited).
     - Only removes:
       - Our own sandbox containers by name prefix, OR
-      - Likely build intermediates (Cmd contains '#(nop)') older than max_age_seconds.
+      - Likely build intermediates older than max_age_seconds, detected via:
+        - Config.Image is an untagged digest (sha256:...) AND
+        - Cmd contains '#(nop)' (typical of Docker build step metadata)
     - Throttled by min_interval_seconds.
     """
     global _LAST_GC_TS
@@ -158,16 +160,11 @@ def garbage_collect_stale_containers(
             else:
                 cmd_s = str(cmd)
 
-            # Heuristic: intermediate build containers often have '#(nop)' in Cmd.
-            if "#(nop)" in cmd_s:
-                try:
-                    stop_and_remove(c)
-                    removed += 1
-                except Exception:
-                    pass
-            # Heuristic: intermediate build containers from RUN steps won't include '#(nop)',
-            # but are typically created from untaged image digests and have no labels.
-            elif image.startswith("sha256:") and not labels:
+            # Heuristic: Docker build step containers typically have '#(nop)' in Cmd and
+            # refer to an untagged digest image. This is intentionally conservative so
+            # we don't delete unrelated local containers (e.g. demo websites) that may
+            # be running on the same Docker host.
+            if image.startswith("sha256:") and "#(nop)" in cmd_s:
                 try:
                     stop_and_remove(c)
                     removed += 1
