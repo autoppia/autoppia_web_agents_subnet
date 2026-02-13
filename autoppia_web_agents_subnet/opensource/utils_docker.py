@@ -151,6 +151,8 @@ def garbage_collect_stale_containers(
 
             cfg = (attrs.get("Config") or {}) if isinstance(attrs, dict) else {}
             cmd = cfg.get("Cmd") or []
+            labels = cfg.get("Labels") or {}
+            image = str(cfg.get("Image") or "")
             if isinstance(cmd, list):
                 cmd_s = " ".join(str(x) for x in cmd)
             else:
@@ -158,6 +160,14 @@ def garbage_collect_stale_containers(
 
             # Heuristic: intermediate build containers often have '#(nop)' in Cmd.
             if "#(nop)" in cmd_s:
+                try:
+                    stop_and_remove(c)
+                    removed += 1
+                except Exception:
+                    pass
+            # Heuristic: intermediate build containers from RUN steps won't include '#(nop)',
+            # but are typically created from untaged image digests and have no labels.
+            elif image.startswith("sha256:") and not labels:
                 try:
                     stop_and_remove(c)
                     removed += 1
