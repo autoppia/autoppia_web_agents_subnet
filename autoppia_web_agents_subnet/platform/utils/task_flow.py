@@ -32,10 +32,10 @@ def prepare_evaluation_payload(
 ) -> Dict[str, Any]:
     """
     Prepare a single evaluation payload for submission to IWAP.
-    
+
     This function extracts the common logic for building task, task_solution,
     and evaluation payloads from the raw evaluation data.
-    
+
     Args:
         ctx: Validator context
         task_payload: IWAP task payload
@@ -50,24 +50,24 @@ def prepare_evaluation_payload(
         llm_cost: Total LLM cost in USD (optional)
         llm_tokens: Total LLM tokens used (optional)
         llm_provider: LLM provider used, e.g., "openai", "chutes" (optional)
-    
+
     Returns:
         Dict containing task, task_solution, evaluation, and evaluation_result
     """
     validator_hotkey = ctx.wallet.hotkey.ss58_address
-    
+
     miner_hotkey = None
     try:
         miner_hotkey = ctx.metagraph.hotkeys[miner_uid]
     except Exception:
         miner_hotkey = None
-    
+
     # Handle None solution (miner didn't respond)
     if solution is None:
         raw_actions = []
     else:
         raw_actions = getattr(solution, "actions", []) or []
-    
+
     actions_payload: List[Dict[str, Any]] = []
     for action in raw_actions:
         if hasattr(action, "model_dump"):
@@ -76,17 +76,17 @@ def prepare_evaluation_payload(
             actions_payload.append(dict(action.__dict__))
         else:
             actions_payload.append({"type": getattr(action, "type", "unknown")})
-    
+
     # Use the full task_id from IWAP payload for generating IDs
     iwap_task_id = task_payload.task_id
     task_solution_id = iwa_main.generate_task_solution_id(iwap_task_id, miner_uid)
     evaluation_id = iwa_main.generate_evaluation_id(iwap_task_id, miner_uid)
-    
+
     # Ensure evaluation_meta is a dict
     if not isinstance(evaluation_meta, dict):
         evaluation_meta = {}
     evaluation_metadata = dict(evaluation_meta)
-    
+
     # Remove fields that are already in specific EvaluationResultIWAP fields
     evaluation_metadata.pop("gif_recording", None)
     evaluation_metadata.pop("final_score", None)
@@ -101,10 +101,11 @@ def prepare_evaluation_payload(
     evaluation_metadata.pop("raw_score", None)
     evaluation_metadata.pop("evaluation_time", None)
     evaluation_metadata.pop("stats", None)
-    
+
     # Mark timeout in metadata if execution time reaches TIMEOUT
     try:
         from autoppia_web_agents_subnet.validator.config import TIMEOUT
+
         is_timeout = False
         if exec_time is not None and TIMEOUT is not None:
             is_timeout = float(exec_time) >= float(TIMEOUT)
@@ -114,7 +115,7 @@ def prepare_evaluation_payload(
             evaluation_metadata["timeout"] = True
     except Exception:
         pass
-    
+
     task_solution_payload = iwa_models.TaskSolutionIWAP(
         solution_id=task_solution_id,
         task_id=iwap_task_id,
@@ -127,7 +128,12 @@ def prepare_evaluation_payload(
         actions=actions_payload,
         recording=getattr(solution, "recording", None) if solution is not None else None,
     )
-    
+
+    # Build llm_usage for backend (evaluation_llm_usage table); backend also accepts scalar llm_* for compat
+    llm_usage: Optional[List[Dict[str, Any]]] = evaluation_meta.get("llm_usage") if isinstance(evaluation_meta.get("llm_usage"), list) else None
+    if not llm_usage and (llm_cost is not None or llm_tokens is not None or llm_provider is not None):
+        llm_usage = [{"provider": llm_provider, "model": None, "tokens": llm_tokens, "cost": llm_cost}]
+
     evaluation_result_payload = iwa_models.EvaluationResultIWAP(
         evaluation_id=evaluation_id,
         validator_round_id=ctx.current_round_id,
@@ -149,8 +155,9 @@ def prepare_evaluation_payload(
         llm_cost=llm_cost,
         llm_tokens=llm_tokens,
         llm_provider=llm_provider,
+        llm_usage=llm_usage,
     )
-    
+
     return {
         "task": task_payload.to_payload(),
         "task_solution": task_solution_payload.to_payload(),
@@ -181,7 +188,7 @@ async def submit_task_results(
     # Build the full task_id that matches what was stored in IWAP
     # The task_id in IWAP includes the validator_round_id prefix
     full_task_id = f"{ctx.current_round_id}_{base_task_id}"
-    
+
     # Try to get task_payload using the full task_id first
     task_payload = ctx.current_round_tasks.get(full_task_id)
     # Fallback to base_task_id for backward compatibility
@@ -200,20 +207,22 @@ async def submit_task_results(
 
     validator_hotkey = ctx.wallet.hotkey.ss58_address
 
+    try:
+        from autoppia_web_agents_subnet.validator.config import TIMEOUT
+    except ImportError:
+        TIMEOUT = 180.0
+
     # CRITICAL: Always create evaluations for ALL miners that have agent_runs
     # active_miner_uids should match current_agent_runs, but iterate over agent_runs to be safe
     # Each miner with agent_run MUST have a TaskSolution and Evaluation for each task
-    
+
     for idx, miner_uid in enumerate(ctx.active_miner_uids):
         # Get agent_run - if it doesn't exist, skip (shouldn't happen, but handle gracefully)
         agent_run = ctx.current_agent_runs.get(miner_uid)
         if agent_run is None:
-            bt.logging.warning(
-                f"⚠️ Miner {miner_uid} is in active_miner_uids but has no agent_run. "
-                f"This should not happen - agent_run should be created during handshake."
-            )
+            bt.logging.warning(f"⚠️ Miner {miner_uid} is in active_miner_uids but has no agent_run. This should not happen - agent_run should be created during handshake.")
             continue
-        
+
         # Get solution and evaluation data for this miner
         # task_solutions, eval_scores, etc. are aligned with active_miner_uids by index
         if idx < len(task_solutions):
@@ -242,7 +251,7 @@ async def submit_task_results(
             raw_actions = []
         else:
             raw_actions = getattr(solution, "actions", []) or []
-        
+
         actions_payload: List[Dict[str, Any]] = []
         log_iwap_phase(
             "Phase 4",
@@ -280,12 +289,12 @@ async def submit_task_results(
         iwap_task_id = task_payload.task_id
         task_solution_id = iwa_main.generate_task_solution_id(iwap_task_id, miner_uid)
         evaluation_id = iwa_main.generate_evaluation_id(iwap_task_id, miner_uid)
-        
+
         # Ensure evaluation_meta is a dict
         if not isinstance(evaluation_meta, dict):
             evaluation_meta = {}
         evaluation_metadata = dict(evaluation_meta)
-        
+
         # Remove fields that are already in specific EvaluationResultIWAP fields
         # These should not be in metadata
         evaluation_metadata.pop("gif_recording", None)
@@ -301,9 +310,9 @@ async def submit_task_results(
         evaluation_metadata.pop("raw_score", None)  # raw_score is a separate field
         evaluation_metadata.pop("evaluation_time", None)  # evaluation_time is a separate field
         evaluation_metadata.pop("stats", None)  # stats is a separate field
-        
+
         gif_payload = evaluation_meta.get("gif_recording")
-        
+
         # Only keep metadata if it has useful information (not empty)
         if not evaluation_metadata:
             evaluation_metadata = {}
@@ -311,6 +320,7 @@ async def submit_task_results(
         # Marcar timeout en metadata si el tiempo de ejecución alcanza el TIMEOUT
         try:
             from autoppia_web_agents_subnet.validator.config import TIMEOUT
+
             is_timeout = False
             if exec_time is not None and TIMEOUT is not None:
                 is_timeout = float(exec_time) >= float(TIMEOUT)
@@ -331,6 +341,7 @@ async def submit_task_results(
             if eval_score >= 1.0:
                 # Use minimum reward (EVAL_SCORE_WEIGHT) if task was completed but reward not available
                 from autoppia_web_agents_subnet.validator.config import EVAL_SCORE_WEIGHT
+
                 reward_value = float(EVAL_SCORE_WEIGHT)  # Minimum reward for completed task
             else:
                 reward_value = 0.0  # Failed task = 0 reward
@@ -347,6 +358,14 @@ async def submit_task_results(
             actions=actions_payload,
             recording=getattr(solution, "recording", None) if solution is not None else None,
         )
+
+        # Build llm_usage for backend (same as prepare_evaluation_payload)
+        llm_usage_inner: Optional[List[Dict[str, Any]]] = evaluation_meta.get("llm_usage") if isinstance(evaluation_meta.get("llm_usage"), list) else None
+        llm_cost_inner = evaluation_meta.get("cost")
+        llm_tokens_inner = evaluation_meta.get("tokens")
+        llm_provider_inner = evaluation_meta.get("provider")
+        if not llm_usage_inner and (llm_cost_inner is not None or llm_tokens_inner is not None or llm_provider_inner is not None):
+            llm_usage_inner = [{"provider": llm_provider_inner, "model": None, "tokens": llm_tokens_inner, "cost": llm_cost_inner}]
 
         evaluation_result_payload = iwa_models.EvaluationResultIWAP(
             evaluation_id=evaluation_id,
@@ -366,6 +385,10 @@ async def submit_task_results(
             stats=evaluation_meta.get("stats"),
             gif_recording=None,
             metadata=evaluation_metadata,
+            llm_cost=llm_cost_inner,
+            llm_tokens=llm_tokens_inner,
+            llm_provider=llm_provider_inner,
+            llm_usage=llm_usage_inner,
         )
 
         if (miner_uid, iwap_task_id) in ctx._completed_pairs:
@@ -407,7 +430,7 @@ async def submit_task_results(
                 # Already exists - mark as completed
                 log_iwap_phase(
                     "Phase 4",
-                    f"add_evaluation returned 409 for miner_uid={miner_uid}, task_id={task_id}; marking as completed",
+                    f"add_evaluation returned 409 for miner_uid={miner_uid}, task_id={iwap_task_id}; marking as completed",
                     level="warning",
                 )
                 ctx._completed_pairs.add((miner_uid, iwap_task_id))

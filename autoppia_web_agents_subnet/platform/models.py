@@ -214,10 +214,11 @@ class EvaluationResultIWAP:
     stats: Optional[Dict[str, Any]] = None
     gif_recording: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
-    # LLM usage tracking
+    # LLM usage tracking (backend persists llm_usage to evaluation_llm_usage; scalars kept for compat)
     llm_cost: Optional[float] = None  # Total cost in USD for LLM usage
     llm_tokens: Optional[int] = None  # Total tokens used
     llm_provider: Optional[str] = None  # LLM provider used (e.g., "openai", "chutes")
+    llm_usage: Optional[List[Dict[str, Any]]] = None  # Per-call usage [{provider, model?, tokens?, cost?}]
 
     def to_payload(self) -> Dict[str, Any]:
         data = asdict(self)
@@ -301,7 +302,7 @@ class FinishRoundIWAP:
             "summary": self.summary or {},
             "agent_runs": [run.to_payload() for run in self.agent_runs],
         }
-        
+
         # Add new fields if present
         if self.round_metadata:
             payload["round"] = self.round_metadata.to_payload()
@@ -313,7 +314,7 @@ class FinishRoundIWAP:
             payload["ipfs_uploaded"] = self.ipfs_uploaded
         if self.ipfs_downloaded:
             payload["ipfs_downloaded"] = self.ipfs_downloaded
-            
+
         # Deprecated fields (only included if populated for backward compatibility)
         if self.winners:
             payload["winners"] = [winner.to_payload() for winner in self.winners]
@@ -321,5 +322,5 @@ class FinishRoundIWAP:
             payload["winner_scores"] = self.winner_scores
         if self.weights:
             payload["weights"] = self.weights
-            
+
         return payload
