@@ -54,6 +54,26 @@ class ValidatorEvaluationMixin:
             except Exception:
                 season_tasks = []
 
+        total_tasks = len(season_tasks)
+
+        # Track best known score among already-evaluated miners so we can
+        # early-stop miners that cannot possibly win (WTA settlement).
+        best_score_so_far = 0.0
+        try:
+            agents_dict = getattr(self, "agents_dict", None)
+            if isinstance(agents_dict, dict) and agents_dict:
+                for info in agents_dict.values():
+                    if not getattr(info, "evaluated", False):
+                        continue
+                    try:
+                        score = float(getattr(info, "score", 0.0) or 0.0)
+                    except Exception:
+                        score = 0.0
+                    if score > best_score_so_far:
+                        best_score_so_far = score
+        except Exception:
+            best_score_so_far = 0.0
+
         agents_evaluated = 0
         while not self.agents_queue.empty():
             # Refresh block each loop iteration so settlement cutoff checks don't drift.
@@ -122,6 +142,7 @@ class ValidatorEvaluationMixin:
             batch_size = int(getattr(validator_config, "CONCURRENT_EVALUATION_NUM", 1) or 1)
             max_steps = int(getattr(validator_config, "AGENT_MAX_STEPS", 30) or 30)
             screening = int(getattr(validator_config, "SCREENING_TASKS_FOR_EARLY_STOP", 0) or 0)
+            early_stop_behind_best = bool(getattr(validator_config, "EARLY_STOP_BEHIND_BEST", False))
 
             try:
                 for i in range(0, len(season_tasks), batch_size):
@@ -175,43 +196,6 @@ class ValidatorEvaluationMixin:
                         except Exception:
                             tokens = 0
 
-                        # Build llm_usage list from gateway usage_details (provider -> model -> value) for IWAP
-                        llm_usage_list = []
-                        primary_provider = None
-                        primary_model = None
-                        details = (usage_for_task or {}).get("usage_details") or {}
-                        tokens_by_provider_model = details.get("tokens") or {}
-                        cost_by_provider_model = details.get("cost") or {}
-                        for provider, models in tokens_by_provider_model.items():
-                            if not isinstance(models, dict):
-                                continue
-                            for model, tok in models.items():
-                                c = (cost_by_provider_model.get(provider) or {}).get(model)
-                                if c is None:
-                                    c = 0.0
-                                try:
-                                    tok_int = int(tok)
-                                except Exception:
-                                    tok_int = 0
-                                try:
-                                    c_float = float(c)
-                                except Exception:
-                                    c_float = 0.0
-                                llm_usage_list.append(
-                                    {
-                                        "provider": provider,
-                                        "model": model or None,
-                                        "tokens": tok_int,
-                                        "cost": c_float,
-                                    }
-                                )
-                                if primary_provider is None:
-                                    primary_provider = provider
-                                    primary_model = model or None
-                        # If gateway only returned aggregates (no usage_details), keep single entry from scalars
-                        if not llm_usage_list and (cost > 0 or tokens > 0):
-                            llm_usage_list = [{"provider": None, "model": None, "tokens": tokens, "cost": cost}]
-
                         try:
                             score_f = float(score)
                         except Exception:
@@ -230,7 +214,7 @@ class ValidatorEvaluationMixin:
                         )
                         rewards.append(reward)
 
-                        # Store evaluation data for batch submission (llm_usage has provider/model per entry)
+                        # Store evaluation data for batch submission
                         batch_eval_data.append(
                             {
                                 "task_item": task_item,
@@ -240,9 +224,6 @@ class ValidatorEvaluationMixin:
                                 "tokens": tokens,
                                 "reward": reward,
                                 "task_solution": task_solution,
-                                "llm_usage": llm_usage_list,
-                                "provider": primary_provider,
-                                "model": primary_model,
                             }
                         )
 
@@ -269,6 +250,18 @@ class ValidatorEvaluationMixin:
                             ColoredLogger.YELLOW,
                         )
                         break
+
+                    # WTA early stop: if even perfect rewards on remaining tasks cannot
+                    # beat the current best, abort to save time/cost.
+                    if early_stop_behind_best and total_tasks > 0:
+                        tasks_done = min(i + len(batch_tasks), total_tasks)
+                        upper_bound_avg = (sum(rewards) + float(total_tasks - tasks_done)) / float(total_tasks)
+                        if upper_bound_avg < best_score_so_far:
+                            ColoredLogger.warning(
+                                f"Agent {agent.uid} cannot beat best_score={best_score_so_far:.4f} (upper_bound={upper_bound_avg:.4f} after {tasks_done}/{total_tasks} tasks); stopping evaluation",
+                                ColoredLogger.YELLOW,
+                            )
+                            break
             finally:
                 # Always cleanup the agent container after evaluation.
                 try:
@@ -279,11 +272,13 @@ class ValidatorEvaluationMixin:
                     pass
 
             # Update agent score/evaluated state and increment the counter.
-            avg_reward = (sum(rewards) / len(rewards)) if rewards else 0.0
+            avg_reward = (sum(rewards) / float(total_tasks)) if total_tasks > 0 else 0.0
             agent.score = float(avg_reward)
             agent.evaluated = True
             self.agents_dict[agent.uid] = agent
             agents_evaluated += 1
+            if agent.score > best_score_so_far:
+                best_score_so_far = float(agent.score)
 
         ColoredLogger.info("Evaluation phase completed", ColoredLogger.MAGENTA)
         return agents_evaluated
@@ -373,9 +368,6 @@ class ValidatorEvaluationMixin:
                 # Fallback: create empty solution
                 solution = TaskSolution(task_id=base_task_id, actions=[], web_agent_id=str(agent_uid))
 
-            evaluation_meta_for_payload = dict(evaluation_meta_dict) if isinstance(task_solution, dict) else {}
-            evaluation_meta_for_payload["llm_usage"] = eval_data.get("llm_usage") or []
-
             evaluation_payload = prepare_evaluation_payload(
                 ctx=self,
                 task_payload=task_payload,
@@ -383,7 +375,7 @@ class ValidatorEvaluationMixin:
                 miner_uid=agent_uid,
                 solution=solution,
                 eval_score=eval_data["score"],
-                evaluation_meta=evaluation_meta_for_payload,
+                evaluation_meta=evaluation_meta_dict if isinstance(task_solution, dict) else {},
                 test_results_data=test_results_data,
                 exec_time=eval_data["exec_time"],
                 reward=eval_data["reward"],

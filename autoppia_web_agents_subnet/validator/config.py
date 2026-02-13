@@ -61,6 +61,10 @@ COST_WEIGHT = _env_float("COST_WEIGHT", 0.0)
 SAME_SOLUTION_PENALTY = _env_float("SAME_SOLUTION_PENALTY", 0.0)
 SAME_SOLUTION_SIM_THRESHOLD = _env_float("SAME_SOLUTION_SIM_THRESHOLD", 0.90)
 
+# Early stop: abort evaluating a miner when it can no longer beat the current best
+# possible average reward (winner-takes-all settlement), saving time and cost.
+EARLY_STOP_BEHIND_BEST = _env_bool("EARLY_STOP_BEHIND_BEST", False)
+
 VALIDATOR_NAME = _env_str("VALIDATOR_NAME")
 VALIDATOR_IMAGE = _env_str("VALIDATOR_IMAGE")
 IWAP_VALIDATOR_AUTH_MESSAGE = _env_str("IWAP_VALIDATOR_AUTH_MESSAGE", "I am a honest validator")

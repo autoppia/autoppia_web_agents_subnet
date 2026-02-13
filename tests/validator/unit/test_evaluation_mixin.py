@@ -102,6 +102,41 @@ class TestEvaluationPhase:
             
             assert validator_with_agents.round_manager.current_phase == RoundPhase.EVALUATION
 
+    async def test_evaluation_early_stops_when_cannot_beat_best(self, validator_with_agents, season_tasks):
+        """Test that evaluation can early-stop miners that cannot beat the best score."""
+        from tests.conftest import _bind_evaluation_mixin
+        validator_with_agents = _bind_evaluation_mixin(validator_with_agents)
+
+        validator_with_agents.season_manager.get_season_tasks = AsyncMock(return_value=season_tasks)
+        validator_with_agents.sandbox_manager = Mock()
+
+        # Mock agent deployment
+        mock_instance = Mock()
+        mock_instance.base_url = "http://localhost:8001"
+        validator_with_agents.sandbox_manager.deploy_agent = Mock(return_value=mock_instance)
+        validator_with_agents.sandbox_manager.cleanup_agent = Mock()
+
+        # Seed a best already-evaluated agent so new miners can be stopped quickly.
+        validator_with_agents.agents_dict[99] = AgentInfo(
+            uid=99,
+            agent_name="best",
+            github_url="https://github.com/test/best",
+            score=0.9,
+            evaluated=True,
+        )
+
+        with patch('autoppia_web_agents_subnet.validator.config.EARLY_STOP_BEHIND_BEST', True):
+            with patch('autoppia_web_agents_subnet.validator.config.CONCURRENT_EVALUATION_NUM', 1):
+                with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua') as mock_eval:
+                    with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize:
+                        mock_normalize.return_value = "https://github.com/test/agent"
+                        mock_eval.return_value = (0.0, 0.0, None)
+
+                        await validator_with_agents._run_evaluation_phase()
+
+                        # With early-stop and batch_size=1, each of the 3 agents should only run ~1 task.
+                        assert mock_eval.call_count == 3
+
 
 @pytest.mark.unit
 @pytest.mark.asyncio

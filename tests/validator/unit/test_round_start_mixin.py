@@ -187,6 +187,41 @@ class TestHandshake:
             valid_agents = [a for a in dummy_validator.agents_dict.values() if a.agent_name and a.github_url]
             assert len(valid_agents) >= 1
 
+    async def test_handshake_does_not_reenqueue_when_submission_unchanged(self, dummy_validator):
+        from tests.conftest import _bind_round_start_mixin
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+
+        # Keep the test small: validator uid 0, one eligible miner uid 1.
+        dummy_validator.uid = 0
+        dummy_validator.metagraph.n = 2
+        dummy_validator.metagraph.stake = [15000.0, 15000.0]
+        dummy_validator.metagraph.axons = [Mock(ip="127.0.0.1", port=8000), Mock(ip="127.0.0.1", port=8001)]
+
+        # Existing evaluated agent with a non-default score.
+        from autoppia_web_agents_subnet.validator.models import AgentInfo
+        existing = AgentInfo(
+            uid=1,
+            agent_name="agent1",
+            github_url="https://github.com/test/agent1",
+            agent_image=None,
+            score=0.42,
+            evaluated=True,
+        )
+        dummy_validator.agents_dict = {1: existing}
+
+        with patch('autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners') as mock_send:
+            mock_send.return_value = [
+                Mock(agent_name="agent1", github_url="https://github.com/test/agent1", agent_image=None),
+            ]
+
+            # Handshake should not enqueue unchanged submissions.
+            dummy_validator.agents_queue.put.reset_mock()
+            await dummy_validator._perform_handshake()
+
+            dummy_validator.agents_queue.put.assert_not_called()
+            assert dummy_validator.agents_dict[1].score == 0.42
+            assert dummy_validator.agents_dict[1].evaluated is True
+
 
 @pytest.mark.unit
 @pytest.mark.asyncio
