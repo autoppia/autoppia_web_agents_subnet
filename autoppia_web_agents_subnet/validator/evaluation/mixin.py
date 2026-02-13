@@ -52,6 +52,26 @@ class ValidatorEvaluationMixin:
                 season_tasks = res
             except Exception:
                 season_tasks = []
+
+        total_tasks = len(season_tasks)
+
+        # Track best known score among already-evaluated miners so we can
+        # early-stop miners that cannot possibly win (WTA settlement).
+        best_score_so_far = 0.0
+        try:
+            agents_dict = getattr(self, "agents_dict", None)
+            if isinstance(agents_dict, dict) and agents_dict:
+                for info in agents_dict.values():
+                    if not getattr(info, "evaluated", False):
+                        continue
+                    try:
+                        score = float(getattr(info, "score", 0.0) or 0.0)
+                    except Exception:
+                        score = 0.0
+                    if score > best_score_so_far:
+                        best_score_so_far = score
+        except Exception:
+            best_score_so_far = 0.0
         
         agents_evaluated = 0
         while not self.agents_queue.empty():    
@@ -121,6 +141,7 @@ class ValidatorEvaluationMixin:
             batch_size = int(getattr(validator_config, "CONCURRENT_EVALUATION_NUM", 1) or 1)
             max_steps = int(getattr(validator_config, "AGENT_MAX_STEPS", 30) or 30)
             screening = int(getattr(validator_config, "SCREENING_TASKS_FOR_EARLY_STOP", 0) or 0)
+            early_stop_behind_best = bool(getattr(validator_config, "EARLY_STOP_BEHIND_BEST", False))
             
             try:
                 for i in range(0, len(season_tasks), batch_size):
@@ -228,6 +249,19 @@ class ValidatorEvaluationMixin:
                             ColoredLogger.YELLOW,
                         )
                         break
+
+                    # WTA early stop: if even perfect rewards on remaining tasks cannot
+                    # beat the current best, abort to save time/cost.
+                    if early_stop_behind_best and total_tasks > 0:
+                        tasks_done = min(i + len(batch_tasks), total_tasks)
+                        upper_bound_avg = (sum(rewards) + float(total_tasks - tasks_done)) / float(total_tasks)
+                        if upper_bound_avg < best_score_so_far:
+                            ColoredLogger.warning(
+                                f"Agent {agent.uid} cannot beat best_score={best_score_so_far:.4f} "
+                                f"(upper_bound={upper_bound_avg:.4f} after {tasks_done}/{total_tasks} tasks); stopping evaluation",
+                                ColoredLogger.YELLOW,
+                            )
+                            break
             finally:
                 # Always cleanup the agent container after evaluation.
                 try:
@@ -238,11 +272,13 @@ class ValidatorEvaluationMixin:
                     pass
 
             # Update agent score/evaluated state and increment the counter.
-            avg_reward = (sum(rewards) / len(rewards)) if rewards else 0.0
+            avg_reward = (sum(rewards) / float(total_tasks)) if total_tasks > 0 else 0.0
             agent.score = float(avg_reward)
             agent.evaluated = True
             self.agents_dict[agent.uid] = agent
             agents_evaluated += 1
+            if agent.score > best_score_so_far:
+                best_score_so_far = float(agent.score)
 
 
         ColoredLogger.info("Evaluation phase completed", ColoredLogger.MAGENTA)

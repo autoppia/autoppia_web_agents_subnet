@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import time
 import bittensor as bt
+from urllib.parse import urlparse
 
 from autoppia_web_agents_subnet.utils.log_colors import round_details_tag
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
@@ -105,6 +106,53 @@ class ValidatorRoundStartMixin:
         """
         Perform StartRound handshake and collect new submitted agents
         """
+        def _submission_key(raw_url: str | None) -> tuple[str, str | None]:
+            """
+            Best-effort canonicalization for "is the submitted code the same?" checks.
+
+            We intentionally ignore transient fields like score/evaluated. Miners should
+            update the github_url (ideally including a branch/ref) to trigger re-eval.
+            """
+            if not raw_url:
+                return ("", None)
+            url = raw_url.strip()
+            if not url:
+                return ("", None)
+
+            # Handle common SSH-style GitHub URL.
+            if url.startswith("git@github.com:"):
+                path = url[len("git@github.com:") :].strip()
+                if path.endswith(".git"):
+                    path = path[:-4]
+                url = f"https://github.com/{path}"
+
+            # Prefix bare hosts with https://
+            if not url.startswith(("http://", "https://")):
+                url = f"https://{url}"
+
+            try:
+                parsed = urlparse(url)
+            except Exception:
+                return (url, None)
+
+            host = (parsed.netloc or "").lower()
+            if host.startswith("www."):
+                host = host[4:]
+            if host != "github.com":
+                return (url, None)
+
+            path = (parsed.path or "").strip().rstrip("/")
+            segments = [seg for seg in path.split("/") if seg]
+            if len(segments) < 2:
+                return (url, None)
+
+            owner, repo = segments[0], segments[1]
+            if repo.endswith(".git"):
+                repo = repo[:-4]
+            normalized = f"https://github.com/{owner}/{repo}"
+            ref = segments[3] if len(segments) >= 4 else None
+            return (normalized, ref)
+
         # Guard: metagraph must be available.
         metagraph = getattr(self, "metagraph", None)
         if metagraph is None:
@@ -202,8 +250,19 @@ class ValidatorRoundStartMixin:
             )
             ColoredLogger.info(agent_info.__repr__(), ColoredLogger.GREEN)
 
-            if uid in self.agents_dict and agent_info == self.agents_dict[uid]:
-                continue
+            existing = self.agents_dict.get(uid)
+            if isinstance(existing, AgentInfo):
+                # Do not re-evaluate if the code submission (repo/ref) didn't change.
+                if _submission_key(getattr(existing, "github_url", None)) == _submission_key(agent_info.github_url):
+                    # Keep score/evaluated, but allow display metadata to update.
+                    try:
+                        existing.agent_name = agent_info.agent_name
+                        existing.agent_image = agent_info.agent_image
+                        existing.github_url = agent_info.github_url
+                    except Exception:
+                        pass
+                    self.agents_dict[uid] = existing
+                    continue
 
             self.agents_dict[uid] = agent_info
             self.agents_queue.put(agent_info)
