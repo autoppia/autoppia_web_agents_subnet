@@ -12,6 +12,7 @@ from typing import Dict, Optional
 
 import httpx
 import bittensor as bt
+from docker.types import LogConfig
 
 from autoppia_web_agents_subnet.opensource.utils_docker import (
     check_image,
@@ -174,6 +175,53 @@ def _env_int(name: str, default: int) -> int:
         return int(default)
 
 
+def _docker_log_config(*, kind: str) -> Optional[LogConfig]:
+    """
+    Best-effort protection against log spam filling validator disk.
+
+    This caps the Docker `json-file` logs written to the host under /var/lib/docker.
+    """
+    if not _env_bool("SANDBOX_DOCKER_LOG_LIMITS", True):
+        return None
+
+    kind_s = (kind or "").strip().lower()
+    if kind_s == "gateway":
+        max_size = (
+            (os.getenv("SANDBOX_GATEWAY_DOCKER_LOG_MAX_SIZE") or "").strip()
+            or (os.getenv("SANDBOX_DOCKER_LOG_MAX_SIZE") or "").strip()
+            or "20m"
+        )
+        max_files = (
+            (os.getenv("SANDBOX_GATEWAY_DOCKER_LOG_MAX_FILES") or "").strip()
+            or (os.getenv("SANDBOX_DOCKER_LOG_MAX_FILES") or "").strip()
+            or "3"
+        )
+    elif kind_s == "agent":
+        max_size = (
+            (os.getenv("SANDBOX_AGENT_DOCKER_LOG_MAX_SIZE") or "").strip()
+            or (os.getenv("SANDBOX_DOCKER_LOG_MAX_SIZE") or "").strip()
+            or "10m"
+        )
+        max_files = (
+            (os.getenv("SANDBOX_AGENT_DOCKER_LOG_MAX_FILES") or "").strip()
+            or (os.getenv("SANDBOX_DOCKER_LOG_MAX_FILES") or "").strip()
+            or "3"
+        )
+    else:
+        return None
+
+    if not max_size or not max_files:
+        return None
+
+    return LogConfig(
+        type=LogConfig.types.JSON,
+        config={
+            "max-size": str(max_size),
+            "max-file": str(max_files),
+        },
+    )
+
+
 class AgentInstance:
     def __init__(self, uid: int, container, temp_dir: str, port: int, git_commit: Optional[str] = None):
         self.uid = uid
@@ -322,18 +370,27 @@ class SandboxManager:
             init=True,
             detach=True,
         )
+        log_config = _docker_log_config(kind="gateway")
+        if log_config is not None:
+            run_kwargs["log_config"] = log_config
         nano_cpus = _nano_cpus_from_env("SANDBOX_GATEWAY_CPU_LIMIT", default=1.0)
         if nano_cpus is not None:
             run_kwargs["nano_cpus"] = nano_cpus
 
-        try:
-            self.gateway_container = self.client.containers.run(**run_kwargs)
-        except Exception as e:
-            # Best-effort compatibility: some older Docker daemons may reject NanoCPUs.
-            if "nano_cpus" in str(e) or "NanoCPUs" in str(e):
-                run_kwargs.pop("nano_cpus", None)
+        # Best-effort compatibility: some older Docker daemons may reject NanoCPUs
+        # or per-container log config overrides.
+        for _ in range(3):
+            try:
                 self.gateway_container = self.client.containers.run(**run_kwargs)
-            else:
+                break
+            except Exception as e:
+                msg = str(e)
+                if "log" in msg.lower() and "log_config" in run_kwargs:
+                    run_kwargs.pop("log_config", None)
+                    continue
+                if ("nano_cpus" in msg or "NanoCPUs" in msg) and "nano_cpus" in run_kwargs:
+                    run_kwargs.pop("nano_cpus", None)
+                    continue
                 raise
         # Attach to default bridge for egress
         try:
@@ -532,9 +589,8 @@ class SandboxManager:
             image=self.sandbox_image,
             name=container_name,
             volumes={
-                # Untrusted code: mount repo read-only and provide only /tmp + /app/logs as writable locations.
+                # Untrusted code: mount repo read-only.
                 temp_dir: {"bind": "/app", "mode": "ro"},
-                self.host_log_dir: {"bind": "/app/logs", "mode": "rw"},
             },
             network=SANDBOX_NETWORK_NAME,
             environment=env,
@@ -542,7 +598,11 @@ class SandboxManager:
             # Publish on loopback only to avoid exposing miner APIs externally.
             ports={f"{SANDBOX_AGENT_PORT}/tcp": ("127.0.0.1", None)},
             read_only=True,
-            tmpfs={"/tmp": "rw,nosuid,nodev,noexec,size=512m"},
+            # Writable tmpfs locations are size-limited so miners cannot fill host disk.
+            tmpfs={
+                "/tmp": f"rw,nosuid,nodev,noexec,size={os.getenv('SANDBOX_AGENT_TMPFS_SIZE', '512m')}",
+                "/app/logs": f"rw,nosuid,nodev,noexec,size={os.getenv('SANDBOX_AGENT_LOG_TMPFS_SIZE', '64m')}",
+            },
             cap_drop=["ALL"],
             security_opt=["no-new-privileges:true"],
             pids_limit=int(os.getenv("SANDBOX_AGENT_PIDS_LIMIT", "768")),
@@ -550,18 +610,27 @@ class SandboxManager:
             init=True,
             detach=True,
         )
+        log_config = _docker_log_config(kind="agent")
+        if log_config is not None:
+            run_kwargs["log_config"] = log_config
         nano_cpus = _nano_cpus_from_env("SANDBOX_AGENT_CPU_LIMIT", default=2.0)
         if nano_cpus is not None:
             run_kwargs["nano_cpus"] = nano_cpus
 
-        try:
-            container = self.client.containers.run(**run_kwargs)
-        except Exception as e:
-            # Best-effort compatibility: some older Docker daemons may reject NanoCPUs.
-            if "nano_cpus" in str(e) or "NanoCPUs" in str(e):
-                run_kwargs.pop("nano_cpus", None)
+        # Best-effort compatibility: some older Docker daemons may reject NanoCPUs
+        # or per-container log config overrides.
+        for _ in range(3):
+            try:
                 container = self.client.containers.run(**run_kwargs)
-            else:
+                break
+            except Exception as e:
+                msg = str(e)
+                if "log" in msg.lower() and "log_config" in run_kwargs:
+                    run_kwargs.pop("log_config", None)
+                    continue
+                if ("nano_cpus" in msg or "NanoCPUs" in msg) and "nano_cpus" in run_kwargs:
+                    run_kwargs.pop("nano_cpus", None)
+                    continue
                 raise
         try:
             container.reload()

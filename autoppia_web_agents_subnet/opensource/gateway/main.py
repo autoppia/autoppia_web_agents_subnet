@@ -1,9 +1,11 @@
 import asyncio
 import json
 import logging
+import os
 import random
 import time
 from typing import Optional
+from logging.handlers import RotatingFileHandler
 
 import httpx
 from fastapi import FastAPI, Request, HTTPException, Response
@@ -35,7 +37,11 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler("/app/logs/gateway.log"),    
+        RotatingFileHandler(
+            "/app/logs/gateway.log",
+            maxBytes=int(os.getenv("SANDBOX_GATEWAY_LOG_MAX_BYTES", str(10 * 1024 * 1024))),
+            backupCount=int(os.getenv("SANDBOX_GATEWAY_LOG_BACKUP_COUNT", "3")),
+        ),
         logging.StreamHandler()             
     ]
 )
