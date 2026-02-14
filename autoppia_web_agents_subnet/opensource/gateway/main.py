@@ -579,7 +579,35 @@ async def proxy_request(request: Request, path: str):
                 )
 
         # Return response with cost headers
+        # NOTE: httpx transparently decodes compressed upstream responses (gzip/br).
+        # If we forward the original Content-Encoding header alongside the
+        # decoded body, clients may attempt to decompress again and fail
+        # (e.g. zlib: "incorrect header check"). Strip hop-by-hop headers and
+        # remove content-encoding/length so FastAPI can set correct values.
         response_headers = dict(response.headers)
+
+        # Remove hop-by-hop headers (RFC 7230 §6.1)
+        for h in (
+            "connection",
+            "keep-alive",
+            "proxy-authenticate",
+            "proxy-authorization",
+            "te",
+            "trailer",
+            "transfer-encoding",
+            "upgrade",
+        ):
+            response_headers.pop(h, None)
+            response_headers.pop(h.title(), None)
+
+        # Prevent double-decompression on the client.
+        response_headers.pop("content-encoding", None)
+        response_headers.pop("Content-Encoding", None)
+
+        # Let FastAPI compute the correct content-length for the body we return.
+        response_headers.pop("content-length", None)
+        response_headers.pop("Content-Length", None)
+
         current_usage = gateway.get_usage_for_task(task_id)
         response_headers["X-Current-Cost"] = str(current_usage.total_cost)
         response_headers["X-Cost-Limit"] = str(COST_LIMIT_PER_TASK)
