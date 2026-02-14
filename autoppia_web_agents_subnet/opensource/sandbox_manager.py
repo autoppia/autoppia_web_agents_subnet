@@ -119,6 +119,29 @@ def _ensure_writable_file(path: str, mode: int = 0o666) -> None:
         pass
 
 
+def _nano_cpus_from_env(name: str, *, default: Optional[float] = None) -> Optional[int]:
+    """
+    Convert a CPU limit expressed as a float ("cpus") into Docker's nano_cpus int.
+
+    - name: env var holding a float, e.g. "1.5" for 1.5 CPUs
+    - default: used when env var is missing/empty
+    """
+    raw = os.getenv(name)
+    if raw is None or str(raw).strip() == "":
+        if default is None:
+            return None
+        cpus = float(default)
+    else:
+        try:
+            cpus = float(str(raw).strip())
+        except Exception:
+            return None
+
+    if cpus <= 0:
+        return None
+    return int(cpus * 1_000_000_000)
+
+
 class AgentInstance:
     def __init__(self, uid: int, container, temp_dir: str, port: int, git_commit: Optional[str] = None):
         self.uid = uid
@@ -246,7 +269,7 @@ class SandboxManager:
             if val:
                 env[key] = val
                 
-        self.gateway_container = self.client.containers.run(
+        run_kwargs = dict(
             name=SANDBOX_GATEWAY_HOST,
             image=self.gateway_image,
             volumes={
@@ -254,7 +277,7 @@ class SandboxManager:
             },
             network=SANDBOX_NETWORK_NAME,
             environment=env,
-            ports = {
+            ports={
                 f"{SANDBOX_GATEWAY_PORT}/tcp": ("127.0.0.1", SANDBOX_GATEWAY_PORT)
             },
             # Hardening: the gateway should not need to write outside its log dir and /tmp.
@@ -267,6 +290,19 @@ class SandboxManager:
             init=True,
             detach=True,
         )
+        nano_cpus = _nano_cpus_from_env("SANDBOX_GATEWAY_CPU_LIMIT", default=1.0)
+        if nano_cpus is not None:
+            run_kwargs["nano_cpus"] = nano_cpus
+
+        try:
+            self.gateway_container = self.client.containers.run(**run_kwargs)
+        except Exception as e:
+            # Best-effort compatibility: some older Docker daemons may reject NanoCPUs.
+            if "nano_cpus" in str(e) or "NanoCPUs" in str(e):
+                run_kwargs.pop("nano_cpus", None)
+                self.gateway_container = self.client.containers.run(**run_kwargs)
+            else:
+                raise
         # Attach to default bridge for egress
         try:
             bridge = self.client.networks.get("bridge")
@@ -371,7 +407,7 @@ class SandboxManager:
         if self.keep_agent_containers:
             labels["autoppia.sandbox.keep"] = "true"
 
-        container = self.client.containers.run(
+        run_kwargs = dict(
             image=self.sandbox_image,
             name=container_name,
             volumes={
@@ -393,6 +429,19 @@ class SandboxManager:
             init=True,
             detach=True,
         )
+        nano_cpus = _nano_cpus_from_env("SANDBOX_AGENT_CPU_LIMIT", default=2.0)
+        if nano_cpus is not None:
+            run_kwargs["nano_cpus"] = nano_cpus
+
+        try:
+            container = self.client.containers.run(**run_kwargs)
+        except Exception as e:
+            # Best-effort compatibility: some older Docker daemons may reject NanoCPUs.
+            if "nano_cpus" in str(e) or "NanoCPUs" in str(e):
+                run_kwargs.pop("nano_cpus", None)
+                container = self.client.containers.run(**run_kwargs)
+            else:
+                raise
         try:
             container.reload()
         except Exception:

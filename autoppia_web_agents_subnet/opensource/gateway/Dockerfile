@@ -5,10 +5,11 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     HOME=/tmp
 
-# Install required packages
-RUN pip install --no-cache-dir fastapi uvicorn httpx pydantic python-dotenv
-
 WORKDIR /app
+
+# Install required packages (pinned for reproducibility)
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
 
 # Copy gateway application
 COPY main.py /app/
