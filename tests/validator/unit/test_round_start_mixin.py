@@ -325,7 +325,7 @@ class TestHandshake:
 
             # Cooldown blocks evaluation enqueue, but stores a pending submission.
             dummy_validator.agents_queue.put.assert_not_called()
-            assert dummy_validator.agents_dict[1].pending_github_url == "https://github.com/test/agent1/tree/main"
+            assert dummy_validator.agents_dict[1].pending_github_url == "https://github.com/test/agent1/commit/new"
 
             # Next eligible round: if miner does not respond, pending submission is enqueued.
             dummy_validator.round_manager.round_number = 6
@@ -335,7 +335,7 @@ class TestHandshake:
             dummy_validator.agents_queue.put.assert_called_once()
             pending_agent_info = dummy_validator.agents_queue.put.call_args.args[0]
             assert pending_agent_info.uid == 1
-            assert pending_agent_info.github_url == "https://github.com/test/agent1/tree/main"
+            assert pending_agent_info.github_url == "https://github.com/test/agent1/commit/new"
 
 
 @pytest.mark.unit

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 import time
 from typing import Tuple
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import bittensor as bt
 
@@ -11,6 +13,27 @@ from autoppia_iwa.src.data_generation.tasks.classes import Task
 from autoppia_iwa.src.evaluation.stateful_evaluator import AsyncStatefulEvaluator, ScoreDetails
 from autoppia_iwa.src.web_agents.cua import ApifiedWebCUA
 from autoppia_iwa.src.web_agents.classes import TaskSolution, sanitize_snapshot_html
+
+
+def _augment_demo_web_url(url: str, *, web_agent_id: str, validator_id: str) -> str:
+    """
+    Demo websites persist `web_agent_id` / `validator_id` from URL query params
+    into localStorage on initial page load. The IWA evaluator uses these ids when
+    resetting/querying backend events, so we must ensure the navigated URL
+    includes them.
+    """
+    if not url:
+        return url
+    try:
+        split = urlsplit(url)
+        q = dict(parse_qsl(split.query, keep_blank_values=True))
+        q["X-WebAgent-Id"] = web_agent_id
+        q["web_agent_id"] = web_agent_id
+        q["X-Validator-Id"] = validator_id
+        q["validator_id"] = validator_id
+        return urlunsplit(split._replace(query=urlencode(q, doseq=True)))
+    except Exception:
+        return url
 
 
 async def evaluate_with_stateful_cua(
@@ -23,13 +46,45 @@ async def evaluate_with_stateful_cua(
     """
     Evaluate a sandboxed miner agent using AsyncStatefulEvaluator + ApifiedWebCUA.
     """
-    agent = ApifiedWebCUA( 
-        id=str(uid), 
+    # Avoid mutating a shared task object across miners/batches.
+    try:
+        task_for_eval = task.model_copy(deep=True)  # type: ignore[attr-defined]
+    except Exception:
+        try:
+            import copy
+
+            task_for_eval = copy.deepcopy(task)
+        except Exception:
+            task_for_eval = task
+
+    # Demo websites persist attribution ids from URL query params into localStorage
+    # on initial page load. If the ids are missing/mismatched, the backend event
+    # queries will return empty and tasks will score 0.
+    try:
+        if not bool(getattr(task_for_eval, "is_web_real", False)):
+            web_agent_id = str(uid)
+            validator_id = os.getenv("VALIDATOR_ID", "custom_validator")
+            original_url = str(getattr(task_for_eval, "url", "") or "")
+            augmented_url = _augment_demo_web_url(
+                original_url,
+                web_agent_id=web_agent_id,
+                validator_id=validator_id,
+            )
+            if augmented_url and augmented_url != original_url:
+                setattr(task_for_eval, "url", augmented_url)
+                bt.logging.debug(
+                    f"[stateful_cua_eval] augmented demo url for uid={uid} validator_id={validator_id}: {augmented_url}"
+                )
+    except Exception:
+        pass
+
+    agent = ApifiedWebCUA(
+        id=str(uid),
         name=f"miner-{uid}",
-        base_url=base_url, 
-        timeout=AGENT_STEP_TIMEOUT
+        base_url=base_url,
+        timeout=AGENT_STEP_TIMEOUT,
     )
-    evaluator = AsyncStatefulEvaluator(task=task, web_agent_id=str(uid))
+    evaluator = AsyncStatefulEvaluator(task=task_for_eval, web_agent_id=str(uid))
 
     start_ts = time.time()
     final_score: ScoreDetails = ScoreDetails()
@@ -42,12 +97,12 @@ async def evaluate_with_stateful_cua(
         while step_index < max_steps and not bool(final_score.success):
             snapshot = step_result.snapshot
             html = sanitize_snapshot_html(snapshot.html or "", str(uid))
-            current_url = snapshot.url or task.url
+            current_url = snapshot.url or task_for_eval.url
 
             try:
                 # Send task WITH placeholders to agent - agent should return actions with placeholders
                 actions = await agent.act(
-                    task=task,  # Send task with placeholders, NOT replaced
+                    task=task_for_eval,  # Send task with placeholders, NOT replaced
                     snapshot_html=html,
                     url=current_url,
                     step_index=step_index,

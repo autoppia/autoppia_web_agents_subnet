@@ -412,9 +412,16 @@ class ValidatorRoundStartMixin:
                 # Do not re-evaluate if the submission commit didn't change.
                 # If we cannot resolve a commit hash, be conservative and re-evaluate.
                 if normalized_repo and commit_sha and existing_repo == normalized_repo and _commits_match(existing_commit, commit_sha):
-                    current_season = int(getattr(getattr(self, "season_manager", None), "season_number", 0) or 0)
+                    try:
+                        current_season = int(getattr(getattr(self, "season_manager", None), "season_number", 0) or 0)
+                    except Exception:
+                        current_season = 0
                     last_season = getattr(existing, "last_evaluated_season", None)
-                    if current_season and last_season is not None and int(last_season) != int(current_season):
+                    try:
+                        last_season_i = int(last_season) if last_season is not None else None
+                    except Exception:
+                        last_season_i = None
+                    if current_season and last_season_i is not None and last_season_i != int(current_season):
                         # New season -> tasks changed, force re-evaluation even if commit unchanged.
                         pass
                     else:
