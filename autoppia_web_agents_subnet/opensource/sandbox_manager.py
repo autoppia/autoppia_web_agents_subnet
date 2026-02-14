@@ -142,6 +142,38 @@ def _nano_cpus_from_env(name: str, *, default: Optional[float] = None) -> Option
     return int(cpus * 1_000_000_000)
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return bool(default)
+    s = str(raw).strip().lower()
+    if s in {"1", "true", "yes", "on"}:
+        return True
+    if s in {"0", "false", "no", "off"}:
+        return False
+    return bool(default)
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None or str(raw).strip() == "":
+        return float(default)
+    try:
+        return float(str(raw).strip())
+    except Exception:
+        return float(default)
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if raw is None or str(raw).strip() == "":
+        return int(default)
+    try:
+        return int(str(raw).strip())
+    except Exception:
+        return int(default)
+
+
 class AgentInstance:
     def __init__(self, uid: int, container, temp_dir: str, port: int, git_commit: Optional[str] = None):
         self.uid = uid
@@ -318,6 +350,95 @@ class SandboxManager:
             raise RuntimeError(
                 f"Gateway failed health check at http://127.0.0.1:{SANDBOX_GATEWAY_PORT}/health"
             )
+
+        # Fail-fast if the gateway cannot reach its upstream providers. This avoids
+        # silent "all tasks fail" behavior when the gateway has no internet egress.
+        try:
+            self._validate_gateway_upstream_egress()
+        except Exception:
+            try:
+                stop_and_remove(self.gateway_container)
+            except Exception:
+                pass
+            raise
+
+    def _validate_gateway_upstream_egress(self) -> None:
+        if not _env_bool("SANDBOX_GATEWAY_EGRESS_CHECK", True):
+            return
+
+        container = getattr(self, "gateway_container", None)
+        if container is None:
+            raise RuntimeError("Gateway container not available for egress check")
+
+        timeout_s = float(_env_float("SANDBOX_GATEWAY_EGRESS_CHECK_TIMEOUT_SECONDS", 5.0))
+        retries = int(_env_int("SANDBOX_GATEWAY_EGRESS_CHECK_RETRIES", 2))
+        allowed = sorted(self._get_allowed_gateway_providers())
+
+        failures: list[str] = []
+        for provider in allowed:
+            ok = False
+            last_err = ""
+            for attempt in range(max(retries, 1)):
+                ok, last_err = self._gateway_exec_check_provider(provider, timeout_s=timeout_s)
+                if ok:
+                    break
+                # Small backoff to avoid immediate retry storms.
+                time.sleep(0.25 * (attempt + 1))
+            if not ok:
+                failures.append(f"{provider}: {last_err}".strip())
+
+        if failures:
+            msg = "Gateway upstream egress check failed:\n  - " + "\n  - ".join(failures)
+            raise RuntimeError(msg)
+
+    def _gateway_exec_check_provider(self, provider: str, *, timeout_s: float) -> tuple[bool, str]:
+        """
+        Execute a lightweight upstream reachability/auth check inside the gateway
+        container. We run it inside the container so it reflects *container* egress.
+        """
+        provider_s = str(provider or "").strip().lower()
+        if provider_s == "openai":
+            url = "https://api.openai.com/v1/models"
+            key_env = "OPENAI_API_KEY"
+        elif provider_s == "chutes":
+            url = "https://llm.chutes.ai/v1/models"
+            key_env = "CHUTES_API_KEY"
+        else:
+            return False, "unknown provider"
+
+        # Keep the inline script short and robust: print status and a short body prefix.
+        py = (
+            "import os,sys,httpx\n"
+            "url=sys.argv[1]; key_env=sys.argv[2]; timeout=float(sys.argv[3])\n"
+            "key=(os.getenv(key_env) or '').strip()\n"
+            "headers={'Authorization': f'Bearer {key}'} if key else {}\n"
+            "try:\n"
+            "  r=httpx.get(url, headers=headers, timeout=timeout, follow_redirects=True)\n"
+            "  body=(r.text or '')[:200].replace('\\n',' ')\n"
+            "  print(f'status={r.status_code} body={body}')\n"
+            "  sys.exit(0 if r.status_code < 400 else 10)\n"
+            "except Exception as e:\n"
+            "  print(f'exception={type(e).__name__}: {e}')\n"
+            "  sys.exit(20)\n"
+        )
+
+        try:
+            res = self.gateway_container.exec_run(  # type: ignore[attr-defined]
+                ["python", "-c", py, url, key_env, str(timeout_s)],
+                stdout=True,
+                stderr=True,
+            )
+            rc = int(getattr(res, "exit_code", 1) or 1)
+            out = getattr(res, "output", b"") or b""
+            out_s = out.decode("utf-8", errors="replace").strip()
+        except Exception as e:
+            return False, f"exec_run failed: {type(e).__name__}: {e}"
+
+        if rc == 0:
+            return True, out_s or "ok"
+        # 4xx/5xx: provider reachable but request failed; treat as hard-fail
+        # because it usually indicates missing/invalid keys or wrong endpoint.
+        return False, out_s or f"nonzero exit_code={rc}"
 
     def _get_allowed_gateway_providers(self) -> set[str]:
         allowed = _csv_env("GATEWAY_ALLOWED_PROVIDERS")

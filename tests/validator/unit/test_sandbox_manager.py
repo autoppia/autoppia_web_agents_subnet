@@ -331,7 +331,12 @@ class TestGateway:
         from autoppia_web_agents_subnet.opensource.sandbox_manager import SandboxManager
         with patch.dict(
             os.environ,
-            {"OPENAI_API_KEY": "test-openai", "CHUTES_API_KEY": "test-chutes"},
+            {
+                "OPENAI_API_KEY": "test-openai",
+                "CHUTES_API_KEY": "test-chutes",
+                # Unit test uses a mocked Docker container; skip real upstream egress checks.
+                "SANDBOX_GATEWAY_EGRESS_CHECK": "false",
+            },
             clear=False,
         ):
             with patch("autoppia_web_agents_subnet.opensource.sandbox_manager.get_client") as mock_client:
@@ -358,7 +363,12 @@ class TestGateway:
         from autoppia_web_agents_subnet.opensource.sandbox_manager import SandboxManager
         with patch.dict(
             os.environ,
-            {"OPENAI_API_KEY": "test-openai", "CHUTES_API_KEY": "test-chutes"},
+            {
+                "OPENAI_API_KEY": "test-openai",
+                "CHUTES_API_KEY": "test-chutes",
+                # Unit test uses a mocked Docker container; skip real upstream egress checks.
+                "SANDBOX_GATEWAY_EGRESS_CHECK": "false",
+            },
             clear=False,
         ):
             with patch("autoppia_web_agents_subnet.opensource.sandbox_manager.get_client") as mock_client:
