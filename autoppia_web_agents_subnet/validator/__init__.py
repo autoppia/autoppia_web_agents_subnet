@@ -1,4 +1,12 @@
-from .config import *  # noqa: F401,F403
-from .round_manager import RoundManager, RoundPhase  # noqa: F401
-import autoppia_web_agents_subnet.validator.settlement.consensus as consensus
-from autoppia_web_agents_subnet.validator.settlement.consensus import *  # noqa: F401,F403
+"""
+Validator package.
+
+Keep imports minimal to avoid circular import chains during startup and tests.
+
+Import from submodules directly, e.g.:
+  - autoppia_web_agents_subnet.validator.config
+  - autoppia_web_agents_subnet.validator.round_manager
+  - autoppia_web_agents_subnet.validator.settlement.consensus
+"""
+
+# Intentionally no side-effect imports here.
