@@ -90,39 +90,24 @@ class LLMGateway:
         b2["response_format"] = {"type": "json_object"}
         return b2, True
 
-
-def _looks_like_unsupported_response_format(resp: httpx.Response) -> bool:
-    try:
-        payload = resp.json()
-    except Exception:
-        return False
-    if not isinstance(payload, dict):
-        return False
-    err = payload.get("error") if isinstance(payload.get("error"), dict) else {}
-    msg = str(err.get("message") or "")
-    code = str(err.get("code") or "")
-    param = str(err.get("param") or "")
-    text = (msg + " " + param + " " + code).lower()
-    return "response_format" in text and ("unsupported" in text or "invalid" in text or "unknown" in text or code == "unsupported_parameter")
-    
     def detect_provider(self, path: str) -> Optional[str]:
-        """Detect LLM provider from request"""        
+        """Detect LLM provider from request."""
         for provider in self.providers.keys():
             # Require an exact provider match or a slash-delimited prefix.
             # This prevents SSRF-style host override via paths like "openai@evil.com/...".
             if path == provider or path.startswith(f"{provider}/"):
                 return provider
-        
-        logger.error(f"Unsupported provider.")
+
+        logger.error("Unsupported provider.")
         return None
 
     def detect_task_id(self, request: Request) -> Optional[str]:
-        """Detect task ID from request for usage tracking"""
+        """Detect task ID from request for usage tracking."""
         task_id = request.headers.get("iwa-task-id", "")
         if task_id in self.allowed_task_ids:
             return task_id
 
-        logger.error(f"Missing or invalid task ID for usage tracking.")
+        logger.error("Missing or invalid task ID for usage tracking.")
         logger.error(f"Task ID: {task_id}")
         return None
 
@@ -130,7 +115,13 @@ def _looks_like_unsupported_response_format(resp: httpx.Response) -> bool:
         return self.usage_per_task.get(task_id, LLMUsage())
 
     def _is_allowed_path(self, provider: str, suffix: str) -> bool:
-        allowed = OPENAI_ALLOWED_PATHS if provider == "openai" else CHUTES_ALLOWED_PATHS if provider == "chutes" else set()
+        allowed = (
+            OPENAI_ALLOWED_PATHS
+            if provider == "openai"
+            else CHUTES_ALLOWED_PATHS
+            if provider == "chutes"
+            else set()
+        )
         if not allowed:
             return True
         for p in allowed:
@@ -139,7 +130,13 @@ def _looks_like_unsupported_response_format(resp: httpx.Response) -> bool:
         return False
 
     def _is_allowed_model(self, provider: str, model: str) -> bool:
-        allowed = OPENAI_ALLOWED_MODELS if provider == "openai" else CHUTES_ALLOWED_MODELS if provider == "chutes" else set()
+        allowed = (
+            OPENAI_ALLOWED_MODELS
+            if provider == "openai"
+            else CHUTES_ALLOWED_MODELS
+            if provider == "chutes"
+            else set()
+        )
         if not allowed:
             return True
         return model in allowed
@@ -331,6 +328,26 @@ def _looks_like_unsupported_response_format(resp: httpx.Response) -> bool:
     
     def is_cost_exceeded(self, task_id: str) -> bool:
         return self.usage_per_task[task_id].total_cost >= COST_LIMIT_PER_TASK
+
+
+def _looks_like_unsupported_response_format(resp: httpx.Response) -> bool:
+    try:
+        payload = resp.json()
+    except Exception:
+        return False
+    if not isinstance(payload, dict):
+        return False
+    err = payload.get("error") if isinstance(payload.get("error"), dict) else {}
+    msg = str(err.get("message") or "")
+    code = str(err.get("code") or "")
+    param = str(err.get("param") or "")
+    text = (msg + " " + param + " " + code).lower()
+    return "response_format" in text and (
+        "unsupported" in text
+        or "invalid" in text
+        or "unknown" in text
+        or code == "unsupported_parameter"
+    )
 
 
 # Initialize the gateway
