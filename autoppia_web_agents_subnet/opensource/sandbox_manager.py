@@ -35,6 +35,9 @@ from autoppia_web_agents_subnet.validator.config import (
     SANDBOX_AGENT_PORT,
     SANDBOX_CLONE_TIMEOUT,
     SANDBOX_KEEP_AGENT_CONTAINERS,
+    SANDBOX_AGENT_LOG_ERRORS,
+    SANDBOX_AGENT_LOG_DECISIONS,
+    SANDBOX_AGENT_RETURN_METRICS,
     COST_LIMIT_ENABLED,
     COST_LIMIT_VALUE,
 )
@@ -341,7 +344,15 @@ class SandboxManager:
             "CHUTES_BASE_URL": f"{gateway_url}/chutes/v1",
             "SANDBOX_AGENT_PORT": str(SANDBOX_AGENT_PORT),
             "SANDBOX_AGENT_UID": str(uid),
+            # Ensure any `print(...)` diagnostics appear immediately in `docker logs`.
+            "PYTHONUNBUFFERED": "1",
         }
+        if SANDBOX_AGENT_LOG_ERRORS:
+            env["AGENT_LOG_ERRORS"] = "1"
+        if SANDBOX_AGENT_LOG_DECISIONS:
+            env["AGENT_LOG_DECISIONS"] = "1"
+        if SANDBOX_AGENT_RETURN_METRICS:
+            env["AGENT_RETURN_METRICS"] = "1"
 
         # Ensure the nested mountpoint exists inside the bind-mounted repo dir
         # so Docker can mount /app/logs even when /app itself is read-only.

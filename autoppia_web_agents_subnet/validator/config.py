@@ -117,6 +117,12 @@ SANDBOX_KEEP_AGENT_CONTAINERS = _env_bool("SANDBOX_KEEP_AGENT_CONTAINERS", False
 if TESTING:
     SANDBOX_KEEP_AGENT_CONTAINERS = _env_bool("TEST_SANDBOX_KEEP_AGENT_CONTAINERS", SANDBOX_KEEP_AGENT_CONTAINERS)
 
+# Debug/testing: enable miner agent diagnostics (logged to container stdout).
+# Keep this off by default to avoid noisy logs in production.
+SANDBOX_AGENT_LOG_ERRORS = _env_bool("SANDBOX_AGENT_LOG_ERRORS", False)
+SANDBOX_AGENT_LOG_DECISIONS = _env_bool("SANDBOX_AGENT_LOG_DECISIONS", False)
+SANDBOX_AGENT_RETURN_METRICS = _env_bool("SANDBOX_AGENT_RETURN_METRICS", False)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # CONSENSUS CONFIGURATION
