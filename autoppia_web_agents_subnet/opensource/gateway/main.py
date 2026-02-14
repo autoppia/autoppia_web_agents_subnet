@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import random
 import time
 from typing import Optional
 
@@ -23,6 +24,11 @@ from config import (
     GATEWAY_STRICT_PRICING,
     CHUTES_PRICING_TTL_SECONDS,
     CHUTES_PRICING_TIMEOUT_SECONDS,
+    GATEWAY_FORCE_JSON_RESPONSE_FORMAT,
+    GATEWAY_OPENAI_MAX_CONCURRENCY,
+    GATEWAY_CHUTES_MAX_CONCURRENCY,
+    GATEWAY_UPSTREAM_MAX_RETRIES,
+    GATEWAY_UPSTREAM_RETRY_BASE_DELAY_S,
 )
 
 logging.basicConfig(
@@ -56,6 +62,48 @@ class LLMGateway:
         self.usage_per_task: dict[str, LLMUsage] = {}
         self._chutes_pricing_lock = asyncio.Lock()
         self._chutes_pricing_last_refresh = 0.0
+        # Best-effort upstream concurrency limits to reduce 429s.
+        self._provider_semaphores = {
+            "openai": asyncio.Semaphore(max(1, int(GATEWAY_OPENAI_MAX_CONCURRENCY))),
+            "chutes": asyncio.Semaphore(max(1, int(GATEWAY_CHUTES_MAX_CONCURRENCY))),
+        }
+
+    def _maybe_force_json_response_format(self, provider: str, suffix: str, body: dict) -> tuple[dict, bool]:
+        """
+        Force response_format=json_object when talking to OpenAI-compatible chat endpoints.
+
+        This is a practical hardening so miners can reliably parse model output. If the
+        upstream rejects it, we will retry without response_format.
+        """
+        if not GATEWAY_FORCE_JSON_RESPONSE_FORMAT:
+            return body, False
+        if provider not in {"openai", "chutes"}:
+            return body, False
+        # Only for chat completions. Responses API is left untouched.
+        if suffix != "/v1/chat/completions":
+            return body, False
+        if not isinstance(body, dict):
+            return body, False
+        if isinstance(body.get("response_format"), dict):
+            return body, False
+        b2 = dict(body)
+        b2["response_format"] = {"type": "json_object"}
+        return b2, True
+
+
+def _looks_like_unsupported_response_format(resp: httpx.Response) -> bool:
+    try:
+        payload = resp.json()
+    except Exception:
+        return False
+    if not isinstance(payload, dict):
+        return False
+    err = payload.get("error") if isinstance(payload.get("error"), dict) else {}
+    msg = str(err.get("message") or "")
+    code = str(err.get("code") or "")
+    param = str(err.get("param") or "")
+    text = (msg + " " + param + " " + code).lower()
+    return "response_format" in text and ("unsupported" in text or "invalid" in text or "unknown" in text or code == "unsupported_parameter")
     
     def detect_provider(self, path: str) -> Optional[str]:
         """Detect LLM provider from request"""        
@@ -428,14 +476,79 @@ async def proxy_request(request: Request, path: str):
                 # conservative defaults rather than hard-fail the task.
                 if (provider != "chutes" or provider_config.pricing) and pricing_model not in provider_config.pricing:
                     raise HTTPException(status_code=400, detail="Missing pricing for model")
+
+        upstream_body = body
+        forced_response_format = False
+        if request.method in ("POST", "PUT", "PATCH") and isinstance(parsed_body, dict):
+            # Force response_format=json_object for chat completions where possible to
+            # reduce miner-side parsing failures (fallback on upstream rejection).
+            parsed_body2, forced_response_format = gateway._maybe_force_json_response_format(provider, suffix, parsed_body)
+            if forced_response_format:
+                upstream_body = json.dumps(parsed_body2).encode("utf-8")
         
-        response = await gateway.http_client.request(
-            method=request.method,
-            url=url,
-            headers=headers,
-            params=request.query_params,
-            content=body
-        )
+        # Forward request to upstream, with best-effort retries for transient errors.
+        # NOTE: max_retries counts additional tries after the initial attempt.
+        max_retries = max(0, int(GATEWAY_UPSTREAM_MAX_RETRIES))
+        base_delay = max(0.0, float(GATEWAY_UPSTREAM_RETRY_BASE_DELAY_S))
+        attempted_without_response_format = False
+
+        sem = gateway._provider_semaphores.get(provider) or asyncio.Semaphore(10_000)
+
+        last_exc: Exception | None = None
+        response: httpx.Response | None = None
+        attempt = 0
+
+        while True:
+            try:
+                async with sem:
+                    response = await gateway.http_client.request(
+                        method=request.method,
+                        url=url,
+                        headers=headers,
+                        params=request.query_params,
+                        content=upstream_body,
+                    )
+            except Exception as e:
+                last_exc = e
+                response = None
+            else:
+                # If we forced response_format and upstream rejects it, retry once without it.
+                if forced_response_format and not attempted_without_response_format and response.status_code in (400, 422):
+                    if _looks_like_unsupported_response_format(response):
+                        attempted_without_response_format = True
+                        forced_response_format = False
+                        upstream_body = body  # original bytes
+                        # Do not count this as a retry; it's a compatibility fallback.
+                        continue
+
+                # Retry transient upstream errors.
+                if response.status_code == 429 or response.status_code >= 500:
+                    if attempt < max_retries:
+                        retry_after_s = 0.0
+                        ra = (response.headers.get("retry-after") or "").strip()
+                        if ra:
+                            try:
+                                retry_after_s = float(ra)
+                            except Exception:
+                                retry_after_s = 0.0
+                        delay = max(base_delay * (2 ** attempt), retry_after_s)
+                        delay += random.random() * 0.25
+                        attempt += 1
+                        await asyncio.sleep(delay)
+                        continue
+
+            if response is None:
+                if attempt < max_retries:
+                    delay = base_delay * (2 ** attempt)
+                    delay += random.random() * 0.25
+                    attempt += 1
+                    await asyncio.sleep(delay)
+                    continue
+
+            break
+
+        if response is None:
+            raise HTTPException(status_code=502, detail=f"Upstream request failed: {str(last_exc)[:200] if last_exc else 'unknown error'}")
         
         # Parse response to extract usage and update tracking
         if response.status_code == 200:

@@ -46,3 +46,16 @@ GATEWAY_STRICT_PRICING = os.getenv("GATEWAY_STRICT_PRICING", "true").lower() == 
 # public OpenAI-compatible /v1/models endpoint.
 CHUTES_PRICING_TTL_SECONDS = float(os.getenv("CHUTES_PRICING_TTL_SECONDS", "3600"))
 CHUTES_PRICING_TIMEOUT_SECONDS = float(os.getenv("CHUTES_PRICING_TIMEOUT_SECONDS", "10"))
+
+# Gateway behavior knobs (safe defaults for this subnet use-case).
+# Force OpenAI-compatible endpoints to return JSON objects when possible so
+# miners can reliably parse decisions. Retries fall back when providers reject it.
+GATEWAY_FORCE_JSON_RESPONSE_FORMAT = os.getenv("GATEWAY_FORCE_JSON_RESPONSE_FORMAT", "true").lower() == "true"
+
+# Limit concurrent upstream requests per provider to reduce 429s (especially OpenAI).
+GATEWAY_OPENAI_MAX_CONCURRENCY = int(os.getenv("GATEWAY_OPENAI_MAX_CONCURRENCY", "2"))
+GATEWAY_CHUTES_MAX_CONCURRENCY = int(os.getenv("GATEWAY_CHUTES_MAX_CONCURRENCY", "8"))
+
+# Upstream retry policy (best-effort) for transient errors.
+GATEWAY_UPSTREAM_MAX_RETRIES = int(os.getenv("GATEWAY_UPSTREAM_MAX_RETRIES", "2"))
+GATEWAY_UPSTREAM_RETRY_BASE_DELAY_S = float(os.getenv("GATEWAY_UPSTREAM_RETRY_BASE_DELAY_S", "0.5"))

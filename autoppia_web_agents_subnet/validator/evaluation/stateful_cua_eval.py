@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Tuple
+from typing import Tuple, Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import bittensor as bt
@@ -93,6 +93,7 @@ async def evaluate_with_stateful_cua(
         step_index = 0
         step_result = await evaluator.reset()
         final_score = step_result.score
+        history: list[dict[str, Any]] = []
 
         while step_index < max_steps and not bool(final_score.success):
             snapshot = step_result.snapshot
@@ -106,17 +107,43 @@ async def evaluate_with_stateful_cua(
                     snapshot_html=html,
                     url=current_url,
                     step_index=step_index,
+                    history=history,
                 )
             except Exception as exc:
                 bt.logging.warning(f"[stateful_cua_eval] miner {uid} /act failed: {exc}")
                 actions = []
 
             # Single-step semantics: execute at most one action per loop.
+            action_executed = None
             if actions:
                 action = actions[0]
+                action_executed = action
                 step_result = await evaluator.step(action)
             else:
                 step_result = await evaluator.step(None)
+
+            # Provide minimal action execution history back to the agent on the next step.
+            try:
+                exec_ok = True
+                exec_err = None
+                ar = step_result.action_result
+                if ar is not None:
+                    exec_ok = bool(getattr(ar, "successfully_executed", True))
+                    exec_err = getattr(ar, "error", None)
+
+                history.append(
+                    {
+                        "step": int(step_index),
+                        "action": getattr(action_executed, "type", None) if action_executed is not None else "NOOP",
+                        # Some agents use candidate_id for loop detection; we don't have it here.
+                        "candidate_id": None,
+                        "text": getattr(action_executed, "text", None) if action_executed is not None else None,
+                        "exec_ok": exec_ok,
+                        "error": exec_err,
+                    }
+                )
+            except Exception:
+                pass
 
             final_score = step_result.score
             step_index += 1
