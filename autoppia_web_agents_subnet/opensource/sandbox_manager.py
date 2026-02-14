@@ -34,6 +34,7 @@ from autoppia_web_agents_subnet.validator.config import (
     SANDBOX_AGENT_IMAGE,
     SANDBOX_AGENT_PORT,
     SANDBOX_CLONE_TIMEOUT,
+    SANDBOX_KEEP_AGENT_CONTAINERS,
     COST_LIMIT_ENABLED,
     COST_LIMIT_VALUE,
 )
@@ -163,6 +164,7 @@ class SandboxManager:
     def __init__(self):
         self.client = get_client()
         self._agents: Dict[int, AgentInstance] = {}
+        self.keep_agent_containers = bool(SANDBOX_KEEP_AGENT_CONTAINERS)
 
         self.base_dir = os.path.dirname(__file__)
         self.sandbox_ctx = os.path.join(self.base_dir, 'sandbox')
@@ -181,6 +183,23 @@ class SandboxManager:
             garbage_collect_stale_containers()
         except Exception:
             pass
+
+    def _agent_container_name(self, uid: int, *, git_commit: Optional[str] = None) -> str:
+        """
+        Return the container name for an agent.
+
+        Default behavior uses a stable per-uid name so we can replace containers cleanly.
+        In debugging mode we create a unique name so containers can be preserved for
+        post-mortem inspection (docker logs, filesystem, etc.).
+        """
+        if not self.keep_agent_containers:
+            return f"sandbox-agent-{uid}"
+
+        short = (str(git_commit or "").strip()[:7]) if git_commit else ""
+        ts_ms = int(time.time() * 1000)
+        if short:
+            return f"sandbox-agent-{uid}-{short}-{ts_ms}"
+        return f"sandbox-agent-{uid}-{ts_ms}"
 
     def deploy_gateway(self):
         self._validate_gateway_provider_keys()
@@ -290,7 +309,10 @@ class SandboxManager:
         return repo_dir
 
     def _start_container(self, uid: int, temp_dir: str, *, git_commit: Optional[str] = None) -> AgentInstance:
-        cleanup_containers([f"sandbox-agent-{uid}"])
+        container_name = self._agent_container_name(uid, git_commit=git_commit)
+        # In normal mode we replace the stable per-uid container name. In debug
+        # keep mode we use unique names; cleanup_containers() is harmless no-op.
+        cleanup_containers([container_name])
 
         gateway_url = f"http://{SANDBOX_GATEWAY_HOST}:{SANDBOX_GATEWAY_PORT}"
         env = {
@@ -308,9 +330,19 @@ class SandboxManager:
         except Exception:
             pass
 
+        labels = {
+            "autoppia.sandbox": "true",
+            "autoppia.sandbox.kind": "agent",
+            "autoppia.sandbox.uid": str(uid),
+        }
+        if git_commit:
+            labels["autoppia.sandbox.commit"] = str(git_commit)
+        if self.keep_agent_containers:
+            labels["autoppia.sandbox.keep"] = "true"
+
         container = self.client.containers.run(
             image=self.sandbox_image,
-            name=f"sandbox-agent-{uid}",
+            name=container_name,
             volumes={
                 # Untrusted code: mount repo read-only and provide only /tmp + /app/logs as writable locations.
                 temp_dir: {"bind": "/app", "mode": "ro"},
@@ -318,6 +350,7 @@ class SandboxManager:
             },
             network=SANDBOX_NETWORK_NAME,
             environment=env,
+            labels=labels,
             # Publish on loopback only to avoid exposing miner APIs externally.
             ports={f"{SANDBOX_AGENT_PORT}/tcp": ("127.0.0.1", None)},
             read_only=True,
@@ -401,6 +434,22 @@ class SandboxManager:
         agent = self._agents.pop(uid, None)
         if not agent:
             return
+
+        if self.keep_agent_containers:
+            # Debug/testing: preserve the container + workdir so operators can inspect
+            # stdout logs (`docker logs <name>`) and the cloned repo under temp_dir.
+            try:
+                agent.container.stop(timeout=10)
+            except Exception:
+                pass
+            try:
+                bt.logging.warning(
+                    f"[sandbox] Preserving agent container for uid={uid}: name={getattr(agent.container, 'name', '')} temp_dir={agent.temp_dir}"
+                )
+            except Exception:
+                pass
+            return
+
         stop_and_remove(agent.container)
         try:
             shutil.rmtree(agent.temp_dir, ignore_errors=True)

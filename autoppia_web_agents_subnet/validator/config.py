@@ -111,6 +111,11 @@ SANDBOX_GATEWAY_PORT = _env_int("SANDBOX_GATEWAY_PORT", 9000)
 SANDBOX_AGENT_IMAGE = _env_str("SANDBOX_IMAGE", "autoppia-sandbox-agent-image")
 SANDBOX_AGENT_PORT = _env_int("SANDBOX_AGENT_PORT", 8000)
 SANDBOX_CLONE_TIMEOUT = _env_int("SANDBOX_CLONE_TIMEOUT", 90)
+# Debug/testing: keep agent containers (and clone dirs) after evaluation so you can inspect
+# logs via `docker logs` and examine the cloned repo. Default is False for safety/cleanup.
+SANDBOX_KEEP_AGENT_CONTAINERS = _env_bool("SANDBOX_KEEP_AGENT_CONTAINERS", False)
+if TESTING:
+    SANDBOX_KEEP_AGENT_CONTAINERS = _env_bool("TEST_SANDBOX_KEEP_AGENT_CONTAINERS", SANDBOX_KEEP_AGENT_CONTAINERS)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

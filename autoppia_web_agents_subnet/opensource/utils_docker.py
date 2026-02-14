@@ -135,8 +135,15 @@ def garbage_collect_stale_containers(
                 attrs = {}
 
             name = getattr(c, "name", "") or ""
+            cfg = (attrs.get("Config") or {}) if isinstance(attrs, dict) else {}
+            labels = cfg.get("Labels") or {}
+            keep_label = str(labels.get("autoppia.sandbox.keep") or "").strip().lower()
+            keep = keep_label in {"1", "true", "yes", "on"}
 
-            # Always remove our own stale sandbox containers.
+            # Always remove our own stale sandbox containers, except those explicitly
+            # preserved for debugging via SANDBOX_KEEP_AGENT_CONTAINERS (label-based).
+            if name.startswith("sandbox-agent-") and keep:
+                continue
             if name == "sandbox-gateway" or name.startswith("sandbox-agent-"):
                 try:
                     stop_and_remove(c)
@@ -151,9 +158,7 @@ def garbage_collect_stale_containers(
             if created_epoch and (now - created_epoch) < float(max_age_seconds):
                 continue
 
-            cfg = (attrs.get("Config") or {}) if isinstance(attrs, dict) else {}
             cmd = cfg.get("Cmd") or []
-            labels = cfg.get("Labels") or {}
             image = str(cfg.get("Image") or "")
             if isinstance(cmd, list):
                 cmd_s = " ".join(str(x) for x in cmd)
