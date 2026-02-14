@@ -107,18 +107,18 @@ class TestConsensusAggregationProperties:
         assert abs(aggregated - score) < 1e-6
 
     @given(
-        scores=st.lists(
-            st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False),
-            min_size=2,
-            max_size=2  # Exactly 2 validators for this test
+        # Generate two clearly different scores to avoid heavy assume() filtering.
+        score_high=st.floats(min_value=0.6, max_value=1.0, allow_nan=False, allow_infinity=False),
+        score_low=st.floats(min_value=0.0, max_value=0.4, allow_nan=False, allow_infinity=False),
+        # Generate stakes such that the first validator has significantly more stake.
+        stakes=st.floats(min_value=1.0, max_value=66.0, allow_nan=False, allow_infinity=False).flatmap(
+            lambda stake_low: st.tuples(
+                st.just(stake_low),
+                st.floats(min_value=(stake_low * 1.5) + 1e-6, max_value=100.0, allow_nan=False, allow_infinity=False),
+            )
         ),
-        stakes=st.lists(
-            st.floats(min_value=1.0, max_value=100.0, allow_nan=False, allow_infinity=False),
-            min_size=2,
-            max_size=2  # Exactly 2 validators for this test
-        )
     )
-    def test_higher_stake_increases_influence(self, scores, stakes):
+    def test_higher_stake_increases_influence(self, score_high, score_low, stakes):
         """
         Property 6: Stake Weighting Correctness
         
@@ -127,23 +127,19 @@ class TestConsensusAggregationProperties:
         
         **Validates: Requirements 6.3, 6.4**
         """
-        assume(len(scores) == len(stakes))
-        assume(len(scores) >= 2)
-        
-        # Only test when stakes are meaningfully different
-        assume(stakes[0] > stakes[1] * 1.5)  # First validator has significantly more stake
-        assume(abs(scores[0] - scores[1]) > 0.1)  # Scores are different
-        
+        stake_low, stake_high = stakes
+
+        scores = [score_high, score_low]
+        stakes = [stake_high, stake_low]
+
         # Calculate weighted average
         weighted_sum = sum(score * stake for score, stake in zip(scores, stakes))
         total_stake = sum(stakes)
         aggregated = weighted_sum / total_stake
-        
-        # If first validator has higher stake and higher score,
-        # aggregated should be between the two scores
-        if scores[0] > scores[1]:
-            # Aggregated should be between the two scores
-            assert min(scores[0], scores[1]) <= aggregated <= max(scores[0], scores[1])
+
+        # With higher stake and higher score, the aggregate should be closer to the
+        # higher-stake validator's score than to the lower-stake validator's score.
+        assert abs(aggregated - score_high) < abs(aggregated - score_low)
 
     @given(
         scores=st.lists(
