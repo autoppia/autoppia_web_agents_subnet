@@ -212,10 +212,7 @@ class EvaluationResultIWAP:
     stats: Optional[Dict[str, Any]] = None
     gif_recording: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
-    # LLM usage tracking (backend persists llm_usage to evaluation_llm_usage; scalars kept for compat)
-    llm_cost: Optional[float] = None  # Total cost in USD for LLM usage
-    llm_tokens: Optional[int] = None  # Total tokens used
-    llm_provider: Optional[str] = None  # LLM provider used (e.g., "openai", "chutes")
+    # LLM usage tracking (single source of truth)
     llm_usage: Optional[List[Dict[str, Any]]] = None  # Per-call usage [{provider, model?, tokens?, cost?}]
 
     def to_payload(self) -> Dict[str, Any]:

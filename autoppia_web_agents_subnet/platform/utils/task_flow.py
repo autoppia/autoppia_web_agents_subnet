@@ -92,6 +92,41 @@ def _normalize_action_payload(action: Any) -> Dict[str, Any]:
     return action_dict
 
 
+def _normalize_llm_usage(raw: Any) -> Optional[List[Dict[str, Any]]]:
+    """Normalize llm_usage to list of {provider, model, tokens, cost} dicts."""
+    if not isinstance(raw, list):
+        return None
+    out: List[Dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        provider = item.get("provider")
+        model = item.get("model")
+        tokens = item.get("tokens")
+        cost = item.get("cost")
+        if tokens is not None:
+            try:
+                tokens = int(tokens)
+            except Exception:
+                tokens = None
+        if cost is not None:
+            try:
+                cost = float(cost)
+            except Exception:
+                cost = None
+        if provider is None and model is None and tokens is None and cost is None:
+            continue
+        out.append(
+            {
+                "provider": provider,
+                "model": model,
+                "tokens": tokens,
+                "cost": cost,
+            }
+        )
+    return out or None
+
+
 def prepare_evaluation_payload(
     *,
     ctx,
@@ -104,9 +139,6 @@ def prepare_evaluation_payload(
     test_results_data: List[Any],
     exec_time: float,
     reward: float,
-    llm_cost: Optional[float] = None,
-    llm_tokens: Optional[int] = None,
-    llm_provider: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Prepare a single evaluation payload for submission to IWAP.
@@ -125,10 +157,6 @@ def prepare_evaluation_payload(
         test_results_data: Test results list
         exec_time: Execution time
         reward: Calculated reward value
-        llm_cost: Total LLM cost in USD (optional)
-        llm_tokens: Total LLM tokens used (optional)
-        llm_provider: LLM provider used, e.g., "openai", "chutes" (optional)
-
     Returns:
         Dict containing task, task_solution, evaluation, and evaluation_result
     """
@@ -202,8 +230,8 @@ def prepare_evaluation_payload(
         recording=getattr(solution, "recording", None) if solution is not None else None,
     )
 
-    # Build llm_usage for backend (evaluation_llm_usage table); backend also accepts scalar llm_* for compat
-    llm_usage: Optional[List[Dict[str, Any]]] = evaluation_meta.get("llm_usage") if isinstance(evaluation_meta.get("llm_usage"), list) else None
+    # Build llm_usage for backend (evaluation_llm_usage table)
+    llm_usage: Optional[List[Dict[str, Any]]] = _normalize_llm_usage(evaluation_meta.get("llm_usage"))
 
     evaluation_result_payload = iwa_models.EvaluationResultIWAP(
         evaluation_id=evaluation_id,
@@ -411,7 +439,7 @@ async def submit_task_results(
         )
 
         # Build llm_usage for backend (same as prepare_evaluation_payload)
-        llm_usage_inner: Optional[List[Dict[str, Any]]] = evaluation_meta.get("llm_usage") if isinstance(evaluation_meta.get("llm_usage"), list) else None
+        llm_usage_inner: Optional[List[Dict[str, Any]]] = _normalize_llm_usage(evaluation_meta.get("llm_usage"))
 
         evaluation_result_payload = iwa_models.EvaluationResultIWAP(
             evaluation_id=evaluation_id,
