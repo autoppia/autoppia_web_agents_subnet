@@ -7,9 +7,10 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import bittensor as bt
 
-from autoppia_web_agents_subnet.validator.config import AGENT_STEP_TIMEOUT
+from autoppia_web_agents_subnet.validator.config import AGENT_STEP_TIMEOUT, SHOULD_RECORD_GIF
 
 from autoppia_iwa.src.data_generation.tasks.classes import Task
+from autoppia_iwa.src.evaluation.shared.utils import make_gif_from_screenshots
 from autoppia_iwa.src.evaluation.stateful_evaluator import AsyncStatefulEvaluator, ScoreDetails
 from autoppia_iwa.src.web_agents.cua import ApifiedWebCUA
 from autoppia_iwa.src.web_agents.classes import TaskSolution, sanitize_snapshot_html
@@ -72,9 +73,7 @@ async def evaluate_with_stateful_cua(
             )
             if augmented_url and augmented_url != original_url:
                 setattr(task_for_eval, "url", augmented_url)
-                bt.logging.debug(
-                    f"[stateful_cua_eval] augmented demo url for uid={uid} validator_id={validator_id}: {augmented_url}"
-                )
+                bt.logging.debug(f"[stateful_cua_eval] augmented demo url for uid={uid} validator_id={validator_id}: {augmented_url}")
     except Exception:
         pass
 
@@ -84,7 +83,11 @@ async def evaluate_with_stateful_cua(
         base_url=base_url,
         timeout=AGENT_STEP_TIMEOUT,
     )
-    evaluator = AsyncStatefulEvaluator(task=task_for_eval, web_agent_id=str(uid))
+    evaluator = AsyncStatefulEvaluator(
+        task=task_for_eval,
+        web_agent_id=str(uid),
+        should_record_gif=SHOULD_RECORD_GIF,
+    )
 
     start_ts = time.time()
     final_score: ScoreDetails = ScoreDetails()
@@ -156,17 +159,41 @@ async def evaluate_with_stateful_cua(
         try:
             history = list(getattr(evaluator, "history", []) or [])
             actions = []
+            screenshot_frames: list[str] = []
             for h in history:
                 try:
                     a = getattr(h, "action", None)
                     if a is not None:
                         actions.append(a)
+                    if SHOULD_RECORD_GIF:
+                        snap = getattr(h, "browser_snapshot", None)
+                        shot = getattr(snap, "screenshot_after", None) if snap is not None else None
+                        if isinstance(shot, str) and shot:
+                            screenshot_frames.append(shot)
                 except Exception:
                     continue
+            recording_payload: Any = history
+            if SHOULD_RECORD_GIF and screenshot_frames:
+                try:
+                    encoded = make_gif_from_screenshots(screenshot_frames)
+                    if isinstance(encoded, (bytes, bytearray)):
+                        gif_b64 = bytes(encoded).decode("utf-8")
+                    elif isinstance(encoded, str):
+                        gif_b64 = encoded
+                    else:
+                        gif_b64 = None
+                    if gif_b64:
+                        recording_payload = {
+                            "execution_history": history,
+                            "gif_recording": gif_b64,
+                        }
+                except Exception as exc:
+                    bt.logging.warning(f"[stateful_cua_eval] failed to create GIF for miner {uid}: {exc}")
             solution = TaskSolution(
                 task_id=str(getattr(task, "id", "")),
                 actions=actions,
                 web_agent_id=str(uid),
+                recording=recording_payload,
             )
         except Exception:
             # If we cannot reconstruct a solution, append a minimal empty one
@@ -176,7 +203,7 @@ async def evaluate_with_stateful_cua(
             await evaluator.close()
         except Exception:
             pass
-    
+
     score = max(0.0, min(final_score.raw_score, 1.0))
     elapsed = max(time.time() - start_ts, 0.0)
     return score, elapsed, solution

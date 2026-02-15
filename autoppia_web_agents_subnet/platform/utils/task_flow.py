@@ -14,6 +14,84 @@ from .iwa_core import (
 )
 
 
+def _normalize_action_payload(action: Any) -> Dict[str, Any]:
+    """
+    Normalize heterogeneous action objects into a JSON-serializable dict.
+
+    Supports:
+    - Pydantic models (model_dump)
+    - Plain dicts
+    - Objects with __dict__ (e.g., dataclasses or custom action classes)
+
+    Also flattens nested "action" or "attributes" payloads when present,
+    so stored actions are reproducible (selector/text/url/x/y, etc.).
+    """
+    action_dict: Dict[str, Any] = {}
+
+    if action is None:
+        return {"type": "unknown"}
+
+    if isinstance(action, dict):
+        action_dict = dict(action)
+    elif hasattr(action, "model_dump"):
+        try:
+            action_dict = action.model_dump(mode="json", exclude_none=True)
+        except Exception:
+            try:
+                action_dict = dict(action)
+            except Exception:
+                action_dict = {"type": getattr(action, "type", "unknown")}
+    elif hasattr(action, "__dict__"):
+        try:
+            action_dict = {k: v for k, v in vars(action).items() if not k.startswith("_")}
+        except Exception:
+            action_dict = {"type": getattr(action, "type", "unknown")}
+    else:
+        action_dict = {"type": getattr(action, "type", "unknown")}
+
+    # Flatten nested "action" payloads if present (legacy formats)
+    nested_action = action_dict.get("action")
+    if isinstance(nested_action, dict):
+        merged = dict(nested_action)
+        for k, v in action_dict.items():
+            if k != "action" and k not in merged:
+                merged[k] = v
+        action_dict = merged
+
+    # Flatten "attributes" into top-level if present (common miner formats)
+    attrs = action_dict.get("attributes")
+    if isinstance(attrs, dict):
+        for k, v in attrs.items():
+            if k not in action_dict or action_dict.get(k) in (None, "", [], {}):
+                action_dict[k] = v
+
+    # If the payload is still too thin, try to pull common fields directly
+    # from the object (helps when model_dump returns only type/attributes).
+    for key in ("selector", "text", "value", "url", "x", "y", "button", "keys", "delta", "go_back", "go_forward"):
+        if key not in action_dict:
+            try:
+                val = getattr(action, key, None)
+            except Exception:
+                val = None
+            if val is not None:
+                action_dict[key] = val
+
+    # Ensure selector is JSON-serializable if it's a model
+    sel = action_dict.get("selector")
+    if hasattr(sel, "model_dump"):
+        try:
+            action_dict["selector"] = sel.model_dump(mode="json", exclude_none=True)
+        except Exception:
+            pass
+
+    # Drop empty attributes if we already have useful fields
+    if action_dict.get("attributes") == {}:
+        if len(action_dict) > 2 or (len(action_dict) == 2 and "type" in action_dict):
+            action_dict.pop("attributes", None)
+
+    return action_dict
+
+
 def prepare_evaluation_payload(
     *,
     ctx,
@@ -70,12 +148,7 @@ def prepare_evaluation_payload(
 
     actions_payload: List[Dict[str, Any]] = []
     for action in raw_actions:
-        if hasattr(action, "model_dump"):
-            actions_payload.append(action.model_dump(mode="json", exclude_none=True))
-        elif hasattr(action, "__dict__"):
-            actions_payload.append(dict(action.__dict__))
-        else:
-            actions_payload.append({"type": getattr(action, "type", "unknown")})
+        actions_payload.append(_normalize_action_payload(action))
 
     # Use the full task_id from IWAP payload for generating IDs
     iwap_task_id = task_payload.task_id
@@ -255,30 +328,13 @@ async def submit_task_results(
         )
 
         for action_idx, action in enumerate(raw_actions):
-            if hasattr(action, "model_dump"):
-                action_dict = action.model_dump(mode="json", exclude_none=True)
-                actions_payload.append(action_dict)
-                log_iwap_phase(
-                    "Phase 4",
-                    f"  Action {action_idx} (model_dump): {action_dict}",
-                    level="debug",
-                )
-            elif hasattr(action, "__dict__"):
-                action_dict = dict(action.__dict__)
-                actions_payload.append(action_dict)
-                log_iwap_phase(
-                    "Phase 4",
-                    f"  Action {action_idx} (__dict__): {action_dict}",
-                    level="debug",
-                )
-            else:
-                action_dict = {"type": getattr(action, "type", "unknown")}
-                actions_payload.append(action_dict)
-                log_iwap_phase(
-                    "Phase 4",
-                    f"  Action {action_idx} (fallback): {action_dict}",
-                    level="debug",
-                )
+            action_dict = _normalize_action_payload(action)
+            actions_payload.append(action_dict)
+            log_iwap_phase(
+                "Phase 4",
+                f"  Action {action_idx} (normalized): {action_dict}",
+                level="debug",
+            )
 
         # Use the full task_id from IWAP payload for generating IDs
         iwap_task_id = task_payload.task_id

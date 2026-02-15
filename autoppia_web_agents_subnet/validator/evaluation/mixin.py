@@ -483,8 +483,10 @@ class ValidatorEvaluationMixin:
 
         # Prepare all evaluation payloads
         from autoppia_web_agents_subnet.platform.utils.task_flow import prepare_evaluation_payload
+        from autoppia_web_agents_subnet.platform.utils.iwa_core import extract_gif_bytes
 
         evaluations_batch = []
+        pending_gif_uploads: list[tuple[str, object]] = []
         for eval_data in batch_eval_data:
             task_item = eval_data["task_item"]
 
@@ -516,6 +518,32 @@ class ValidatorEvaluationMixin:
             if isinstance(task_solution, TaskSolution):
                 solution = task_solution
                 actions = getattr(solution, "actions", []) or []
+                # If the solution carries execution history, attach it for backend persistence.
+                recording = getattr(solution, "recording", None)
+                execution_history_payload = None
+                gif_payload = None
+                if isinstance(recording, dict):
+                    execution_history_payload = recording.get("execution_history")
+                    gif_payload = recording.get("gif_recording")
+                elif isinstance(recording, list):
+                    execution_history_payload = recording
+
+                if isinstance(execution_history_payload, list) and execution_history_payload:
+                    serialized_history: list[dict] = []
+                    for item in execution_history_payload:
+                        if hasattr(item, "model_dump"):
+                            try:
+                                serialized_history.append(item.model_dump(mode="json", exclude_none=True))
+                                continue
+                            except Exception:
+                                pass
+                        if isinstance(item, dict):
+                            serialized_history.append(item)
+                    if serialized_history:
+                        evaluation_meta_dict["execution_history"] = serialized_history
+
+                if gif_payload:
+                    evaluation_meta_dict["gif_recording"] = gif_payload
             elif isinstance(task_solution, dict):
                 # Legacy: dict form (e.g. execution_history, test_results)
                 evaluation_meta_dict = task_solution
@@ -534,7 +562,10 @@ class ValidatorEvaluationMixin:
                 # Fallback: create empty solution
                 solution = TaskSolution(task_id=base_task_id, actions=[], web_agent_id=str(agent_uid))
 
-            evaluation_meta_dict = evaluation_meta_dict if isinstance(task_solution, dict) else {}
+            if not isinstance(evaluation_meta_dict, dict):
+                evaluation_meta_dict = {}
+            else:
+                evaluation_meta_dict = dict(evaluation_meta_dict)
             if isinstance(eval_data.get("llm_usage"), list):
                 evaluation_meta_dict["llm_usage"] = eval_data.get("llm_usage")
 
@@ -552,6 +583,11 @@ class ValidatorEvaluationMixin:
             )
 
             evaluations_batch.append(evaluation_payload)
+            gif_payload = evaluation_meta_dict.get("gif_recording")
+            evaluation_result = evaluation_payload.get("evaluation_result", {})
+            evaluation_id = evaluation_result.get("evaluation_id") if isinstance(evaluation_result, dict) else None
+            if evaluation_id and gif_payload:
+                pending_gif_uploads.append((str(evaluation_id), gif_payload))
 
         if not evaluations_batch:
             ColoredLogger.warning("No evaluations to submit in batch", ColoredLogger.YELLOW)
@@ -576,6 +612,33 @@ class ValidatorEvaluationMixin:
                         ColoredLogger.error(f"Batch errors: {result.get('errors')}", ColoredLogger.RED)
                 else:
                     ColoredLogger.info(f"Batch submission result: {result.get('message', 'Success')}", ColoredLogger.GREEN)
+
+                # Batch endpoint stores evaluations but does not upload GIF binaries.
+                # Upload each GIF separately using the deterministic evaluation_id.
+                if pending_gif_uploads:
+                    uploaded = 0
+                    skipped = 0
+                    for evaluation_id, gif_payload in pending_gif_uploads:
+                        gif_bytes = extract_gif_bytes(gif_payload)
+                        if not gif_bytes:
+                            skipped += 1
+                            ColoredLogger.warning(
+                                f"Skipping GIF upload for evaluation_id={evaluation_id}: invalid payload",
+                                ColoredLogger.YELLOW,
+                            )
+                            continue
+                        try:
+                            await self.iwap_client.upload_evaluation_gif(evaluation_id, gif_bytes)
+                            uploaded += 1
+                        except Exception as gif_exc:
+                            ColoredLogger.error(
+                                f"Failed GIF upload for evaluation_id={evaluation_id}: {gif_exc}",
+                                ColoredLogger.RED,
+                            )
+                    ColoredLogger.info(
+                        f"GIF upload summary for agent {agent_uid}: uploaded={uploaded} skipped={skipped} total={len(pending_gif_uploads)}",
+                        ColoredLogger.CYAN,
+                    )
             except Exception as e:
                 ColoredLogger.error(f"Failed to submit batch: {e}", ColoredLogger.RED)
                 raise
