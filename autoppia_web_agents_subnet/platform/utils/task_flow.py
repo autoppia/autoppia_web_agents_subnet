@@ -92,6 +92,21 @@ def _normalize_action_payload(action: Any) -> Dict[str, Any]:
     return action_dict
 
 
+def _is_thin_action(action_dict: Dict[str, Any]) -> bool:
+    """Detect actions that only contain type/empty attributes (no reproducible details)."""
+    if not isinstance(action_dict, dict):
+        return True
+    attrs = action_dict.get("attributes")
+    if isinstance(attrs, dict) and attrs:
+        return False
+    for k, v in action_dict.items():
+        if k in ("type", "attributes"):
+            continue
+        if v not in (None, "", [], {}):
+            return False
+    return True
+
+
 def _normalize_llm_usage(raw: Any) -> Optional[List[Dict[str, Any]]]:
     """Normalize llm_usage to list of {provider, model, tokens, cost} dicts."""
     if not isinstance(raw, list):
@@ -178,6 +193,18 @@ def prepare_evaluation_payload(
     for action in raw_actions:
         actions_payload.append(_normalize_action_payload(action))
 
+    # If actions are empty/thin, try to derive them from execution_history.
+    history = evaluation_meta.get("execution_history") if isinstance(evaluation_meta, dict) else None
+    derived_actions: List[Dict[str, Any]] = []
+    if isinstance(history, list):
+        for item in history:
+            if isinstance(item, dict):
+                hist_action = item.get("action")
+                if isinstance(hist_action, dict):
+                    derived_actions.append(_normalize_action_payload(hist_action))
+    if derived_actions and (not actions_payload or all(_is_thin_action(a) for a in actions_payload)):
+        actions_payload = derived_actions
+
     # Use the full task_id from IWAP payload for generating IDs
     iwap_task_id = task_payload.task_id
     task_solution_id = iwa_main.generate_task_solution_id(iwap_task_id, miner_uid)
@@ -217,6 +244,12 @@ def prepare_evaluation_payload(
     except Exception:
         pass
 
+    recording_payload = getattr(solution, "recording", None) if solution is not None else None
+    if isinstance(recording_payload, dict):
+        recording_payload = dict(recording_payload)
+        # Avoid logging/storing base64 GIF in task_solution payload.
+        recording_payload.pop("gif_recording", None)
+
     task_solution_payload = iwa_models.TaskSolutionIWAP(
         solution_id=task_solution_id,
         task_id=iwap_task_id,
@@ -227,7 +260,7 @@ def prepare_evaluation_payload(
         miner_uid=miner_uid,
         miner_hotkey=miner_hotkey,
         actions=actions_payload,
-        recording=getattr(solution, "recording", None) if solution is not None else None,
+        recording=recording_payload,
     )
 
     # Build llm_usage for backend (evaluation_llm_usage table)
