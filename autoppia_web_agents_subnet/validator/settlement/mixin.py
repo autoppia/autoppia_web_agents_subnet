@@ -9,6 +9,7 @@ import numpy as np
 
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.validator import config as validator_config
+from autoppia_web_agents_subnet.validator.config import BURN_AMOUNT_PERCENTAGE, BURN_UID
 from autoppia_web_agents_subnet.validator.round_manager import RoundPhase
 from autoppia_web_agents_subnet.validator.visualization.round_table import (
     render_round_summary_table,
@@ -40,9 +41,7 @@ class ValidatorSettlementMixin:
         else:
             handshake_uids = []
 
-        self.should_update_weights = all(
-            bool(getattr(agents_dict.get(uid), "evaluated", False)) for uid in handshake_uids
-        )
+        self.should_update_weights = all(bool(getattr(agents_dict.get(uid), "evaluated", False)) for uid in handshake_uids)
 
         if not self.should_update_weights:
             ColoredLogger.info(
@@ -53,16 +52,12 @@ class ValidatorSettlementMixin:
             self.round_manager.enter_phase(
                 RoundPhase.COMPLETE,
                 block=self.block,
-                note=f"Round finalized without weight update",
+                note="Round finalized without weight update",
                 force=True,
             )
         else:
             st = await self._get_async_subtensor()
-            await publish_round_snapshot(
-                self, 
-                st=st, 
-                scores={str(int(uid)): float(agent.score) for uid, agent in (self.agents_dict or {}).items()}
-            )
+            await publish_round_snapshot(self, st=st, scores={str(int(uid)): float(agent.score) for uid, agent in (self.agents_dict or {}).items()})
 
             await self._wait_until_specific_block(
                 target_block=self.round_manager.settlement_block,
@@ -74,12 +69,12 @@ class ValidatorSettlementMixin:
             except Exception as e:
                 ColoredLogger.error(f"Error aggregating scores from commitments: {e}", ColoredLogger.RED)
                 scores = {}
-                
+
             await self._calculate_final_weights(scores=scores)
             self.round_manager.enter_phase(
                 RoundPhase.COMPLETE,
                 block=self.block,
-                note=f"Round finalized with weight update",
+                note="Round finalized with weight update",
                 force=True,
             )
 
@@ -119,10 +114,7 @@ class ValidatorSettlementMixin:
         consecutive_errors = 0
         while True:
             if time.monotonic() > deadline:
-                raise TimeoutError(
-                    f"Timed out waiting for {target_description} at block {target_block}; "
-                    f"last observed block={current_block}"
-                )
+                raise TimeoutError(f"Timed out waiting for {target_description} at block {target_block}; last observed block={current_block}")
             try:
                 current_block = self.subtensor.get_current_block()
                 consecutive_errors = 0
@@ -139,9 +131,7 @@ class ValidatorSettlementMixin:
 
                 if now - last_log_time >= 12:
                     ColoredLogger.info(
-                        (
-                            f"Waiting — {target_description} — ~{minutes_remaining:.1f}m left — holding until block {target_block}"
-                        ),
+                        (f"Waiting — {target_description} — ~{minutes_remaining:.1f}m left — holding until block {target_block}"),
                         ColoredLogger.BLUE,
                     )
                     last_log_time = now
@@ -149,9 +139,7 @@ class ValidatorSettlementMixin:
                 consecutive_errors += 1
                 bt.logging.warning(f"Failed to read current block during finalize wait: {exc}")
                 if consecutive_errors >= 5:
-                    raise RuntimeError(
-                        f"Failed to read current block 5 times while waiting for {target_description}"
-                    ) from exc
+                    raise RuntimeError(f"Failed to read current block 5 times while waiting for {target_description}") from exc
 
             await asyncio.sleep(12)
 
@@ -173,7 +161,7 @@ class ValidatorSettlementMixin:
 
         if weights is None:
             try:
-                burn_uid = int(getattr(validator_config, "BURN_UID", 5))
+                burn_uid = int(BURN_UID)
             except Exception:
                 burn_uid = 5
             burn_idx = burn_uid if 0 <= burn_uid < n else min(5, n - 1)
@@ -194,9 +182,7 @@ class ValidatorSettlementMixin:
         # Best-effort: still close the IWAP round even when we burn (e.g. all miners failed),
         # otherwise the dashboard can remain stuck in "started" forever.
         try:
-            final_weights = {
-                uid: float(weights[uid]) for uid in range(len(weights)) if float(weights[uid]) > 0.0
-            }
+            final_weights = {uid: float(weights[uid]) for uid in range(len(weights)) if float(weights[uid]) > 0.0}
         except Exception:
             final_weights = {}
 
@@ -240,9 +226,7 @@ class ValidatorSettlementMixin:
                 tasks_completed=int(tasks_total or 0),
             )
         except Exception as exc:
-            bt.logging.warning(
-                f"IWAP finish_round failed during burn-all ({reason}) ({type(exc).__name__}: {exc}); continuing locally."
-            )
+            bt.logging.warning(f"IWAP finish_round failed during burn-all ({reason}) ({type(exc).__name__}: {exc}); continuing locally.")
             finish_success = False
 
         if finish_success:
@@ -263,10 +247,10 @@ class ValidatorSettlementMixin:
             ColoredLogger.info("🏁 Finishing current round", ColoredLogger.GOLD)
 
         burn_reason: Optional[str] = None
-
-        if bool(getattr(validator_config, "BURN_ALL", False)):
+        burn_pct = float(max(0.0, min(1.0, BURN_AMOUNT_PERCENTAGE)))
+        if burn_pct >= 1.0:
             ColoredLogger.warning(
-                "🔥 BURN_ALL enabled: forcing burn and skipping consensus",
+                "🔥 BURN_AMOUNT_PERCENTAGE=1: forcing burn and skipping consensus",
                 ColoredLogger.RED,
             )
             burn_reason = "burn (forced)"
@@ -298,14 +282,20 @@ class ValidatorSettlementMixin:
                 )
 
         final_rewards_array = wta_rewards(avg_rewards_array)
-        final_rewards_dict = {
-            uid: float(final_rewards_array[uid])
-            for uid in range(len(final_rewards_array))
-            if float(final_rewards_array[uid]) > 0.0
-        }
+        winner_uid = int(np.argmax(final_rewards_array))
+        # Antes de set_weights: SIEMPRE repartimos entre 2 destinos:
+        #   - BURN_UID (ej. 5): BURN_AMOUNT_PERCENTAGE (ej. 0.8 = 80%)
+        #   - Ganador de la season: (1 - BURN_AMOUNT_PERCENTAGE) (ej. 0.2 = 20%)
+        winner_percentage = 1.0 - burn_pct
+        burn_idx = int(BURN_UID) if 0 <= int(BURN_UID) < len(final_rewards_array) else min(5, len(final_rewards_array) - 1)
+        if burn_pct > 0.0:
+            final_rewards_array = final_rewards_array.astype(np.float32) * winner_percentage
+            # += por si winner == burn_idx (sumar en vez de sobrescribir)
+            final_rewards_array[burn_idx] = float(final_rewards_array[burn_idx]) + float(burn_pct)
+        bt.logging.info(f"🎯 WEIGHT DISTRIBUTION | Winner UID {winner_uid}: {winner_percentage:.1%} | Burn UID {burn_idx}: {burn_pct:.1%} | BURN_AMOUNT_PERCENTAGE={BURN_AMOUNT_PERCENTAGE}")
+        final_rewards_dict = {uid: float(final_rewards_array[uid]) for uid in range(len(final_rewards_array)) if float(final_rewards_array[uid]) > 0.0}
 
         if final_rewards_dict:
-            winner_uid = next(iter(final_rewards_dict.keys()))
             self._last_round_winner_uid = winner_uid
         else:
             self._last_round_winner_uid = None
@@ -325,19 +315,15 @@ class ValidatorSettlementMixin:
             # Count tasks completed (from agents_dict)
             tasks_completed = 0
             for agent in self.agents_dict.values():
-                if hasattr(agent, 'score') and agent.score > 0:
+                if hasattr(agent, "score") and agent.score > 0:
                     tasks_completed += 1
-            
+
             finish_success = await self._finish_iwap_round(
                 avg_rewards=valid_scores,
-                final_weights={
-                    uid: float(final_rewards_array[uid])
-                    for uid in range(len(final_rewards_array))
-                    if float(final_rewards_array[uid]) > 0.0
-                },
+                final_weights={uid: float(final_rewards_array[uid]) for uid in range(len(final_rewards_array)) if float(final_rewards_array[uid]) > 0.0},
                 tasks_completed=tasks_completed,
             )
-            
+
             if finish_success:
                 ColoredLogger.success("✅ Final weights submitted to IWAP successfully", ColoredLogger.GREEN)
             else:
@@ -361,7 +347,6 @@ class ValidatorSettlementMixin:
                 manager.cleanup_all_agents()
         except Exception:
             pass
-
 
     def _log_round_completion(self, *, color: str, reason: str) -> None:
         """Small helper for consistent round completion logs."""

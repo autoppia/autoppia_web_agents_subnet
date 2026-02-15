@@ -76,17 +76,14 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
         if latest_block is not None:
             current_block = int(latest_block)
             if current_block != original_block:
-                bt.logging.info(
-                    f"[IWAP] Block refresh: using fresh_block={current_block:,} "
-                    f"(was {original_block:,}, diff={current_block - original_block})"
-                )
+                bt.logging.info(f"[IWAP] Block refresh: using fresh_block={current_block:,} (was {original_block:,}, diff={current_block - original_block})")
     except Exception:
         # If refresh fails, use the passed block (fallback)
         pass
 
     validator_identity = build_validator_identity(ctx)
     validator_snapshot = build_validator_snapshot(ctx, ctx.current_round_id)
-    
+
     # 🔍 IMPORTANT: Recalculate boundaries with refreshed block to ensure consistency
     # get_current_boundaries() uses self.start_block (from original block), but we need
     # boundaries consistent with the refreshed current_block for round_number calculation
@@ -101,31 +98,24 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
 
     # Use round_start_block from boundaries (not current_block) for consistency
     round_start_block = int(boundaries.get("round_start_block", current_block) or current_block)
-    
+
     # 🔍 Calculate season and round within season using round_start_block
     # CRITICAL: Must use round_start_block (not current_block) so backend validation passes
     # The backend validates season_number against start_block, so they must match
     from autoppia_web_agents_subnet.platform import client as iwa_main
+
     round_blocks = int(ctx.round_manager.round_block_length)
-    
+
     season_number = iwa_main.compute_season_number(round_start_block)
     round_number_in_season = iwa_main.compute_round_number_in_season(round_start_block, round_blocks)
-    
+
     bt.logging.info(
-        f"[IWAP] Season calculation: round_start_block={round_start_block:,} | "
-        f"season_number={season_number} | "
-        f"round_number_in_season={round_number_in_season} | "
-        f"round_blocks={round_blocks}"
+        f"[IWAP] Season calculation: round_start_block={round_start_block:,} | season_number={season_number} | round_number_in_season={round_number_in_season} | round_blocks={round_blocks}"
     )
-    
+
     miner_count = len(getattr(ctx, "active_miner_uids", []))
 
-    start_round_message = (
-        f"Calling start_round with season={season_number}, "
-        f"round_in_season={round_number_in_season}, "
-        f"tasks={n_tasks}, miners={miner_count}, "
-        f"round_id={ctx.current_round_id}"
-    )
+    start_round_message = f"Calling start_round with season={season_number}, round_in_season={round_number_in_season}, tasks={n_tasks}, miners={miner_count}, round_id={ctx.current_round_id}"
     log_iwap_phase("Phase 1", start_round_message)
 
     # Try to authenticate with IWAP, but don't kill validator if it fails
@@ -203,7 +193,7 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                 expected, got = mismatch
                 log_iwap_phase(
                     "Phase 1",
-                    ("start_round rejected due to round_number mismatch " f"(expected={expected}, got={got}); continuing without IWAP sync"),
+                    (f"start_round rejected due to round_number mismatch (expected={expected}, got={got}); continuing without IWAP sync"),
                     level="error",
                 )
             else:
@@ -234,10 +224,8 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
             season_tasks = ctx.season_manager.season_tasks
             if season_tasks:
                 from autoppia_web_agents_subnet.platform.utils.iwa_core import build_iwap_tasks
-                ctx.current_round_tasks = build_iwap_tasks(
-                    validator_round_id=ctx.current_round_id,
-                    tasks=season_tasks
-                )
+
+                ctx.current_round_tasks = build_iwap_tasks(validator_round_id=ctx.current_round_id, tasks=season_tasks)
 
     task_count = len(ctx.current_round_tasks)
     set_tasks_message = f"Calling set_tasks with tasks={task_count} for round_id={ctx.current_round_id}"
@@ -279,28 +267,28 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
             level="success",
         )
 
-    # Note: register_participating_miners_in_iwap is called separately in validator.py 
+    # Note: register_participating_miners_in_iwap is called separately in validator.py
     # after handshake to avoid duplication
 
 
 async def register_participating_miners_in_iwap(ctx) -> None:
     """
     Register all miners that responded to handshake in IWAP dashboard.
-    
+
     For each active miner:
     - Sends miner identity (uid, hotkey, coldkey)
     - Sends miner snapshot (agent_name, github_url, image_url)
     - Creates agent_run record (agent_run_id, started_at)
-    
+
     Creates records in:
     - validator_round_miners (miner info)
     - miner_evaluation_runs (agent_evaluation_runs)
-    
+
     Skips registration if IWAP is in offline mode.
     """
     if not ctx.current_round_id:
         return
-    
+
     if getattr(ctx, "_iwap_offline_mode", False):
         log_iwap_phase(
             "Register Miners",
@@ -308,7 +296,7 @@ async def register_participating_miners_in_iwap(ctx) -> None:
             level="warning",
         )
         return
-    
+
     if not hasattr(ctx, "active_miner_uids") or not ctx.active_miner_uids:
         log_iwap_phase(
             "Register Miners",
@@ -316,11 +304,11 @@ async def register_participating_miners_in_iwap(ctx) -> None:
             level="info",
         )
         return
-    
+
     validator_identity = build_validator_identity(ctx)
     coldkeys = getattr(ctx.metagraph, "coldkeys", [])
     now_ts = time.time()
-    
+
     for miner_uid in ctx.active_miner_uids:
         # CRITICAL: Check if agent_run already exists for this miner in this round
         # An agent run should be unique per (validator_round_id, miner_uid)
@@ -329,12 +317,11 @@ async def register_participating_miners_in_iwap(ctx) -> None:
         if existing_agent_run and existing_agent_run.validator_round_id == ctx.current_round_id:
             log_iwap_phase(
                 "Register Miners",
-                f"Agent run already exists for miner_uid={miner_uid} in round {ctx.current_round_id}. "
-                f"Existing agent_run_id={existing_agent_run.agent_run_id}. Skipping registration.",
+                f"Agent run already exists for miner_uid={miner_uid} in round {ctx.current_round_id}. Existing agent_run_id={existing_agent_run.agent_run_id}. Skipping registration.",
                 level="warning",
             )
             continue
-        
+
         miner_hotkey = None
         try:
             miner_hotkey = ctx.metagraph.hotkeys[miner_uid]
@@ -463,7 +450,6 @@ async def finish_round_flow(
         agent_run.ended_at = ended_at
         agent_run.elapsed_sec = max(0.0, ended_at - agent_run.started_at)
 
-    sorted_miners = sorted(avg_rewards.items(), key=lambda item: item[1], reverse=True)
     summary = {
         "tasks_completed": tasks_completed,
         "active_miners": len(avg_rewards),
@@ -472,9 +458,6 @@ async def finish_round_flow(
     # Get local scores (pre-consensus) if they were saved during IPFS publish
     # If not available, use current avg_rewards (backward compatible)
     local_avg_rewards = getattr(ctx, "_local_avg_rewards_at_publish", None) or avg_rewards
-
-    # Calculate ranks with FINAL scores (for consensus) - needed for post_consensus_evaluation
-    rank_map_final = {uid: rank for rank, (uid, _score) in enumerate(sorted_miners, start=1)}
 
     # Calculate local avg_eval_scores (average of eval_scores for each miner)
     local_avg_eval_scores = {}
@@ -502,7 +485,7 @@ async def finish_round_flow(
     # local_avg_rewards: Dict[uid -> avg_reward] where avg_reward = average of all rewards for that miner
     local_evaluation_miners = []
     local_stats_by_miner: Dict[int, Dict[str, Any]] = {}
-    
+
     # Guardar local_evaluation antes de finish_round para que pueda ser incluido en IPFS
     # (se construye aquí porque necesitamos los datos antes de que termine el round)
     for miner_uid, agent_run in ctx.current_agent_runs.items():
@@ -525,7 +508,7 @@ async def finish_round_flow(
 
         # Get miner name from agent_run
         miner_name = getattr(agent_run, "agent_name", None) or f"Miner {miner_uid}"
-        
+
         # Obtener miner_hotkey
         miner_hotkey = None
         try:
@@ -604,15 +587,10 @@ async def finish_round_flow(
 
     # Build emission info (will be added to round_metadata)
     # alpha_price will be calculated by backend
-    from autoppia_web_agents_subnet.validator.config import BURN_UID
-    
-    # BURN_AMOUNT_PERCENTAGE is not in config, use default 0.1 (10%)
-    burn_percentage = getattr(
-        __import__('autoppia_web_agents_subnet.validator.config', fromlist=['BURN_AMOUNT_PERCENTAGE']),
-        'BURN_AMOUNT_PERCENTAGE',
-        0.1  # Default 10% if not defined
-    )
-    
+    from autoppia_web_agents_subnet.validator.config import BURN_UID, BURN_AMOUNT_PERCENTAGE
+
+    burn_percentage = float(BURN_AMOUNT_PERCENTAGE)
+
     emission_info = {
         "burn_percentage": float(burn_percentage) * 100,  # Convert to percentage
         "burn_recipient_uid": int(BURN_UID),
@@ -635,7 +613,7 @@ async def finish_round_flow(
 
     # Build local_evaluation (what THIS validator evaluated - pre-consensus)
     local_evaluation = {"timestamp": ended_at, "miners": local_evaluation_miners}
-    
+
     # Actualizar el payload IPFS guardado para incluir local_evaluation
     # (aunque se publique antes, actualizamos el payload guardado para que tenga la info completa)
     if hasattr(ctx, "validator") and hasattr(ctx.validator, "_ipfs_uploaded_payload"):
@@ -678,11 +656,11 @@ async def finish_round_flow(
     if agg_meta and isinstance(agg_meta, dict):
         # Obtener los payloads originales descargados de IPFS
         downloaded_payloads = agg_meta.get("downloaded_payloads", [])
-        
+
         if downloaded_payloads:
             # Calcular total_stake y validators_participated
             total_stake = sum(p.get("stake", 0.0) for p in downloaded_payloads)
-            
+
             # Guardar los payloads originales tal cual se descargaron de IPFS
             # Cada payload tiene la misma estructura que ipfs_uploaded
             ipfs_downloaded = {
@@ -714,17 +692,17 @@ async def finish_round_flow(
 
         # Build post_consensus miners list - include all miners with weight > 0 (including burn_uid)
         # BURN_AMOUNT_PERCENTAGE and BURN_UID are already imported above
-        
+
         post_consensus_miners = []
         # First, add all miners from consensus_scores
         for miner_uid, consensus_reward in consensus_scores.items():
             weight = final_weights.get(miner_uid, 0.0)
             rank = rank_map_consensus.get(miner_uid)
-            
+
             # Obtener stats: primero del consensus, luego locales como fallback
             consensus_stats = stats_by_miner.get(miner_uid) or {}
             local_stats = local_stats_by_miner.get(miner_uid) or {}
-            
+
             # Obtener miner_hotkey
             miner_hotkey = None
             try:
@@ -776,7 +754,7 @@ async def finish_round_flow(
                 burn_miner_hotkey = ctx.metagraph.hotkeys[burn_uid] if burn_uid < len(ctx.metagraph.hotkeys) else None
             except Exception:
                 pass
-            
+
             post_consensus_miners.append(
                 {
                     "miner_uid": burn_uid,
@@ -791,7 +769,7 @@ async def finish_round_flow(
             "miners": post_consensus_miners,
             "timestamp": ended_at,
         }
-        
+
         # NOTA: post_consensus_evaluation NO se sube a IPFS
         # Se calcula DESPUÉS de descargar todos los IPFS de otros validadores
         # Solo se guarda para enviarlo al backend en finish_round

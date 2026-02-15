@@ -105,7 +105,7 @@ All IWAP requests include validator-hotkey signature headers (set in `platform/c
 
 **Aggregation & Settlement**:
 - At `FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION`, the validator fetches peer CIDs (`aggregate_scores_from_commitments`) and averages scores if stake thresholds are met (`MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO`). A final re-fetch is performed just before calculating weights to ensure all commits are included, and an immutable snapshot of consensus data is used for both weight calculation and IWAP submission to guarantee consistency.
-- If all scores ≤ 0, or no miners responded, on-chain weights burn to `BURN_UID` with explanatory logs.
+- If all scores ≤ 0, or no miners responded, or `BURN_AMOUNT_PERCENTAGE=1`, on-chain weights burn to `BURN_UID`. Otherwise `BURN_AMOUNT_PERCENTAGE` (0-1) determines how much is burned vs. rewarded to miners.
 
 ---
 

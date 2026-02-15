@@ -11,9 +11,10 @@ TESTING = _env_bool("TESTING", False)
 # ═══════════════════════════════════════════════════════════════════════════
 # BURN CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
-
+# BURN_AMOUNT_PERCENTAGE: 0.0-1.0 (qué fracción se quema, el resto premia a miners)
+# 1.0 = quemar todo. 0.9 = 90% burn, 10% a winner. Igual que en main.
 BURN_UID = _env_int("BURN_UID", 5)
-BURN_ALL = _env_bool("BURN_ALL", False)
+BURN_AMOUNT_PERCENTAGE = _env_float("BURN_AMOUNT_PERCENTAGE", 0.9)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
