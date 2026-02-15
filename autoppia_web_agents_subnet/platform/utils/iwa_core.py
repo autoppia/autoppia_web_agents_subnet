@@ -254,7 +254,6 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
         SKIP_ROUND_IF_STARTED_AFTER_FRACTION,
         MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO,
         ENABLE_DISTRIBUTED_CONSENSUS,
-        ENABLE_DYNAMIC,
         SHOULD_RECORD_GIF,
         TIMEOUT,
         FEEDBACK_TIMEOUT,
@@ -264,10 +263,10 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
         TESTING,
         IWAP_API_BASE_URL,
     )
-    
+
     stake = normalized_stake_tao(validator.metagraph, validator.uid)
     vtrust = validator_vtrust(validator.metagraph, validator.uid)
-    
+
     # Get coldkey from validator wallet (same as in build_validator_identity)
     coldkey = getattr(getattr(validator.wallet, "coldkeypub", None), "ss58_address", None)
 
@@ -296,7 +295,7 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
             "enable_distributed_consensus": ENABLE_DISTRIBUTED_CONSENSUS,
         },
         "execution": {
-            "enable_dynamic": ENABLE_DYNAMIC,
+            "enable_dynamic": True,
             "should_record_gif": SHOULD_RECORD_GIF,
             "timeout": TIMEOUT,
             "feedback_timeout": FEEDBACK_TIMEOUT,
@@ -309,7 +308,7 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
         "environment": {
             "testing": TESTING,
             "iwap_api_base_url": IWAP_API_BASE_URL,
-        }
+        },
     }
 
     return iwa_models.ValidatorSnapshotIWAP(

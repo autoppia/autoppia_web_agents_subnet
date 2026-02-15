@@ -43,7 +43,6 @@ AGENT_STEP_TIMEOUT = _env_int("AGENT_STEP_TIMEOUT", 180)  # seconds
 MAX_ACTIONS_LENGTH = _env_int("MAX_ACTIONS_LENGTH", 30, test_default=30)
 TIMEOUT = _env_float("TIMEOUT", 180.0, test_default=180.0)  # seconds
 FEEDBACK_TIMEOUT = _env_float("FEEDBACK_TIMEOUT", 30.0, test_default=30.0)  # seconds
-ENABLE_DYNAMIC = _env_bool("ENABLE_DYNAMIC", False)
 SHOULD_RECORD_GIF = _env_bool("SHOULD_RECORD_GIF", True)
 
 COST_LIMIT_ENABLED = _env_bool("COST_LIMIT_ENABLED", True)
