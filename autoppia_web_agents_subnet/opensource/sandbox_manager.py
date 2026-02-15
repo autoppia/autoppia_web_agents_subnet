@@ -56,13 +56,13 @@ def _fingerprint_ctx(ctx_dir: str) -> str:
     base = Path(ctx_dir)
 
     # Hash all files under the context directory (small contexts; deterministic order).
-    for fp in sorted(base.rglob('*')):
+    for fp in sorted(base.rglob("*")):
         if not fp.is_file():
             continue
-        if '__pycache__' in fp.parts or '.git' in fp.parts:
+        if "__pycache__" in fp.parts or ".git" in fp.parts:
             continue
-        rel = str(fp.relative_to(base)).replace('\\', '/')
-        h.update(rel.encode('utf-8'))
+        rel = str(fp.relative_to(base)).replace("\\", "/")
+        h.update(rel.encode("utf-8"))
         try:
             h.update(fp.read_bytes())
         except OSError:
@@ -84,6 +84,7 @@ def _csv_env(name: str) -> set[str]:
     if not raw:
         return set()
     return {part.strip().lower() for part in raw.split(",") if part.strip()}
+
 
 def _pick_host_log_dir() -> str:
     preferred = os.getenv("SANDBOX_LOG_DIR") or "/var/log/autoppia-sandbox"
@@ -186,27 +187,11 @@ def _docker_log_config(*, kind: str) -> Optional[LogConfig]:
 
     kind_s = (kind or "").strip().lower()
     if kind_s == "gateway":
-        max_size = (
-            (os.getenv("SANDBOX_GATEWAY_DOCKER_LOG_MAX_SIZE") or "").strip()
-            or (os.getenv("SANDBOX_DOCKER_LOG_MAX_SIZE") or "").strip()
-            or "20m"
-        )
-        max_files = (
-            (os.getenv("SANDBOX_GATEWAY_DOCKER_LOG_MAX_FILES") or "").strip()
-            or (os.getenv("SANDBOX_DOCKER_LOG_MAX_FILES") or "").strip()
-            or "3"
-        )
+        max_size = (os.getenv("SANDBOX_GATEWAY_DOCKER_LOG_MAX_SIZE") or "").strip() or (os.getenv("SANDBOX_DOCKER_LOG_MAX_SIZE") or "").strip() or "20m"
+        max_files = (os.getenv("SANDBOX_GATEWAY_DOCKER_LOG_MAX_FILES") or "").strip() or (os.getenv("SANDBOX_DOCKER_LOG_MAX_FILES") or "").strip() or "3"
     elif kind_s == "agent":
-        max_size = (
-            (os.getenv("SANDBOX_AGENT_DOCKER_LOG_MAX_SIZE") or "").strip()
-            or (os.getenv("SANDBOX_DOCKER_LOG_MAX_SIZE") or "").strip()
-            or "10m"
-        )
-        max_files = (
-            (os.getenv("SANDBOX_AGENT_DOCKER_LOG_MAX_FILES") or "").strip()
-            or (os.getenv("SANDBOX_DOCKER_LOG_MAX_FILES") or "").strip()
-            or "3"
-        )
+        max_size = (os.getenv("SANDBOX_AGENT_DOCKER_LOG_MAX_SIZE") or "").strip() or (os.getenv("SANDBOX_DOCKER_LOG_MAX_SIZE") or "").strip() or "10m"
+        max_files = (os.getenv("SANDBOX_AGENT_DOCKER_LOG_MAX_FILES") or "").strip() or (os.getenv("SANDBOX_DOCKER_LOG_MAX_FILES") or "").strip() or "3"
     else:
         return None
 
@@ -273,8 +258,8 @@ class SandboxManager:
         self.keep_agent_containers = bool(SANDBOX_KEEP_AGENT_CONTAINERS)
 
         self.base_dir = os.path.dirname(__file__)
-        self.sandbox_ctx = os.path.join(self.base_dir, 'sandbox')
-        self.gateway_ctx = os.path.join(self.base_dir, 'gateway')
+        self.sandbox_ctx = os.path.join(self.base_dir, "sandbox")
+        self.gateway_ctx = os.path.join(self.base_dir, "gateway")
         self.sandbox_image = _tag_with_fingerprint(SANDBOX_AGENT_IMAGE, _fingerprint_ctx(self.sandbox_ctx))
         self.gateway_image = _tag_with_fingerprint(SANDBOX_GATEWAY_IMAGE, _fingerprint_ctx(self.gateway_ctx))
         # Admin token is used to protect privileged gateway endpoints from
@@ -348,7 +333,7 @@ class SandboxManager:
             val = os.getenv(key)
             if val:
                 env[key] = val
-                
+
         run_kwargs = dict(
             name=SANDBOX_GATEWAY_HOST,
             image=self.gateway_image,
@@ -357,9 +342,7 @@ class SandboxManager:
             },
             network=SANDBOX_NETWORK_NAME,
             environment=env,
-            ports={
-                f"{SANDBOX_GATEWAY_PORT}/tcp": ("127.0.0.1", SANDBOX_GATEWAY_PORT)
-            },
+            ports={f"{SANDBOX_GATEWAY_PORT}/tcp": ("127.0.0.1", SANDBOX_GATEWAY_PORT)},
             # Hardening: the gateway should not need to write outside its log dir and /tmp.
             read_only=True,
             tmpfs={"/tmp": "rw,nosuid,nodev,noexec,size=256m"},
@@ -404,9 +387,7 @@ class SandboxManager:
                 stop_and_remove(self.gateway_container)
             except Exception:
                 pass
-            raise RuntimeError(
-                f"Gateway failed health check at http://127.0.0.1:{SANDBOX_GATEWAY_PORT}/health"
-            )
+            raise RuntimeError(f"Gateway failed health check at http://127.0.0.1:{SANDBOX_GATEWAY_PORT}/health")
 
         # Fail-fast if the gateway cannot reach its upstream providers. This avoids
         # silent "all tasks fail" behavior when the gateway has no internet egress.
@@ -485,7 +466,8 @@ class SandboxManager:
                 stdout=True,
                 stderr=True,
             )
-            rc = int(getattr(res, "exit_code", 1) or 1)
+            exit_code = getattr(res, "exit_code", None)
+            rc = 1 if exit_code is None else int(exit_code)
             out = getattr(res, "output", b"") or b""
             out_s = out.decode("utf-8", errors="replace").strip()
         except Exception as e:
@@ -507,9 +489,7 @@ class SandboxManager:
         allowed_providers = self._get_allowed_gateway_providers()
         unknown = sorted(p for p in allowed_providers if p not in _PROVIDER_TO_API_KEY_ENV)
         if unknown:
-            raise RuntimeError(
-                f"Unknown providers in GATEWAY_ALLOWED_PROVIDERS: {', '.join(unknown)}"
-            )
+            raise RuntimeError(f"Unknown providers in GATEWAY_ALLOWED_PROVIDERS: {', '.join(unknown)}")
 
         missing_key_envs: list[str] = []
         for provider in sorted(allowed_providers):
@@ -520,10 +500,7 @@ class SandboxManager:
         if missing_key_envs:
             providers = ", ".join(sorted(allowed_providers))
             missing = ", ".join(missing_key_envs)
-            raise RuntimeError(
-                f"Missing API keys for allowed gateway providers ({providers}). "
-                f"Set: {missing}"
-            )
+            raise RuntimeError(f"Missing API keys for allowed gateway providers ({providers}). Set: {missing}")
 
     def _wait_for_gateway_health(self, timeout: int = 20, retry_interval: float = 1.0) -> bool:
         health_url = f"http://127.0.0.1:{SANDBOX_GATEWAY_PORT}/health"
@@ -669,8 +646,8 @@ class SandboxManager:
                 git_commit = None
 
             agent = self._start_container(uid, repo_dir, git_commit=git_commit)
-            bt.logging.success(f"Started container for agent {uid} at {agent.base_url}")            
-            
+            bt.logging.success(f"Started container for agent {uid} at {agent.base_url}")
+
             self._agents[uid] = agent
 
             if self.health_check(agent):
@@ -679,7 +656,7 @@ class SandboxManager:
                 bt.logging.error(f"Agent {uid} failed health check.")
                 self.cleanup_agent(uid)
                 return None
-            
+
             return agent
         except Exception as exc:
             bt.logging.error(f"Failed to deploy agent {uid} from {github_url}: {exc}")
@@ -713,9 +690,7 @@ class SandboxManager:
             except Exception:
                 pass
             try:
-                bt.logging.warning(
-                    f"[sandbox] Preserving agent container for uid={uid}: name={getattr(agent.container, 'name', '')} temp_dir={agent.temp_dir}"
-                )
+                bt.logging.warning(f"[sandbox] Preserving agent container for uid={uid}: name={getattr(agent.container, 'name', '')} temp_dir={agent.temp_dir}")
             except Exception:
                 pass
             return
@@ -750,9 +725,7 @@ class SandboxManager:
             )
             if resp.status_code == 200:
                 return True
-            bt.logging.error(
-                f"Gateway set-allowed-task-ids failed: status={resp.status_code} body={resp.text[:300]}"
-            )
+            bt.logging.error(f"Gateway set-allowed-task-ids failed: status={resp.status_code} body={resp.text[:300]}")
         except Exception as e:
             bt.logging.error(f"Gateway set-allowed-task-ids request failed: {e}")
             return False
@@ -768,9 +741,7 @@ class SandboxManager:
             )
             if resp.status_code == 200:
                 return resp.json()
-            bt.logging.error(
-                f"Gateway usage lookup failed for task_id={task_id}: status={resp.status_code} body={resp.text[:300]}"
-            )
+            bt.logging.error(f"Gateway usage lookup failed for task_id={task_id}: status={resp.status_code} body={resp.text[:300]}")
         except Exception as e:
             bt.logging.error(f"Gateway usage lookup request failed for task_id={task_id}: {e}")
             return None
