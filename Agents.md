@@ -141,7 +141,7 @@ It scrapes the canonical start/end markers (`🚦 Starting Round`, `✅ Round co
 3. Waits `block_delay × seconds_per_block` (default 2 × 12s = 24s).
 4. Runs `report.sh` for the round; renders HTML + text email (SMTP config uses `.env` or `REPORT_MONITOR_*` variables).
 5. Optional LLM command (`REPORT_MONITOR_LLM_COMMAND`) enriches the email.
-6. **Codex integration**: after emailing, it streams the report to `run_codex.sh` (see below) and waits for Codex to finish before clearing the round.
+6. **Codex integration**: after emailing, it streams the report to `run_codex.sh` (see below) and waits for Codex to finish before clearing the round. This is **disabled by default** unless `REPORT_MONITOR_RUN_CODEX=true`.
 
 ### Alerts
 `python scripts/validator/utils/alert_admins.py` lets Codex or humans dispatch additional notifications if a round requires attention beyond the automated email.
@@ -158,6 +158,11 @@ Launches Codex with full context:
 scripts/validator/reporting/run_codex.sh --round 598 <<'EOF'
 …report output…
 EOF
+```
+
+By default it does nothing unless you set:
+```bash
+export REPORT_MONITOR_RUN_CODEX=true
 ```
 
 Behaviour:
