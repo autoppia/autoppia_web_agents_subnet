@@ -2,6 +2,7 @@ import os
 from typing import Optional
 
 from dotenv import load_dotenv
+
 load_dotenv()
 
 
@@ -12,11 +13,26 @@ def _env_str(name: str, default: str = "") -> str:
     return os.getenv(name, default).strip()
 
 
-def _env_bool(name: str, default: bool = False) -> bool:
+def _env_bool(name: str, default: bool = False, *, test_default: Optional[bool] = None) -> bool:
     """
     Retrieve a boolean environment variable, falling back to default for invalid values.
+    Supports TEST_* overrides when TESTING=true.
     """
-    return _env_str(name, str(default)).strip().lower() in {"y", "yes", "t", "true", "on", "1"}
+
+    def _parse_bool(value: str) -> bool:
+        return value.strip().lower() in {"y", "yes", "t", "true", "on", "1"}
+
+    TESTING = _parse_bool(_env_str("TESTING", "false"))
+    if TESTING:
+        test_key = f"TEST_{name}"
+        test_val = os.getenv(test_key)
+        if test_val is not None and test_val.strip() != "":
+            return _parse_bool(test_val)
+
+        if test_default is not None:
+            return _parse_bool(str(test_default))
+        return _parse_bool(_env_str(name, str(default)))
+    return _parse_bool(_env_str(name, str(default)))
 
 
 def _env_int(name: str, default: int = 0, *, test_default: Optional[int] = None) -> int:

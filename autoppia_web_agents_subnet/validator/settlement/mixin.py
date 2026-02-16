@@ -69,7 +69,6 @@ class ValidatorSettlementMixin:
             except Exception as e:
                 ColoredLogger.error(f"Error aggregating scores from commitments: {e}", ColoredLogger.RED)
                 scores = {}
-
             await self._calculate_final_weights(scores=scores)
             self.round_manager.enter_phase(
                 RoundPhase.COMPLETE,

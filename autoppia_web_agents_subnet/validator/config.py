@@ -123,8 +123,16 @@ SANDBOX_AGENT_RETURN_METRICS = _env_bool("SANDBOX_AGENT_RETURN_METRICS", False)
 # ═══════════════════════════════════════════════════════════════════════════
 
 CONSENSUS_VERSION = _env_int("CONSENSUS_VERSION", 1)
-ENABLE_DISTRIBUTED_CONSENSUS = _env_bool("ENABLE_DISTRIBUTED_CONSENSUS", True)
-MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO = _env_float("MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO", 10000.0)
+ENABLE_DISTRIBUTED_CONSENSUS = _env_bool(
+    "ENABLE_DISTRIBUTED_CONSENSUS",
+    True,
+    test_default=True,
+)
+MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO = _env_float(
+    "MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO",
+    10000.0,
+    test_default=0.0,
+)
 IWAP_API_BASE_URL = _env_str("IWAP_API_BASE_URL", "https://api-leaderboard.autoppia.com" if not TESTING else "https://dev-api-leaderboard.autoppia.com")
 
 
