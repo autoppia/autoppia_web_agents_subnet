@@ -5,6 +5,8 @@ from autoppia_web_agents_subnet.utils.env import (
     _env_float,
 )
 
+import os
+
 TESTING = _env_bool("TESTING", False)
 
 
@@ -100,8 +102,28 @@ LAST_WINNER_BONUS_PCT = _env_float("LAST_WINNER_BONUS_PCT", 0.05)
 
 SANDBOX_NETWORK_NAME = _env_str("SANDBOX_NETWORK_NAME", "sandbox-network")
 SANDBOX_GATEWAY_IMAGE = _env_str("SANDBOX_GATEWAY_IMAGE", "autoppia-sandbox-gateway-image")
-SANDBOX_GATEWAY_HOST = _env_str("SANDBOX_GATEWAY_HOST", "sandbox-gateway")
-SANDBOX_GATEWAY_PORT = _env_int("SANDBOX_GATEWAY_PORT", 9000)
+
+# Multi-validator support on the same machine:
+# Each validator should run its own gateway container to avoid name/port/token conflicts.
+#
+# Recommended:
+# - Set `SANDBOX_GATEWAY_INSTANCE` to a unique string per validator process.
+# - Set `SANDBOX_GATEWAY_PORT_OFFSET` to a unique integer per validator process.
+#
+# You can always override `SANDBOX_GATEWAY_HOST` / `SANDBOX_GATEWAY_PORT` explicitly.
+_SANDBOX_GATEWAY_INSTANCE = (_env_str("SANDBOX_GATEWAY_INSTANCE", "") or "").strip()
+
+if (os.getenv("SANDBOX_GATEWAY_HOST") or "").strip():
+    SANDBOX_GATEWAY_HOST = _env_str("SANDBOX_GATEWAY_HOST", "sandbox-gateway")
+else:
+    _base = "sandbox-gateway"
+    SANDBOX_GATEWAY_HOST = f"{_base}-{_SANDBOX_GATEWAY_INSTANCE}" if _SANDBOX_GATEWAY_INSTANCE else _base
+
+if (os.getenv("SANDBOX_GATEWAY_PORT") or "").strip():
+    SANDBOX_GATEWAY_PORT = _env_int("SANDBOX_GATEWAY_PORT", 9000)
+else:
+    _offset = _env_int("SANDBOX_GATEWAY_PORT_OFFSET", 0)
+    SANDBOX_GATEWAY_PORT = 9000 + int(_offset)
 SANDBOX_AGENT_IMAGE = _env_str("SANDBOX_IMAGE", "autoppia-sandbox-agent-image")
 SANDBOX_AGENT_PORT = _env_int("SANDBOX_AGENT_PORT", 8000)
 SANDBOX_CLONE_TIMEOUT = _env_int("SANDBOX_CLONE_TIMEOUT", 90)

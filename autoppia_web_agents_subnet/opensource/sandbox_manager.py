@@ -257,6 +257,11 @@ class SandboxManager:
         self._agents: Dict[int, AgentInstance] = {}
         self.keep_agent_containers = bool(SANDBOX_KEEP_AGENT_CONTAINERS)
 
+        # Optional namespace to allow multiple validators on the same host without
+        # Docker name collisions for sandboxed agent containers.
+        # Prefer an explicit SANDBOX_INSTANCE, fallback to SANDBOX_GATEWAY_INSTANCE.
+        self.instance = (os.getenv("SANDBOX_INSTANCE") or os.getenv("SANDBOX_GATEWAY_INSTANCE") or "").strip()
+
         self.base_dir = os.path.dirname(__file__)
         self.sandbox_ctx = os.path.join(self.base_dir, "sandbox")
         self.gateway_ctx = os.path.join(self.base_dir, "gateway")
@@ -283,14 +288,23 @@ class SandboxManager:
         In debugging mode we create a unique name so containers can be preserved for
         post-mortem inspection (docker logs, filesystem, etc.).
         """
+        prefix = (os.getenv("SANDBOX_AGENT_CONTAINER_PREFIX") or "sandbox-agent").strip() or "sandbox-agent"
+
         if not self.keep_agent_containers:
-            return f"sandbox-agent-{uid}"
+            # Stable name so we can replace containers cleanly, but namespaced per instance.
+            if self.instance:
+                return f"{prefix}-{self.instance}-{uid}"
+            return f"{prefix}-{uid}"
 
         short = (str(git_commit or "").strip()[:7]) if git_commit else ""
         ts_ms = int(time.time() * 1000)
         if short:
-            return f"sandbox-agent-{uid}-{short}-{ts_ms}"
-        return f"sandbox-agent-{uid}-{ts_ms}"
+            if self.instance:
+                return f"{prefix}-{self.instance}-{uid}-{short}-{ts_ms}"
+            return f"{prefix}-{uid}-{short}-{ts_ms}"
+        if self.instance:
+            return f"{prefix}-{self.instance}-{uid}-{ts_ms}"
+        return f"{prefix}-{uid}-{ts_ms}"
 
     def deploy_gateway(self):
         self._validate_gateway_provider_keys()

@@ -372,7 +372,51 @@ class ValidatorEvaluationMixin:
                             f"  Agent {agent.uid}: score={score_f:.3f}, time={exec_time_s:.2f}s, cost=${cost:.4f}, tokens={tokens}",
                             ColoredLogger.CYAN,
                         )
-                        ColoredLogger.debug(f"    Task solution: {task_solution}", ColoredLogger.BLUE)
+                        # Avoid logging huge payloads (DOM snapshots, base64 blobs) that can appear in
+                        # TaskSolution.recording/execution_history. Keep logs readable and prevent PM2
+                        # log files from ballooning.
+                        try:
+                            from autoppia_iwa.src.web_agents.classes import TaskSolution as _TaskSolution  # type: ignore
+                        except Exception:  # pragma: no cover
+                            _TaskSolution = None
+
+                        def _summarize_task_solution(ts) -> str:
+                            try:
+                                if _TaskSolution is not None and isinstance(ts, _TaskSolution):
+                                    actions = getattr(ts, "actions", []) or []
+                                    task_id = getattr(ts, "task_id", None)
+                                    recording = getattr(ts, "recording", None)
+                                    rec_keys = []
+                                    exec_hist_len = 0
+                                    gif_present = False
+                                    if isinstance(recording, dict):
+                                        rec_keys = sorted(list(recording.keys()))
+                                        hist = recording.get("execution_history")
+                                        if isinstance(hist, list):
+                                            exec_hist_len = len(hist)
+                                        gif_present = bool(recording.get("gif_recording"))
+                                    elif isinstance(recording, list):
+                                        exec_hist_len = len(recording)
+                                    action_types = []
+                                    for a in actions[:3]:
+                                        t = getattr(a, "type", None) or (a.get("type") if isinstance(a, dict) else None)
+                                        if t:
+                                            action_types.append(str(t))
+                                    return (
+                                        f"TaskSolution(task_id={task_id!r}, actions={len(actions)}, "
+                                        f"action_types={action_types}, recording_keys={rec_keys}, "
+                                        f"execution_history={exec_hist_len}, gif_present={gif_present})"
+                                    )
+                                if isinstance(ts, dict):
+                                    keys = sorted(list(ts.keys()))
+                                    hist = ts.get("execution_history")
+                                    hist_len = len(hist) if isinstance(hist, list) else 0
+                                    return f"TaskSolution(dict keys={keys}, execution_history={hist_len})"
+                            except Exception:
+                                pass
+                            return f"TaskSolution(type={type(ts).__name__})"
+
+                        ColoredLogger.debug(f"    Task solution: {_summarize_task_solution(task_solution)}", ColoredLogger.BLUE)
 
                         reward = calculate_reward_for_task(
                             eval_score=score_f,
