@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
+import re
+from datetime import datetime, timezone
 
 import httpx
 
@@ -140,6 +142,132 @@ def _normalize_llm_usage(raw: Any) -> Optional[List[Dict[str, Any]]]:
             }
         )
     return out or None
+
+
+def _extract_season_round(validator_round_id: Optional[str]) -> tuple[Optional[int], Optional[int]]:
+    if not validator_round_id:
+        return None, None
+    match = re.match(r"validator_round_(\d+)_(\d+)_", str(validator_round_id))
+    if not match:
+        return None, None
+    try:
+        return int(match.group(1)), int(match.group(2))
+    except Exception:
+        return None, None
+
+
+def _summarize_llm_usage(llm_usage: Optional[List[Dict[str, Any]]]) -> Optional[Dict[str, Any]]:
+    if not llm_usage:
+        return None
+    total_tokens = 0
+    total_cost = 0.0
+    providers: Dict[str, float] = {}
+    for item in llm_usage:
+        if not isinstance(item, dict):
+            continue
+        tokens = item.get("tokens")
+        cost = item.get("cost")
+        provider = item.get("provider")
+        if isinstance(tokens, (int, float)):
+            total_tokens += int(tokens)
+        if isinstance(cost, (int, float)):
+            total_cost += float(cost)
+            if isinstance(provider, str) and provider:
+                providers[provider] = providers.get(provider, 0.0) + float(cost)
+    return {
+        "total_tokens": total_tokens,
+        "total_cost": round(total_cost, 6),
+        "providers": providers,
+    }
+
+
+def _build_execution_steps(execution_history: Any) -> List[Dict[str, Any]]:
+    if not isinstance(execution_history, list):
+        return []
+    steps: List[Dict[str, Any]] = []
+    for idx, item in enumerate(execution_history):
+        if not isinstance(item, dict):
+            continue
+        action = item.get("action")
+        if isinstance(action, dict):
+            action = _normalize_action_payload(action)
+        snapshot = item.get("browser_snapshot") or item.get("observation")
+        timestamp = None
+        if isinstance(snapshot, dict):
+            timestamp = snapshot.get("timestamp") or snapshot.get("time")
+        exec_time = item.get("execution_time")
+        exec_time_ms = None
+        if isinstance(exec_time, (int, float)):
+            exec_time_ms = int(exec_time * 1000)
+        step = {
+            "step_index": idx,
+            "timestamp": timestamp,
+            "agent_call": item.get("agent_call"),
+            "llm_usage": item.get("llm_usage"),
+            "action": action,
+            "observation": snapshot,
+            "success": item.get("successfully_executed", item.get("success")),
+            "error": item.get("error"),
+            "execution_time_ms": exec_time_ms,
+        }
+        steps.append(step)
+    return steps
+
+
+def _build_task_log_payload(
+    *,
+    task_payload: Any,
+    agent_run: Any,
+    miner_uid: int,
+    eval_score: float,
+    reward: float,
+    exec_time: float,
+    evaluation_meta: Dict[str, Any],
+    validator_round_id: Optional[str],
+    validator_uid: Optional[int],
+) -> Dict[str, Any]:
+    execution_history = evaluation_meta.get("execution_history", []) if isinstance(evaluation_meta, dict) else []
+    steps = _build_execution_steps(execution_history)
+    steps_success = len([s for s in steps if s.get("success")])
+    llm_usage = _normalize_llm_usage(evaluation_meta.get("llm_usage")) if isinstance(evaluation_meta, dict) else None
+    season, round_in_season = _extract_season_round(validator_round_id)
+    created_at = datetime.now(timezone.utc).isoformat()
+    task_prompt = getattr(task_payload, "prompt", None)
+    task_url = getattr(task_payload, "url", None)
+    use_case = getattr(task_payload, "use_case", None)
+    website = getattr(task_payload, "web_project_id", None) or getattr(task_payload, "web", None)
+
+    return {
+        "schema_version": "1.0",
+        "task_id": getattr(task_payload, "task_id", None),
+        "agent_run_id": getattr(agent_run, "agent_run_id", None),
+        "validator_round_id": validator_round_id,
+        "season": season,
+        "round_in_season": round_in_season,
+        "miner_uid": miner_uid,
+        "validator_uid": validator_uid,
+        "created_at": created_at,
+        "task": {
+            "prompt": task_prompt,
+            "url": task_url,
+            "website": website,
+            "use_case": use_case,
+        },
+        "summary": {
+            "status": "success" if eval_score and eval_score > 0 else "fail",
+            "reward": float(reward),
+            "eval_score": float(eval_score),
+            "eval_time_sec": float(exec_time),
+            "steps_total": len(steps),
+            "steps_success": steps_success,
+        },
+        "llm_usage_summary": _summarize_llm_usage(llm_usage),
+        "steps": steps,
+        "raw": {
+            "execution_history": execution_history if isinstance(execution_history, list) else [],
+            "llm_usage": llm_usage or [],
+        },
+    }
 
 
 def prepare_evaluation_payload(
@@ -589,6 +717,31 @@ async def submit_task_results(
                 else:
                     log_gif_event(
                         "Skipped upload: invalid payload (failed to extract bytes)",
+                        level="warning",
+                    )
+
+            try:
+                from autoppia_web_agents_subnet.validator.config import UPLOAD_TASK_LOGS
+            except Exception:
+                UPLOAD_TASK_LOGS = False
+            if UPLOAD_TASK_LOGS:
+                try:
+                    task_log_payload = _build_task_log_payload(
+                        task_payload=task_payload,
+                        agent_run=agent_run,
+                        miner_uid=miner_uid,
+                        eval_score=eval_score,
+                        reward=reward_value,
+                        exec_time=exec_time,
+                        evaluation_meta=evaluation_meta,
+                        validator_round_id=ctx.current_round_id,
+                        validator_uid=int(ctx.uid),
+                    )
+                    await ctx.iwap_client.upload_task_log(task_log_payload)
+                except Exception as log_exc:  # noqa: BLE001
+                    log_iwap_phase(
+                        "Phase 4",
+                        f"Task log upload failed for task_id={iwap_task_id} miner_uid={miner_uid}: {log_exc}",
                         level="warning",
                     )
 

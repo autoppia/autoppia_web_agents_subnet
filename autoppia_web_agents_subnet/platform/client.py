@@ -470,6 +470,49 @@ class IWAPClient:
             log_gif_event(f"Upload completed but no URL returned for evaluation_id={evaluation_id}", level="warning")
         return gif_url
 
+    async def upload_task_log(self, payload: Dict[str, Any]) -> Optional[str]:
+        """
+        Upload a per-task execution log to IWAP for S3 persistence.
+        """
+        auth_headers = self._resolve_auth_headers()
+        path = "/api/v1/task-logs"
+
+        try:
+            payload_size = len(json.dumps(payload, ensure_ascii=False))
+        except Exception:
+            payload_size = -1
+
+        async def attempt(attempt_index: int) -> httpx.Response:
+            request = self._client.build_request("POST", path, json=payload)
+            if auth_headers:
+                request.headers.update(auth_headers)
+
+            target_url = str(request.url)
+            attempt_number = attempt_index + 1
+            attempt_suffix = f" (attempt {attempt_number})" if attempt_number > 1 else ""
+
+            from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+
+            ColoredLogger.info(
+                f"IWAP | [task_log] POST {target_url} started{attempt_suffix}",
+                color=ColoredLogger.GOLD,
+            )
+            if payload_size >= 0:
+                bt.logging.debug(f"   Task log payload size: {payload_size} chars")
+
+            response = await self._client.send(request)
+            response.raise_for_status()
+            return response
+
+        response = await self._with_retry(attempt, context="upload_task_log")
+        try:
+            data = response.json()
+        except Exception:
+            data = {}
+        if isinstance(data, dict):
+            return data.get("data", {}).get("url")
+        return None
+
     async def _with_retry(
         self,
         operation: Callable[[int], Awaitable[T]],

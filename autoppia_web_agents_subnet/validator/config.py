@@ -133,6 +133,7 @@ MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO = _env_float(
     10000.0,
     test_default=0.0,
 )
+UPLOAD_TASK_LOGS = _env_bool("UPLOAD_TASK_LOGS", False, test_default=True)
 IWAP_API_BASE_URL = _env_str("IWAP_API_BASE_URL", "https://api-leaderboard.autoppia.com" if not TESTING else "https://dev-api-leaderboard.autoppia.com")
 
 
