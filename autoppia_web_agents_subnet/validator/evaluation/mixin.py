@@ -445,6 +445,58 @@ class ValidatorEvaluationMixin:
                         except Exception:
                             pass
 
+                        # Log the actions actually executed by the evaluator (execution_history).
+                        # This is the ground truth used for backend event checks.
+                        try:
+                            recording = None
+                            if isinstance(task_solution, dict):
+                                recording = task_solution.get("recording")
+                            else:
+                                recording = getattr(task_solution, "recording", None)
+
+                            exec_hist = None
+                            if isinstance(recording, dict):
+                                exec_hist = recording.get("execution_history")
+                            elif isinstance(recording, list):
+                                exec_hist = recording
+
+                            exec_types = []
+                            last_url = None
+                            if isinstance(exec_hist, list):
+                                for h in exec_hist:
+                                    a = getattr(h, "action", None) if not isinstance(h, dict) else h.get("action")
+                                    if isinstance(a, dict):
+                                        t = a.get("type")
+                                    else:
+                                        t = getattr(a, "type", None)
+                                    if t:
+                                        exec_types.append(str(t))
+                                    snap = getattr(h, "browser_snapshot", None) if not isinstance(h, dict) else h.get("browser_snapshot")
+                                    if isinstance(snap, dict):
+                                        last_url = snap.get("current_url") or snap.get("url") or last_url
+                                    else:
+                                        last_url = getattr(snap, "current_url", None) or last_url
+
+                            ColoredLogger.info(
+                                f"[EXEC_ACTIONS] task_id={task_item.task.id} uid={agent.uid} exec_actions={len(exec_types)} types={exec_types} last_url={last_url}",
+                                ColoredLogger.CYAN,
+                            )
+
+                            # Detect and surface cases where the miner returned N actions but the evaluator executed M.
+                            # This helps confirm/deny "missing last action" hypotheses quickly.
+                            try:
+                                miner_n = len(action_list) if isinstance(action_list, list) else 0
+                                exec_n = len(exec_hist) if isinstance(exec_hist, list) else 0
+                                if miner_n != exec_n:
+                                    ColoredLogger.warning(
+                                        f"[MISMATCH_MINER_EXEC] task_id={task_item.task.id} uid={agent.uid} miner_actions={miner_n} exec_actions={exec_n}",
+                                        ColoredLogger.YELLOW,
+                                    )
+                            except Exception:
+                                pass
+                        except Exception:
+                            pass
+
                         reward = calculate_reward_for_task(
                             eval_score=score_f,
                             execution_time=exec_time_s,
@@ -658,10 +710,61 @@ class ValidatorEvaluationMixin:
 
             evaluations_batch.append(evaluation_payload)
 
+            def _action_to_dict(a):
+                if a is None:
+                    return None
+                if isinstance(a, dict):
+                    return a
+                d = {}
+                for k in ("type", "url", "text", "go_back", "go_forward", "x", "y"):
+                    v = getattr(a, k, None)
+                    if v is not None:
+                        d[k] = v
+                sel = getattr(a, "selector", None)
+                if sel is not None:
+                    d["selector"] = sel if isinstance(sel, dict) else getattr(sel, "__dict__", str(sel))
+                return d or {"type": getattr(a, "type", type(a).__name__)}
+
+            def _preview_indices(n: int, limit: int = 6):
+                if n <= limit:
+                    return list(range(n))
+                head = list(range(3))
+                tail = list(range(max(0, n - 3), n))
+                return head + tail
+
+            def _fmt_action_line(a_dict):
+                if not isinstance(a_dict, dict):
+                    return str(a_dict)
+                t = a_dict.get("type")
+                url = a_dict.get("url")
+                text = a_dict.get("text")
+                sel = a_dict.get("selector")
+                # Keep logs grep-friendly and bounded.
+                if isinstance(text, str) and len(text) > 80:
+                    text = text[:80] + "…"
+                return f"type={t} url={url} selector={sel} text={text}"
+
+            # Extract the executed actions from the evaluator recording (ground truth).
+            exec_actions = []
+            try:
+                ts_obj = eval_data.get("task_solution")
+                recording = ts_obj.get("recording") if isinstance(ts_obj, dict) else getattr(ts_obj, "recording", None)
+                exec_hist = None
+                if isinstance(recording, dict):
+                    exec_hist = recording.get("execution_history")
+                elif isinstance(recording, list):
+                    exec_hist = recording
+                if isinstance(exec_hist, list):
+                    for h in exec_hist:
+                        a = getattr(h, "action", None) if not isinstance(h, dict) else h.get("action")
+                        exec_actions.append(_action_to_dict(a))
+            except Exception:
+                exec_actions = []
+
             # Emit a compact log of what will be persisted to IWAP.
+            actions = []
             try:
                 ts = evaluation_payload.get("task_solution") if isinstance(evaluation_payload, dict) else None
-                actions = []
                 if isinstance(ts, dict):
                     actions = ts.get("actions") or []
                 action_types = []
@@ -672,6 +775,26 @@ class ValidatorEvaluationMixin:
                     f"[IWAP_ACTIONS] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} actions={len(actions)} types={action_types}",
                     ColoredLogger.CYAN,
                 )
+
+                # Log a bounded preview of the actual action objects being sent to IWAP.
+                idxs = _preview_indices(len(actions))
+                for i in idxs:
+                    a = actions[i]
+                    ColoredLogger.info(
+                        f"[IWAP_ACTION] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} i={i} {_fmt_action_line(a)}",
+                        ColoredLogger.CYAN,
+                    )
+            except Exception:
+                pass
+
+            # Always emit a bounded preview of the actions the evaluator actually executed.
+            try:
+                idxs = _preview_indices(len(exec_actions))
+                for i in idxs:
+                    ColoredLogger.info(
+                        f"[EXEC_ACTION] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} i={i} {_fmt_action_line(exec_actions[i])}",
+                        ColoredLogger.CYAN,
+                    )
             except Exception:
                 pass
 
@@ -699,15 +822,60 @@ class ValidatorEvaluationMixin:
                         pl = task_log_payload.get("payload") if isinstance(task_log_payload, dict) else None
                         steps = pl.get("steps") if isinstance(pl, dict) else None
                         last_type = None
+                        s3_actions = []
                         if isinstance(steps, list) and steps:
                             ao = steps[-1].get("agent_output") if isinstance(steps[-1], dict) else None
                             act = ao.get("action") if isinstance(ao, dict) else None
                             if isinstance(act, dict):
                                 last_type = act.get("type")
+                            # Collect actions for mismatch/debug preview.
+                            for step in steps:
+                                if not isinstance(step, dict):
+                                    continue
+                                ao = step.get("agent_output")
+                                if not isinstance(ao, dict):
+                                    continue
+                                act = ao.get("action")
+                                if isinstance(act, dict):
+                                    s3_actions.append(act)
                         ColoredLogger.info(
                             f"[S3_ACTIONS] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} steps={len(steps) if isinstance(steps, list) else 0} last_action={last_type}",
                             ColoredLogger.CYAN,
                         )
+
+                        # Compare executed vs persisted-to-IWAP vs persisted-to-S3 action counts.
+                        try:
+                            iwap_n = len(actions) if isinstance(actions, list) else 0
+                            exec_n = len(exec_actions) if isinstance(exec_actions, list) else 0
+                            s3_n = len(s3_actions) if isinstance(s3_actions, list) else 0
+                            if (exec_n and exec_n != iwap_n) or (exec_n and exec_n != s3_n) or (iwap_n and iwap_n != s3_n):
+                                ColoredLogger.warning(
+                                    f"[MISMATCH_ACTIONS] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} exec={exec_n} iwap={iwap_n} s3={s3_n}",
+                                    ColoredLogger.YELLOW,
+                                )
+                                for i in _preview_indices(exec_n):
+                                    ColoredLogger.info(
+                                        f"[EXEC_ACTION] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} i={i} {_fmt_action_line(exec_actions[i])}",
+                                        ColoredLogger.CYAN,
+                                    )
+                                for i in _preview_indices(iwap_n):
+                                    ColoredLogger.info(
+                                        f"[IWAP_ACTION] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} i={i} {_fmt_action_line(actions[i])}",
+                                        ColoredLogger.CYAN,
+                                    )
+                                for i in _preview_indices(s3_n):
+                                    ColoredLogger.info(
+                                        f"[S3_ACTION] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} i={i} {_fmt_action_line(s3_actions[i])}",
+                                        ColoredLogger.CYAN,
+                                    )
+                            else:
+                                # Still log the executed action summary for correlation when everything matches.
+                                ColoredLogger.info(
+                                    f"[EXEC_ACTIONS] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} exec_actions={exec_n}",
+                                    ColoredLogger.CYAN,
+                                )
+                        except Exception:
+                            pass
                     except Exception:
                         pass
                     await self.iwap_client.upload_task_log(task_log_payload)
