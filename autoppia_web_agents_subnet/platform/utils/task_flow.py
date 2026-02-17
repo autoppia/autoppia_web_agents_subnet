@@ -299,7 +299,17 @@ def _build_task_log_payload(
             "llm_usage": llm_usage or [],
         },
     }
-    return _sanitize_for_json(payload)
+    request_payload = {
+        "task_id": payload.get("task_id"),
+        "agent_run_id": payload.get("agent_run_id"),
+        "validator_round_id": payload.get("validator_round_id"),
+        "season": payload.get("season"),
+        "round_in_season": payload.get("round_in_season"),
+        "miner_uid": payload.get("miner_uid"),
+        "validator_uid": payload.get("validator_uid"),
+        "payload": payload,
+    }
+    return _sanitize_for_json(request_payload)
 
 
 def prepare_evaluation_payload(
