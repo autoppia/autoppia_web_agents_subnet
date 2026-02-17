@@ -209,6 +209,7 @@ def _build_execution_steps(execution_history: Any) -> List[Dict[str, Any]]:
     if not isinstance(execution_history, list):
         return []
     steps: List[Dict[str, Any]] = []
+    history_accum: List[Dict[str, Any]] = []
     for idx, item in enumerate(execution_history):
         if not isinstance(item, dict):
             continue
@@ -236,10 +237,21 @@ def _build_execution_steps(execution_history: Any) -> List[Dict[str, Any]]:
                 "backend_events": snapshot_post.get("backend_events"),
                 "timestamp": snapshot_post.get("timestamp") or snapshot_post.get("time"),
             }
+        agent_input = snapshot_pre if isinstance(snapshot_pre, dict) else {}
+        if not isinstance(agent_input, dict):
+            agent_input = {}
+        agent_input = dict(agent_input)
+        agent_input.setdefault("step_index", item.get("step_index", idx))
+        if "history" not in agent_input:
+            if isinstance(item.get("history"), list):
+                agent_input["history"] = item.get("history")
+            else:
+                agent_input["history"] = list(history_accum)
+
         step = {
             "step_index": idx,
             "timestamp": timestamp,
-            "agent_input": snapshot_pre,
+            "agent_input": agent_input,
             "agent_output": {"action": action} if action is not None else None,
             "post_execute_output": post_execute_output,
             "llm_calls": llm_calls,
@@ -248,6 +260,12 @@ def _build_execution_steps(execution_history: Any) -> List[Dict[str, Any]]:
             "execution_time_ms": exec_time_ms,
         }
         steps.append(step)
+        history_accum.append(
+            {
+                "step": int(idx),
+                "agent_output": {"action": action} if action is not None else None,
+            }
+        )
     return steps
 
 
