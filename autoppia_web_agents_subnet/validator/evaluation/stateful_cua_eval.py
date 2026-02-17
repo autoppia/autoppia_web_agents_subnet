@@ -12,7 +12,13 @@ from autoppia_web_agents_subnet.validator.config import AGENT_STEP_TIMEOUT, SHOU
 from autoppia_iwa.src.data_generation.tasks.classes import Task
 from autoppia_iwa.src.evaluation.shared.utils import make_gif_from_screenshots
 from autoppia_iwa.src.evaluation.stateful_evaluator import AsyncStatefulEvaluator, ScoreDetails
-from autoppia_iwa.src.web_agents.cua.apified_cua import ApifiedWebCUA
+
+try:
+    from autoppia_iwa.src.web_agents.cua.apified_cua import ApifiedWebCUA  # type: ignore
+except Exception:  # pragma: no cover - compatibility with older IWA layouts
+    from autoppia_iwa.src.web_agents.apified_iterative_agent import (  # type: ignore
+        ApifiedIterativeWebAgent as ApifiedWebCUA,
+    )
 from autoppia_iwa.src.web_agents.classes import TaskSolution, sanitize_snapshot_html
 
 
