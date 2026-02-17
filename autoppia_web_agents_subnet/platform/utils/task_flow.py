@@ -424,6 +424,19 @@ def _build_task_log_payload(
         calls = evaluation_meta.get("llm_calls")
         if isinstance(calls, list):
             _attach_llm_calls_to_steps(payload["steps"], calls)
+            # Fallback: if mapping failed, attach all calls to the first step
+            # so the log still preserves the LLM trace.
+            try:
+                if payload.get("steps"):
+                    has_calls = any(
+                        isinstance(s, dict) and isinstance(s.get("llm_calls"), list) and s.get("llm_calls")
+                        for s in payload["steps"]
+                    )
+                    if not has_calls:
+                        payload["steps"][0].setdefault("llm_calls", [])
+                        payload["steps"][0]["llm_calls"].extend(calls)
+            except Exception:
+                pass
     request_payload = {
         "task_id": payload.get("task_id"),
         "agent_run_id": payload.get("agent_run_id"),
