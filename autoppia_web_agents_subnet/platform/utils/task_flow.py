@@ -293,7 +293,6 @@ def _build_task_log_payload(
             "steps_total": len(steps),
             "steps_success": steps_success,
         },
-        "llm_usage_summary": _summarize_llm_usage(llm_usage),
         "steps": steps,
         "raw": {
             "execution_history": execution_history if isinstance(execution_history, list) else [],
