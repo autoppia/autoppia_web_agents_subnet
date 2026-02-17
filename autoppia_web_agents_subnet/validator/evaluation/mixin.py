@@ -363,6 +363,14 @@ class ValidatorEvaluationMixin:
                                 ColoredLogger.CYAN,
                             )
 
+                        llm_calls = None
+                        try:
+                            calls = (usage_for_task or {}).get("calls")
+                            if isinstance(calls, list):
+                                llm_calls = calls
+                        except Exception:
+                            llm_calls = None
+
                         try:
                             score_f = float(score)
                         except Exception:
@@ -436,6 +444,7 @@ class ValidatorEvaluationMixin:
                                 "reward": reward,
                                 "task_solution": task_solution,
                                 "llm_usage": llm_usage,
+                                "llm_calls": llm_calls,
                             }
                         )
 
@@ -612,6 +621,8 @@ class ValidatorEvaluationMixin:
                 evaluation_meta_dict = dict(evaluation_meta_dict)
             if isinstance(eval_data.get("llm_usage"), list):
                 evaluation_meta_dict["llm_usage"] = eval_data.get("llm_usage")
+            if isinstance(eval_data.get("llm_calls"), list):
+                evaluation_meta_dict["llm_calls"] = eval_data.get("llm_calls")
 
             evaluation_payload = prepare_evaluation_payload(
                 ctx=self,

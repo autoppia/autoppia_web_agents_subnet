@@ -42,25 +42,21 @@ logging.basicConfig(
             maxBytes=int(os.getenv("SANDBOX_GATEWAY_LOG_MAX_BYTES", str(10 * 1024 * 1024))),
             backupCount=int(os.getenv("SANDBOX_GATEWAY_LOG_BACKUP_COUNT", "3")),
         ),
-        logging.StreamHandler()             
-    ]
+        logging.StreamHandler(),
+    ],
 )
 logger = logging.getLogger(__name__)
 
 
 class LLMGateway:
     """Simplified gateway for single agent evaluation"""
-    
-    def __init__(self): 
+
+    def __init__(self):
         self.providers = DEFAULT_PROVIDER_CONFIGS.copy()
         unknown = sorted(set(GATEWAY_ALLOWED_PROVIDERS) - set(self.providers.keys()))
         if unknown:
             logger.warning(f"Ignoring unknown providers in GATEWAY_ALLOWED_PROVIDERS: {unknown}")
-        self.providers = {
-            name: cfg
-            for name, cfg in self.providers.items()
-            if name in GATEWAY_ALLOWED_PROVIDERS
-        }
+        self.providers = {name: cfg for name, cfg in self.providers.items() if name in GATEWAY_ALLOWED_PROVIDERS}
         if not self.providers:
             raise RuntimeError("No gateway providers enabled")
         self.http_client = httpx.AsyncClient(timeout=60.0)
@@ -121,13 +117,7 @@ class LLMGateway:
         return self.usage_per_task.get(task_id, LLMUsage())
 
     def _is_allowed_path(self, provider: str, suffix: str) -> bool:
-        allowed = (
-            OPENAI_ALLOWED_PATHS
-            if provider == "openai"
-            else CHUTES_ALLOWED_PATHS
-            if provider == "chutes"
-            else set()
-        )
+        allowed = OPENAI_ALLOWED_PATHS if provider == "openai" else CHUTES_ALLOWED_PATHS if provider == "chutes" else set()
         if not allowed:
             return True
         for p in allowed:
@@ -136,13 +126,7 @@ class LLMGateway:
         return False
 
     def _is_allowed_model(self, provider: str, model: str) -> bool:
-        allowed = (
-            OPENAI_ALLOWED_MODELS
-            if provider == "openai"
-            else CHUTES_ALLOWED_MODELS
-            if provider == "chutes"
-            else set()
-        )
+        allowed = OPENAI_ALLOWED_MODELS if provider == "openai" else CHUTES_ALLOWED_MODELS if provider == "chutes" else set()
         if not allowed:
             return True
         return model in allowed
@@ -211,9 +195,9 @@ class LLMGateway:
             price = m.get("price")
             if isinstance(price, dict):
                 try:
-                    in_usd = ((price.get("input") or {}).get("usd"))
-                    out_usd = ((price.get("output") or {}).get("usd"))
-                    cache_usd = ((price.get("input_cache_read") or {}).get("usd"))
+                    in_usd = (price.get("input") or {}).get("usd")
+                    out_usd = (price.get("output") or {}).get("usd")
+                    cache_usd = (price.get("input_cache_read") or {}).get("usd")
                     if in_usd is not None:
                         entry["input"] = float(in_usd)
                     if out_usd is not None:
@@ -267,9 +251,9 @@ class LLMGateway:
                 return
             # Refresh best-effort.
             await self.refresh_chutes_pricing()
-    
-    def update_usage_for_task(self, provider: str, task_id: str, response_data: dict) -> None:
-        """Update token usage for a specific task""" 
+
+    def update_usage_for_task(self, provider: str, task_id: str, response_data: dict) -> tuple[int, float, str]:
+        """Update token usage for a specific task and return (tokens, cost, model)"""
         usage = response_data.get("usage") or {}
 
         # Support both OpenAI-style {prompt_tokens, completion_tokens} and
@@ -307,11 +291,11 @@ class LLMGateway:
         provider_config = self.providers[provider]
         pricing_model = self._resolve_pricing_model(provider, model)
         pricing = provider_config.pricing.get(pricing_model, {})
-        
+
         input_price = float(pricing.get("input", provider_config.default_input_price))
         cached_input_price = float(pricing.get("input_cache_read", input_price))
         output_price = float(pricing.get("output", provider_config.default_output_price))
-        
+
         non_cached_input_tokens = max(0, input_tokens - cached_input_tokens)
         input_cost = (non_cached_input_tokens / 1_000_000) * input_price
         cached_input_cost = (cached_input_tokens / 1_000_000) * cached_input_price
@@ -324,6 +308,7 @@ class LLMGateway:
             logger.info(f"Provider: {provider} | Model: {model} (priced_as={pricing_model}) | Tokens: {total_tokens} | Cost: {total_cost}")
         else:
             logger.info(f"Provider: {provider} | Model: {model} | Tokens: {total_tokens} | Cost: {total_cost}")
+        return total_tokens, total_cost, model
 
     def set_allowed_task_ids(self, task_ids: Optional[list[str]] = None):
         """Set allowed task IDs for limiting other requests and tracking usage."""
@@ -331,7 +316,7 @@ class LLMGateway:
             task_ids = []
         self.allowed_task_ids = set(task_ids)
         self.usage_per_task = {task_id: LLMUsage() for task_id in task_ids}
-    
+
     def is_cost_exceeded(self, task_id: str) -> bool:
         return self.usage_per_task[task_id].total_cost >= COST_LIMIT_PER_TASK
 
@@ -348,20 +333,56 @@ def _looks_like_unsupported_response_format(resp: httpx.Response) -> bool:
     code = str(err.get("code") or "")
     param = str(err.get("param") or "")
     text = (msg + " " + param + " " + code).lower()
-    return "response_format" in text and (
-        "unsupported" in text
-        or "invalid" in text
-        or "unknown" in text
-        or code == "unsupported_parameter"
-    )
+    return "response_format" in text and ("unsupported" in text or "invalid" in text or "unknown" in text or code == "unsupported_parameter")
+
+
+def _extract_llm_input(provider: str, suffix: str, body: dict) -> Optional[str]:
+    try:
+        if not isinstance(body, dict):
+            return None
+        # Responses API
+        if suffix == "/v1/responses":
+            val = body.get("input") or body.get("messages")
+            return json.dumps(val, ensure_ascii=False)
+        # Chat completions
+        if suffix == "/v1/chat/completions":
+            return json.dumps(body.get("messages"), ensure_ascii=False)
+        # Fallback
+        if "prompt" in body:
+            return json.dumps(body.get("prompt"), ensure_ascii=False)
+    except Exception:
+        return None
+    return None
+
+
+def _extract_llm_output(provider: str, suffix: str, data: dict) -> Optional[str]:
+    try:
+        if not isinstance(data, dict):
+            return None
+        # Responses API
+        if suffix == "/v1/responses":
+            output = data.get("output") or data.get("output_text") or data.get("response") or data.get("content")
+            return json.dumps(output, ensure_ascii=False)
+        # Chat completions
+        if suffix == "/v1/chat/completions":
+            choices = data.get("choices") or []
+            if isinstance(choices, list) and choices:
+                msg = choices[0].get("message") if isinstance(choices[0], dict) else None
+                if isinstance(msg, dict):
+                    return json.dumps(msg.get("content"), ensure_ascii=False)
+                return json.dumps(choices[0], ensure_ascii=False)
+        # Fallback
+        if "text" in data:
+            return json.dumps(data.get("text"), ensure_ascii=False)
+    except Exception:
+        return None
+    return None
 
 
 # Initialize the gateway
 gateway = LLMGateway()
-app = FastAPI(
-    title="Autoppia LLM Gateway", 
-    description="Simple gateway for LLM requests with cost limiting"
-)
+app = FastAPI(title="Autoppia LLM Gateway", description="Simple gateway for LLM requests with cost limiting")
+
 
 @app.on_event("startup")
 async def _startup() -> None:
@@ -370,6 +391,7 @@ async def _startup() -> None:
         await gateway.refresh_chutes_pricing()
     except Exception:
         pass
+
 
 def _require_admin(request: Request) -> None:
     if not SANDBOX_GATEWAY_ADMIN_TOKEN:
@@ -395,10 +417,8 @@ async def get_usage_for_task(task_id: str, request: Request):
         "task_id": task_id,
         "total_tokens": usage.total_tokens,
         "total_cost": usage.total_cost,
-        "usage_details": {
-            "tokens": usage.tokens,
-            "cost": usage.cost
-        }
+        "usage_details": {"tokens": usage.tokens, "cost": usage.cost},
+        "calls": usage.calls,
     }
 
 
@@ -425,18 +445,15 @@ async def proxy_request(request: Request, path: str):
         if not provider:
             raise HTTPException(status_code=400, detail="Unsupported provider!")
 
-        # Detect task ID for usage tracking        
+        # Detect task ID for usage tracking
         task_id = gateway.detect_task_id(request)
         if not task_id:
             raise HTTPException(status_code=400, detail="Task ID not found!")
-        
+
         if COST_LIMIT_ENABLED and gateway.is_cost_exceeded(task_id):
             current_usage = gateway.get_usage_for_task(task_id)
-            raise HTTPException(
-                status_code=402,
-                detail=f"Cost limit exceeded. Current: ${current_usage.total_cost:.2f}, Limit: ${COST_LIMIT_PER_TASK:.2f}"
-            )
-        
+            raise HTTPException(status_code=402, detail=f"Cost limit exceeded. Current: ${current_usage.total_cost:.2f}, Limit: ${COST_LIMIT_PER_TASK:.2f}")
+
         provider_config = gateway.providers[provider]
         suffix = path.removeprefix(provider)
         if suffix and not suffix.startswith("/"):
@@ -454,7 +471,7 @@ async def proxy_request(request: Request, path: str):
         # This prevents authority-section injection like "https://api.openai.com@evil.com/..." .
         base = httpx.URL(provider_config.base_url)
         url = str(base.copy_with(raw_path=suffix.encode("utf-8") if suffix else b""))
-        
+
         # Forward the request
         headers = {}
         headers["Content-Type"] = "application/json"
@@ -508,7 +525,7 @@ async def proxy_request(request: Request, path: str):
             parsed_body2, forced_response_format = gateway._maybe_force_json_response_format(provider, suffix, parsed_body)
             if forced_response_format:
                 upstream_body = json.dumps(parsed_body2).encode("utf-8")
-        
+
         # Forward request to upstream, with best-effort retries for transient errors.
         # NOTE: max_retries counts additional tries after the initial attempt.
         max_retries = max(0, int(GATEWAY_UPSTREAM_MAX_RETRIES))
@@ -554,7 +571,7 @@ async def proxy_request(request: Request, path: str):
                                 retry_after_s = float(ra)
                             except Exception:
                                 retry_after_s = 0.0
-                        delay = max(base_delay * (2 ** attempt), retry_after_s)
+                        delay = max(base_delay * (2**attempt), retry_after_s)
                         delay += random.random() * 0.25
                         attempt += 1
                         await asyncio.sleep(delay)
@@ -562,7 +579,7 @@ async def proxy_request(request: Request, path: str):
 
             if response is None:
                 if attempt < max_retries:
-                    delay = base_delay * (2 ** attempt)
+                    delay = base_delay * (2**attempt)
                     delay += random.random() * 0.25
                     attempt += 1
                     await asyncio.sleep(delay)
@@ -572,17 +589,25 @@ async def proxy_request(request: Request, path: str):
 
         if response is None:
             raise HTTPException(status_code=502, detail=f"Upstream request failed: {str(last_exc)[:200] if last_exc else 'unknown error'}")
-        
+
         # Parse response to extract usage and update tracking
         if response.status_code == 200:
-            try:                      
+            try:
                 response_data = response.json()
-                gateway.update_usage_for_task(provider, task_id, response_data)
+                tokens_used, cost_used, model_used = gateway.update_usage_for_task(provider, task_id, response_data)
+                # Record call details for downstream logs (best-effort)
+                call = {
+                    "provider": provider,
+                    "model": model_used,
+                    "tokens": tokens_used,
+                    "cost": cost_used,
+                    "timestamp": time.time(),
+                }
+                call["input"] = _extract_llm_input(provider, suffix, parsed_body) if parsed_body else None
+                call["output"] = _extract_llm_output(provider, suffix, response_data)
+                gateway.get_usage_for_task(task_id).add_call(call)
             except (json.JSONDecodeError, ValueError) as exc:
-                logger.warning(
-                    f"Provider returned non-JSON 200 response; skipping usage update "
-                    f"(provider={provider}, task_id={task_id}): {exc}"
-                )
+                logger.warning(f"Provider returned non-JSON 200 response; skipping usage update (provider={provider}, task_id={task_id}): {exc}")
 
         # Return response with cost headers
         # NOTE: httpx transparently decodes compressed upstream responses (gzip/br).
@@ -617,13 +642,9 @@ async def proxy_request(request: Request, path: str):
         current_usage = gateway.get_usage_for_task(task_id)
         response_headers["X-Current-Cost"] = str(current_usage.total_cost)
         response_headers["X-Cost-Limit"] = str(COST_LIMIT_PER_TASK)
-        
-        return Response(
-            content=response.content,
-            status_code=response.status_code,
-            headers=response_headers
-        )
-        
+
+        return Response(content=response.content, status_code=response.status_code, headers=response_headers)
+
     except HTTPException:
         raise
     except Exception as e:

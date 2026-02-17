@@ -4,8 +4,10 @@ from pydantic import BaseModel, Field
 
 class LLMUsage(BaseModel):
     """Token usage tracking"""
+
     tokens: dict[str, dict[str, int]] = Field(default_factory=dict)  # provider -> model -> tokens
-    cost: dict[str, dict[str, float]] = Field(default_factory=dict)   # provider -> model -> cost
+    cost: dict[str, dict[str, float]] = Field(default_factory=dict)  # provider -> model -> cost
+    calls: list[dict] = Field(default_factory=list)  # list of {provider, model, input, output, tokens, cost, timestamp, step_index?}
 
     def add_usage(self, provider: str, model: str, tokens: int, cost: float):
         if provider not in self.tokens:
@@ -15,6 +17,10 @@ class LLMUsage(BaseModel):
 
         self.tokens[provider][model] = self.tokens[provider].get(model, 0) + tokens
         self.cost[provider][model] = self.cost[provider].get(model, 0.0) + cost
+
+    def add_call(self, call: dict) -> None:
+        if isinstance(call, dict):
+            self.calls.append(call)
 
     @property
     def total_tokens(self) -> int:
@@ -27,6 +33,7 @@ class LLMUsage(BaseModel):
 
 class ProviderConfig(BaseModel):
     """Configuration for LLM providers"""
+
     name: str
     base_url: str
     pricing: Dict[str, Dict[str, float]] = Field(default_factory=dict)

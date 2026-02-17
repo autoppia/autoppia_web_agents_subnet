@@ -269,6 +269,42 @@ def _build_execution_steps(execution_history: Any) -> List[Dict[str, Any]]:
     return steps
 
 
+def _attach_llm_calls_to_steps(steps: List[Dict[str, Any]], llm_calls: list[dict]) -> None:
+    if not steps or not llm_calls:
+        return
+
+    def _parse_ts(ts: Any) -> Optional[datetime]:
+        if isinstance(ts, (int, float)):
+            try:
+                return datetime.fromtimestamp(float(ts), tz=timezone.utc)
+            except Exception:
+                return None
+        if isinstance(ts, str):
+            try:
+                return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            except Exception:
+                return None
+        return None
+
+    step_times = []
+    for s in steps:
+        step_times.append(_parse_ts(s.get("timestamp")))
+
+    for call in llm_calls:
+        if not isinstance(call, dict):
+            continue
+        call_ts = _parse_ts(call.get("timestamp"))
+        target_idx = 0
+        if call_ts and step_times:
+            for i, st in enumerate(step_times):
+                if st and call_ts <= st:
+                    target_idx = i
+                    break
+                target_idx = i
+        steps[target_idx].setdefault("llm_calls", [])
+        steps[target_idx]["llm_calls"].append(call)
+
+
 def _sanitize_for_json(obj: Any, *, _depth: int = 0) -> Any:
     """Best-effort conversion to JSON-serializable data."""
     if _depth > 8:
@@ -349,6 +385,45 @@ def _build_task_log_payload(
         },
         "steps": steps,
     }
+    # Fill agent_input from previous post_execute_output where missing.
+    for idx, step in enumerate(payload["steps"]):
+        try:
+            if idx > 0:
+                prev = payload["steps"][idx - 1].get("post_execute_output")
+                if prev and isinstance(prev, dict):
+                    agent_input = step.get("agent_input") if isinstance(step.get("agent_input"), dict) else {}
+                    if not agent_input:
+                        agent_input = {}
+                    if isinstance(agent_input, dict):
+                        if "html" not in agent_input or agent_input.get("html") is None:
+                            agent_input["html"] = prev.get("html")
+                        if "current_url" not in agent_input or agent_input.get("current_url") is None:
+                            agent_input["current_url"] = prev.get("current_url")
+                        if "timestamp" not in agent_input or agent_input.get("timestamp") is None:
+                            agent_input["timestamp"] = prev.get("timestamp")
+                        step["agent_input"] = agent_input
+        except Exception:
+            pass
+
+    # Attach task info to agent_input for visibility.
+    for step in payload["steps"]:
+        try:
+            agent_input = step.get("agent_input")
+            if not isinstance(agent_input, dict):
+                agent_input = {}
+            agent_input.setdefault("task_id", payload.get("task_id"))
+            agent_input.setdefault("prompt", task_prompt)
+            agent_input.setdefault("url", task_url)
+            agent_input.setdefault("web_project_id", website)
+            step["agent_input"] = agent_input
+        except Exception:
+            pass
+
+    # Map gateway llm_calls to steps (best-effort).
+    if isinstance(evaluation_meta, dict):
+        calls = evaluation_meta.get("llm_calls")
+        if isinstance(calls, list):
+            _attach_llm_calls_to_steps(payload["steps"], calls)
     request_payload = {
         "task_id": payload.get("task_id"),
         "agent_run_id": payload.get("agent_run_id"),
