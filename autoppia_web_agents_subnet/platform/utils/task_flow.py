@@ -214,6 +214,38 @@ def _build_execution_steps(execution_history: Any) -> List[Dict[str, Any]]:
     return steps
 
 
+def _sanitize_for_json(obj: Any, *, _depth: int = 0) -> Any:
+    """Best-effort conversion to JSON-serializable data."""
+    if _depth > 8:
+        return str(obj)
+    if obj is None or isinstance(obj, (str, int, float, bool)):
+        return obj
+    if isinstance(obj, bytes):
+        return obj.decode("utf-8", errors="replace")
+    if isinstance(obj, (list, tuple, set)):
+        return [_sanitize_for_json(item, _depth=_depth + 1) for item in obj]
+    if isinstance(obj, dict):
+        cleaned: Dict[str, Any] = {}
+        for key, value in obj.items():
+            if callable(value):
+                continue
+            cleaned[str(key)] = _sanitize_for_json(value, _depth=_depth + 1)
+        return cleaned
+    if callable(obj):
+        return str(obj)
+    for attr in ("model_dump", "dict"):
+        try:
+            method = getattr(obj, attr, None)
+            if callable(method):
+                return _sanitize_for_json(method(), _depth=_depth + 1)
+        except Exception:
+            pass
+    try:
+        return _sanitize_for_json(vars(obj), _depth=_depth + 1)
+    except Exception:
+        return str(obj)
+
+
 def _build_task_log_payload(
     *,
     task_payload: Any,
@@ -237,7 +269,7 @@ def _build_task_log_payload(
     use_case = getattr(task_payload, "use_case", None)
     website = getattr(task_payload, "web_project_id", None) or getattr(task_payload, "web", None)
 
-    return {
+    payload = {
         "schema_version": "1.0",
         "task_id": getattr(task_payload, "task_id", None),
         "agent_run_id": getattr(agent_run, "agent_run_id", None),
@@ -268,6 +300,7 @@ def _build_task_log_payload(
             "llm_usage": llm_usage or [],
         },
     }
+    return _sanitize_for_json(payload)
 
 
 def prepare_evaluation_payload(
