@@ -658,6 +658,23 @@ class ValidatorEvaluationMixin:
 
             evaluations_batch.append(evaluation_payload)
 
+            # Emit a compact log of what will be persisted to IWAP.
+            try:
+                ts = evaluation_payload.get("task_solution") if isinstance(evaluation_payload, dict) else None
+                actions = []
+                if isinstance(ts, dict):
+                    actions = ts.get("actions") or []
+                action_types = []
+                for a in actions:
+                    if isinstance(a, dict) and a.get("type"):
+                        action_types.append(str(a.get("type")))
+                ColoredLogger.info(
+                    f"[IWAP_ACTIONS] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} actions={len(actions)} types={action_types}",
+                    ColoredLogger.CYAN,
+                )
+            except Exception:
+                pass
+
             # Optional: upload task execution log for S3-backed storage (batch path)
             try:
                 from autoppia_web_agents_subnet.validator.config import UPLOAD_TASK_LOGS
@@ -678,6 +695,21 @@ class ValidatorEvaluationMixin:
                         validator_round_id=self.current_round_id,
                         validator_uid=int(self.uid),
                     )
+                    try:
+                        pl = task_log_payload.get("payload") if isinstance(task_log_payload, dict) else None
+                        steps = pl.get("steps") if isinstance(pl, dict) else None
+                        last_type = None
+                        if isinstance(steps, list) and steps:
+                            ao = steps[-1].get("agent_output") if isinstance(steps[-1], dict) else None
+                            act = ao.get("action") if isinstance(ao, dict) else None
+                            if isinstance(act, dict):
+                                last_type = act.get("type")
+                        ColoredLogger.info(
+                            f"[S3_ACTIONS] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} steps={len(steps) if isinstance(steps, list) else 0} last_action={last_type}",
+                            ColoredLogger.CYAN,
+                        )
+                    except Exception:
+                        pass
                     await self.iwap_client.upload_task_log(task_log_payload)
                 except Exception as log_exc:  # noqa: BLE001
                     ColoredLogger.warning(
