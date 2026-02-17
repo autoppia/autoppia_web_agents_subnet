@@ -426,6 +426,25 @@ class ValidatorEvaluationMixin:
 
                         ColoredLogger.debug(f"    Task solution: {_summarize_task_solution(task_solution)}", ColoredLogger.BLUE)
 
+                        # Log actions returned by the miner for easy grep/debug.
+                        try:
+                            action_list = []
+                            if isinstance(task_solution, dict):
+                                action_list = task_solution.get("actions") or []
+                            else:
+                                action_list = getattr(task_solution, "actions", []) or []
+                            action_types = []
+                            for a in action_list:
+                                t = getattr(a, "type", None) or (a.get("type") if isinstance(a, dict) else None)
+                                if t:
+                                    action_types.append(str(t))
+                            ColoredLogger.info(
+                                f"[ACTIONS] task_id={task_item.task.id} uid={agent.uid} actions={len(action_list)} types={action_types}",
+                                ColoredLogger.CYAN,
+                            )
+                        except Exception:
+                            pass
+
                         reward = calculate_reward_for_task(
                             eval_score=score_f,
                             execution_time=exec_time_s,
