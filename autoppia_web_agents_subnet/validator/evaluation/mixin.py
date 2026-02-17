@@ -627,6 +627,33 @@ class ValidatorEvaluationMixin:
             )
 
             evaluations_batch.append(evaluation_payload)
+
+            # Optional: upload task execution log for S3-backed storage (batch path)
+            try:
+                from autoppia_web_agents_subnet.validator.config import UPLOAD_TASK_LOGS
+            except Exception:
+                UPLOAD_TASK_LOGS = False
+            if UPLOAD_TASK_LOGS and getattr(self, "iwap_client", None):
+                try:
+                    from autoppia_web_agents_subnet.platform.utils.task_flow import _build_task_log_payload
+
+                    task_log_payload = _build_task_log_payload(
+                        task_payload=task_payload,
+                        agent_run=agent_run,
+                        miner_uid=agent_uid,
+                        eval_score=eval_data["score"],
+                        reward=eval_data["reward"],
+                        exec_time=eval_data["exec_time"],
+                        evaluation_meta=evaluation_meta_dict,
+                        validator_round_id=self.current_round_id,
+                        validator_uid=int(self.uid),
+                    )
+                    await self.iwap_client.upload_task_log(task_log_payload)
+                except Exception as log_exc:  # noqa: BLE001
+                    ColoredLogger.warning(
+                        f"Task log upload failed for task_id={getattr(task_payload, 'task_id', None)} miner_uid={agent_uid}: {log_exc}",
+                        ColoredLogger.YELLOW,
+                    )
             gif_payload = evaluation_meta_dict.get("gif_recording")
             evaluation_result = evaluation_payload.get("evaluation_result", {})
             evaluation_id = evaluation_result.get("evaluation_id") if isinstance(evaluation_result, dict) else None
