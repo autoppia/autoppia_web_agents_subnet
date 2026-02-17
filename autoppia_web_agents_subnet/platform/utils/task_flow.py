@@ -181,6 +181,30 @@ def _summarize_llm_usage(llm_usage: Optional[List[Dict[str, Any]]]) -> Optional[
     }
 
 
+def _normalize_llm_calls(raw: Any) -> List[Dict[str, Any]]:
+    """
+    Normalize llm calls to list of:
+    {input, output, provider, model, tokens, cost}
+    """
+    if not isinstance(raw, list):
+        return []
+    calls: List[Dict[str, Any]] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        calls.append(
+            {
+                "input": item.get("input"),
+                "output": item.get("output"),
+                "provider": item.get("provider"),
+                "model": item.get("model"),
+                "tokens": item.get("tokens"),
+                "cost": item.get("cost"),
+            }
+        )
+    return calls
+
+
 def _build_execution_steps(execution_history: Any) -> List[Dict[str, Any]]:
     if not isinstance(execution_history, list):
         return []
@@ -191,21 +215,34 @@ def _build_execution_steps(execution_history: Any) -> List[Dict[str, Any]]:
         action = item.get("action")
         if isinstance(action, dict):
             action = _normalize_action_payload(action)
-        snapshot = item.get("browser_snapshot") or item.get("observation")
+        snapshot_post = item.get("browser_snapshot") or item.get("observation")
+        snapshot_pre = item.get("agent_input") or item.get("pre_snapshot") or item.get("pre_observation") or None
         timestamp = None
-        if isinstance(snapshot, dict):
-            timestamp = snapshot.get("timestamp") or snapshot.get("time")
+        if isinstance(snapshot_post, dict):
+            timestamp = snapshot_post.get("timestamp") or snapshot_post.get("time")
         exec_time = item.get("execution_time")
         exec_time_ms = None
         if isinstance(exec_time, (int, float)):
             exec_time_ms = int(exec_time * 1000)
+        llm_calls_raw = item.get("llm_calls")
+        if llm_calls_raw is None:
+            llm_calls_raw = item.get("llm_usage")
+        llm_calls = _normalize_llm_calls(llm_calls_raw)
+        post_execute_output = None
+        if isinstance(snapshot_post, dict):
+            post_execute_output = {
+                "current_url": snapshot_post.get("current_url"),
+                "html": snapshot_post.get("html"),
+                "backend_events": snapshot_post.get("backend_events"),
+                "timestamp": snapshot_post.get("timestamp") or snapshot_post.get("time"),
+            }
         step = {
             "step_index": idx,
             "timestamp": timestamp,
-            "agent_call": item.get("agent_call"),
-            "llm_usage": item.get("llm_usage"),
-            "action": action,
-            "observation": snapshot,
+            "agent_input": snapshot_pre,
+            "agent_output": {"action": action} if action is not None else None,
+            "post_execute_output": post_execute_output,
+            "llm_calls": llm_calls,
             "success": item.get("successfully_executed", item.get("success")),
             "error": item.get("error"),
             "execution_time_ms": exec_time_ms,
@@ -261,7 +298,6 @@ def _build_task_log_payload(
     execution_history = evaluation_meta.get("execution_history", []) if isinstance(evaluation_meta, dict) else []
     steps = _build_execution_steps(execution_history)
     steps_success = len([s for s in steps if s.get("success")])
-    llm_usage = _normalize_llm_usage(evaluation_meta.get("llm_usage")) if isinstance(evaluation_meta, dict) else None
     season, round_in_season = _extract_season_round(validator_round_id)
     created_at = datetime.now(timezone.utc).isoformat()
     task_prompt = getattr(task_payload, "prompt", None)
@@ -294,10 +330,6 @@ def _build_task_log_payload(
             "steps_success": steps_success,
         },
         "steps": steps,
-        "raw": {
-            "execution_history": execution_history if isinstance(execution_history, list) else [],
-            "llm_usage": llm_usage or [],
-        },
     }
     request_payload = {
         "task_id": payload.get("task_id"),
