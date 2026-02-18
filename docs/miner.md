@@ -19,7 +19,7 @@ A miner only announces **metadata** (name, image, GitHub URL). Validators then c
 
 ## 🧪 Test Locally First
 
-Use the benchmark to validate your agent **before** advertising it to validators.
+Use the benchmark to validate your agent **before** advertising it to validators. See the Benchmark Guide: `docs/advanced/benchmark-README.md`.
 
 ```bash
 IWA_PATH=${IWA_PATH:-../autoppia_iwa}
@@ -33,11 +33,7 @@ python -m autoppia_iwa.entrypoints.benchmark.run
 
 ## 🚀 Deploy Your Miner to Mainnet
 
-> **Prerequisites**: Only deploy to mainnet after thorough local testing with the benchmark!
-
-### **Before Deploying**
-
-Make sure your agent repo runs locally and passes the benchmark.
+> **Prerequisites**: Only deploy to mainnet after local testing with the benchmark!
 
 ### **Configure .env**
 
