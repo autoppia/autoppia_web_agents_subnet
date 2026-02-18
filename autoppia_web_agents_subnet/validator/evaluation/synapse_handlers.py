@@ -8,6 +8,7 @@ Each synapse type has its own dedicated handler:
 - TaskSynapse        → send_task_synapse_to_miners
 - TaskFeedbackSynapse → send_feedback_synapse_to_miners
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -32,6 +33,7 @@ from autoppia_web_agents_subnet.utils.dendrite import dendrite_with_retries
 # ═══════════════════════════════════════════════════════════════════════════════
 # 1. START ROUND SYNAPSE HANDLER
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 async def send_start_round_synapse_to_miners(
     validator,
@@ -63,31 +65,8 @@ async def send_start_round_synapse_to_miners(
         retries=3,
     )
 
-    # DEBUG: Log all responses with detailed status codes
-    successful_responses = []
-    failed_responses = []
-    status_422_responses = []
-
-    for i, response in enumerate(responses):
-        if response is not None:
-            status_code = getattr(response.dendrite, 'status_code', None)
-            agent_name = getattr(response, 'agent_name', None)
-
-            if status_code == 422:
-                # Log 422 errors with full details
-                status_422_responses.append({
-                    'uid': i,
-                    'hotkey': miner_axons[i].hotkey[:10] if i < len(miner_axons) else 'unknown',
-                    'status': status_code,
-                    'agent_name': agent_name,
-                })
-            elif agent_name:
-                successful_responses.append(f"  UID {i}: agent_name='{agent_name}' status={status_code}")
-            else:
-                failed_responses.append(f"  UID {i}: status={status_code}")
-
-    # Summary only (detailed table is shown in validator.py)
-    successful = sum(1 for r in responses if r is not None and hasattr(r, 'agent_name') and r.agent_name)
+    # Summary only.
+    successful = sum(1 for r in responses if r is not None and hasattr(r, "agent_name") and r.agent_name)
     if successful > 0:
         bt.logging.success(f"✅ Handshake complete: {successful}/{len(miner_axons)} miners responded")
     else:
@@ -99,6 +78,7 @@ async def send_start_round_synapse_to_miners(
 # ═══════════════════════════════════════════════════════════════════════════════
 # 2. TASK SYNAPSE HANDLER
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 async def send_task_synapse_to_miners(
     validator,
@@ -140,6 +120,7 @@ async def send_task_synapse_to_miners(
 # 3. TASK FEEDBACK SYNAPSE HANDLER
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 async def send_feedback_synapse_to_miners(
     validator,
     miner_axons: List[AxonInfo],
@@ -166,6 +147,7 @@ async def send_feedback_synapse_to_miners(
         test_results_list: Test results for each miner (list of dicts)
         evaluation_results: Evaluation results for each miner
     """
+
     def _json_safe(obj: Any) -> Any:
         """Convert values to JSON-serializable types to avoid dendrite TypeError."""
         if obj is None or isinstance(obj, (str, int, float, bool)):

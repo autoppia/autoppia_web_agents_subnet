@@ -5,6 +5,7 @@ import time
 from typing import List
 
 import bittensor as bt
+
 from rich import box
 from rich.console import Console
 from rich.table import Table
@@ -55,10 +56,7 @@ class RoundStartMixin:
         target_epoch = rm.block_to_epoch(DZ_STARTING_BLOCK)
 
         eta = f"~{hours_remaining:.1f}h" if hours_remaining >= 1 else f"~{minutes_remaining:.0f}m"
-        bt.logging.warning(
-            f"🔒 Locked until block {DZ_STARTING_BLOCK:,} (epoch {target_epoch:.2f}) | "
-            f"now {current_block:,} (epoch {current_epoch:.2f}) | ETA {eta}"
-        )
+        bt.logging.warning(f"🔒 Locked until block {DZ_STARTING_BLOCK:,} (epoch {target_epoch:.2f}) | now {current_block:,} (epoch {current_epoch:.2f}) | ETA {eta}")
 
         wait_seconds = min(max(seconds_remaining, 30), 600)
         rm.enter_phase(
@@ -79,7 +77,7 @@ class RoundStartMixin:
         minutes_to_target = (blocks_to_target * self.round_manager.SECONDS_PER_BLOCK) / 60
         epochs_to_target = max(boundaries_preview["target_epoch"] - current_epoch_preview, 0.0)
         bt.logging.info(
-            ("Round status | round={round} | epoch {cur:.2f}/{target:.2f} | " "epochs_to_next={ep:.2f} | minutes_to_next={mins:.1f}").format(
+            ("Round status | round={round} | epoch {cur:.2f}/{target:.2f} | epochs_to_next={ep:.2f} | minutes_to_next={mins:.1f}").format(
                 round=round_number_preview,
                 cur=current_epoch_preview,
                 target=boundaries_preview["target_epoch"],
@@ -106,7 +104,7 @@ class RoundStartMixin:
         if (not at_boundary) and (frac >= float(SKIP_ROUND_IF_STARTED_AFTER_FRACTION)):
             minutes_remaining = (blocks_to_target * self.round_manager.SECONDS_PER_BLOCK) / 60
             ColoredLogger.warning(
-                (f"⏭️ Fresh start late in round: {frac * 100:.1f}% >= " f"{float(SKIP_ROUND_IF_STARTED_AFTER_FRACTION) * 100:.0f}% — skipping"),
+                (f"⏭️ Fresh start late in round: {frac * 100:.1f}% >= {float(SKIP_ROUND_IF_STARTED_AFTER_FRACTION) * 100:.0f}% — skipping"),
                 ColoredLogger.YELLOW,
             )
             ColoredLogger.info(
@@ -140,7 +138,7 @@ class RoundStartMixin:
             tasks_generated += len(tasks_to_add)
 
             batch_elapsed = time.time() - batch_start
-            bt.logging.debug(f"Generated batch: {len(tasks_to_add)} in {batch_elapsed:.1f}s " f"(total {tasks_generated}/{PRE_GENERATED_TASKS})")
+            bt.logging.debug(f"Generated batch: {len(tasks_to_add)} in {batch_elapsed:.1f}s (total {tasks_generated}/{PRE_GENERATED_TASKS})")
 
         if tasks_generated == 0:
             bt.logging.error("❌ No tasks generated; skipping forward for this round")
@@ -299,7 +297,7 @@ class RoundStartMixin:
         if miner_status_map:
             console = Console()
             table = Table(
-                title=(f"[bold magenta]🤝 Handshake Results - {len(self.active_miner_uids)}/" f"{len(all_axons)} Miners Responded[/bold magenta]"),
+                title=(f"[bold magenta]🤝 Handshake Results - {len(self.active_miner_uids)}/{len(all_axons)} Miners Responded[/bold magenta]"),
                 box=box.ROUNDED,
                 show_header=True,
                 header_style="bold cyan",
@@ -341,8 +339,7 @@ class RoundStartMixin:
                 ColoredLogger.YELLOW,
             )
 
-        # Record handshake in report
-        self._report_handshake_sent(total_miners=len(all_axons))
+            bt.logging.debug(f"StartRoundSynapse prepared for {len(all_axons)} miners")
 
         for uid in self.active_miner_uids:
             hotkey = self.metagraph.hotkeys[uid] if uid < len(self.metagraph.hotkeys) else "unknown"
@@ -356,11 +353,78 @@ class RoundStartMixin:
 
             self._report_handshake_response(uid, hotkey, agent_name, agent_image)
 
-        self.round_manager.enter_phase(
-            RoundPhase.HANDSHAKE,
-            block=current_block,
-            note=f"Handshake completed with {len(self.active_miner_uids)} active miners",
-        )
+            def _truncate_agent_name(name: str) -> str:
+                if MAX_MINER_AGENT_NAME_LENGTH and len(name) > MAX_MINER_AGENT_NAME_LENGTH:
+                    bt.logging.debug(f"Truncating agent name '{name}' to {MAX_MINER_AGENT_NAME_LENGTH} characters.")
+                    return name[:MAX_MINER_AGENT_NAME_LENGTH]
+                return name
+
+            valid_count = 0
+            invalid_count = 0
+
+            for idx, response in enumerate(handshake_responses):
+                if idx >= len(all_axons):
+                    continue
+
+                mapped_uid = all_uids[idx]
+
+                if not response:
+                    invalid_count += 1
+                    continue
+
+                status_code = getattr(getattr(response, "dendrite", None), "status_code", None)
+                status_numeric = None
+                if status_code is not None:
+                    try:
+                        status_numeric = int(status_code)
+                    except (TypeError, ValueError):
+                        status_numeric = None
+                if status_numeric is not None and status_numeric >= 400:
+                    invalid_count += 1
+                    continue
+
+                agent_name_raw = getattr(response, "agent_name", None)
+                agent_name = _normalized_optional(agent_name_raw)
+                if not agent_name:
+                    invalid_count += 1
+                    continue
+
+                agent_name = _truncate_agent_name(agent_name)
+                response.agent_name = agent_name
+                response.agent_image = _normalized_optional(getattr(response, "agent_image", None))
+                response.github_url = _normalized_optional(getattr(response, "github_url", None))
+                agent_version = _normalized_optional(getattr(response, "agent_version", None))
+                if agent_version is not None:
+                    response.agent_version = agent_version
+                else:
+                    response.agent_version = None
+
+                self.round_handshake_payloads[mapped_uid] = response
+                self.active_miner_uids.append(mapped_uid)
+                valid_count += 1
+
+            has_prior_handshake = bool(self._phases.get("handshake_sent"))
+            bt.logging.info(f"🤝 Handshake complete: {valid_count} valid, {invalid_count} invalid, sent={len(all_axons)} total")
+
+            if not has_prior_handshake:
+                self._phases["handshake_sent"] = True
+                if self.active_miner_uids:
+                    ColoredLogger.success(
+                        f"✅ Handshake sent: {len(self.active_miner_uids)}/{len(all_axons)} miners responded",
+                        ColoredLogger.GREEN,
+                    )
+                else:
+                    ColoredLogger.warning(
+                        f"⚠️ Handshake sent: 0/{len(all_axons)} miners responded",
+                        ColoredLogger.YELLOW,
+                    )
+                self._save_round_state()
+
+            self.round_manager.enter_phase(
+                RoundPhase.HANDSHAKE,
+                block=current_block,
+                note=f"Handshake completed with {len(self.active_miner_uids)} active miners",
+            )
 
         round_number = await self.round_manager.calculate_round(current_block)
         start_epoch = boundaries["round_start_epoch"]

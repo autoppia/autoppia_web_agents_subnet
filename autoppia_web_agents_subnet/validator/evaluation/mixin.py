@@ -54,7 +54,7 @@ class EvaluationPhaseMixin:
             wait_info = self.round_manager.get_wait_info(current_block)
 
             ColoredLogger.info(
-                (f"📍 Task {task_index + 1}/{len(all_tasks)} | epoch {current_epoch:.2f}/" f"{boundaries['target_epoch']} | remaining {wait_info['minutes_remaining']:.1f}m"),
+                (f"📍 Task {task_index + 1}/{len(all_tasks)} | epoch {current_epoch:.2f}/{boundaries['target_epoch']} | remaining {wait_info['minutes_remaining']:.1f}m"),
                 ColoredLogger.CYAN,
             )
 
@@ -91,7 +91,12 @@ class EvaluationPhaseMixin:
             # CRITICAL: Verificar 90% PRIMERO para asegurar que siempre se publique a IPFS
             # Si progress >= 90% y no se ha publicado, publicar ahora.
             # El cálculo de consenso se hará más adelante (95%) en _run_settlement_phase.
-            if ENABLE_DISTRIBUTED_CONSENSUS and (not self._finalized_this_round) and (not self._consensus_published) and (progress_frac >= float(STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION)):
+            if (
+                ENABLE_DISTRIBUTED_CONSENSUS
+                and (not self._finalized_this_round)
+                and (not self._consensus_published)
+                and (progress_frac >= float(STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION))
+            ):
                 ColoredLogger.info("\n" + "=" * 80, ColoredLogger.CYAN)
                 ColoredLogger.info(
                     f"🛑🛑🛑 STOP FRACTION REACHED: {STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION:.0%} 🛑🛑🛑",
@@ -128,7 +133,7 @@ class EvaluationPhaseMixin:
                     ColoredLogger.YELLOW,
                 )
                 ColoredLogger.info(
-                    (f"   epoch={current_epoch:.2f}, remaining={wait_info['seconds_remaining']:.0f}s, " f"buffer={SAFETY_BUFFER_EPOCHS} epochs, tasks={tasks_completed}/{len(all_tasks)}"),
+                    (f"   epoch={current_epoch:.2f}, remaining={wait_info['seconds_remaining']:.0f}s, buffer={SAFETY_BUFFER_EPOCHS} epochs, tasks={tasks_completed}/{len(all_tasks)}"),
                     ColoredLogger.YELLOW,
                 )
                 bounds_ctx = self.round_manager.get_round_boundaries(current_block, log_debug=False)
@@ -136,7 +141,7 @@ class EvaluationPhaseMixin:
                 target_block_ctx = bounds_ctx["target_block"]
                 round_no_ctx = await self.round_manager.calculate_round(current_block)
                 ColoredLogger.info(
-                    ("   Waiting for end-of-round target epoch to set weights | " f"round={round_no_ctx} | target_epoch={target_epoch_ctx:.2f} | target_block={target_block_ctx}"),
+                    (f"   Waiting for end-of-round target epoch to set weights | round={round_no_ctx} | target_epoch={target_epoch_ctx:.2f} | target_block={target_block_ctx}"),
                     ColoredLogger.YELLOW,
                 )
                 if ENABLE_DISTRIBUTED_CONSENSUS and (not self._consensus_published) and (not self._finalized_this_round):
@@ -237,7 +242,7 @@ class EvaluationPhaseMixin:
                     ColoredLogger.CYAN,
                 )
 
-            task_url = project.frontend_url
+            task_url = str(project.frontend_url)
             if seed is not None:
                 separator = "&" if "?" in task_url else "?"
                 task_url = f"{task_url}{separator}seed={seed}"
@@ -298,7 +303,6 @@ class EvaluationPhaseMixin:
 
             try:
                 console = Console()
-                expected_base = project.frontend_url.rstrip("/")
                 for group_idx, (solution_hash, group_data) in enumerate(solution_groups.items(), 1):
                     group_uids = group_data["uids"]
                     group_indices = group_data["indices"]
