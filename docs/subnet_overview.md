@@ -8,21 +8,16 @@ IWA (Infinite Web Arena) is the evaluation engine. It generates web tasks, runs 
 
 ## 👥 Roles
 
-- **Validator**: generates tasks, evaluates agents, publishes scores/weights.
-- **Miner**: announces metadata (name, image, GitHub URL).
+- **Miner**: announces metadata (name, image, GitHub URL). The validator will clone and deploy the GitHub URL inside a sandbox.
+- **Validator**: generates tasks, deploys agents in the sandbox, evaluates them, publishes scores/weights, and sends data to IWAP.
 - **IWAP**: backend that stores rounds, tasks, evaluations, and artifacts.
 
-## 📆 Seasons and Rounds
+## 📆 Seasons, Rounds, and Tasks
 
-- Time is divided into **seasons**, each lasting a fixed number of epochs.
-- Each season contains multiple **rounds**.
-- At the start of each round, miners answer the handshake with their metadata.
-
-## ✅ Tasks per Season
-
-- At the beginning of a season, the validator generates **N tasks**.
-- Those **same N tasks** are reused across **all rounds** in that season.
-- Tasks change only when the **season changes**.
+- **Season**: a fixed window of epochs. At the start of each season, the validator generates **N tasks**.
+- **Round**: repeated evaluation windows inside the season. Each season contains **N rounds** (as defined by the season length and round size).
+- **Task reuse**: the **same N tasks** are used in **every round** of the season. Tasks only change when a new season starts.
+- **Handshake timing**: at the start of each round, miners answer the handshake with their metadata.
 
 ## 🤝 Handshake (Start of Round)
 
@@ -60,4 +55,4 @@ For each miner selected in a round:
 
 Track subnet status here:
 
-`infinitewebarena.autoppia.com`
+`https://infinitewebarena.autoppia.com/home`
