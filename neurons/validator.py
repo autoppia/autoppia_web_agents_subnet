@@ -3,7 +3,6 @@ from __future__ import annotations
 import time
 import queue
 import bittensor as bt
-from loguru import logger
 
 from autoppia_web_agents_subnet import __version__
 
@@ -47,7 +46,8 @@ class Validator(
             self.sandbox_manager = SandboxManager()
             self.sandbox_manager.deploy_gateway()
         except Exception as e:
-            import sys            
+            import sys
+
             bt.logging.error(f"Sandbox manager failed to initialize/deploy gateway: {e}")
             sys.exit(1)
 
@@ -66,7 +66,7 @@ class Validator(
         """
         if await self._wait_for_minimum_start_block():
             return
-        
+
         bt.logging.info(f"🚀 Starting round-based forward (epochs per round: {ROUND_SIZE_EPOCHS:.1f})")
         start_result: RoundStartResult = await self._start_round()
 
@@ -80,21 +80,18 @@ class Validator(
 
         # 1) Handshake & agent discovery
         await self._perform_handshake()
-        
+
         # Initialize IWAP round after handshake (we now know how many miners participate)
         current_block = self.block
         season_tasks = await self.round_manager.get_round_tasks(current_block, self.season_manager)
         n_tasks = len(season_tasks)
-        
+
         # Build IWAP tasks before starting round
         if season_tasks and self.current_round_id:
-            self.current_round_tasks = self._build_iwap_tasks(
-                validator_round_id=self.current_round_id,
-                tasks=season_tasks
-            )
-        
+            self.current_round_tasks = self._build_iwap_tasks(validator_round_id=self.current_round_id, tasks=season_tasks)
+
         await self._iwap_start_round(current_block=current_block, n_tasks=n_tasks)
-        
+
         # Register miners in IWAP (creates validator_round_miners records)
         await self._iwap_register_miners()
 
@@ -108,10 +105,6 @@ class Validator(
 if __name__ == "__main__":
     # Initialize IWA with default logging (best-effort)
     AppBootstrap()
-
-    logger.remove()
-    logger.add("logfile.log", level="INFO")
-    logger.add(lambda msg: print(msg, end=""), level="WARNING")
 
     with Validator(config=config(role="validator")) as validator:
         while True:

@@ -22,6 +22,7 @@ from abc import ABC, abstractmethod
 # Sync calls set weights and also resyncs the metagraph.
 from autoppia_web_agents_subnet.base.utils.config import check_config, add_args, config
 from autoppia_web_agents_subnet.base.utils.misc import ttl_get_block
+from autoppia_web_agents_subnet.utils.logging_filter import apply_subnet_module_logging_filters
 import time
 import traceback
 import re
@@ -62,23 +63,24 @@ class BaseNeuron(ABC):
         base_config = copy.deepcopy(config or BaseNeuron.config())
         self.config = self.config()
         self.config.merge(base_config)
-        self.check_config(self.config) 
+        self.check_config(self.config)
 
         # Version check
         self.parse_versions()
 
         # Set up logging with the provided configuration.
         bt.logging.set_config(config=self.config.logging)
+        apply_subnet_module_logging_filters(logging_config=self.config.logging)
 
         # Filter out noisy dendrite connection errors without changing global log level
         # Note: bt.logging uses its own logger; standard logging.Filter may not catch it.
         # We install both: (1) a stdlib logging Filter for modules that use logging;
         # (2) a lightweight monkey-patch on bt.logging.debug to drop matching messages.
         import logging
-        import re
 
         class DendriteNoiseFilter(logging.Filter):
             """Filter to block noisy dendrite connection errors (stdlib logging)."""
+
             NOISE_PATTERNS = [
                 r"ClientConnectorError.*Cannot connect to host",
                 r"TimeoutError#[a-f0-9-]+:",
@@ -99,8 +101,7 @@ class BaseNeuron(ABC):
         logging.getLogger("bittensor.dendrite").addFilter(DendriteNoiseFilter())
 
         # Optional bt.logging debug filter (covers loguru-style logger used by bittensor)
-        if getattr(self.config, "logging", None) is None or \
-           getattr(self.config.logging, "suppress_dendrite_noise", True):
+        if getattr(self.config, "logging", None) is None or getattr(self.config.logging, "suppress_dendrite_noise", True):
             patterns = [
                 re.compile(r"ClientConnectorError.*Cannot connect to host"),
                 re.compile(r"TimeoutError#[a-f0-9-]+:"),
@@ -144,12 +145,8 @@ class BaseNeuron(ABC):
                 self.metagraph = self.subtensor.metagraph(self.config.netuid)
                 break
             except Exception as e:
-                bt.logging.error(
-                    "Couldn't init subtensor and metagraph with error: {}".format(e)
-                )
-                bt.logging.error(
-                    "If you use public RPC endpoint try to move to local node"
-                )
+                bt.logging.error("Couldn't init subtensor and metagraph with error: {}".format(e))
+                bt.logging.error("If you use public RPC endpoint try to move to local node")
                 time.sleep(5)
 
         bt.logging.info(f"Wallet: {self.wallet}")
@@ -161,9 +158,7 @@ class BaseNeuron(ABC):
 
         # Each miner gets a unique identity (UID) in the network for differentiation.
         self.uid = self.metagraph.hotkeys.index(self.wallet.hotkey.ss58_address)
-        bt.logging.info(
-            f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: {self.subtensor.chain_endpoint}"
-        )
+        bt.logging.info(f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: {self.subtensor.chain_endpoint}")
         self.step = 0
         self.last_update = 0
 
@@ -184,7 +179,6 @@ class BaseNeuron(ABC):
 
     @abstractmethod
     def set_weights(self):
-
         pass
 
     def sync(self):
@@ -204,12 +198,8 @@ class BaseNeuron(ABC):
 
             # Always save state.
             self.save_state()
-        except Exception as e:
-            bt.logging.error(
-                "Coundn't sync metagraph or set weights: {}".format(
-                    traceback.format_exc()
-                )
-            )
+        except Exception:
+            bt.logging.error("Coundn't sync metagraph or set weights: {}".format(traceback.format_exc()))
             bt.logging.error("If you use public RPC endpoint try to move to local node")
             time.sleep(5)
 
@@ -219,10 +209,7 @@ class BaseNeuron(ABC):
             netuid=self.config.netuid,
             hotkey_ss58=self.wallet.hotkey.ss58_address,
         ):
-            bt.logging.error(
-                f"Wallet: {self.wallet} is not registered on netuid {self.config.netuid}."
-                f" Please register the hotkey using `btcli subnets register` before trying again"
-            )
+            bt.logging.error(f"Wallet: {self.wallet} is not registered on netuid {self.config.netuid}. Please register the hotkey using `btcli subnets register` before trying again")
             exit()
 
     def should_sync_metagraph(self):
@@ -247,19 +234,13 @@ class BaseNeuron(ABC):
             return False
 
         # Define appropriate logic for when set weights.
-        return (
-            self.block - self.metagraph.last_update[self.uid]
-        ) > self.config.neuron.epoch_length and self.neuron_type != "MinerNeuron"  # don't set weights if you're a miner
+        return (self.block - self.metagraph.last_update[self.uid]) > self.config.neuron.epoch_length and self.neuron_type != "MinerNeuron"  # don't set weights if you're a miner
 
     def save_state(self):
-        bt.logging.trace(
-            "save_state() not implemented for this neuron. You can implement this function to save model checkpoints or other useful data."
-        )
+        bt.logging.trace("save_state() not implemented for this neuron. You can implement this function to save model checkpoints or other useful data.")
 
     def load_state(self):
-        bt.logging.trace(
-            "load_state() not implemented for this neuron. You can implement this function to load model checkpoints or other useful data."
-        )
+        bt.logging.trace("load_state() not implemented for this neuron. You can implement this function to load model checkpoints or other useful data.")
 
     def parse_versions(self):
         # No network version check: validators should not block startup on an
