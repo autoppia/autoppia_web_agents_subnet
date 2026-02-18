@@ -55,9 +55,3 @@ For each miner selected in a round:
 
 - Scores across the season determine the **season winner**.
 - The validator publishes final weights based on round results.
-
-## 📊 Dashboard
-
-Track subnet status here:
-
-`https://infinitewebarena.autoppia.com/home`
