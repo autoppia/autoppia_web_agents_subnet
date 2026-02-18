@@ -1,83 +1,63 @@
 # Subnet 36 (IWA) — How It Works
 
-This document explains how the Autoppia Web Agents subnet works, end‑to‑end, in clear steps.
+This document explains the subnet flow in a clear, compact way.
 
-## 1) What IWA Is
+## 🌍 IWA at a Glance
 
-IWA (Infinite Web Arena) is the evaluation engine. It generates tasks on demo websites, executes agent actions in real browsers, and verifies success with objective tests. The validator uses IWA to score miners.
+IWA (Infinite Web Arena) is the evaluation engine. It generates web tasks, runs real browser actions, and checks success with objective tests.
 
-## 2) Core Roles
+## 👥 Roles
 
-- **Validator**: generates tasks, runs evaluation, and publishes scores and weights.
-- **Miner**: advertises metadata (name, image, GitHub URL) so the validator can clone and run the agent code.
-- **IWAP**: backend service where validators report rounds, tasks, evaluations, and artifacts.
+- **Validator**: generates tasks, evaluates agents, publishes scores/weights.
+- **Miner**: announces metadata (name, image, GitHub URL).
+- **IWAP**: backend that stores rounds, tasks, evaluations, and artifacts.
 
-## 3) Seasons and Rounds
+## 📆 Seasons and Rounds
 
-- Time is split into **seasons**. Each season spans a fixed number of epochs.
-- Each season contains multiple **rounds**. A round is the evaluation window where tasks are assigned and miners are scored.
-- At the **start of every round**, miners respond to the handshake with their metadata (GitHub URL, name, image).
+- Time is divided into **seasons**, each lasting a fixed number of epochs.
+- Each season contains multiple **rounds**.
+- At the start of each round, miners answer the handshake with their metadata.
 
-## 4) Handshake and Miner Metadata
+## ✅ Tasks per Season
 
-- The validator sends a StartRound handshake to miners.
-- Each miner replies with:
-  - `MINER_AGENT_NAME`
-  - `MINER_AGENT_IMAGE`
-  - `MINER_GITHUB_URL`
-- The miner does not execute tasks. The validator will clone and run the repo from the GitHub URL.
+- At the beginning of a season, the validator generates **N tasks**.
+- Those **same N tasks** are reused across **all rounds** in that season.
+- Tasks change only when the **season changes**.
 
-## 5) Task Generation (Per Round)
+## 🤝 Handshake (Start of Round)
 
-- The validator uses IWA to generate tasks for the current round.
-- Tasks are created for demo web projects and include:
-  - a URL
-  - a natural language prompt
-  - validation tests
-- These tasks are fixed for the round and are the same for all miners in that round.
+Miners respond with:
 
-## 6) Evaluation Flow
+- `MINER_AGENT_NAME`
+- `MINER_AGENT_IMAGE`
+- `MINER_GITHUB_URL`
 
-For each miner selected in the round:
+The miner itself does not execute tasks. The validator will clone and run the repo.
 
-1. The validator clones the miner’s repo from the GitHub URL.
-2. The repo is executed inside a sandbox container.
-3. The validator calls the agent’s **POST `/act`** endpoint step‑by‑step.
-4. The validator executes the returned actions in a browser.
-5. IWA runs tests to verify task success.
-6. Scores are computed and stored.
+## 🧪 Evaluation Flow
 
-## 7) Re‑evaluation Rules
+For each miner selected in a round:
 
-- If a miner submits the **same repo + same commit** within the same season, it will not be re‑evaluated.
-- To be evaluated again in the same season, the miner must publish a **new commit** and update `MINER_GITHUB_URL` to that commit URL.
-- At a new season, re‑evaluation happens even if the commit is unchanged.
+1. Clone the miner repo from the GitHub URL.
+2. Run it inside a sandbox container.
+3. Call the agent’s **POST `/act`** endpoint step‑by‑step.
+4. Execute the returned actions in a browser.
+5. Validate outcomes with IWA tests.
+6. Compute and store scores.
 
-## 8) Reporting to IWAP
+## 🔁 Re‑evaluation Rules
 
-When IWAP is available, the validator reports:
+- If the repo **commit is unchanged** during the same season, it is **not re‑evaluated**.
+- To be evaluated again in the same season, submit a **new commit URL**.
+- When a **new season** starts, miners are evaluated again even if the commit is unchanged.
 
-- round start and metadata
-- the full task set
-- miner agent runs
-- evaluation results (batch)
-- task logs and optional GIFs
-- round finish summary
+## 🏆 End of Season
 
-If IWAP is unreachable, the validator runs in offline mode and skips these writes, but still evaluates and scores miners.
+- Scores across the season determine the **season winner**.
+- The validator publishes final weights based on round results.
 
-## 9) Outcome
+## 📊 Dashboard
 
-- The validator computes final scores and sets weights on chain.
-- Miners are rewarded based on performance on the round’s tasks.
+Track subnet status here:
 
-## 10) Local Testing
-
-Before advertising your miner, test your agent locally using the IWA Benchmark:
-
-- Guide: `docs/advanced/benchmark_readme.md`
-- It uses the same evaluation pipeline the validator uses.
-
----
-
-If you want a diagram version of this flow, say the word and I’ll add one.
+`infinitewebarena.autoppia.com`
