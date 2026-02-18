@@ -1,6 +1,6 @@
-"""Round reporting system for validators."""
+"""Reporting utilities (placeholder).
 
-from .round_report import RoundReport, MinerReport, ConsensusValidatorReport
-from .codex_analyzer import analyze_round_with_codex
+This package exists to keep compatibility with operator scripts, but the
+validator currently does not implement reporting in this repo.
+"""
 
-__all__ = ["RoundReport", "MinerReport", "ConsensusValidatorReport", "analyze_round_with_codex"]

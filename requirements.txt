@@ -1,6 +1,11 @@
 pydantic
 rich
+docker
 pytest
+pytest-asyncio
+pytest-mock
+psutil
+hypothesis
 numpy
 setuptools
 loguru

@@ -1,99 +1,72 @@
-from __future__ import annotations
-
 import os
 from typing import Optional
 
+from dotenv import load_dotenv
 
-def _str_to_bool(value: str) -> bool:
+load_dotenv()
+
+
+def _env_str(name: str, default: str = "") -> str:
     """
-    Minimal replacement for distutils.util.strtobool that keeps behaviour consistent
-    while remaining compatible with Python 3.12+ where distutils is deprecated.
+    Retrieve a string environment variable, falling back to default for empty values.
     """
-    normalized = value.strip().lower()
-    if normalized in {"y", "yes", "t", "true", "on", "1"}:
-        return True
-    if normalized in {"n", "no", "f", "false", "off", "0"}:
-        return False
-    raise ValueError(f"Invalid truth value {value!r}")
+    return os.getenv(name, default).strip()
 
 
-def _normalized(value: Optional[str]) -> Optional[str]:
-    if value is None:
-        return None
-    stripped = value.strip()
-    return stripped or None
+def _env_bool(name: str, default: bool = False, *, test_default: Optional[bool] = None) -> bool:
+    """
+    Retrieve a boolean environment variable, falling back to default for invalid values.
+    Supports TEST_* overrides when TESTING=true.
+    """
+
+    def _parse_bool(value: str) -> bool:
+        return value.strip().lower() in {"y", "yes", "t", "true", "on", "1"}
+
+    TESTING = _parse_bool(_env_str("TESTING", "false"))
+    if TESTING:
+        test_key = f"TEST_{name}"
+        test_val = os.getenv(test_key)
+        if test_val is not None and test_val.strip() != "":
+            return _parse_bool(test_val)
+
+        if test_default is not None:
+            return _parse_bool(str(test_default))
+        return _parse_bool(_env_str(name, str(default)))
+    return _parse_bool(_env_str(name, str(default)))
 
 
-def _env_int(name: str, default: int) -> int:
+def _env_int(name: str, default: int = 0, *, test_default: Optional[int] = None) -> int:
     """
     Retrieve an integer environment variable, falling back to default for invalid values.
     """
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    try:
-        parsed = int(raw.strip())
-        return parsed if parsed > 0 else default
-    except (TypeError, ValueError):
-        return default
+    TESTING = _env_bool("TESTING", False)
+    if TESTING:
+        test_key = f"TEST_{name}"
+        test_val = os.getenv(test_key)
+        if test_val is not None and test_val.strip() != "":
+            return int(test_val.strip())
+
+        # In testing mode, prefer TEST_* overrides. If none provided, fall back:
+        # - if a test_default is specified: use it
+        # - otherwise: allow the non-test env var to be used (more ergonomic for .env files)
+        if test_default is not None:
+            return int(str(test_default))
+        return int(_env_str(name, str(default)))
+    return int(_env_str(name, str(default)))
 
 
-def _env_float(
-    name: str,
-    default: float,
-    *,
-    alias: Optional[str] = None,
-    test_default: Optional[float] = None,
-) -> float:
+def _env_float(name: str, default: float = 0.0, *, test_default: Optional[float] = None) -> float:
     """
-    Retrieve a float environment variable with optional:
-    - alias: fallback env var name (for backward compatibility)
-    - test_default: default used when TESTING env is true and TEST_* variable is not set
-
-    Resolution order:
-      1) If TESTING env and TEST_<name> is set → parse and return
-      2) If <name> is set → parse and return
-      3) If alias is set and alias is set → parse and return
-      4) If TESTING env and test_default is provided → return test_default
-      5) Otherwise → return default
+    Retrieve a float environment variable, falling back to default for invalid values and testing default if provided.
     """
-    # Determine TESTING from environment (avoid circular imports)
-    testing_env = False
-    try:
-        testing_env = _str_to_bool(os.getenv("TESTING", "false"))
-    except Exception:
-        testing_env = False
+    TESTING = _env_bool("TESTING", False)
+    if TESTING:
+        test_key = f"TEST_{name}"
+        test_val = os.getenv(test_key)
+        if test_val is not None and test_val.strip() != "":
+            return float(test_val.strip())
 
-    # 1) Explicit testing override
-    if testing_env:
-        tval = os.getenv(f"TEST_{name}")
-        if tval is not None:
-            try:
-                return float(tval.strip())
-            except (TypeError, ValueError):
-                pass
-
-    # 2) Primary name
-    raw = os.getenv(name)
-    if raw is not None:
-        try:
-            return float(raw.strip())
-        except (TypeError, ValueError):
-            pass
-
-    # 3) Backward-compatible alias
-    if alias is not None:
-        ar = os.getenv(alias)
-        if ar is not None:
-            try:
-                return float(ar.strip())
-            except (TypeError, ValueError):
-                pass
-
-    # 4) Testing default
-    if testing_env and test_default is not None:
-        return float(test_default)
-
-    # 5) Production/default
-    return float(default)
-
+        if test_default is not None:
+            return float(str(test_default))
+        return float(_env_str(name, str(default)))
+    return float(_env_str(name, str(default)))

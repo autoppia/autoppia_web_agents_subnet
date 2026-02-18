@@ -1,533 +1,1022 @@
+"""Evaluation-phase helper mixin used in tests."""
+
 from __future__ import annotations
+import asyncio
+import inspect
 
-import hashlib
-from typing import List
-from urllib.parse import parse_qs, urlparse
-
-import bittensor as bt
-from rich import box
-from rich.console import Console
-from rich.table import Table
-
-from autoppia_web_agents_subnet.protocol import TaskSynapse
-from autoppia_web_agents_subnet.utils.log_colors import consensus_tag
-from autoppia_web_agents_subnet.utils.logging import ColoredLogger
-from autoppia_web_agents_subnet.validator.config import (
-    ENABLE_DISTRIBUTED_CONSENSUS,
-    SAFETY_BUFFER_EPOCHS,
-    STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION,
-    TIME_WEIGHT,
-    EVAL_SCORE_WEIGHT,
-)
-from autoppia_web_agents_subnet.validator.models import TaskWithProject
+from autoppia_web_agents_subnet.validator.evaluation.stateful_cua_eval import evaluate_with_stateful_cua
+from autoppia_web_agents_subnet.validator.evaluation.rewards import calculate_reward_for_task
+from autoppia_web_agents_subnet.validator import config as validator_config
 from autoppia_web_agents_subnet.validator.round_manager import RoundPhase
-from autoppia_web_agents_subnet.validator.evaluation.types import EvaluationPhaseResult
-from autoppia_web_agents_subnet.validator.evaluation.eval import evaluate_task_solutions
-from autoppia_web_agents_subnet.validator.evaluation.rewards import calculate_rewards_for_task
-from autoppia_web_agents_subnet.validator.evaluation.synapse_handlers import (
-    send_feedback_synapse_to_miners,
-    send_task_synapse_to_miners,
-)
-from autoppia_web_agents_subnet.validator.evaluation.tasks import (
-    collect_task_solutions_and_execution_times,
+from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+from autoppia_web_agents_subnet.opensource.utils_git import (
+    normalize_and_validate_github_url,
+    resolve_remote_ref_commit,
 )
 
 
-class EvaluationPhaseMixin:
-    """Handles task dispatch, evaluation, and mid-round consensus triggers."""
+class ValidatorEvaluationMixin:
+    """Mixin for evaluation phase."""
 
-    async def _run_task_phase(self, all_tasks: List[TaskWithProject]) -> EvaluationPhaseResult:
+    async def _run_evaluation_phase(self) -> int:
+        """
+        Run the evaluation phase.
+
+        Flow:
+        1. Deploy all available agents
+        2. For each task:
+           - Evaluate all deployed agents
+           - Send results to IWAP
+        3. Cleanup agents
+        """
+        current_block = self.block
         self.round_manager.enter_phase(
-            RoundPhase.TASK_EXECUTION,
-            block=self.block,
-            note=f"{len(all_tasks)} tasks scheduled",
+            RoundPhase.EVALUATION,
+            block=current_block,
+            note="Starting evaluation phase",
         )
-        ColoredLogger.info("🔄 Starting dynamic task execution", ColoredLogger.MAGENTA)
+        ColoredLogger.info("Starting evaluation phase", ColoredLogger.MAGENTA)
 
-        task_index = 0
-        tasks_completed = 0
+        # Get tasks for this round (all season tasks)
+        season_tasks = None
+        getter = getattr(self.round_manager, "get_round_tasks", None)
+        if callable(getter):
+            try:
+                res = getter(current_block, self.season_manager)
+                if inspect.isawaitable(res):
+                    res = await res
+                season_tasks = res
+            except Exception:
+                season_tasks = None
+        if not isinstance(season_tasks, list):
+            try:
+                res = getattr(self.season_manager, "get_season_tasks")(current_block, self.round_manager)
+                if inspect.isawaitable(res):
+                    res = await res
+                season_tasks = res
+            except Exception:
+                season_tasks = []
 
-        while task_index < len(all_tasks):
+        total_tasks = len(season_tasks)
+
+        # Capture which uids are pending (re-)evaluation so early-stop does not
+        # rely on stale scores for miners whose submissions are being updated.
+        uids_pending_eval: set[int] = set()
+        try:
+            q = getattr(getattr(self, "agents_queue", None), "queue", None)
+            if q is not None:
+                for item in list(q):
+                    uid = getattr(item, "uid", None)
+                    if isinstance(uid, int):
+                        uids_pending_eval.add(uid)
+        except Exception:
+            uids_pending_eval = set()
+
+        # Track best known score among already-evaluated miners so we can
+        # early-stop miners that cannot possibly win (WTA settlement).
+        best_score_so_far = 0.0
+        try:
+            agents_dict = getattr(self, "agents_dict", None)
+            if isinstance(agents_dict, dict) and agents_dict:
+                for info in agents_dict.values():
+                    if not getattr(info, "evaluated", False):
+                        continue
+                    uid = getattr(info, "uid", None)
+                    if isinstance(uid, int) and uid in uids_pending_eval:
+                        continue
+                    try:
+                        score = float(getattr(info, "score", 0.0) or 0.0)
+                    except Exception:
+                        score = 0.0
+                    if score > best_score_so_far:
+                        best_score_so_far = score
+        except Exception:
+            best_score_so_far = 0.0
+
+        # WTA bonus for last round winner can raise the bar for overtaking.
+        # Use this as an adjusted early-stop threshold so we don't evaluate miners
+        # that cannot beat the boosted previous winner.
+        early_stop_last_winner_bonus_pct = 0.0
+        if best_score_so_far > 0.0:
+            try:
+                last_winner_uid = getattr(self, "_last_round_winner_uid", None)
+                bonus_pct = max(
+                    float(getattr(validator_config, "LAST_WINNER_BONUS_PCT", 0.0)),
+                    0.0,
+                )
+                early_stop_last_winner_bonus_pct = bonus_pct
+                if bonus_pct > 0.0 and isinstance(last_winner_uid, int):
+                    agents_dict = getattr(self, "agents_dict", None)
+                    last_winner_info = None
+                    if isinstance(agents_dict, dict):
+                        last_winner_info = agents_dict.get(int(last_winner_uid))
+                    if last_winner_info is not None:
+                        last_winner_score = float(getattr(last_winner_info, "score", 0.0) or 0.0)
+                        if last_winner_score > 0.0:
+                            best_score_so_far = max(
+                                best_score_so_far,
+                                last_winner_score * (1.0 + bonus_pct),
+                            )
+            except Exception:
+                pass
+
+        # Round-based rate limiting metadata.
+        round_number = 0
+        season_number = None
+        try:
+            round_number = int(getattr(getattr(self, "round_manager", None), "round_number", 0) or 0)
+        except Exception:
+            round_number = 0
+        try:
+            season_number = int(getattr(getattr(self, "season_manager", None), "season_number", 0) or 0)
+        except Exception:
+            season_number = None
+
+        def _finalize_agent(agent: object, *, score: float) -> None:
+            """
+            Mark an AgentInfo-like object as evaluated and persist it in agents_dict.
+            """
+            finalized_score: float = 0.0
+            try:
+                finalized_score = float(score)
+                agent.score = finalized_score  # type: ignore[attr-defined]
+            except Exception:
+                try:
+                    agent.score = 0.0  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+            try:
+                current_best = float(getattr(self, "_best_score_ever", 0.0) or 0.0)
+            except Exception:
+                current_best = 0.0
+            if finalized_score > current_best:
+                try:
+                    self._best_score_ever = finalized_score
+                except Exception:
+                    pass
+            try:
+                agent.evaluated = True  # type: ignore[attr-defined]
+            except Exception:
+                pass
+            try:
+                agent.last_evaluated_round = round_number  # type: ignore[attr-defined]
+            except Exception:
+                pass
+            try:
+                if season_number:
+                    agent.last_evaluated_season = season_number  # type: ignore[attr-defined]
+            except Exception:
+                pass
+            # Clear any stale pending submission once we've processed the agent in this round.
+            for attr in (
+                "pending_github_url",
+                "pending_agent_name",
+                "pending_agent_image",
+                "pending_normalized_repo",
+                "pending_ref",
+                "pending_received_round",
+            ):
+                try:
+                    setattr(agent, attr, None)
+                except Exception:
+                    pass
+            try:
+                self.agents_dict[agent.uid] = agent  # type: ignore[attr-defined]
+            except Exception:
+                pass
+
+        agents_evaluated = 0
+        while not self.agents_queue.empty():
+            # Refresh block each loop iteration so settlement cutoff checks don't drift.
             current_block = self.block
-            current_epoch = self.round_manager.block_to_epoch(current_block)
-            boundaries = self.round_manager.get_current_boundaries()
             wait_info = self.round_manager.get_wait_info(current_block)
+            max_eval = float(getattr(validator_config, "MAXIMUM_EVALUATION_TIME", 0.0) or 0.0)
+            max_consensus = float(getattr(validator_config, "MAXIMUM_CONSENSUS_TIME", 0.0) or 0.0)
+            if wait_info["minutes_to_settlement"] < (max_eval + max_consensus):
+                ColoredLogger.info("Stopping evaluation phase for settlement", ColoredLogger.YELLOW)
+                return agents_evaluated
 
-            ColoredLogger.info(
-                (f"📍 Task {task_index + 1}/{len(all_tasks)} | epoch {current_epoch:.2f}/{boundaries['target_epoch']} | remaining {wait_info['minutes_remaining']:.1f}m"),
-                ColoredLogger.CYAN,
-            )
+            agent = self.agents_queue.get()
 
-            tasks_by_id = self.current_round_tasks or {}
-            target_task_id = next(
-                (task_id for task_id, payload in tasks_by_id.items() if getattr(payload, "sequence", None) == task_index),
-                getattr(all_tasks[task_index].task, "id", None),
-            )
-
-            if target_task_id and self.active_miner_uids and self._completed_pairs:
-                all_done = all((uid, target_task_id) in self._completed_pairs for uid in self.active_miner_uids)
-                if all_done:
-                    ColoredLogger.info(
-                        f"⏭️ Skipping task {task_index + 1}: already completed by all active miners",
+            agent_instance = None
+            # Pre-validate GitHub URL to avoid expensive docker/git work for
+            # obviously invalid miner submissions.
+            raw_github_url = getattr(agent, "github_url", None)
+            require_ref = bool(getattr(validator_config, "REQUIRE_MINER_GITHUB_REF", False))
+            try:
+                validated = normalize_and_validate_github_url(
+                    raw_github_url,
+                    miner_uid=getattr(agent, "uid", None),
+                    require_ref=require_ref,
+                )
+                if isinstance(validated, tuple):
+                    normalized_url, ref = validated
+                else:
+                    normalized_url, ref = validated, None
+                if not normalized_url:
+                    ColoredLogger.warning(
+                        f"Skipping agent {getattr(agent, 'uid', '?')}: invalid github_url={getattr(agent, 'github_url', None)}",
                         ColoredLogger.YELLOW,
                     )
-                    tasks_completed += 1
-                    task_index += 1
+                    _finalize_agent(agent, score=0.0)
                     continue
 
-            task_sent = await self._send_task_and_evaluate(all_tasks[task_index], task_index)
-            if task_sent:
-                tasks_completed += 1
-            task_index += 1
-
-            current_block = self.block
-            boundaries_now = self.round_manager.get_round_boundaries(current_block, log_debug=False)
-            rsb = boundaries_now["round_start_block"]
-            tb = boundaries_now["target_block"]
-            bt_total = max(tb - rsb, 1)
-            bt_done = max(current_block - rsb, 0)
-            progress_frac = min(max(bt_done / bt_total, 0.0), 1.0)
-
-            # CRITICAL: Verificar 90% PRIMERO para asegurar que siempre se publique a IPFS
-            # Si progress >= 90% y no se ha publicado, publicar ahora.
-            # El cálculo de consenso se hará más adelante (95%) en _run_settlement_phase.
-            if (
-                ENABLE_DISTRIBUTED_CONSENSUS
-                and (not self._finalized_this_round)
-                and (not self._consensus_published)
-                and (progress_frac >= float(STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION))
-            ):
-                ColoredLogger.info("\n" + "=" * 80, ColoredLogger.CYAN)
-                ColoredLogger.info(
-                    f"🛑🛑🛑 STOP FRACTION REACHED: {STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION:.0%} 🛑🛑🛑",
-                    ColoredLogger.CYAN,
-                )
-                ColoredLogger.info(
-                    f"📤📤📤 PUBLISHING TO IPFS NOW WITH {tasks_completed} TASKS 📤📤📤",
-                    ColoredLogger.CYAN,
-                )
-                ColoredLogger.info("⏸️⏸️⏸️  HALTING ALL TASK EXECUTION ⏸️⏸️⏸️", ColoredLogger.CYAN)
-                ColoredLogger.info("=" * 80 + "\n", ColoredLogger.CYAN)
-                bt.logging.info("=" * 80)
-                bt.logging.info(consensus_tag(f"🛑 STOP EVAL @ {STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION:.0%}"))
-                bt.logging.info(consensus_tag(f"Progress: {progress_frac:.2f}"))
-                bt.logging.info(consensus_tag(f"Current Block: {current_block:,}"))
-                bt.logging.info(consensus_tag(f"Blocks Done/Total: {bt_done}/{bt_total}"))
-                bt.logging.info(consensus_tag(f"Tasks Completed: {tasks_completed}"))
-                bt.logging.info(consensus_tag("Publishing to IPFS now..."))
-                bt.logging.info("=" * 80)
-                await self._publish_final_snapshot(
-                    tasks_completed=tasks_completed,
-                    total_tasks=len(all_tasks),
-                )
-                break
-
-            if not self.round_manager.should_send_next_task(current_block):
-                self.round_manager.enter_phase(
-                    RoundPhase.WAITING,
-                    block=current_block,
-                    note="Safety buffer reached; pausing task dispatch",
-                )
-                ColoredLogger.warning(
-                    "🛑 Stopping task execution: safety buffer reached",
-                    ColoredLogger.YELLOW,
-                )
-                ColoredLogger.info(
-                    (f"   epoch={current_epoch:.2f}, remaining={wait_info['seconds_remaining']:.0f}s, buffer={SAFETY_BUFFER_EPOCHS} epochs, tasks={tasks_completed}/{len(all_tasks)}"),
-                    ColoredLogger.YELLOW,
-                )
-                bounds_ctx = self.round_manager.get_round_boundaries(current_block, log_debug=False)
-                target_epoch_ctx = bounds_ctx["target_epoch"]
-                target_block_ctx = bounds_ctx["target_block"]
-                round_no_ctx = await self.round_manager.calculate_round(current_block)
-                ColoredLogger.info(
-                    (f"   Waiting for end-of-round target epoch to set weights | round={round_no_ctx} | target_epoch={target_epoch_ctx:.2f} | target_block={target_block_ctx}"),
-                    ColoredLogger.YELLOW,
-                )
-                if ENABLE_DISTRIBUTED_CONSENSUS and (not self._consensus_published) and (not self._finalized_this_round):
-                    bt.logging.info(f"[CONSENSUS] Safety buffer reached - publishing to IPFS with {tasks_completed} tasks")
-                    await self._publish_final_snapshot(
-                        tasks_completed=tasks_completed,
-                        total_tasks=len(all_tasks),
-                    )
-                # NO finalizar aquí - esperar hasta FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION (95%) para calcular consenso
-                break
-
-        if ENABLE_DISTRIBUTED_CONSENSUS and (not self._consensus_published) and (not self._finalized_this_round):
-            await self._publish_final_snapshot(
-                tasks_completed=tasks_completed,
-                total_tasks=len(all_tasks),
-            )
-
-        return EvaluationPhaseResult(
-            tasks_completed=tasks_completed,
-            finished_early=bool(self._finalized_this_round),
-        )
-
-    async def _send_task_and_evaluate(
-        self,
-        task_item: TaskWithProject,
-        task_index: int,
-    ) -> bool:
-        project = task_item.project
-        task = task_item.task
-
-        try:
-            if not self.active_miner_uids:
-                ColoredLogger.warning(
-                    "⚠️ No active miners responded to handshake; skipping task send.",
-                    ColoredLogger.YELLOW,
-                )
-                return False
-
-            active_axons = [self.metagraph.axons[uid] for uid in self.active_miner_uids]
-
-            seed: int | None = getattr(task, "_seed_value", None)
-            if seed is None and isinstance(getattr(task, "url", None), str):
-                try:
-                    parsed = urlparse(task.url)
-                    query = parse_qs(parsed.query)
-                    raw_seed = query.get("seed", [None])[0]
-                    seed = int(str(raw_seed)) if raw_seed is not None else None
-                except (ValueError, TypeError):
-                    seed = None
-
-            web_project_name = getattr(project, "name", None)
-
-            try:
-                console = Console()
-                task_table = Table(
-                    title=f"[bold cyan]📋 Task {task_index + 1}/{len(self.current_round_tasks)}[/bold cyan]",
-                    box=box.DOUBLE,
-                    show_header=True,
-                    header_style="bold yellow",
-                    expand=False,
-                )
-                task_table.add_column("Field", justify="left", style="cyan", width=12)
-                task_table.add_column("Value", justify="left", style="white", no_wrap=False)
-                task_table.add_row("📦 Project", f"[magenta]{web_project_name}[/magenta]")
-
-                task_url_display = project.frontend_url
-                if seed is not None:
-                    separator = "&" if "?" in task_url_display else "?"
-                    task_url_display = f"{task_url_display}{separator}seed={seed}"
-                task_table.add_row("🌐 URL", f"[blue]{task_url_display}[/blue]")
-                task_table.add_row("📝 Prompt", f"[white]{task.prompt}[/white]")
-
-                tests_count = len(task.tests) if task.tests else 0
-                tests_info = []
-                if task.tests:
-                    for test_idx, test in enumerate(task.tests, 1):
-                        test_lines = [f"[yellow]{test_idx}. {test.type}[/yellow]: {test.description}"]
-                        if hasattr(test, "event_name"):
-                            test_lines.append(f"   Event: [cyan]{test.event_name}[/cyan]")
-                        if hasattr(test, "event_criteria") and test.event_criteria:
-                            import json
-
-                            criteria_str = json.dumps(test.event_criteria, indent=2)
-                            test_lines.append(f"   Criteria: [dim]{criteria_str}[/dim]")
-                        tests_info.append("\n".join(test_lines))
-                    tests_str = "\n\n".join(tests_info)
+                # Strict: ensure the submitted ref exists / repo is reachable via git
+                # before spending resources cloning/building.
+                raw_s = str(raw_github_url or "")
+                is_commit_url = "/commit/" in raw_s
+                if is_commit_url:
+                    # We can't ls-remote a commit hash directly, but we can at least
+                    # ensure the repo is reachable.
+                    if resolve_remote_ref_commit(str(normalized_url), "HEAD") is None:
+                        ColoredLogger.warning(
+                            f"Skipping agent {getattr(agent, 'uid', '?')}: git ls-remote failed (repo unreachable)",
+                            ColoredLogger.YELLOW,
+                        )
+                        _finalize_agent(agent, score=0.0)
+                        continue
                 else:
-                    tests_str = "[dim]No tests[/dim]"
-                task_table.add_row(f"🧪 Tests ({tests_count})", tests_str)
-
-                console.print()
-                console.print(task_table)
-                console.print()
+                    if require_ref and not ref:
+                        ColoredLogger.warning(
+                            f"Skipping agent {getattr(agent, 'uid', '?')}: missing required ref in github_url={raw_s}",
+                            ColoredLogger.YELLOW,
+                        )
+                        _finalize_agent(agent, score=0.0)
+                        continue
+                    if ref and resolve_remote_ref_commit(str(normalized_url), str(ref)) is None:
+                        ColoredLogger.warning(
+                            f"Skipping agent {getattr(agent, 'uid', '?')}: git ls-remote failed for ref={ref}",
+                            ColoredLogger.YELLOW,
+                        )
+                        _finalize_agent(agent, score=0.0)
+                        continue
             except Exception as exc:
-                bt.logging.warning(f"Failed to render task table: {exc}")
-                ColoredLogger.debug(
-                    f"Task {task_index + 1}: {task.prompt[:100]}...",
+                ColoredLogger.warning(
+                    f"Skipping agent {getattr(agent, 'uid', '?')}: github_url pre-validation failed: {exc}",
+                    ColoredLogger.YELLOW,
+                )
+                _finalize_agent(agent, score=0.0)
+                continue
+            try:
+                agent_instance = self.sandbox_manager.deploy_agent(agent.uid, agent.github_url)
+            except Exception as e:
+                ColoredLogger.error(f"Error deploying agent {agent.uid}: {e}", ColoredLogger.RED)
+                _finalize_agent(agent, score=0.0)
+                continue
+
+            if agent_instance is None:
+                ColoredLogger.error(f"Agent not deployed correctly for uid {agent.uid}", ColoredLogger.RED)
+                _finalize_agent(agent, score=0.0)
+                continue
+
+            # Persist the exact evaluated code identity for future "skip re-eval"
+            # checks (resolved during clone, not from miner-provided metadata).
+            try:
+                if normalized_url:
+                    agent.normalized_repo = str(normalized_url)
+            except Exception:
+                pass
+            try:
+                commit = getattr(agent_instance, "git_commit", None)
+                if commit:
+                    agent.git_commit = str(commit)
+            except Exception:
+                pass
+
+            try:
+                setter = getattr(self.sandbox_manager, "set_allowed_task_ids", None)
+                if callable(setter):
+                    task_ids: list[str] = []
+                    for task_item in season_tasks:
+                        tid = getattr(getattr(task_item, "task", None), "id", None)
+                        if tid is not None:
+                            task_ids.append(str(tid))
+                    ok = setter(task_ids=task_ids)
+                    if ok is False:
+                        ColoredLogger.warning(
+                            f"Gateway rejected allowed task ids for agent {agent.uid}; cost accounting may be incomplete",
+                            ColoredLogger.YELLOW,
+                        )
+            except Exception as exc:
+                ColoredLogger.warning(
+                    f"Failed to set allowed task ids for agent {agent.uid}: {exc}",
+                    ColoredLogger.YELLOW,
+                )
+
+            rewards: list[float] = []
+            batch_size = int(getattr(validator_config, "CONCURRENT_EVALUATION_NUM", 1) or 1)
+            max_steps = int(getattr(validator_config, "AGENT_MAX_STEPS", 30) or 30)
+            screening = int(getattr(validator_config, "SCREENING_TASKS_FOR_EARLY_STOP", 0) or 0)
+            early_stop_behind_best = bool(getattr(validator_config, "EARLY_STOP_BEHIND_BEST", False))
+            cost_limit_exceed_count = int(
+                getattr(
+                    validator_config,
+                    "COST_LIMIT_EXCEED_COUNT",
+                    getattr(validator_config, "COST_LIMIT_EARLY_STOP_STREAK", 0),
+                )
+                or 0
+            )
+            cost_limit_enabled = bool(getattr(validator_config, "COST_LIMIT_ENABLED", True))
+            max_cost_per_task = float(getattr(validator_config, "MAX_TASK_DOLLAR_COST", 0.0) or 0.0)
+            cost_limit_hits = 0
+            tasks_evaluated_for_agent = 0
+            stop_for_cost_limit_streak = False
+
+            try:
+                for i in range(0, len(season_tasks), batch_size):
+                    batch_tasks = season_tasks[i : i + batch_size]
+                    eval_results = await asyncio.gather(
+                        *[
+                            evaluate_with_stateful_cua(
+                                task=task_item.task,
+                                uid=agent.uid,
+                                base_url=agent_instance.base_url,
+                                max_steps=max_steps,
+                            )
+                            for task_item in batch_tasks
+                        ],
+                        return_exceptions=True,
+                    )
+
+                    # Prepare batch data for IWAP submission
+                    batch_eval_data = []  # Store (task_item, score, exec_time, cost, reward, eval_result)
+
+                    for task_item, eval_result in zip(batch_tasks, eval_results):
+                        tasks_evaluated_for_agent += 1
+                        if isinstance(eval_result, Exception):
+                            ColoredLogger.error(
+                                f"Error evaluating agent {agent.uid} on task {task_item.task.id}: {eval_result}",
+                                ColoredLogger.RED,
+                            )
+                            continue
+
+                        score, exec_time, task_solution = eval_result
+                        try:
+                            exec_time_s = float(exec_time) if exec_time is not None else 0.0
+                        except Exception:
+                            exec_time_s = 0.0
+
+                        usage_for_task = None
+                        try:
+                            getter = getattr(self.sandbox_manager, "get_usage_for_task", None)
+                            if callable(getter):
+                                usage_for_task = getter(task_id=task_item.task.id)
+                        except Exception:
+                            usage_for_task = None
+                        if not isinstance(usage_for_task, dict):
+                            usage_for_task = None
+
+                        try:
+                            cost = float((usage_for_task or {}).get("total_cost", 0.0))
+                        except Exception:
+                            cost = 0.0
+                        try:
+                            tokens = int((usage_for_task or {}).get("total_tokens", 0))
+                        except Exception:
+                            tokens = 0
+
+                        # Build per-provider/model usage list for backend (evaluation_llm_usage)
+                        llm_usage: list[dict] = []
+                        try:
+                            usage_details = (usage_for_task or {}).get("usage_details") or {}
+                            tokens_map = usage_details.get("tokens") or {}
+                            cost_map = usage_details.get("cost") or {}
+                            for provider, models in tokens_map.items():
+                                if not isinstance(models, dict):
+                                    continue
+                                for model, tk in models.items():
+                                    try:
+                                        tk_val = int(tk or 0)
+                                    except Exception:
+                                        tk_val = 0
+                                    try:
+                                        cost_val = float((cost_map.get(provider) or {}).get(model) or 0.0)
+                                    except Exception:
+                                        cost_val = 0.0
+                                    llm_usage.append(
+                                        {
+                                            "provider": provider,
+                                            "model": model,
+                                            "tokens": tk_val,
+                                            "cost": cost_val,
+                                        }
+                                    )
+                        except Exception:
+                            llm_usage = []
+
+                        if usage_for_task and not llm_usage:
+                            ColoredLogger.warning(
+                                f"LLM usage details missing or unparseable for task {task_item.task.id}: keys={list((usage_for_task or {}).keys())}",
+                                ColoredLogger.YELLOW,
+                            )
+                        elif llm_usage:
+                            ColoredLogger.info(
+                                f"LLM usage parsed for task {task_item.task.id}: {llm_usage}",
+                                ColoredLogger.CYAN,
+                            )
+
+                        llm_calls = None
+                        try:
+                            calls = (usage_for_task or {}).get("calls")
+                            if isinstance(calls, list):
+                                llm_calls = calls
+                        except Exception:
+                            llm_calls = None
+
+                        try:
+                            score_f = float(score)
+                        except Exception:
+                            score_f = 0.0
+
+                        ColoredLogger.info(
+                            f"  Agent {agent.uid}: score={score_f:.3f}, time={exec_time_s:.2f}s, cost=${cost:.4f}, tokens={tokens}",
+                            ColoredLogger.CYAN,
+                        )
+                        # Avoid logging huge payloads (DOM snapshots, base64 blobs) that can appear in
+                        # TaskSolution.recording/execution_history. Keep logs readable and prevent PM2
+                        # log files from ballooning.
+                        try:
+                            from autoppia_iwa.src.web_agents.classes import TaskSolution as _TaskSolution  # type: ignore
+                        except Exception:  # pragma: no cover
+                            _TaskSolution = None
+
+                        def _summarize_task_solution(ts) -> str:
+                            try:
+                                if _TaskSolution is not None and isinstance(ts, _TaskSolution):
+                                    actions = getattr(ts, "actions", []) or []
+                                    task_id = getattr(ts, "task_id", None)
+                                    recording = getattr(ts, "recording", None)
+                                    rec_keys = []
+                                    exec_hist_len = 0
+                                    gif_present = False
+                                    if isinstance(recording, dict):
+                                        rec_keys = sorted(list(recording.keys()))
+                                        hist = recording.get("execution_history")
+                                        if isinstance(hist, list):
+                                            exec_hist_len = len(hist)
+                                        gif_present = bool(recording.get("gif_recording"))
+                                    elif isinstance(recording, list):
+                                        exec_hist_len = len(recording)
+                                    action_types = []
+                                    for a in actions[:3]:
+                                        t = getattr(a, "type", None) or (a.get("type") if isinstance(a, dict) else None)
+                                        if t:
+                                            action_types.append(str(t))
+                                    return (
+                                        f"TaskSolution(task_id={task_id!r}, actions={len(actions)}, "
+                                        f"action_types={action_types}, recording_keys={rec_keys}, "
+                                        f"execution_history={exec_hist_len}, gif_present={gif_present})"
+                                    )
+                                if isinstance(ts, dict):
+                                    keys = sorted(list(ts.keys()))
+                                    hist = ts.get("execution_history")
+                                    hist_len = len(hist) if isinstance(hist, list) else 0
+                                    return f"TaskSolution(dict keys={keys}, execution_history={hist_len})"
+                            except Exception:
+                                pass
+                            return f"TaskSolution(type={type(ts).__name__})"
+
+                        ColoredLogger.debug(f"    Task solution: {_summarize_task_solution(task_solution)}", ColoredLogger.BLUE)
+
+                        # Log actions returned by the miner for easy grep/debug.
+                        try:
+                            action_list = []
+                            if isinstance(task_solution, dict):
+                                action_list = task_solution.get("actions") or []
+                            else:
+                                action_list = getattr(task_solution, "actions", []) or []
+                            action_types = []
+                            for a in action_list:
+                                t = getattr(a, "type", None) or (a.get("type") if isinstance(a, dict) else None)
+                                if t:
+                                    action_types.append(str(t))
+                            ColoredLogger.info(
+                                f"[ACTIONS] task_id={task_item.task.id} uid={agent.uid} actions={len(action_list)} types={action_types}",
+                                ColoredLogger.CYAN,
+                            )
+                        except Exception:
+                            pass
+
+                        # Log the actions actually executed by the evaluator (execution_history).
+                        # This is the ground truth used for backend event checks.
+                        try:
+                            recording = None
+                            if isinstance(task_solution, dict):
+                                recording = task_solution.get("recording")
+                            else:
+                                recording = getattr(task_solution, "recording", None)
+
+                            exec_hist = None
+                            if isinstance(recording, dict):
+                                exec_hist = recording.get("execution_history")
+                            elif isinstance(recording, list):
+                                exec_hist = recording
+
+                            exec_types = []
+                            last_url = None
+                            if isinstance(exec_hist, list):
+                                for h in exec_hist:
+                                    a = getattr(h, "action", None) if not isinstance(h, dict) else h.get("action")
+                                    if isinstance(a, dict):
+                                        t = a.get("type")
+                                    else:
+                                        t = getattr(a, "type", None)
+                                    if t:
+                                        exec_types.append(str(t))
+                                    snap = getattr(h, "browser_snapshot", None) if not isinstance(h, dict) else h.get("browser_snapshot")
+                                    if isinstance(snap, dict):
+                                        last_url = snap.get("current_url") or snap.get("url") or last_url
+                                    else:
+                                        last_url = getattr(snap, "current_url", None) or last_url
+
+                            ColoredLogger.info(
+                                f"[EXEC_ACTIONS] task_id={task_item.task.id} uid={agent.uid} exec_actions={len(exec_types)} types={exec_types} last_url={last_url}",
+                                ColoredLogger.CYAN,
+                            )
+
+                            # Detect and surface cases where the miner returned N actions but the evaluator executed M.
+                            # This helps confirm/deny "missing last action" hypotheses quickly.
+                            try:
+                                miner_n = len(action_list) if isinstance(action_list, list) else 0
+                                exec_n = len(exec_hist) if isinstance(exec_hist, list) else 0
+                                if miner_n != exec_n:
+                                    ColoredLogger.warning(
+                                        f"[MISMATCH_MINER_EXEC] task_id={task_item.task.id} uid={agent.uid} miner_actions={miner_n} exec_actions={exec_n}",
+                                        ColoredLogger.YELLOW,
+                                    )
+                            except Exception:
+                                pass
+                        except Exception:
+                            pass
+
+                        reward = calculate_reward_for_task(
+                            eval_score=score_f,
+                            execution_time=exec_time_s,
+                            token_cost=cost,
+                        )
+                        rewards.append(reward)
+
+                        if cost_limit_enabled and cost_limit_exceed_count > 0 and max_cost_per_task > 0.0 and cost >= max_cost_per_task - 1e-12:
+                            cost_limit_hits += 1
+                            ColoredLogger.warning(
+                                f"Agent {agent.uid} exceeded task cost limit on task {tasks_evaluated_for_agent}/{total_tasks}: "
+                                f"${cost:.4f} (limit={max_cost_per_task:.4f}, count={cost_limit_hits}/{cost_limit_exceed_count})",
+                                ColoredLogger.YELLOW,
+                            )
+                            if cost_limit_hits >= cost_limit_exceed_count:
+                                ColoredLogger.warning(
+                                    f"Agent {agent.uid} hit max over-cost task limit ({cost_limit_exceed_count}); stopping remaining tasks and forcing score=0",
+                                    ColoredLogger.YELLOW,
+                                )
+                                stop_for_cost_limit_streak = True
+
+                        # Store evaluation data for batch submission
+                        batch_eval_data.append(
+                            {
+                                "task_item": task_item,
+                                "score": score_f,
+                                "exec_time": exec_time_s,
+                                "cost": cost,
+                                "tokens": tokens,
+                                "reward": reward,
+                                "task_solution": task_solution,
+                                "llm_usage": llm_usage,
+                                "llm_calls": llm_calls,
+                            }
+                        )
+
+                    # Submit batch evaluations to IWAP
+                    if batch_eval_data:
+                        try:
+                            await self._submit_batch_evaluations_to_iwap(
+                                agent_uid=agent.uid,
+                                batch_eval_data=batch_eval_data,
+                            )
+                            ColoredLogger.info(
+                                f"✅ Submitted {len(batch_eval_data)} evaluations to IWAP for agent {agent.uid}",
+                                ColoredLogger.GREEN,
+                            )
+                        except Exception as e:
+                            ColoredLogger.error(
+                                f"Failed to submit batch evaluations to IWAP for agent {agent.uid}: {e}",
+                                ColoredLogger.RED,
+                            )
+
+                    if screening and len(rewards) >= screening and sum(rewards) == 0.0:
+                        ColoredLogger.warning(
+                            f"Agent {agent.uid} is failing first {len(rewards)} tasks, stopping evaluation",
+                            ColoredLogger.YELLOW,
+                        )
+                        break
+
+                    if stop_for_cost_limit_streak:
+                        break
+
+                    # WTA early stop: if even perfect rewards on remaining tasks cannot
+                    # beat the current best, abort to save time/cost.
+                    if early_stop_behind_best and total_tasks > 0:
+                        tasks_done = min(i + len(batch_tasks), total_tasks)
+                        upper_bound_avg = (sum(rewards) + float(total_tasks - tasks_done)) / float(total_tasks)
+                        if upper_bound_avg <= best_score_so_far:
+                            ColoredLogger.warning(
+                                f"Agent {agent.uid} cannot beat threshold={best_score_so_far:.4f} (upper_bound={upper_bound_avg:.4f}, bonus={early_stop_last_winner_bonus_pct:.1%} from last winner) after {tasks_done}/{total_tasks} tasks; stopping evaluation",
+                                ColoredLogger.YELLOW,
+                            )
+                            break
+            finally:
+                # Always cleanup the agent container after evaluation.
+                try:
+                    cleanup = getattr(self.sandbox_manager, "cleanup_agent", None)
+                    if callable(cleanup):
+                        cleanup(agent.uid)
+                except Exception:
+                    pass
+
+            # Update agent score/evaluated state and increment the counter.
+            if stop_for_cost_limit_streak:
+                ColoredLogger.warning(
+                    f"Agent {agent.uid} stopped after {tasks_evaluated_for_agent}/{total_tasks} evaluated tasks "
+                    f"due to {cost_limit_hits} over-cost tasks (limit={cost_limit_exceed_count}); final score forced to 0",
+                    ColoredLogger.YELLOW,
+                )
+                _finalize_agent(agent, score=0.0)
+            else:
+                avg_reward = (sum(rewards) / float(total_tasks)) if total_tasks > 0 else 0.0
+                _finalize_agent(agent, score=float(avg_reward))
+            agents_evaluated += 1
+            if agent.score > best_score_so_far:
+                best_score_so_far = float(agent.score)
+
+        ColoredLogger.info("Evaluation phase completed", ColoredLogger.MAGENTA)
+        return agents_evaluated
+
+    async def _submit_batch_evaluations_to_iwap(
+        self,
+        *,
+        agent_uid: int,
+        batch_eval_data: list,
+    ) -> None:
+        """
+        Submit a batch of evaluations to IWAP for a single agent.
+
+        This method prepares evaluation payloads for all tasks in the batch
+        and sends them in a single HTTP request to IWAP.
+
+        Args:
+            agent_uid: The UID of the agent being evaluated
+            batch_eval_data: List of dicts containing evaluation data:
+                - task_item: Task with project
+                - score: Evaluation score
+                - exec_time: Execution time
+                - cost: Token cost
+                - reward: Calculated reward
+                - task_solution: TaskSolution from evaluate_with_stateful_cua
+        """
+        if not hasattr(self, "current_round_id") or not self.current_round_id:
+            ColoredLogger.warning("No current round ID, skipping IWAP submission", ColoredLogger.YELLOW)
+            return
+
+        if not hasattr(self, "current_agent_runs") or agent_uid not in self.current_agent_runs:
+            ColoredLogger.warning(f"No agent run found for agent {agent_uid}, skipping IWAP submission", ColoredLogger.YELLOW)
+            return
+
+        agent_run = self.current_agent_runs[agent_uid]
+
+        # Prepare all evaluation payloads
+        from autoppia_web_agents_subnet.platform.utils.task_flow import prepare_evaluation_payload
+        from autoppia_web_agents_subnet.platform.utils.iwa_core import extract_gif_bytes
+
+        evaluations_batch = []
+        pending_gif_uploads: list[tuple[str, object]] = []
+        for eval_data in batch_eval_data:
+            task_item = eval_data["task_item"]
+
+            # Get task payload from current round tasks
+            base_task_id = getattr(task_item.task, "id", None)
+            if base_task_id is None:
+                continue
+
+            # Build the full task_id that matches what was stored in IWAP
+            full_task_id = f"{self.current_round_id}_{base_task_id}"
+            task_payload = self.current_round_tasks.get(full_task_id)
+            if task_payload is None:
+                task_payload = self.current_round_tasks.get(base_task_id)
+            if task_payload is None:
+                ColoredLogger.warning(f"Task {base_task_id} not found in current round tasks", ColoredLogger.YELLOW)
+                continue
+
+            # task_solution comes from evaluate_with_stateful_cua (TaskSolution); support dict for backwards compat
+            task_solution = eval_data["task_solution"]
+
+            # Extract solution and actions
+            solution = None
+            actions = []
+            test_results_data = []
+            evaluation_meta_dict = {}
+
+            from autoppia_iwa.src.web_agents.classes import TaskSolution
+
+            if isinstance(task_solution, TaskSolution):
+                solution = task_solution
+                actions = getattr(solution, "actions", []) or []
+                # If the solution carries execution history, attach it for backend persistence.
+                recording = getattr(solution, "recording", None)
+                execution_history_payload = None
+                gif_payload = None
+                if isinstance(recording, dict):
+                    execution_history_payload = recording.get("execution_history")
+                    gif_payload = recording.get("gif_recording")
+                elif isinstance(recording, list):
+                    execution_history_payload = recording
+
+                if isinstance(execution_history_payload, list) and execution_history_payload:
+                    serialized_history: list[dict] = []
+                    for item in execution_history_payload:
+                        if hasattr(item, "model_dump"):
+                            try:
+                                serialized_history.append(item.model_dump(mode="json", exclude_none=True))
+                                continue
+                            except Exception:
+                                pass
+                        if isinstance(item, dict):
+                            serialized_history.append(item)
+                    if serialized_history:
+                        evaluation_meta_dict["execution_history"] = serialized_history
+
+                if gif_payload:
+                    evaluation_meta_dict["gif_recording"] = gif_payload
+            elif isinstance(task_solution, dict):
+                # Legacy: dict form (e.g. execution_history, test_results)
+                evaluation_meta_dict = task_solution
+                # Extract actions from execution_history if present
+                if "execution_history" in task_solution:
+                    execution_history = task_solution["execution_history"]
+                    if isinstance(execution_history, list):
+                        for step in execution_history:
+                            if isinstance(step, dict) and "action" in step:
+                                actions.append(step["action"])
+                # Extract test_results
+                test_results_data = task_solution.get("test_results", [])
+                # Create solution object with extracted actions
+                solution = TaskSolution(task_id=base_task_id, actions=actions, web_agent_id=str(agent_uid))
+            else:
+                # Fallback: create empty solution
+                solution = TaskSolution(task_id=base_task_id, actions=[], web_agent_id=str(agent_uid))
+
+            if not isinstance(evaluation_meta_dict, dict):
+                evaluation_meta_dict = {}
+            else:
+                evaluation_meta_dict = dict(evaluation_meta_dict)
+            if isinstance(eval_data.get("llm_usage"), list):
+                evaluation_meta_dict["llm_usage"] = eval_data.get("llm_usage")
+            if isinstance(eval_data.get("llm_calls"), list):
+                evaluation_meta_dict["llm_calls"] = eval_data.get("llm_calls")
+
+            evaluation_payload = prepare_evaluation_payload(
+                ctx=self,
+                task_payload=task_payload,
+                agent_run=agent_run,
+                miner_uid=agent_uid,
+                solution=solution,
+                eval_score=eval_data["score"],
+                evaluation_meta=evaluation_meta_dict,
+                test_results_data=test_results_data,
+                exec_time=eval_data["exec_time"],
+                reward=eval_data["reward"],
+            )
+
+            evaluations_batch.append(evaluation_payload)
+
+            def _action_to_dict(a):
+                if a is None:
+                    return None
+                if isinstance(a, dict):
+                    return a
+                d = {}
+                for k in ("type", "url", "text", "go_back", "go_forward", "x", "y"):
+                    v = getattr(a, k, None)
+                    if v is not None:
+                        d[k] = v
+                sel = getattr(a, "selector", None)
+                if sel is not None:
+                    d["selector"] = sel if isinstance(sel, dict) else getattr(sel, "__dict__", str(sel))
+                return d or {"type": getattr(a, "type", type(a).__name__)}
+
+            def _preview_indices(n: int, limit: int = 6):
+                if n <= limit:
+                    return list(range(n))
+                head = list(range(3))
+                tail = list(range(max(0, n - 3), n))
+                return head + tail
+
+            def _fmt_action_line(a_dict):
+                if not isinstance(a_dict, dict):
+                    return str(a_dict)
+                t = a_dict.get("type")
+                url = a_dict.get("url")
+                text = a_dict.get("text")
+                sel = a_dict.get("selector")
+                # Keep logs grep-friendly and bounded.
+                if isinstance(text, str) and len(text) > 80:
+                    text = text[:80] + "…"
+                return f"type={t} url={url} selector={sel} text={text}"
+
+            # Extract the executed actions from the evaluator recording (ground truth).
+            exec_actions = []
+            try:
+                ts_obj = eval_data.get("task_solution")
+                recording = ts_obj.get("recording") if isinstance(ts_obj, dict) else getattr(ts_obj, "recording", None)
+                exec_hist = None
+                if isinstance(recording, dict):
+                    exec_hist = recording.get("execution_history")
+                elif isinstance(recording, list):
+                    exec_hist = recording
+                if isinstance(exec_hist, list):
+                    for h in exec_hist:
+                        a = getattr(h, "action", None) if not isinstance(h, dict) else h.get("action")
+                        exec_actions.append(_action_to_dict(a))
+            except Exception:
+                exec_actions = []
+
+            # Emit a compact log of what will be persisted to IWAP.
+            actions = []
+            try:
+                ts = evaluation_payload.get("task_solution") if isinstance(evaluation_payload, dict) else None
+                if isinstance(ts, dict):
+                    actions = ts.get("actions") or []
+                action_types = []
+                for a in actions:
+                    if isinstance(a, dict) and a.get("type"):
+                        action_types.append(str(a.get("type")))
+                ColoredLogger.info(
+                    f"[IWAP_ACTIONS] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} actions={len(actions)} types={action_types}",
                     ColoredLogger.CYAN,
                 )
 
-            task_url = str(project.frontend_url)
-            if seed is not None:
-                separator = "&" if "?" in task_url else "?"
-                task_url = f"{task_url}{separator}seed={seed}"
+                # Log a bounded preview of the actual action objects being sent to IWAP.
+                idxs = _preview_indices(len(actions))
+                for i in idxs:
+                    a = actions[i]
+                    ColoredLogger.info(
+                        f"[IWAP_ACTION] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} i={i} {_fmt_action_line(a)}",
+                        ColoredLogger.CYAN,
+                    )
+            except Exception:
+                pass
 
-            task_synapse = TaskSynapse(
-                version=self.version,
-                prompt=task.prompt,
-                url=task_url,
-                seed=seed,
-                web_project_name=web_project_name,
-            )
-
-            responses = await send_task_synapse_to_miners(
-                validator=self,
-                miner_axons=active_axons,
-                task_synapse=task_synapse,
-                timeout=120,
-            )
-
-            task_solutions, execution_times = collect_task_solutions_and_execution_times(
-                task=task,
-                responses=responses,
-                miner_uids=list(self.active_miner_uids),
-            )
-
-            solution_groups = {}
-            for i, (uid, solution) in enumerate(zip(self.active_miner_uids, task_solutions)):
-                if solution and solution.actions:
-                    actions_repr = []
-                    for action in solution.actions:
-                        action_str = f"{action.type}"
-                        if hasattr(action, "url"):
-                            action_str += f"|{action.url}"
-                        if hasattr(action, "text"):
-                            action_str += f"|{action.text}"
-                        if hasattr(action, "selector") and action.selector:
-                            selector_str = f"{getattr(action.selector, 'type', '')}:{getattr(action.selector, 'value', '')}"
-                            action_str += f"|{selector_str}"
-                        actions_repr.append(action_str)
-                    actions_str = "||".join(actions_repr)
-                    solution_hash = hashlib.md5(actions_str.encode()).hexdigest()[:8]
-                else:
-                    solution_hash = "no_actions"
-
-                if solution_hash not in solution_groups:
-                    solution_groups[solution_hash] = {"uids": [], "solution": solution, "indices": []}
-
-                solution_groups[solution_hash]["uids"].append(uid)
-                solution_groups[solution_hash]["indices"].append(i)
-
-            ColoredLogger.debug("🔍 STARTING EVALUATION...", ColoredLogger.CYAN)
-            eval_scores, test_results_list, evaluation_results = await evaluate_task_solutions(
-                web_project=project,
-                task=task,
-                task_solutions=task_solutions,
-                execution_times=execution_times,
-            )
-
+            # Always emit a bounded preview of the actions the evaluator actually executed.
             try:
-                console = Console()
-                for group_idx, (solution_hash, group_data) in enumerate(solution_groups.items(), 1):
-                    group_uids = group_data["uids"]
-                    group_indices = group_data["indices"]
-                    solution = group_data["solution"]
-                    group_scores = [eval_scores[i] for i in group_indices]
-                    group_times = [execution_times[i] for i in group_indices]
-                    group_errors = [evaluation_results[i].get("error_message", "") for i in group_indices]
+                idxs = _preview_indices(len(exec_actions))
+                for i in idxs:
+                    ColoredLogger.info(
+                        f"[EXEC_ACTION] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} i={i} {_fmt_action_line(exec_actions[i])}",
+                        ColoredLogger.CYAN,
+                    )
+            except Exception:
+                pass
 
-                    if solution and solution.actions:
-                        seed_issues = 0
-                        for action in solution.actions:
-                            if hasattr(action, "url") and action.url and action.type == "NavigateAction" and seed is not None:
-                                if "seed=" not in action.url:
-                                    seed_issues += 1
-                                else:
-                                    action_seed = action.url.split("seed=")[1].split("&")[0].split("?")[0]
-                                    if action_seed != str(seed):
-                                        seed_issues += 1
+            # Optional: upload task execution log for S3-backed storage (batch path)
+            try:
+                from autoppia_web_agents_subnet.validator.config import UPLOAD_TASK_LOGS
+            except Exception:
+                UPLOAD_TASK_LOGS = False
+            if UPLOAD_TASK_LOGS and getattr(self, "iwap_client", None):
+                try:
+                    from autoppia_web_agents_subnet.platform.utils.task_flow import _build_task_log_payload
 
-                        status_emoji = "✅" if seed_issues == 0 else "⚠️"
-                        uids_str = ", ".join([str(u) for u in group_uids])
-                        actions_table = Table(
-                            title=(f"[bold cyan]{status_emoji} Group {group_idx} | UIDs: [{uids_str}] - Actions Submitted[/bold cyan]"),
-                            box=box.ROUNDED,
-                            show_header=True,
-                            header_style="bold yellow",
-                            expand=False,
-                        )
-                        actions_table.add_column("#", justify="right", style="cyan", width=4)
-                        actions_table.add_column("Action Type", justify="left", style="magenta", width=25)
-                        actions_table.add_column("Details (Full)", justify="left", style="white", no_wrap=False)
-                        actions_table.add_column("Status", justify="center", style="bold", width=6)
-
-                        for j, action in enumerate(solution.actions, 1):
-                            action_type = action.type
-                            status = "[bold green]✅[/bold green]"
-                            action_dict = vars(action)
-                            details_lines = []
-                            for key, value in action_dict.items():
-                                if key == "type":
-                                    continue
-                                if hasattr(value, "__dict__"):
-                                    value = vars(value)
-                                details_lines.append(f"{key}: {value}")
-                            details = "\n".join(details_lines)
-
-                            if action_type == "NavigateAction" and seed is not None:
-                                url = getattr(action, "url", "")
-                                if "seed=" not in url:
-                                    status = "[bold red]❌[/bold red]"
-                                else:
-                                    action_seed = url.split("seed=")[1].split("&")[0].split("?")[0]
-                                    if action_seed != str(seed):
-                                        status = "[bold red]❌[/bold red]"
-
-                            actions_table.add_row(str(j), action_type, details, status)
-
-                        console.print(actions_table)
-                    else:
-                        uids_str = ", ".join([str(u) for u in group_uids])
-                        console.print(f"[yellow]📊 Group {group_idx} | UIDs: [{uids_str}] - NO ACTIONS SUBMITTED[/yellow]")
-
+                    task_log_payload = _build_task_log_payload(
+                        task_payload=task_payload,
+                        agent_run=agent_run,
+                        miner_uid=agent_uid,
+                        eval_score=eval_data["score"],
+                        reward=eval_data["reward"],
+                        exec_time=eval_data["exec_time"],
+                        evaluation_meta=evaluation_meta_dict,
+                        validator_round_id=self.current_round_id,
+                        validator_uid=int(self.uid),
+                    )
                     try:
-                        group_tests = [test_results_list[i] if i < len(test_results_list) else [] for i in group_indices]
-                        tests_table = Table(
-                            title=(f"[bold green]🧪 Group {group_idx} | UIDs: [{', '.join([str(u) for u in group_uids])}] - Backend Tests[/bold green]"),
-                            box=box.SIMPLE,
-                            show_header=True,
-                            header_style="bold green",
-                            expand=False,
+                        pl = task_log_payload.get("payload") if isinstance(task_log_payload, dict) else None
+                        steps = pl.get("steps") if isinstance(pl, dict) else None
+                        last_type = None
+                        s3_actions = []
+                        if isinstance(steps, list) and steps:
+                            ao = steps[-1].get("agent_output") if isinstance(steps[-1], dict) else None
+                            act = ao.get("action") if isinstance(ao, dict) else None
+                            if isinstance(act, dict):
+                                last_type = act.get("type")
+                            # Collect actions for mismatch/debug preview.
+                            for step in steps:
+                                if not isinstance(step, dict):
+                                    continue
+                                ao = step.get("agent_output")
+                                if not isinstance(ao, dict):
+                                    continue
+                                act = ao.get("action")
+                                if isinstance(act, dict):
+                                    s3_actions.append(act)
+                        ColoredLogger.info(
+                            f"[S3_ACTIONS] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} steps={len(steps) if isinstance(steps, list) else 0} last_action={last_type}",
+                            ColoredLogger.CYAN,
                         )
-                        tests_table.add_column("UID", justify="right", style="cyan", width=8)
-                        tests_table.add_column("Tests", justify="center", style="white", width=8)
-                        tests_table.add_column("Passed", justify="center", style="white", width=8)
-                        tests_table.add_column("Example Event", justify="left", style="white")
 
-                        for uid, tests in zip(group_uids, group_tests):
-                            total = len(tests or [])
-                            passed = sum(1 for t in (tests or []) if bool(t.get("success", False)))
-                            example = ""
-                            try:
-                                if tests:
-                                    ed = (tests[0] or {}).get("extra_data", {}) or {}
-                                    example = str(ed.get("event_name") or ed.get("type") or "")
-                            except Exception:
-                                example = ""
-                            tests_table.add_row(str(uid), str(total), str(passed), example)
-
-                        console.print(tests_table)
+                        # Compare executed vs persisted-to-IWAP vs persisted-to-S3 action counts.
+                        try:
+                            iwap_n = len(actions) if isinstance(actions, list) else 0
+                            exec_n = len(exec_actions) if isinstance(exec_actions, list) else 0
+                            s3_n = len(s3_actions) if isinstance(s3_actions, list) else 0
+                            if (exec_n and exec_n != iwap_n) or (exec_n and exec_n != s3_n) or (iwap_n and iwap_n != s3_n):
+                                ColoredLogger.warning(
+                                    f"[MISMATCH_ACTIONS] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} exec={exec_n} iwap={iwap_n} s3={s3_n}",
+                                    ColoredLogger.YELLOW,
+                                )
+                                for i in _preview_indices(exec_n):
+                                    ColoredLogger.info(
+                                        f"[EXEC_ACTION] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} i={i} {_fmt_action_line(exec_actions[i])}",
+                                        ColoredLogger.CYAN,
+                                    )
+                                for i in _preview_indices(iwap_n):
+                                    ColoredLogger.info(
+                                        f"[IWAP_ACTION] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} i={i} {_fmt_action_line(actions[i])}",
+                                        ColoredLogger.CYAN,
+                                    )
+                                for i in _preview_indices(s3_n):
+                                    ColoredLogger.info(
+                                        f"[S3_ACTION] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} i={i} {_fmt_action_line(s3_actions[i])}",
+                                        ColoredLogger.CYAN,
+                                    )
+                            else:
+                                # Still log the executed action summary for correlation when everything matches.
+                                ColoredLogger.info(
+                                    f"[EXEC_ACTIONS] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} exec_actions={exec_n}",
+                                    ColoredLogger.CYAN,
+                                )
+                        except Exception:
+                            pass
                     except Exception:
                         pass
-
-                    uids_str = ", ".join([str(u) for u in group_uids])
-                    result_table = Table(
-                        title=(f"[bold magenta]📊 Group {group_idx} | UIDs: [{uids_str}] - Evaluation Results[/bold magenta]"),
-                        box=box.SIMPLE,
-                        show_header=True,
-                        header_style="bold cyan",
-                        expand=False,
+                    await self.iwap_client.upload_task_log(task_log_payload)
+                except Exception as log_exc:  # noqa: BLE001
+                    ColoredLogger.warning(
+                        f"Task log upload failed for task_id={getattr(task_payload, 'task_id', None)} miner_uid={agent_uid}: {log_exc}",
+                        ColoredLogger.YELLOW,
                     )
-                    result_table.add_column("UID", justify="right", style="cyan", width=8)
-                    result_table.add_column("Score", justify="center", style="bold", width=10)
-                    result_table.add_column("Time", justify="center", style="blue", width=12)
-                    result_table.add_column("Status", justify="left", style="white", width=50)
-                    result_table.add_column("Result", justify="center", style="bold", width=8)
+            gif_payload = evaluation_meta_dict.get("gif_recording")
+            evaluation_result = evaluation_payload.get("evaluation_result", {})
+            evaluation_id = evaluation_result.get("evaluation_id") if isinstance(evaluation_result, dict) else None
+            if evaluation_id and gif_payload:
+                pending_gif_uploads.append((str(evaluation_id), gif_payload))
 
-                    for uid, score, exec_time, error_msg in zip(group_uids, group_scores, group_times, group_errors):
-                        if score >= 0.8:
-                            score_str = f"[bold green]{score:.4f}[/bold green]"
-                            result_icon = "[bold green]✅[/bold green]"
-                        elif score >= 0.5:
-                            score_str = f"[bold yellow]{score:.4f}[/bold yellow]"
-                            result_icon = "[bold yellow]⚠️[/bold yellow]"
-                        else:
-                            score_str = f"[bold red]{score:.4f}[/bold red]"
-                            result_icon = "[bold red]❌[/bold red]"
+        if not evaluations_batch:
+            ColoredLogger.warning("No evaluations to submit in batch", ColoredLogger.YELLOW)
+            return
 
-                        time_str = f"[blue]{exec_time:.2f}s[/blue]"
-
-                        if error_msg:
-                            status_msg = f"[red]{error_msg[:47]}...[/red]" if len(error_msg) > 50 else f"[red]{error_msg}[/red]"
-                        elif score >= 0.8:
-                            status_msg = "[green]All tests passed[/green]"
-                        elif score > 0:
-                            status_msg = "[yellow]Some tests failed[/yellow]"
-                        else:
-                            status_msg = "[red]All tests failed[/red]"
-
-                        result_table.add_row(str(uid), score_str, time_str, status_msg, result_icon)
-
-                    console.print(result_table)
-                    console.print()
-                    console.print("[dim]" + "─" * 100 + "[/dim]")
-                    console.print()
-            except Exception as exc:
-                bt.logging.warning(f"Failed to render miner tables: {exc}")
-                import traceback
-
-                bt.logging.warning(f"Traceback: {traceback.format_exc()}")
-                for i, uid in enumerate(self.active_miner_uids):
-                    ColoredLogger.debug(
-                        f"UID={uid}: Score={eval_scores[i]:.4f}, Time={execution_times[i]:.2f}s",
-                        ColoredLogger.GREEN,
-                    )
-
-            rewards = calculate_rewards_for_task(
-                eval_scores=eval_scores,
-                execution_times=execution_times,
-                n_miners=len(self.active_miner_uids),
-                eval_score_weight=EVAL_SCORE_WEIGHT,
-                time_weight=TIME_WEIGHT,
-            )
-
-            for idx, uid in enumerate(self.active_miner_uids):
-                reward_value = float(rewards[idx])
-                score_value = float(eval_scores[idx])
-                exec_time_value = float(execution_times[idx])
-
-                attempts = self.round_manager.round_task_attempts
-                attempts[uid] = attempts.get(uid, 0) + 1
-
-                self.round_manager.round_rewards.setdefault(uid, []).append(reward_value)
-                self.round_manager.round_eval_scores.setdefault(uid, []).append(score_value)
-                self.round_manager.round_times.setdefault(uid, []).append(exec_time_value)
-
-                # Record in round report (NEW)
-                try:
-                    hotkey = self.metagraph.hotkeys[uid] if uid < len(self.metagraph.hotkeys) else "unknown"
-                    coldkey = self.metagraph.coldkeys[uid] if uid < len(self.metagraph.coldkeys) else "unknown"
-                    success = score_value > 0.0
-
-                    self._report_task_result(
-                        uid=uid,
-                        hotkey=hotkey,
-                        coldkey=coldkey,
-                        success=success,
-                        execution_time=exec_time_value,
-                        eval_score=score_value,
-                        reward=reward_value,
-                        web_name=web_project_name or "Unknown",
-                    )
-                except Exception as report_exc:
-                    bt.logging.debug(f"Failed to record task result in report: {report_exc}")
-
+        # Submit batch to IWAP
+        if hasattr(self, "iwap_client") and self.iwap_client:
             try:
-                await send_feedback_synapse_to_miners(
-                    validator=self,
-                    miner_axons=list(active_axons),
-                    miner_uids=list(self.active_miner_uids),
-                    task=task,
-                    rewards=rewards.tolist(),
-                    execution_times=execution_times,
-                    task_solutions=task_solutions,
-                    test_results_list=test_results_list,
-                    evaluation_results=evaluation_results,
-                    web_project_name=web_project_name or "Unknown",
+                result = await self.iwap_client.add_evaluations_batch(
+                    validator_round_id=self.current_round_id,
+                    agent_run_id=agent_run.agent_run_id,
+                    evaluations=evaluations_batch,
                 )
-            except Exception as exc:
-                bt.logging.warning(f"Feedback failed: {exc}")
+                created = int(result.get("evaluations_created") or 0) if isinstance(result, dict) else 0
+                total = int(result.get("total_requested") or len(evaluations_batch)) if isinstance(result, dict) else len(evaluations_batch)
+                if created < total:
+                    ColoredLogger.error(
+                        f"Batch submission incomplete: created={created} total={total} message={result.get('message')}",
+                        ColoredLogger.RED,
+                    )
+                    if isinstance(result, dict) and result.get("errors"):
+                        ColoredLogger.error(f"Batch errors: {result.get('errors')}", ColoredLogger.RED)
+                else:
+                    ColoredLogger.info(f"Batch submission result: {result.get('message', 'Success')}", ColoredLogger.GREEN)
 
-            try:
-                await self._iwap_submit_task_results(
-                    task_item=task_item,
-                    task_solutions=task_solutions,
-                    eval_scores=eval_scores,
-                    test_results_list=test_results_list,
-                    evaluation_results=evaluation_results,
-                    execution_times=execution_times,
-                    rewards=rewards.tolist(),
-                )
-            except Exception as exc:
-                bt.logging.warning(f"IWAP submission failed: {exc}")
-
-            bt.logging.info(f"✅ Task {task_index + 1} completed")
-
-            # Save incremental pickle after each task (NEW)
-            try:
-                report = self.round_manager.current_round_report
-                if report:
-                    self._save_round_report_pickle(report, incremental=True)
-            except Exception as save_exc:
-                bt.logging.debug(f"Incremental save failed: {save_exc}")
-
-            return True
-
-        except Exception as exc:
-            bt.logging.error(f"Task execution failed: {exc}")
-            raise
+                # Batch endpoint stores evaluations but does not upload GIF binaries.
+                # Upload each GIF separately using the deterministic evaluation_id.
+                if pending_gif_uploads:
+                    uploaded = 0
+                    skipped = 0
+                    for evaluation_id, gif_payload in pending_gif_uploads:
+                        gif_bytes = extract_gif_bytes(gif_payload)
+                        if not gif_bytes:
+                            skipped += 1
+                            ColoredLogger.warning(
+                                f"Skipping GIF upload for evaluation_id={evaluation_id}: invalid payload",
+                                ColoredLogger.YELLOW,
+                            )
+                            continue
+                        try:
+                            await self.iwap_client.upload_evaluation_gif(evaluation_id, gif_bytes)
+                            uploaded += 1
+                        except Exception as gif_exc:
+                            ColoredLogger.error(
+                                f"Failed GIF upload for evaluation_id={evaluation_id}: {gif_exc}",
+                                ColoredLogger.RED,
+                            )
+                    ColoredLogger.info(
+                        f"GIF upload summary for agent {agent_uid}: uploaded={uploaded} skipped={skipped} total={len(pending_gif_uploads)}",
+                        ColoredLogger.CYAN,
+                    )
+            except Exception as e:
+                ColoredLogger.error(f"Failed to submit batch: {e}", ColoredLogger.RED)
+                raise

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import time
 from typing import Any, Dict, Optional
 
 import bittensor as bt
 from bittensor import AsyncSubtensor  # type: ignore
 
 from autoppia_web_agents_subnet.validator.config import (
+    CONSENSUS_VERSION,
     ENABLE_DISTRIBUTED_CONSENSUS,
     MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO,
     IPFS_API_URL,
@@ -15,14 +15,28 @@ from autoppia_web_agents_subnet.utils.commitments import (
     read_all_plain_commitments,
     write_plain_commitment_json,
 )
-from autoppia_web_agents_subnet.utils.ipfs_client import aadd_json, aget_json
+from autoppia_web_agents_subnet.utils.ipfs_client import add_json_async, get_json_async
 from autoppia_web_agents_subnet.utils.log_colors import ipfs_tag, consensus_tag
+from autoppia_web_agents_subnet.validator.round_manager import RoundPhase
+from autoppia_web_agents_subnet.platform.client import compute_season_number
+
+
+def _safe_season_number(self, current_block: int) -> int:
+    try:
+        sm = getattr(self, "season_manager", None)
+        if sm is not None and hasattr(sm, "get_season_number"):
+            return int(sm.get_season_number(current_block))
+    except Exception:
+        pass
+    try:
+        return int(compute_season_number(current_block))
+    except Exception:
+        return 0
 
 
 def _stake_to_float(stake_val: Any) -> float:
     """Convert various stake representations to a float TAO value."""
     try:
-        # bittensor Balance
         from bittensor.utils.balance import Balance  # type: ignore
 
         if isinstance(stake_val, Balance):
@@ -35,18 +49,17 @@ def _stake_to_float(stake_val: Any) -> float:
         return 0.0
 
 
-def _hotkey_to_uid_map(mg) -> Dict[str, int]:
+def _hotkey_to_uid_map(metagraph) -> Dict[str, int]:
     mapping: Dict[str, int] = {}
     try:
-        for i, ax in enumerate(getattr(mg, "axons", []) or []):
+        for i, ax in enumerate(getattr(metagraph, "axons", []) or []):
             hk = getattr(ax, "hotkey", None)
             if hk:
                 mapping[hk] = i
     except Exception:
         pass
-    # fallback to hotkeys array
     try:
-        for i, hk in enumerate(getattr(mg, "hotkeys", []) or []):
+        for i, hk in enumerate(getattr(metagraph, "hotkeys", []) or []):
             mapping.setdefault(hk, i)
     except Exception:
         pass
@@ -54,14 +67,13 @@ def _hotkey_to_uid_map(mg) -> Dict[str, int]:
 
 
 async def publish_round_snapshot(
+    self,
     *,
-    validator,
     st: AsyncSubtensor,
-    round_number: Optional[int],
-    tasks_completed: int,
+    scores: Dict[int, float],
 ) -> Optional[str]:
     """
-    Publish a mid-round snapshot to IPFS and commit CID on-chain.
+    Publish round snapshot to IPFS and commit CID on-chain.
 
     Returns the CID if successful, else None.
     """
@@ -69,387 +81,231 @@ async def publish_round_snapshot(
         bt.logging.warning(consensus_tag("Disabled - skipping publish"))
         return None
 
-    # 🔍 VALIDATION: round_number should NEVER be None
-    if round_number is None:
-        bt.logging.error("=" * 80)
-        bt.logging.error(consensus_tag("❌ CRITICAL: round_number is None - this should never happen!"))
-        bt.logging.error(consensus_tag(f"Validator UID: {getattr(validator, 'uid', 'unknown')}"))
-        bt.logging.error(consensus_tag(f"Current block: {getattr(validator, 'block', 'unknown')}"))
-        bt.logging.error(consensus_tag(f"_current_round_number: {getattr(validator, '_current_round_number', 'not set')}"))
-        bt.logging.error(consensus_tag("Attempting to calculate round_number from current block..."))
-        bt.logging.error("=" * 80)
-        
-        # Try to recover by calculating round_number directly
-        try:
-            current_block = getattr(validator, 'block', None)
-            if current_block is not None:
-                round_number = await validator.round_manager.calculate_round(current_block)
-                bt.logging.warning(consensus_tag(f"✅ Recovered round_number: {round_number}"))
-            else:
-                bt.logging.error(consensus_tag("❌ Cannot recover: validator.block is None"))
-                return None
-        except Exception as e:
-            bt.logging.error(consensus_tag(f"❌ Failed to recover round_number: {e}"))
-            return None
+    self.round_manager.enter_phase(
+        RoundPhase.CONSENSUS,
+        block=self.block,
+        note=f"Publishing consensus snapshot",
+    )
+
+    current_block = self.block
+    consensus_version = CONSENSUS_VERSION
+    season_number = _safe_season_number(self, current_block)
+    round_number = self.round_manager.calculate_round(current_block)
+    boundaries = self.round_manager.get_current_boundaries()
+    start_epoch = int(boundaries["round_start_epoch"])
+    target_epoch = int(boundaries["round_target_epoch"])    
     
-    # Ensure round_number is a valid positive integer
-    if round_number is None or round_number < 1:
-        bt.logging.error(consensus_tag(f"❌ Invalid round_number: {round_number} (must be >= 1)"))
-        return None
-
-    # Build payload: per-miner averages so far
-    boundaries = validator.round_manager.get_current_boundaries()
-    start_epoch = boundaries["round_start_epoch"]
-    target_epoch = boundaries["target_epoch"]
-    start_block = int(boundaries["round_start_block"])
-    target_block = int(boundaries["target_block"])
-    # avg_rewards: Dict[uid -> avg_reward] where avg_reward = average of all rewards for that miner
-    # reward = eval_score_weight × eval_score + time_weight × time_score
-    avg_rewards = validator.round_manager.get_average_rewards()
-    # avg_eval_scores: Dict[uid -> avg_eval_score] where avg_eval_score = average of all eval_scores for that miner
-    # eval_score = pure evaluation score from tests/actions (0-1), before time weighting
-    avg_eval_scores = validator.round_manager.get_average_eval_scores()
-    # round_rewards: Dict[uid -> List[reward]] where each reward is individual (eval_score + time_score)
-    round_rewards = getattr(validator.round_manager, "round_rewards", {}) or {}
-    round_times = getattr(validator.round_manager, "round_times", {}) or {}
-
-    # Build per-miner stats to share via IPFS
-    # Each miner entry contains avg_reward (average of all rewards) + avg_eval_score (average of all eval_scores) + timing + task counters
-    stats_list = []
-    for uid, avg_reward in (avg_rewards or {}).items():
-        rewards_arr = round_rewards.get(uid, []) or []  # List of individual rewards
-        times_arr = round_times.get(uid, []) or []
-        tasks_sent = len(rewards_arr)
-        tasks_success = len([r for r in rewards_arr if r >= 0.5])
-        tasks_failed = max(tasks_sent - tasks_success, 0)
-        avg_eval_time = sum(times_arr) / len(times_arr) if times_arr else 0.0
-        avg_eval_score = avg_eval_scores.get(uid, 0.0)  # Average of all eval_scores for this miner
-        
-        # Obtener miner_hotkey desde metagraph
-        miner_hotkey = None
-        try:
-            miner_hotkey = validator.metagraph.hotkeys[uid] if uid < len(validator.metagraph.hotkeys) else None
-        except Exception:
-            pass
-        
-        stats_list.append(
-            {
-                "uid": int(uid),
-                "miner_hotkey": miner_hotkey,  # Miner hotkey for identification
-                "avg_reward": float(avg_reward),  # Average of all rewards for this miner (reward = eval_score_weight × eval_score + time_weight × time_score)
-                "avg_eval_score": float(avg_eval_score),  # Average of all eval_scores for this miner (pure evaluation score from tests/actions, 0-1)
-                "avg_eval_time": float(avg_eval_time),  # Average execution time for this miner
-                "tasks_sent": int(tasks_sent),  # Total tasks sent to this miner
-                "tasks_success": int(tasks_success),  # Tasks with reward >= 0.5
-                "tasks_failed": int(tasks_failed),  # Tasks with reward < 0.5
-            }
-        )
-
     payload = {
-        "payload_version": 2,
-        # Round/window
-        "round_number": int(round_number) if round_number is not None else None,
-        "round_start_block": start_block,
-        "target_block": target_block,
-        "epoch_start": float(start_epoch),
-        "epoch_end": float(target_epoch),
-        # Validator identity fields
-        "validator_hotkey": validator.wallet.hotkey.ss58_address,
-        "validator_uid": int(validator.uid),
-        "validator_round_id": getattr(validator, "current_round_id", None),
-        "validator_version": getattr(validator, "version", None),
-        # Per-miner stats (includes avg_reward = average of all rewards for each miner)
-        "stats": stats_list,
-        # Timestamp for auditability
-        "timestamp": time.time(),
+        "v": int(consensus_version),
+        "s": int(season_number),
+        "r": int(round_number),
+        "es": start_epoch,
+        "et": target_epoch,
+        "uid": int(self.uid),
+        "validator_uid": int(self.uid),
+        "hk": self.wallet.hotkey.ss58_address,
+        "validator_hotkey": self.wallet.hotkey.ss58_address,
+        "validator_round_id": getattr(self, "current_round_id", None),
+        "validator_version": getattr(self, "version", None),
+        "scores": scores,
     }
 
     try:
-        # 🔍 LOG: Show FULL payload being uploaded
         import json
+
         payload_json = json.dumps(payload, indent=2, sort_keys=True)
 
         bt.logging.info("=" * 80)
-        round_num_log = payload.get("round_number")
-        stats_len = len(payload.get("stats", []) or [])
-        bt.logging.info(
-            ipfs_tag(
-                "UPLOAD",
-                f"Round {round_num_log} | {stats_len} miners | Validator UID {payload.get('validator_uid')}",
-            )
-        )
+        bt.logging.info(ipfs_tag("UPLOAD", f"Round {payload.get('r')} | {len(payload.get('scores', {}))} miners"))
         bt.logging.info(ipfs_tag("UPLOAD", f"Payload:\n{payload_json}"))
 
-        cid, sha_hex, byte_len = await aadd_json(
+        cid, sha_hex, byte_len = await add_json_async(
             payload,
-            filename=f"autoppia_commit_r{round_num_log or 'X'}.json",
+            filename=f"autoppia_commit_r{payload['r'] or 'X'}.json",
             api_url=IPFS_API_URL,
             pin=True,
             sort_keys=True,
         )
 
-        # 🔍 LOG: IPFS upload success
         bt.logging.success(ipfs_tag("UPLOAD", f"✅ SUCCESS - CID: {cid}"))
         bt.logging.info(ipfs_tag("UPLOAD", f"Size: {byte_len} bytes | SHA256: {sha_hex[:16]}..."))
-        bt.logging.info(ipfs_tag("UPLOAD", f"Download: http://ipfs.metahash73.com:5001/api/v0/cat?arg={cid}"))
         bt.logging.info("=" * 80)
-        
-        # Save the actual payload that was uploaded (for finish_round)
-        # Note: local_evaluation and post_consensus_evaluation are NOT included in IPFS payload
-        # They are stored separately in meta at the backend level
-        validator._ipfs_uploaded_payload = payload
-        # Also save the CID immediately (even if commit fails later)
-        validator._ipfs_upload_cid = str(cid)
-        validator._consensus_publish_timestamp = time.time()  # Save timestamp when published
-        
-        # FASE 4: Save local scores at publish time (before consensus can change them)
-        validator._local_avg_rewards_at_publish = dict(avg_rewards)
-    except Exception as e:
+    except Exception as exc:
         bt.logging.error("=" * 80)
-        bt.logging.error(ipfs_tag("UPLOAD", f"❌ FAILED | Error: {type(e).__name__}: {e}"))
+        bt.logging.error(ipfs_tag("UPLOAD", f"❌ FAILED | Error: {type(exc).__name__}: {exc}"))
         bt.logging.error(ipfs_tag("UPLOAD", f"API URL: {IPFS_API_URL}"))
         import traceback
+
         bt.logging.error(ipfs_tag("UPLOAD", f"Traceback:\n{traceback.format_exc()}"))
         bt.logging.error("=" * 80)
         return None
 
-    # On-chain commitment: v4 (CID + blocks + round)
-    # NOTE: On-chain commits have strict serialization limits (scalecodec)
-    # Substrate Data enum has variants Raw0-Raw128 (max 128 bytes)
-    # Payload with sb, tb, c, r: 102 bytes (within limit)
-    # Payload with sb, tb, c (no r): 93 bytes (within limit)
-    # Filtering: First by round_number (r), fallback to blocks (sb/tb) if r is None
-    commit_v4 = {
-        "sb": start_block,
-        "tb": target_block,
+    # Keep the on-chain commitment payload small and versioned for compatibility
+    # across validators. The IPFS payload holds the verbose metadata.
+    commit_payload = {
+        "v": int(consensus_version),
+        "s": int(season_number),
+        "r": int(round_number),
         "c": str(cid),
+        "p": 0,  # phase placeholder for future extensions
     }
-    # Only include "r" if round_number is not None (on-chain can't serialize None)
-    if round_number is not None:
-        commit_v4["r"] = int(round_number)
 
     try:
-        # 🔍 DEBUG: Log the exact commit_v4 structure before serialization
-        import json
-        commit_v4_json = json.dumps(commit_v4, sort_keys=True)
-        commit_v4_bytes = commit_v4_json.encode("utf-8")
-        bt.logging.info("=" * 80)
-        bt.logging.info(ipfs_tag("BLOCKCHAIN", f"📋 Commit payload (before serialization):"))
-        bt.logging.info(ipfs_tag("BLOCKCHAIN", commit_v4_json))
-        bt.logging.info(ipfs_tag("BLOCKCHAIN", f"Payload size: {len(commit_v4_bytes)} bytes (limit: 128 bytes)"))
-        if len(commit_v4_bytes) > 128:
-            bt.logging.error(ipfs_tag("BLOCKCHAIN", f"❌ ERROR: Payload exceeds 128 bytes! This will cause Raw129 error."))
-        bt.logging.info(ipfs_tag("BLOCKCHAIN", f"Full metadata (blocks {start_block}→{target_block}, epochs {target_epoch-1}→{target_epoch}) is in IPFS payload"))
-        bt.logging.info("=" * 80)
-        
         bt.logging.info(
-            f"📮 CONSENSUS COMMIT START | blocks {start_block}→{target_block} | "
-            f"r={commit_v4.get('r')} cid={commit_v4['c']}"
+            f"📮 CONSENSUS COMMIT START | v={commit_payload['v']} s={commit_payload['s']} r={commit_payload['r']} | cid={commit_payload['c']}"
         )
-        ok = False
-        try:
-            ok = await write_plain_commitment_json(
-                st,
-                wallet=validator.wallet,
-                data=commit_v4,
-                netuid=validator.config.netuid,
-            )
-        except Exception as e:
-            # Catch and log commit exceptions explicitly to avoid bubbling up and
-            # prematurely aborting the validator forward loop.
-            import asyncio as _asyncio
-            if isinstance(e, _asyncio.CancelledError):
-                bt.logging.warning(
-                    f"📮 CONSENSUS COMMIT RESULT | status=failed error=CancelledError: {e}"
-                )
-                ok = False
-            else:
-                raise
+        ok = await write_plain_commitment_json(
+            st,
+            wallet=self.wallet,
+            data=commit_payload,
+            netuid=self.config.netuid,
+        )
         if ok:
-            # Record commit context on validator for later aggregation spread checks
             try:
-                commit_block = validator.subtensor.get_current_block()
+                commit_block = self.subtensor.get_current_block()
             except Exception:
                 commit_block = None
             else:
                 try:
-                    validator._consensus_commit_block = commit_block
-                    validator._consensus_commit_cid = str(cid)
+                    self._consensus_commit_block = commit_block
+                    self._consensus_commit_cid = str(cid)
                 except Exception:
                     pass
-
             bt.logging.success(ipfs_tag("BLOCKCHAIN", f"✅ Commitment successful | CID: {cid}"))
             return str(cid)
-        else:
-            bt.logging.warning(ipfs_tag("BLOCKCHAIN", "⚠️ Commitment failed - write returned false"))
-            return None
-    except Exception as e:
+        bt.logging.warning(ipfs_tag("BLOCKCHAIN", "⚠️ Commitment failed - write returned false"))
+        return None
+    except Exception as exc:
         bt.logging.error("=" * 80)
-        bt.logging.error(ipfs_tag("BLOCKCHAIN", f"❌ Commitment failed | Error: {type(e).__name__}: {e}"))
+        bt.logging.error(ipfs_tag("BLOCKCHAIN", f"❌ Commitment failed | Error: {type(exc).__name__}: {exc}"))
         import traceback
+
         bt.logging.error(ipfs_tag("BLOCKCHAIN", f"Traceback:\n{traceback.format_exc()}"))
         bt.logging.error("=" * 80)
         return None
 
 
 async def aggregate_scores_from_commitments(
+    self,
     *,
-    validator,
-    st: AsyncSubtensor,
-    start_block: int,
-    target_block: int,
+    st: AsyncSubtensor,  
 ) -> tuple[Dict[int, float], Dict[str, Any]]:
     """
-    Read all validators' commitments for this round block window and compute
-    stake-weighted average rewards per miner UID.
+    Read all validators' commitments for this round window and compute stake-weighted
+    average scores per miner UID.
 
-    Returns a tuple: (final_rewards, details)
-      - final_rewards: Dict[uid -> aggregated avg_reward] (avg_reward = eval_score + time_score)
+    Returns a tuple: (final_scores, details)
+      - final_scores: Dict[uid -> aggregated score]
       - details:
           {
             "validators": [ {"hotkey": str, "uid": int|"?", "stake": float, "cid": str} ],
-            "scores_by_validator": { hotkey: { uid: avg_reward } }  # Note: kept as "scores_by_validator" for backward compatibility, but contains avg_reward
+            "scores_by_validator": { hotkey: { uid: score } }
           }
     """
-    if not ENABLE_DISTRIBUTED_CONSENSUS:
-        raise RuntimeError("Consensus aggregation requested while distributed consensus is disabled")
-
     # Build hotkey->uid and stake map
-    hk_to_uid = _hotkey_to_uid_map(validator.metagraph)
-    stake_list = getattr(validator.metagraph, "stake", None)
+    hk_to_uid = _hotkey_to_uid_map(self.metagraph)
+    stake_list = getattr(self.metagraph, "stake", None)
 
     def stake_for_hk(hk: str) -> float:
-        uid = hk_to_uid.get(hk)
-        if uid is None:
-            raise RuntimeError(f"No UID mapping found for hotkey {hk}")
-        if stake_list is None:
-            raise RuntimeError("Metagraph stake information is unavailable")
         try:
-            return _stake_to_float(stake_list[uid])  # type: ignore[index]
-        except Exception as exc:  # noqa: BLE001
-            raise RuntimeError(f"Unable to read stake for UID {uid}") from exc
+            uid = hk_to_uid.get(hk)
+            if uid is None:
+                return 0.0
+            return _stake_to_float(stake_list[uid]) if stake_list is not None else 0.0  # type: ignore[index]
+        except Exception:
+            return 0.0
 
-    # Fetch all plain commitments and select those for this round (v4 with CID)
-    # Calculate expected round_number from start_block for filtering
-    expected_round_number = await validator.round_manager.calculate_round(start_block)
-    blocks_per_epoch = getattr(validator.round_manager, "BLOCKS_PER_EPOCH", 360)
+    current_block = self.block
+    consensus_version = CONSENSUS_VERSION
+    season_number = _safe_season_number(self, current_block)
+    round_number = self.round_manager.calculate_round(current_block)
 
-    commits = await read_all_plain_commitments(st, netuid=validator.config.netuid, block=None)
-    start_epoch = start_block / blocks_per_epoch
-    target_epoch = target_block / blocks_per_epoch
-    expected_window = f"{start_block:,}→{target_block:,} (epochs {start_epoch:.2f}→{target_epoch:.2f})"
-    bt.logging.info(consensus_tag(f"Aggregate | Round {expected_round_number} | Expected blocks {expected_window} | Commitments found: {len(commits or {})}"))
-    
-    if commits:
-        bt.logging.info(consensus_tag(f"Found {len(commits)} validator commitments:"))
-        for hk, entry in list(commits.items())[:5]:
-            r = entry.get("r")
-            sb = entry.get("sb")
-            tb = entry.get("tb")
-            cid_preview = str(entry.get('c', 'N/A'))[:24]
-            if r is not None:
-                bt.logging.info(consensus_tag(f"  - {hk[:12]}... | round={r} | CID {cid_preview}..."))
-            elif sb is not None and tb is not None:
-                bt.logging.info(consensus_tag(f"  - {hk[:12]}... | blocks {sb}→{tb} | CID {cid_preview}..."))
-            else:
-                bt.logging.info(consensus_tag(f"  - {hk[:12]}... | CID {cid_preview}..."))
+    # Fetch all plain commitments and select those for this round (v5 with CID)
+    try:
+        commits = await read_all_plain_commitments(st, netuid=self.config.netuid, block=None)
+        bt.logging.info(
+            consensus_tag(f"Aggregate | Expected round {round_number} | Commitments found: {len(commits or {})}")
+        )
+        if commits:
+            bt.logging.info(consensus_tag(f"Found {len(commits)} validator commitments:"))
+            for hk, entry in list(commits.items())[:5]:
+                bt.logging.info(
+                    consensus_tag(f"  - {hk[:12]}... | Round {entry.get('r')} | Phase {entry.get('p')} | CID {str(entry.get('c', 'N/A'))[:24]}...")
+                )
+    except Exception as e:
+        bt.logging.error(f"❌ Failed to read commitments from blockchain: {e}")
+        commits = {}
 
-    expected_start_block = int(start_block)
-    expected_target_block = int(target_block)
-
-    bt.logging.info(f"[CONSENSUS] Filtering commitments for current block window: {expected_start_block:,}→{expected_target_block:,}")
+    bt.logging.info(f"[CONSENSUS] Filtering commitments for current round: {round_number}")
 
     weighted_sum: Dict[int, float] = {}
     weight_total: Dict[int, float] = {}
 
     included = 0
-    skipped_wrong_window = 0
+    skipped_legacy_consensus_version = 0
+    skipped_wrong_season = 0
+    skipped_wrong_round = 0
     skipped_missing_cid = 0
     skipped_low_stake = 0
     skipped_ipfs = 0
-    skipped_wrong_window_list: list[tuple[str, int, int]] = []  # (hk, start_block, target_block)
+    skipped_verification_fail = 0
+    skipped_legacy_consensus_version_list: list[tuple[str, int]] = []  # (hk, version)
+    skipped_wrong_season_list: list[tuple[str, int]] = []  # (hk, season_number)
+    skipped_wrong_round_list: list[tuple[str, int]] = []  # (hk, round_number)
     skipped_missing_cid_list: list[str] = []
     skipped_low_stake_list: list[tuple[str, float]] = []  # (hk, stake)
     skipped_ipfs_list: list[tuple[str, str]] = []  # (hk, cid)
+    skipped_verification_fail_list: list[tuple[str, str]] = []  # (hk, reason)
 
     fetched: list[tuple[str, str, float]] = []
-    scores_by_validator: Dict[str, Dict[int, float]] = {}  # Note: contains avg_reward, kept name for backward compatibility
-    stats_by_validator: Dict[str, Dict[int, Dict[str, Any]]] = {}
-    stats_accumulator: Dict[int, Dict[str, float]] = {}
-    downloaded_payloads: list[Dict[str, Any]] = []  # Lista para guardar payloads originales descargados
-
-    blocks_per_epoch = getattr(validator.round_manager, "BLOCKS_PER_EPOCH", 360)
-
-    def _coerce_int(val) -> Optional[int]:
-        try:
-            if val is None:
-                return None
-            return int(val)
-        except Exception:
-            return None
-
-    def _extract_block_window_from_entry(entry_dict: Dict[str, Any]) -> Optional[tuple[int, int]]:
-        sb = _coerce_int(entry_dict.get("sb"))
-        tb = _coerce_int(entry_dict.get("tb"))
-        if sb is not None and tb is not None:
-            return sb, tb
-        sb = _coerce_int(entry_dict.get("round_start_block"))
-        tb = _coerce_int(entry_dict.get("target_block"))
-        if sb is not None and tb is not None:
-            return sb, tb
-        return None
-
-    def _extract_block_window_from_payload(payload_dict: Dict[str, Any]) -> Optional[tuple[int, int]]:
-        sb = _coerce_int(payload_dict.get("round_start_block"))
-        tb = _coerce_int(payload_dict.get("target_block"))
-        if sb is not None and tb is not None:
-            return sb, tb
-        es = payload_dict.get("es")
-        et = payload_dict.get("et")
-        try:
-            if es is not None and et is not None:
-                start_b = int(round(float(es) * blocks_per_epoch))
-                target_b = int(round(float(et) * blocks_per_epoch))
-                return start_b, target_b
-        except Exception:
-            return None
-        return None
+    scores_by_validator: Dict[str, Dict[int, float]] = {}
 
     for hk, entry in (commits or {}).items():
         if not isinstance(entry, dict):
             bt.logging.info(f"[CONSENSUS] Skip {hk[:12]}... | Reason: entry is not dict")
             continue
 
-        # Filter by round_number (r) first - most efficient
-        entry_round = _coerce_int(entry.get("r"))
-        if entry_round is not None:
-            if entry_round != expected_round_number:
-                skipped_wrong_window += 1
-                skipped_wrong_window_list.append((hk, None, None))
-                bt.logging.debug(
-                    f"⏭️ Skip {hk[:10]}…: wrong round (has r={entry_round}, need r={expected_round_number})"
-                )
-                continue
+        # Backward compatible parsing: older commitments may omit v/s.
+        raw_v = entry.get("v", None)
+        if raw_v is None:
+            entry_consensus_version = int(consensus_version)
         else:
-            # Fallback: If no round_number, filter by block window (sb/tb)
-            entry_window = _extract_block_window_from_entry(entry)
-            if entry_window is not None:
-                entry_sb, entry_tb = entry_window
-                if entry_sb != expected_start_block or entry_tb != expected_target_block:
-                    skipped_wrong_window += 1
-                    skipped_wrong_window_list.append((hk, entry_sb, entry_tb))
-                    bt.logging.debug(
-                        f"⏭️ Skip {hk[:10]}…: wrong window (has blocks {entry_sb}→{entry_tb}, need {expected_start_block}→{expected_target_block})"
-                    )
-                    continue
-            # If no round and no blocks, skip (invalid entry)
-            else:
-                skipped_wrong_window += 1
-                skipped_wrong_window_list.append((hk, None, None))
-                bt.logging.debug(
-                    f"⏭️ Skip {hk[:10]}…: missing both round (r) and blocks (sb/tb)"
-                )
-                continue
+            try:
+                entry_consensus_version = int(raw_v)
+            except Exception:
+                entry_consensus_version = -1
+        if entry_consensus_version != int(consensus_version):
+            skipped_legacy_consensus_version += 1
+            skipped_legacy_consensus_version_list.append((hk, entry_consensus_version))
+            bt.logging.debug(
+                f"⏭️ Skip {hk[:10]}…: legacy consensus version (has v={entry_consensus_version}, need v={consensus_version})"
+            )
+            continue
+
+        raw_s = entry.get("s", None)
+        if raw_s is None:
+            entry_season_number = int(season_number)
+        else:
+            try:
+                entry_season_number = int(raw_s)
+            except Exception:
+                entry_season_number = -1
+        if entry_season_number != int(season_number):
+            skipped_wrong_season += 1
+            skipped_wrong_season_list.append((hk, entry_season_number))
+            bt.logging.debug(
+                f"⏭️ Skip {hk[:10]}…: wrong season (has s={entry_season_number}, need s={season_number})"
+            )
+            continue
+
+        entry_round_number = int(entry.get("r", -1))
+        if entry_round_number != round_number:
+            skipped_wrong_round += 1
+            skipped_wrong_round_list.append((hk, entry_round_number))
+            bt.logging.debug(
+                f"⏭️ Skip {hk[:10]}…: wrong round (has r={entry_round_number}, need r={round_number})"
+            )
+            continue
 
         cid = entry.get("c")
         if not isinstance(cid, str) or not cid:
@@ -470,31 +326,16 @@ async def aggregate_scores_from_commitments(
             continue
 
         try:
-            payload, _norm, _h = await aget_json(cid, api_url=IPFS_API_URL)
+            payload, _norm, _h = await get_json_async(cid, api_url=IPFS_API_URL)
             import json
 
             payload_json = json.dumps(payload, indent=2, sort_keys=True)
-
-            payload_window = _extract_block_window_from_payload(payload) if isinstance(payload, dict) else None
-            if payload_window is not None:
-                payload_sb, payload_tb = payload_window
-                if payload_sb != expected_start_block or payload_tb != expected_target_block:
-                    skipped_wrong_window += 1
-                    skipped_wrong_window_list.append((hk, payload_sb, payload_tb))
-                    bt.logging.debug(
-                        f"⏭️ Skip {hk[:10]}…: payload window {payload_sb}→{payload_tb} does not match {expected_start_block}→{expected_target_block}"
-                    )
-                    continue
 
             bt.logging.info("=" * 80)
             bt.logging.info(f"[IPFS] [DOWNLOAD] Validator {hk[:12]}... (UID {validator_uid}) | CID: {cid}")
             bt.logging.info(f"[IPFS] [DOWNLOAD] URL: http://ipfs.metahash73.com:5001/api/v0/cat?arg={cid}")
             bt.logging.info(f"[IPFS] [DOWNLOAD] Payload:\n{payload_json}")
-            # Count miners from stats list (new format) or scores dict (legacy format)
-            stats_count = len(payload.get('stats', [])) if isinstance(payload.get('stats'), list) else 0
-            scores_count = len(payload.get('scores', {})) if isinstance(payload.get('scores'), dict) else 0
-            miner_count = stats_count if stats_count > 0 else scores_count
-            bt.logging.success(f"[IPFS] [DOWNLOAD] ✅ SUCCESS - Round {payload.get('round_number') or payload.get('r')} | {miner_count} miners | Stake: {st_val:.2f}τ")
+            bt.logging.success(f"[IPFS] [DOWNLOAD] ✅ SUCCESS - Round {payload.get('r')} | {len(payload.get('scores', {}))} miners | Stake: {st_val:.2f}τ")
             bt.logging.info("=" * 80)
         except Exception as e:
             skipped_ipfs += 1
@@ -505,123 +346,25 @@ async def aggregate_scores_from_commitments(
             bt.logging.info(f"[CONSENSUS] Skip {hk[:12]}... | Reason: payload is not dict")
             continue
 
-        # Guardar payload original descargado ANTES de procesarlo
-        downloaded_payloads.append({
-            "validator_hotkey": hk,
-            "validator_uid": validator_uid,
-            "stake": st_val,
-            "ipfs_cid": cid,
-            "payload": payload,  # Payload completo tal cual se descargó de IPFS (misma estructura que ipfs_uploaded)
-        })
-
-        # Stats entries (required)
-        stats_entries = payload.get("stats")
-        if not isinstance(stats_entries, list):
-            bt.logging.debug(f"⏭️ Skip {hk[:10]}…: payload missing required 'stats' list")
+        scores = payload.get("scores")
+        if not isinstance(scores, dict):
             continue
 
-        per_val_stats: Dict[int, Dict[str, Any]] = {}
-        per_val_rewards: Dict[int, float] = {}
-
-        for item in stats_entries:
-            if not isinstance(item, dict):
-                continue
+        # Record per-validator scores (converted to int uid)
+        per_val_map: Dict[int, float] = {}
+        for uid_s, sc in scores.items():
             try:
-                uid_val = int(item.get("uid"))
+                uid = int(uid_s)
+                val = float(sc)
             except Exception:
                 continue
-            stat_entry: Dict[str, Any] = {}
-            reward_val: Optional[float] = None
-            # Read "avg_reward" (required field)
-            if "avg_reward" in item:
-                try:
-                    reward_val = float(item["avg_reward"])
-                    stat_entry["avg_reward"] = reward_val
-                except Exception:
-                    reward_val = None
-            # Read "miner_hotkey" if available
-            if "miner_hotkey" in item:
-                stat_entry["miner_hotkey"] = item["miner_hotkey"]
-            # Read "avg_eval_score" if available
-            if "avg_eval_score" in item:
-                try:
-                    stat_entry["avg_eval_score"] = float(item["avg_eval_score"])
-                except Exception:
-                    pass
-            for key in ("avg_eval_time", "tasks_sent", "tasks_success", "tasks_failed"):
-                if key in item:
-                    try:
-                        stat_entry[key] = float(item[key]) if key == "avg_eval_time" else int(item[key])
-                    except Exception:
-                        continue
-            if stat_entry:
-                per_val_stats[uid_val] = stat_entry
-                if reward_val is not None:
-                    per_val_rewards[uid_val] = reward_val  # Contains avg_reward (normalized from avg_reward/reward/score)
-                # Accumulate aggregates per miner
-                acc = stats_accumulator.setdefault(
-                    uid_val,
-                    {
-                        "avg_eval_score_sum": 0.0,
-                        "avg_eval_score_count": 0.0,
-                        "avg_eval_time_sum": 0.0,
-                        "avg_eval_time_count": 0.0,
-                        "tasks_sent_sum": 0.0,
-                        "tasks_sent_count": 0.0,
-                        "tasks_success_sum": 0.0,
-                        "tasks_success_count": 0.0,
-                        "tasks_failed_sum": 0.0,
-                        "tasks_failed_count": 0.0,
-                    },
-                )
-                if "avg_eval_score" in stat_entry:
-                    acc["avg_eval_score_sum"] += float(stat_entry["avg_eval_score"])
-                    acc["avg_eval_score_count"] += 1
-                if "avg_eval_time" in stat_entry:
-                    acc["avg_eval_time_sum"] += float(stat_entry["avg_eval_time"])
-                    acc["avg_eval_time_count"] += 1
-                if "tasks_sent" in stat_entry:
-                    acc["tasks_sent_sum"] += float(stat_entry["tasks_sent"])
-                    acc["tasks_sent_count"] += 1
-                if "tasks_success" in stat_entry:
-                    acc["tasks_success_sum"] += float(stat_entry["tasks_success"])
-                    acc["tasks_success_count"] += 1
-                if "tasks_failed" in stat_entry:
-                    acc["tasks_failed_sum"] += float(stat_entry["tasks_failed"])
-                    acc["tasks_failed_count"] += 1
-
-        # Require stats with avg_reward; otherwise skip this validator
-        if not per_val_rewards:
-            bt.logging.debug(f"⏭️ Skip {hk[:10]}…: no avg_reward found in stats")
-            continue
-
-        # Apply stake-weighted aggregation using per_val_rewards
-        for uid, val in per_val_rewards.items():
             effective_weight = st_val if st_val > 0.0 else 1.0
             weighted_sum[uid] = weighted_sum.get(uid, 0.0) + effective_weight * val
             weight_total[uid] = weight_total.get(uid, 0.0) + effective_weight
-
+            per_val_map[uid] = val
         included += 1
         fetched.append((hk, cid, st_val))
-        scores_by_validator[hk] = per_val_rewards  # Note: contains avg_reward, kept as "scores_by_validator" for backward compatibility in details dict
-        if per_val_stats:
-            stats_by_validator[hk] = per_val_stats
-
-    # Ensure missing miners in a validator payload count as zero (still counting stake).
-    if fetched:
-        # Union of all miners present in any validator payload.
-        all_miners: set[int] = set()
-        for rewards in scores_by_validator.values():
-            all_miners.update(rewards.keys())
-
-        # Add zero contribution for miners omitted by each validator.
-        for hk, _cid, st_val in fetched:
-            stake = st_val if st_val > 0.0 else 1.0
-            rewards = scores_by_validator.get(hk, {}) or {}
-            missing = all_miners.difference(rewards.keys())
-            for uid in missing:
-                weight_total[uid] = weight_total.get(uid, 0.0) + stake
-                # weighted_sum unchanged (implicit zero reward)
+        scores_by_validator[hk] = per_val_map
 
     result: Dict[int, float] = {}
     for uid, wsum in weighted_sum.items():
@@ -637,16 +380,30 @@ async def aggregate_scores_from_commitments(
             f"[CONSENSUS] ✅ Aggregation complete | Validators: {included} | Miners: {len(result)} | Mode: {consensus_mode}"
         )
         bt.logging.info(
-            f"[CONSENSUS] Skipped | Wrong window: {skipped_wrong_window} | Missing CID: {skipped_missing_cid} | Low stake: {skipped_low_stake} | IPFS fail: {skipped_ipfs}"
+            f"[CONSENSUS] Skipped | "
+            f"Legacy consensus version: {skipped_legacy_consensus_version} | "
+            f"Wrong season: {skipped_wrong_season} | "
+            f"Wrong round: {skipped_wrong_round} | "
+            f"Missing CID: {skipped_missing_cid} | "
+            f"Low stake: {skipped_low_stake} | "
+            f"IPFS fail: {skipped_ipfs} | "
+            f"Verify fail: {skipped_verification_fail} | "
         )
+
         # Extra verbose logs to diagnose stake/epoch filtering
         try:
             if skipped_low_stake_list:
                 low_str = ", ".join([f"{hk[:10]}…({stake:.0f}τ)" for hk, stake in skipped_low_stake_list])
                 bt.logging.debug(f"   ⏭️ Low-stake excluded: {low_str}")
-            if skipped_wrong_window_list:
-                wrong_str = ", ".join([f"{hk[:10]}…(sb={sb},tb={tb})" for hk, sb, tb in skipped_wrong_window_list])
-                bt.logging.debug(f"   ⏭️ Wrong-window excluded: {wrong_str}")
+            if skipped_legacy_consensus_version_list:
+                legacy_str = ", ".join([f"{hk[:10]}…(v={vv})" for hk, vv in skipped_legacy_consensus_version_list])
+                bt.logging.debug(f"   ⏭️ Legacy-version excluded: {legacy_str}")
+            if skipped_wrong_season_list:
+                season_str = ", ".join([f"{hk[:10]}…(s={ss})" for hk, ss in skipped_wrong_season_list])
+                bt.logging.debug(f"   ⏭️ Wrong-season excluded: {season_str}")
+            if skipped_wrong_round_list:
+                wrong_str = ", ".join([f"{hk[:10]}…(r={rr})" for hk, rr in skipped_wrong_round_list])
+                bt.logging.debug(f"   ⏭️ Wrong-round excluded: {wrong_str}")
             if skipped_missing_cid_list:
                 miss_str = ", ".join([f"{hk[:10]}…" for hk in skipped_missing_cid_list])
                 bt.logging.debug(f"   ⏭️ Missing-CID excluded: {miss_str}")
@@ -656,38 +413,24 @@ async def aggregate_scores_from_commitments(
         except Exception:
             pass
         if len(result) > 0:
-            # Log validator contributions used for the aggregation so we can inspect their raw rewards.
-            try:
-                bt.logging.info(
-                    f"[CONSENSUS] Validators included ({included}): "
-                    + ", ".join(f"{hk[:12]}…(stake={stake:.2f}τ)" for hk, _, stake in fetched)
-                )
-                for hk, cid, stake in fetched:
-                    per_val_rewards = scores_by_validator.get(hk, {})
-                    miner_count = len(per_val_rewards)
-                    bt.logging.info(
-                        f"[CONSENSUS]   ↳ {hk[:12]}… | miners={miner_count} | stake={stake:.2f}τ | cid={cid}"
-                    )
-                    if per_val_rewards:
-                        top_items = list(per_val_rewards.items())[:10]
-                        for uid, avg_reward in top_items:
-                            bt.logging.info(f"[CONSENSUS]      UID {uid}: avg_reward={avg_reward:.4f}")
-                        if miner_count > len(top_items):
-                            bt.logging.info(
-                                f"[CONSENSUS]      … {miner_count - len(top_items)} more miners omitted for brevity"
-                            )
-            except Exception:
-                pass
-            bt.logging.info(f"[CONSENSUS] Aggregated avg_reward ({len(result)} miners):")
+            bt.logging.info(f"[CONSENSUS] Aggregated scores ({len(result)} miners):")
             top_sample = list(sorted(result.items(), key=lambda x: x[1], reverse=True))[:10]
-            for uid, avg_reward in top_sample:
-                bt.logging.info(f"[CONSENSUS]   UID {uid}: avg_reward={avg_reward:.4f}")
+            for uid, score in top_sample:
+                bt.logging.info(f"[CONSENSUS]   UID {uid}: {score:.4f}")
         else:
             bt.logging.warning(f"[CONSENSUS] ⚠️ No miners aggregated (all scores were <= 0 or no common miners)")
     else:
         bt.logging.warning(f"[CONSENSUS] ⚠️ No validators included in aggregation")
         bt.logging.info(
-            f"[CONSENSUS] Reasons | Wrong window: {skipped_wrong_window} | Missing CID: {skipped_missing_cid} | Low stake: {skipped_low_stake} | IPFS fail: {skipped_ipfs} | Total commits: {len(commits or {})}"
+            f"[CONSENSUS] Reasons | "
+            f"Legacy consensus version: {skipped_legacy_consensus_version} | "
+            f"Wrong season: {skipped_wrong_season} | "
+            f"Wrong round: {skipped_wrong_round} | "
+            f"Missing CID: {skipped_missing_cid} | "
+            f"Low stake: {skipped_low_stake} | "
+            f"IPFS fail: {skipped_ipfs} | "
+            f"Verify fail: {skipped_verification_fail} | "
+            f"Total commits: {len(commits or {})}"
         )
 
     # Build details structure for reporting/visualization
@@ -695,42 +438,17 @@ async def aggregate_scores_from_commitments(
         {"hotkey": hk, "uid": hk_to_uid.get(hk, "?"), "stake": stake, "cid": cid}
         for hk, cid, stake in fetched
     ]
-    # Aggregate stats per miner across validators (simple averages where available)
-    stats_by_miner: Dict[int, Dict[str, float]] = {}
-    for uid, agg in stats_accumulator.items():
-        stats_by_miner[uid] = {}
-        if agg.get("avg_eval_score_count", 0) > 0:
-            stats_by_miner[uid]["avg_eval_score"] = float(
-                agg["avg_eval_score_sum"] / agg["avg_eval_score_count"]
-            )
-        if agg.get("avg_eval_time_count", 0) > 0:
-            stats_by_miner[uid]["avg_eval_time"] = float(
-                agg["avg_eval_time_sum"] / agg["avg_eval_time_count"]
-            )
-        if agg.get("tasks_sent_count", 0) > 0:
-            stats_by_miner[uid]["tasks_sent"] = float(
-                agg["tasks_sent_sum"] / agg["tasks_sent_count"]
-            )
-        if agg.get("tasks_success_count", 0) > 0:
-            stats_by_miner[uid]["tasks_success"] = float(
-                agg["tasks_success_sum"] / agg["tasks_success_count"]
-            )
-        if agg.get("tasks_failed_count", 0) > 0:
-            stats_by_miner[uid]["tasks_failed"] = float(
-                agg["tasks_failed_sum"] / agg["tasks_failed_count"]
-            )
-
     details = {
         "validators": validators_info,
         "scores_by_validator": scores_by_validator,
-        "stats_by_validator": stats_by_validator,
-        "stats_by_miner": stats_by_miner,
-        "downloaded_payloads": downloaded_payloads,  # Payloads originales descargados de IPFS
         "skips": {
-            "wrong_window": skipped_wrong_window_list,
+            "legacy_consensus_version": skipped_legacy_consensus_version_list,
+            "wrong_season": skipped_wrong_season_list,
+            "wrong_round": skipped_wrong_round_list,
             "missing_cid": skipped_missing_cid_list,
             "low_stake": skipped_low_stake_list,
             "ipfs_fail": skipped_ipfs_list,
+            "verify_fail": skipped_verification_fail_list,
         },
     }
 

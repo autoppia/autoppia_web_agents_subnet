@@ -246,15 +246,14 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
     from autoppia_web_agents_subnet.validator.config import (
         ROUND_SIZE_EPOCHS,
         SAFETY_BUFFER_EPOCHS,
-        DZ_STARTING_BLOCK,
-        PRE_GENERATED_TASKS,
+        MINIMUM_START_BLOCK,
+        TASKS_PER_SEASON,
         AVG_TASK_DURATION_SECONDS,
         STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION,
         FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION,
         SKIP_ROUND_IF_STARTED_AFTER_FRACTION,
         MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO,
         ENABLE_DISTRIBUTED_CONSENSUS,
-        ENABLE_DYNAMIC,
         SHOULD_RECORD_GIF,
         TIMEOUT,
         FEEDBACK_TIMEOUT,
@@ -264,10 +263,10 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
         TESTING,
         IWAP_API_BASE_URL,
     )
-    
+
     stake = normalized_stake_tao(validator.metagraph, validator.uid)
     vtrust = validator_vtrust(validator.metagraph, validator.uid)
-    
+
     # Get coldkey from validator wallet (same as in build_validator_identity)
     coldkey = getattr(getattr(validator.wallet, "coldkeypub", None), "ss58_address", None)
 
@@ -282,8 +281,8 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
         "round": {
             "round_size_epochs": ROUND_SIZE_EPOCHS,
             "safety_buffer_epochs": SAFETY_BUFFER_EPOCHS,
-            "dz_starting_block": DZ_STARTING_BLOCK,
-            "pre_generated_tasks": PRE_GENERATED_TASKS,
+            "minimum_start_block": MINIMUM_START_BLOCK,
+            "tasks_per_season": TASKS_PER_SEASON,
             "avg_task_duration_seconds": AVG_TASK_DURATION_SECONDS,
         },
         "timing": {
@@ -296,7 +295,7 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
             "enable_distributed_consensus": ENABLE_DISTRIBUTED_CONSENSUS,
         },
         "execution": {
-            "enable_dynamic": ENABLE_DYNAMIC,
+            "enable_dynamic": True,
             "should_record_gif": SHOULD_RECORD_GIF,
             "timeout": TIMEOUT,
             "feedback_timeout": FEEDBACK_TIMEOUT,
@@ -309,7 +308,7 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
         "environment": {
             "testing": TESTING,
             "iwap_api_base_url": IWAP_API_BASE_URL,
-        }
+        },
     }
 
     return iwa_models.ValidatorSnapshotIWAP(
@@ -331,7 +330,10 @@ def build_iwap_tasks(*, validator_round_id: str, tasks: List[TaskWithProject]) -
     for index, task_item in enumerate(tasks):
         task = task_item.task
         project = task_item.project
-        task_id = getattr(task, "id", None) or f"{validator_round_id}_task_{index:04d}"
+        # Always include validator_round_id in task_id to ensure uniqueness across rounds
+        # Even if task has an id from JSON, we need to make it unique per round
+        base_task_id = getattr(task, "id", None) or f"task_{index:04d}"
+        task_id = f"{validator_round_id}_{base_task_id}"
 
         specifications = {}
         if hasattr(task, "specifications") and task.specifications is not None:
@@ -358,10 +360,6 @@ def build_iwap_tasks(*, validator_round_id: str, tasks: List[TaskWithProject]) -
             elif hasattr(use_case, "model_dump"):
                 use_case_payload = use_case.model_dump(mode="json", exclude_none=True)
 
-        relevant_data = getattr(task, "relevant_data", {}) or {}
-        if not isinstance(relevant_data, dict):
-            relevant_data = {"value": relevant_data}
-
         task_model = iwa_models.TaskIWAP(
             task_id=task_id,
             validator_round_id=validator_round_id,
@@ -372,7 +370,6 @@ def build_iwap_tasks(*, validator_round_id: str, tasks: List[TaskWithProject]) -
             prompt=getattr(task, "prompt", ""),
             specifications=specifications,
             tests=tests,
-            relevant_data=relevant_data,
             use_case=use_case_payload,
         )
         task_map[task_id] = task_model

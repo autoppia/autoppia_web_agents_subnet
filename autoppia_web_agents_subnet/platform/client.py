@@ -11,10 +11,14 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, TypeVar
 
-import httpx
 import bittensor as bt
+import httpx
 
-from autoppia_web_agents_subnet.validator.config import MAX_MINER_AGENT_NAME_LENGTH
+from autoppia_web_agents_subnet.validator.config import (
+    MAX_MINER_AGENT_NAME_LENGTH,
+    MINIMUM_START_BLOCK as VALIDATOR_MINIMUM_START_BLOCK,
+    SEASON_SIZE_EPOCHS,
+)
 
 from . import models
 
@@ -25,24 +29,76 @@ VALIDATOR_SIGNATURE_HEADER = "x-validator-signature"
 
 T = TypeVar("T")
 
+# Season calculation constants (must match backend config)
+# Import from validator config to ensure consistency with TESTING mode
+
+BLOCKS_PER_EPOCH = 360.0
+
 
 def _uuid_suffix(length: int = 12) -> str:
     return uuid.uuid4().hex[:length]
 
 
-def generate_validator_round_id(round_number: Optional[int] = None) -> str:
+def _season_blocks() -> int:
+    """Calculate the number of blocks per season."""
+    return int(SEASON_SIZE_EPOCHS * BLOCKS_PER_EPOCH)
+
+
+def compute_season_number(current_block: int) -> int:
     """
-    Generate a unique validator round ID.
+    Calculate the season number based on the current block.
+
+    Season 0 = before MINIMUM_START_BLOCK
+    Season 1+ = after MINIMUM_START_BLOCK, each season is SEASON_SIZE_EPOCHS epochs
+    """
+    base = int(VALIDATOR_MINIMUM_START_BLOCK)
+    # Base block is the first block of season 1.
+    if current_block < base:
+        return 0
+    length = _season_blocks()
+    idx = (current_block - base) // length
+    return int(idx + 1)
+
+
+def compute_round_number_in_season(current_block: int, round_length: int) -> int:
+    """
+    Calculate the round number within the current season.
 
     Args:
-        round_number: Optional round number to include in the ID (e.g., 1, 2, 3...)
+        current_block: Current blockchain block number
+        round_length: Length of a round in blocks
 
     Returns:
-        Round ID in format: validator_round_{number}_{random_id} or validator_round_{random_id}
+        Round number within the season (1-indexed)
     """
-    if round_number is not None:
-        return f"validator_round_{round_number}_{_uuid_suffix()}"
-    return f"validator_round_{_uuid_suffix()}"
+    base = int(VALIDATOR_MINIMUM_START_BLOCK)
+    season_num = compute_season_number(current_block)
+
+    if season_num == 0:
+        # Before starting block, just use simple calculation
+        return 1
+
+    # Calculate blocks since the start of this season
+    season_start_block = base + (season_num - 1) * _season_blocks()
+    blocks_in_season = current_block - season_start_block
+    round_in_season = (blocks_in_season // round_length) + 1
+
+    return int(round_in_season)
+
+
+def generate_validator_round_id(season_number: int, round_number_in_season: int) -> str:
+    """
+    Generate a unique validator round ID with season and round information.
+
+    Args:
+        season_number: Season number (e.g., 4, 5, 6...)
+        round_number_in_season: Round number within the season (e.g., 1, 2, 3...)
+
+    Returns:
+        Round ID in format: validator_round_{season}_{round}_{random_hash}
+        Example: validator_round_4_6_abc123def456
+    """
+    return f"validator_round_{season_number}_{round_number_in_season}_{_uuid_suffix()}"
 
 
 def generate_agent_run_id(miner_uid: Optional[int]) -> str:
@@ -109,8 +165,6 @@ class IWAPClient:
         try:
             headers = dict(self._auth_provider())
         except Exception:
-            from autoppia_web_agents_subnet.utils.logging import ColoredLogger
-
             bt.logging.error("IWAP | Auth provider failed to generate headers", exc_info=True)
             raise
         sanitized: Dict[str, str] = {}
@@ -126,6 +180,7 @@ class IWAPClient:
         validator_identity: models.ValidatorIdentityIWAP,
         validator_round: models.ValidatorRoundIWAP,
         validator_snapshot: models.ValidatorSnapshotIWAP,
+        force: bool = False,
     ) -> Dict[str, Any]:
         payload = {
             "validator_identity": validator_identity.to_payload(),
@@ -133,22 +188,47 @@ class IWAPClient:
             "validator_snapshot": validator_snapshot.to_payload(),
         }
         from autoppia_web_agents_subnet.platform.utils.iwa_core import log_iwap_phase
+        from autoppia_web_agents_subnet.validator.config import TESTING
 
-        log_iwap_phase("start_round", f"Preparing request for validator_round_id={validator_round.validator_round_id} round_number={validator_round.round_number}", level="debug")
-        return await self._post("/api/v1/validator-rounds/start", payload, context="start_round")
+        # In TESTING mode, automatically set force=true to bypass chain state checks
+        if TESTING:
+            force = True
+
+        log_iwap_phase(
+            "start_round", f"Preparing request for validator_round_id={validator_round.validator_round_id} round_number_in_season={validator_round.round_number_in_season} force={force}", level="debug"
+        )
+
+        # Add force as query parameter
+        url = "/api/v1/validator-rounds/start"
+        if force:
+            url += "?force=true"
+
+        return await self._post(url, payload, context="start_round")
 
     async def set_tasks(
         self,
         *,
         validator_round_id: str,
         tasks: Iterable[models.TaskIWAP],
+        force: bool = False,
     ) -> Dict[str, Any]:
         task_payloads = [task.to_payload() for task in tasks]
         payload = {"tasks": task_payloads}
         from autoppia_web_agents_subnet.platform.utils.iwa_core import log_iwap_phase
+        from autoppia_web_agents_subnet.validator.config import TESTING
 
-        log_iwap_phase("set_tasks", f"Preparing request for validator_round_id={validator_round_id} tasks={len(task_payloads)}", level="debug")
-        return await self._post(f"/api/v1/validator-rounds/{validator_round_id}/tasks", payload, context="set_tasks")
+        # In TESTING mode, automatically set force=true to bypass chain state checks
+        if TESTING:
+            force = True
+
+        log_iwap_phase("set_tasks", f"Preparing request for validator_round_id={validator_round_id} tasks={len(task_payloads)} force={force}", level="debug")
+
+        # Add force as query parameter
+        url = f"/api/v1/validator-rounds/{validator_round_id}/tasks"
+        if force:
+            url += "?force=true"
+
+        return await self._post(url, payload, context="set_tasks")
 
     async def start_agent_run(
         self,
@@ -157,6 +237,7 @@ class IWAPClient:
         agent_run: models.AgentRunIWAP,
         miner_identity: models.MinerIdentityIWAP,
         miner_snapshot: models.MinerSnapshotIWAP,
+        force: bool = False,
     ) -> Dict[str, Any]:
         payload = {
             "agent_run": agent_run.to_payload(),
@@ -164,13 +245,27 @@ class IWAPClient:
             "miner_snapshot": miner_snapshot.to_payload(),
         }
         from autoppia_web_agents_subnet.platform.utils.iwa_core import log_iwap_phase
+        from autoppia_web_agents_subnet.validator.config import TESTING
 
-        log_iwap_phase("start_agent_run", f"Preparing request for validator_round_id={validator_round_id} agent_run_id={agent_run.agent_run_id} miner_uid={miner_identity.uid}", level="debug")
-        return await self._post(
-            f"/api/v1/validator-rounds/{validator_round_id}/agent-runs/start",
-            payload,
-            context="start_agent_run",
+        # In TESTING mode, automatically set force=true to bypass chain state checks
+        if TESTING:
+            force = True
+
+        log_iwap_phase(
+            "start_agent_run", f"Preparing request for validator_round_id={validator_round_id} agent_run_id={agent_run.agent_run_id} miner_uid={miner_identity.uid} force={force}", level="debug"
         )
+
+        # Add force as query parameter
+        url = f"/api/v1/validator-rounds/{validator_round_id}/agent-runs/start"
+        if force:
+            url += "?force=true"
+
+        response = await self._post(url, payload, context="start_agent_run")
+        # Backend may return existing agent_run_id if duplicate was detected
+        # Update agent_run.agent_run_id to match what backend returned
+        if isinstance(response, dict) and "agent_run_id" in response:
+            agent_run.agent_run_id = response["agent_run_id"]
+        return response
 
     async def add_evaluation(
         self,
@@ -262,6 +357,43 @@ class IWAPClient:
                 context="add_evaluation",
             )
 
+    async def add_evaluations_batch(
+        self,
+        *,
+        validator_round_id: str,
+        agent_run_id: str,
+        evaluations: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """
+        Submit multiple evaluations in a single batch request.
+
+        This is more efficient than calling add_evaluation multiple times:
+        - Single HTTP request instead of N requests
+        - Atomic transaction (all or nothing)
+        - Reduced network overhead
+
+        Args:
+            validator_round_id: The validator round ID
+            agent_run_id: The agent run ID
+            evaluations: List of evaluation payloads, each containing:
+                - task: TaskIWAP
+                - task_solution: TaskSolutionIWAP
+                - evaluation: EvaluationIWAP
+                - evaluation_result: Dict (optional)
+
+        Returns:
+            Dict with batch results including number of evaluations created
+        """
+        from autoppia_web_agents_subnet.platform.utils.iwa_core import log_iwap_phase
+
+        log_iwap_phase("add_evaluations_batch", f"Preparing batch request for validator_round_id={validator_round_id} agent_run_id={agent_run_id} count={len(evaluations)}", level="debug")
+
+        return await self._post(
+            f"/api/v1/validator-rounds/{validator_round_id}/agent-runs/{agent_run_id}/evaluations/batch",
+            evaluations,
+            context="add_evaluations_batch",
+        )
+
     async def finish_round(
         self,
         *,
@@ -337,6 +469,49 @@ class IWAPClient:
         else:
             log_gif_event(f"Upload completed but no URL returned for evaluation_id={evaluation_id}", level="warning")
         return gif_url
+
+    async def upload_task_log(self, payload: Dict[str, Any]) -> Optional[str]:
+        """
+        Upload a per-task execution log to IWAP for S3 persistence.
+        """
+        auth_headers = self._resolve_auth_headers()
+        path = "/api/v1/task-logs"
+
+        try:
+            payload_size = len(json.dumps(payload, ensure_ascii=False))
+        except Exception:
+            payload_size = -1
+
+        async def attempt(attempt_index: int) -> httpx.Response:
+            request = self._client.build_request("POST", path, json=payload)
+            if auth_headers:
+                request.headers.update(auth_headers)
+
+            target_url = str(request.url)
+            attempt_number = attempt_index + 1
+            attempt_suffix = f" (attempt {attempt_number})" if attempt_number > 1 else ""
+
+            from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+
+            ColoredLogger.info(
+                f"IWAP | [task_log] POST {target_url} started{attempt_suffix}",
+                color=ColoredLogger.GOLD,
+            )
+            if payload_size >= 0:
+                bt.logging.debug(f"   Task log payload size: {payload_size} chars")
+
+            response = await self._client.send(request)
+            response.raise_for_status()
+            return response
+
+        response = await self._with_retry(attempt, context="upload_task_log")
+        try:
+            data = response.json()
+        except Exception:
+            data = {}
+        if isinstance(data, dict):
+            return data.get("data", {}).get("url")
+        return None
 
     async def _with_retry(
         self,
@@ -424,7 +599,7 @@ class IWAPClient:
                 bt.logging.debug(f"   Response status: {response.status_code}")
                 bt.logging.debug(f"   Response headers: {dict(response.headers)}")
                 if response.text:
-                    bt.logging.debug("   Response body (first 500 chars): " f"{response.text[:500]}")
+                    bt.logging.debug(f"   Response body (first 500 chars): {response.text[:500]}")
                 return response
             except httpx.HTTPStatusError as exc:
                 body = exc.response.text
@@ -517,7 +692,7 @@ class IWAPClient:
                 bt.logging.debug(f"   Response status: {response.status_code}")
                 bt.logging.debug(f"   Response headers: {dict(response.headers)}")
                 if response.text:
-                    bt.logging.debug("   Response body (first 500 chars): " f"{response.text[:500]}")
+                    bt.logging.debug(f"   Response body (first 500 chars): {response.text[:500]}")
                 return response
             except httpx.HTTPStatusError as exc:
                 body_text = exc.response.text
@@ -593,7 +768,7 @@ def build_miner_snapshot(
 
     image_url = _normalized_optional(getattr(handshake_payload, "agent_image", None))
     github_url = _normalized_optional(getattr(handshake_payload, "github_url", None))
-    description = _normalized_optional(getattr(handshake_payload, "agent_version", None))
+    description = None
 
     return models.MinerSnapshotIWAP(
         validator_round_id=validator_round_id,
@@ -611,7 +786,19 @@ def build_miner_snapshot(
     )
 
 
-def _sanitize_json(obj: Any) -> Any:
+_REDACT_KEYS = {
+    "gif_recording",
+    "recording",
+    "screenshot",
+    "screenshots",
+    "screenshot_before",
+    "screenshot_after",
+    "prev_html",
+    "current_html",
+}
+
+
+def _sanitize_json(obj: Any, *, _key: str | None = None) -> Any:
     """
     Recursively convert complex Python objects into JSON-serializable forms.
 
@@ -625,7 +812,14 @@ def _sanitize_json(obj: Any) -> Any:
     """
     from base64 import b64encode
 
+    if _key in _REDACT_KEYS:
+        if isinstance(obj, (str, bytes, bytearray)):
+            return f"<redacted:{_key} size={len(obj)}>"
+        return f"<redacted:{_key}>"
+
     if obj is None or isinstance(obj, (str, int, float, bool)):
+        if isinstance(obj, str) and len(obj) > 1000:
+            return obj[:1000] + f"... (truncated {len(obj)} chars)"
         return obj
 
     if isinstance(obj, (datetime, date, dtime)):
@@ -650,7 +844,7 @@ def _sanitize_json(obj: Any) -> Any:
         return [_sanitize_json(item) for item in obj]
 
     if isinstance(obj, dict):
-        return {str(k): _sanitize_json(v) for k, v in obj.items() if v is not None}
+        return {str(k): _sanitize_json(v, _key=str(k)) for k, v in obj.items() if v is not None}
 
     # Dataclasses
     if is_dataclass(obj):
@@ -662,17 +856,17 @@ def _sanitize_json(obj: Any) -> Any:
     # Pydantic BaseModel (duck-typed)
     if hasattr(obj, "model_dump"):
         try:
-            return obj.model_dump(mode="json", exclude_none=True)
+            return _sanitize_json(obj.model_dump(mode="json", exclude_none=True))
         except Exception:
             try:
-                return dict(obj)
+                return _sanitize_json(dict(obj))
             except Exception:
                 return str(obj)
 
     # Fallback: try to use __dict__
     if hasattr(obj, "__dict__"):
         try:
-            return {k: _sanitize_json(v) for k, v in vars(obj).items() if not k.startswith("_")}
+            return {k: _sanitize_json(v, _key=str(k)) for k, v in vars(obj).items() if not k.startswith("_")}
         except Exception:
             return str(obj)
 

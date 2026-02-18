@@ -10,21 +10,15 @@ import typing
 import bittensor as bt
 
 from autoppia_web_agents_subnet.base.neuron import BaseNeuron
-from autoppia_web_agents_subnet.protocol import (
-    TaskSynapse,
-    TaskFeedbackSynapse,
-    StartRoundSynapse,
-)
+from autoppia_web_agents_subnet.protocol import StartRoundSynapse
 
 
 class BaseMinerNeuron(BaseNeuron):
     """
     Base class for Bittensor miners in the Autoppia Web Agents subnet.
 
-    Exposes three endpoints:
-      - forward(TaskSynapse)            → miners return actions to solve the task
-      - forward_feedback(TaskFeedbackSynapse) → validator sends per-task feedback
-      - forward_start_round(StartRoundSynapse) → round handshake / miner metadata
+    Exposes one endpoint:
+      - forward(StartRoundSynapse) → round handshake / miner metadata
     """
 
     neuron_type: str = "MinerNeuron"
@@ -54,16 +48,6 @@ class BaseMinerNeuron(BaseNeuron):
             forward_fn=self.forward,
             blacklist_fn=self.blacklist,
             priority_fn=self.priority,
-        )
-        self.axon.attach(
-            forward_fn=self.forward_feedback,
-            blacklist_fn=self.blacklist_feedback,
-            priority_fn=self.priority_feedback,
-        )
-        self.axon.attach(
-            forward_fn=self.forward_start_round,
-            blacklist_fn=self.blacklist_start_round,
-            priority_fn=self.priority_start_round,
         )
         bt.logging.info(f"Axon created: {self.axon}")
 
@@ -150,30 +134,7 @@ class BaseMinerNeuron(BaseNeuron):
 
     # ─────────────────────── Blacklists ───────────────────────
 
-    async def blacklist(self, synapse: TaskSynapse) -> typing.Tuple[bool, str]:
-        return await self._common_blacklist(synapse)
-
-    async def blacklist_feedback(
-        self, synapse: TaskFeedbackSynapse
-    ) -> typing.Tuple[bool, str]:
-        return await self._common_blacklist(synapse)
-
-    async def blacklist_start_round(
-        self, synapse: StartRoundSynapse
-    ) -> typing.Tuple[bool, str]:
-        bt.logging.info("🔍 blacklist_start_round called - synapse received!")
-        result = await self._common_blacklist(synapse)
-        bt.logging.info(f"🔍 blacklist_start_round result: blacklisted={result[0]}, reason='{result[1]}'")
-        return result
-
-    async def _common_blacklist(
-        self,
-        synapse: typing.Union[TaskSynapse, TaskFeedbackSynapse, StartRoundSynapse],
-    ) -> typing.Tuple[bool, str]:
-        """
-        Shared blacklist logic used by forward, feedback, and start_round.
-        Returns a tuple: (bool, str).
-        """
+    async def blacklist(self, synapse: StartRoundSynapse) -> typing.Tuple[bool, str]:
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
             bt.logging.warning("Received a request without a dendrite or hotkey.")
             return True, "Missing dendrite or hotkey"
@@ -210,26 +171,7 @@ class BaseMinerNeuron(BaseNeuron):
 
     # ─────────────────────── Priority ───────────────────────
 
-    async def priority(self, synapse: TaskSynapse) -> float:
-        return await self._common_priority(synapse)
-
-    async def priority_feedback(self, synapse: TaskFeedbackSynapse) -> float:
-        return await self._common_priority(synapse)
-
-    async def priority_start_round(self, synapse: StartRoundSynapse) -> float:
-        bt.logging.info("🔍 priority_start_round called - calculating priority")
-        priority = await self._common_priority(synapse)
-        bt.logging.info(f"🔍 priority_start_round result: priority={priority}")
-        return priority
-
-    async def _common_priority(
-        self,
-        synapse: typing.Union[TaskSynapse, TaskFeedbackSynapse, StartRoundSynapse],
-    ) -> float:
-        """
-        Shared priority logic used by forward, feedback, and start_round.
-        Returns a float indicating the priority value.
-        """
+    async def priority(self, synapse: StartRoundSynapse) -> float:
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
             bt.logging.warning("Received a request without a dendrite or hotkey.")
             return 0.0

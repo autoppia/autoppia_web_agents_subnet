@@ -42,7 +42,7 @@ Each round follows these steps (see `neurons/validator.py`):
 
 1. **Initialization & Task Generation**
    - `RoundManager.start_new_round()` anchors the round start, using `ROUND_SIZE_EPOCHS` (0.2 epochs by default in testing: ~14.4 min).
-   - Tasks are pre-generated (`PRE_GENERATED_TASKS`, 3 in testing) via `get_task_collection_interleaved`.
+   - Tasks are generated once per season (`TASKS_PER_SEASON`, 1 in testing) in Round 1 and reused for all rounds in that season. Tasks are distributed round-robin across all demo projects.
    - IWAP identities are registered (`IWAPClient.start_round`).
 
 2. **Phase 1 – Handshake**
@@ -105,7 +105,7 @@ All IWAP requests include validator-hotkey signature headers (set in `platform/c
 
 **Aggregation & Settlement**:
 - At `FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION`, the validator fetches peer CIDs (`aggregate_scores_from_commitments`) and averages scores if stake thresholds are met (`MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO`). A final re-fetch is performed just before calculating weights to ensure all commits are included, and an immutable snapshot of consensus data is used for both weight calculation and IWAP submission to guarantee consistency.
-- If all scores ≤ 0, or no miners responded, on-chain weights burn to `BURN_UID` with explanatory logs.
+- If all scores ≤ 0, or no miners responded, or `BURN_AMOUNT_PERCENTAGE=1`, on-chain weights burn to `BURN_UID`. Otherwise `BURN_AMOUNT_PERCENTAGE` (0-1) determines how much is burned vs. rewarded to miners.
 
 ---
 
@@ -141,7 +141,7 @@ It scrapes the canonical start/end markers (`🚦 Starting Round`, `✅ Round co
 3. Waits `block_delay × seconds_per_block` (default 2 × 12s = 24s).
 4. Runs `report.sh` for the round; renders HTML + text email (SMTP config uses `.env` or `REPORT_MONITOR_*` variables).
 5. Optional LLM command (`REPORT_MONITOR_LLM_COMMAND`) enriches the email.
-6. **Codex integration**: after emailing, it streams the report to `run_codex.sh` (see below) and waits for Codex to finish before clearing the round.
+6. **Codex integration**: after emailing, it streams the report to `run_codex.sh` (see below) and waits for Codex to finish before clearing the round. This is **disabled by default** unless `REPORT_MONITOR_RUN_CODEX=true`.
 
 ### Alerts
 `python scripts/validator/utils/alert_admins.py` lets Codex or humans dispatch additional notifications if a round requires attention beyond the automated email.
@@ -158,6 +158,11 @@ Launches Codex with full context:
 scripts/validator/reporting/run_codex.sh --round 598 <<'EOF'
 …report output…
 EOF
+```
+
+By default it does nothing unless you set:
+```bash
+export REPORT_MONITOR_RUN_CODEX=true
 ```
 
 Behaviour:

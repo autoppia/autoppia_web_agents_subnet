@@ -24,9 +24,7 @@ from autoppia_web_agents_subnet.base.utils.config import check_config, add_args,
 from autoppia_web_agents_subnet.base.utils.misc import ttl_get_block
 import time
 import traceback
-import requests
 import re
-from autoppia_web_agents_subnet import version_url
 from autoppia_web_agents_subnet import __version__, __least_acceptable_version__, __spec_version__
 
 
@@ -264,25 +262,8 @@ class BaseNeuron(ABC):
         )
 
     def parse_versions(self):
+        # No network version check: validators should not block startup on an
+        # external request. Local package versions are the source of truth.
         self.version = __version__
         self.least_acceptable_version = __least_acceptable_version__
-
-        bt.logging.info("Parsing versions...")
-        response = requests.get(version_url)
-        bt.logging.info(f"Response: {response.status_code}")
-        if response.status_code == 200:
-            content = response.text
-
-            version_pattern = r"__version__\s*=\s*['\"]([^'\"]+)['\"]"
-            least_acceptable_version_pattern = r"__least_acceptable_version__\s*=\s*['\"]([^'\"]+)['\"]"
-
-            try:
-                version = re.search(version_pattern, content).group(1)
-                least_acceptable_version = re.search(least_acceptable_version_pattern, content).group(1)
-            except AttributeError as e:
-                bt.logging.error(f"While parsing versions got error: {e}")
-                return
-
-            self.version = version
-            self.least_acceptable_version = least_acceptable_version
         return

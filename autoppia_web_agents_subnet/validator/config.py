@@ -1,122 +1,237 @@
-import os
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
-
-# Shared env helpers
-from autoppia_web_agents_subnet.utils.env import (  # noqa: E402
-    _str_to_bool,
-    _normalized,
+from autoppia_web_agents_subnet.utils.env import (
+    _env_str,
+    _env_bool,
     _env_int,
     _env_float,
 )
 
-# ═══════════════════════════════════════════════════════════════════════════
-# ENVIRONMENT MODE
-# ═══════════════════════════════════════════════════════════════════════════
+import os
 
-TESTING = _str_to_bool(os.getenv("TESTING", "false"))
+TESTING = _env_bool("TESTING", False)
 
-# ── Burn Mechanism ───────────────────────────────────────────────────────────
+
+def _env_float_prefer_new(
+    primary_name: str,
+    legacy_name: str,
+    default: float,
+    test_default: float | None = None,
+) -> float:
+    if os.getenv(primary_name) is not None:
+        return _env_float(primary_name, default, test_default=test_default)
+    if TESTING and os.getenv(f"TEST_{primary_name}") is not None:
+        return _env_float(primary_name, default, test_default=test_default)
+    return _env_float(legacy_name, default, test_default=test_default)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# BURN CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════
+# BURN_AMOUNT_PERCENTAGE: 0.0-1.0 (qué fracción se quema, el resto premia a miners)
+# 1.0 = quemar todo. 0.9 = 90% burn, 10% a winner. Igual que en main.
 BURN_UID = _env_int("BURN_UID", 5)
-# Default 1.0 = 100% burn, 0% to winner (todo a burn cuando pones 1)
-BURN_AMOUNT_PERCENTAGE = _env_float("BURN_AMOUNT_PERCENTAGE", 1.0)
+BURN_AMOUNT_PERCENTAGE = _env_float("BURN_AMOUNT_PERCENTAGE", 0.9)
+BURN_ALL = _env_bool("BURN_ALL", False)
+if BURN_ALL:
+    BURN_AMOUNT_PERCENTAGE = 1.0
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# TESTING CONFIGURATION (Fast iterations for development)
-# ═══════════════════════════════════════════════════════════════════════════
-if TESTING:
-    # ── Round Structure ──────────────────────────────────────────────────────
-    # Short rounds for rapid testing (~25 minutes per round)
-    ROUND_SIZE_EPOCHS = _env_float("TEST_ROUND_SIZE_EPOCHS", 0.347)
-    SAFETY_BUFFER_EPOCHS = _env_float("TEST_SAFETY_BUFFER_EPOCHS", 0.02)
-    AVG_TASK_DURATION_SECONDS = _env_int("TEST_AVG_TASK_DURATION_SECONDS", 300)
-    PRE_GENERATED_TASKS = _env_int("TEST_PRE_GENERATED_TASKS", 3)
-    DZ_STARTING_BLOCK = _env_int("TEST_DZ_STARTING_BLOCK", 6949035)  # Synced with PROD
-
-    # ── Round Phase Timing (all absolute % of total round) ──────────────────
-    # Stop task evaluation and upload to IPFS at this fraction
-    STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION = 0.65
-    # Fetch IPFS payloads and calculate consensus weights at this fraction
-    FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION = 0.75
-
-    # ── Late Start Protection ────────────────────────────────────────────────
-    # Skip round only if started when >95% complete (very permissive for testing)
-    # Allow overriding via env var for local tuning.
-    SKIP_ROUND_IF_STARTED_AFTER_FRACTION = _env_float("SKIP_ROUND_IF_STARTED_AFTER_FRACTION", 0.95)
-
-    # ── Consensus Participation Requirements ─────────────────────────────────
-    # Testing: No stake required (0 τ) - anyone can participate
-    MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO = 0.0
-    IWAP_API_BASE_URL = os.getenv("IWAP_API_BASE_URL", "https://dev-api-leaderboard.autoppia.com")
-
-# ═══════════════════════════════════════════════════════════════════════════
-# PRODUCTION CONFIGURATION (4.8-hour rounds, conservative)
-# ═══════════════════════════════════════════════════════════════════════════
-else:
-    # ── Round Structure ──────────────────────────────────────────────────────
-    # Production rounds (~3.6 hours) - 3 epochs for optimal balance
-    ROUND_SIZE_EPOCHS = _env_float("ROUND_SIZE_EPOCHS", 3.0)
-    SAFETY_BUFFER_EPOCHS = _env_float("SAFETY_BUFFER_EPOCHS", 0.5)
-    AVG_TASK_DURATION_SECONDS = _env_int("AVG_TASK_DURATION_SECONDS", 150)
-    # Increased default tasks for production to extend execution closer to the
-    # reserved consensus window. Previous default was 75; 2.5x -> ~188.
-    # Environment variable PRE_GENERATED_TASKS still takes precedence.
-    PRE_GENERATED_TASKS = _env_int("PRE_GENERATED_TASKS", 75)
-    DZ_STARTING_BLOCK = _env_int("DZ_STARTING_BLOCK", 7084250)
-
-    # ── Round Phase Timing (all absolute % of total round) ──────────────────
-    # Stop task evaluation and upload to IPFS at this fraction
-    STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION = 0.90
-    # Fetch IPFS payloads and calculate consensus weights at this fraction
-    FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION = 0.95
-
-    # ── Late Start Protection ────────────────────────────────────────────────
-    # Skip round if started when >30% complete (conservative for production)
-    # Allow overriding via env var for operators who want to be more permissive.
-    SKIP_ROUND_IF_STARTED_AFTER_FRACTION = _env_float("SKIP_ROUND_IF_STARTED_AFTER_FRACTION", 0.30)
-
-    # ── Consensus Participation Requirements ─────────────────────────────────
-    # Production: Minimum 10k τ stake required to be included in consensus calculations
-    MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO = 10000.0
-    IWAP_API_BASE_URL = os.getenv("IWAP_API_BASE_URL", "https://api-leaderboard.autoppia.com")
-# ═══════════════════════════════════════════════════════════════════════════
-# SHARED CONFIGURATION (same for all modes)
+# SHARED CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
 
-# ── Task Execution Settings ──────────────────────────────────────────────────
-PROMPTS_PER_USECASE = 1
-MAX_ACTIONS_LENGTH = 60
-TIMEOUT = 120
-FEEDBACK_TIMEOUT = 60
+SEASON_SIZE_EPOCHS = _env_float("SEASON_SIZE_EPOCHS", 280.0, test_default=2)
+ROUND_SIZE_EPOCHS = _env_float("ROUND_SIZE_EPOCHS", 4.0, test_default=0.5)
+MINIMUM_START_BLOCK = _env_int("MINIMUM_START_BLOCK", 7572327, test_default=1000)
+ROUND_START_UNTIL_FRACTION = _env_float("ROUND_START_UNTIL_FRACTION", 0.3, test_default=0.6)
+MAXIMUM_EVALUATION_TIME = _env_float("MAXIMUM_EVALUATION_TIME", 30.0, test_default=6.0)  # minutes
+MAXIMUM_CONSENSUS_TIME = _env_float("MAXIMUM_CONSENSUS_TIME", 15.0, test_default=3.0)  # minutes
+SAFETY_BUFFER_EPOCHS = _env_float("SAFETY_BUFFER_EPOCHS", 0.02, test_default=0.02)
+AVG_TASK_DURATION_SECONDS = _env_float("AVG_TASK_DURATION_SECONDS", 600.0, test_default=600.0)
+STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION = _env_float("STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION", 0.90, test_default=0.65)
+FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION = _env_float("FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION", 0.95, test_default=0.75)
+SKIP_ROUND_IF_STARTED_AFTER_FRACTION = _env_float("SKIP_ROUND_IF_STARTED_AFTER_FRACTION", 0.30, test_default=0.95)
 
-# ── Dynamic Task Generation (v1, v2, v3 features) ──────────────────────────────
-# Controls whether tasks are generated with dynamic features (v1: seed, v2: DB selection, v3: structure)
-# Note: Seeds are ALWAYS sent in task URLs regardless of this setting
-ENABLE_DYNAMIC = _str_to_bool(os.getenv("ENABLE_DYNAMIC", "true"))
-SHOULD_RECORD_GIF = _str_to_bool(os.getenv("SHOULD_RECORD_GIF", "true"))
+# TASKS_PER_SEASON: Number of tasks to generate for each season (generated only in round 1)
+# Tasks are distributed round-robin across all demo projects (1 task per project per cycle)
+TASKS_PER_SEASON = _env_int("TASKS_PER_SEASON", 100, test_default=3)
+PROMPTS_PER_USE_CASE = _env_int("PROMPTS_PER_USE_CASE", 1)
+CONCURRENT_EVALUATION_NUM = _env_int("CONCURRENT_EVALUATION_NUM", 5)
+SCREENING_TASKS_FOR_EARLY_STOP = _env_int("SCREENING_TASKS_FOR_EARLY_STOP", 10)
+AGENT_MAX_STEPS = _env_int("AGENT_MAX_STEPS", 12, test_default=12)
+AGENT_STEP_TIMEOUT = _env_int("AGENT_STEP_TIMEOUT", 10)  # seconds
+MAX_ACTIONS_LENGTH = _env_int("MAX_ACTIONS_LENGTH", 30, test_default=30)
+TIMEOUT = _env_float("TIMEOUT", 180.0, test_default=180.0)  # seconds
+FEEDBACK_TIMEOUT = _env_float("FEEDBACK_TIMEOUT", 30.0, test_default=30.0)  # seconds
+SHOULD_RECORD_GIF = _env_bool("SHOULD_RECORD_GIF", True)
 
-# ── Scoring Weights ──────────────────────────────────────────────────────────
-EVAL_SCORE_WEIGHT = float(os.getenv("EVAL_SCORE_WEIGHT", "0.995")) 
-# TIME_WEIGHT: Small weight to incorporate execution time as tiebreaker in score calculation
-TIME_WEIGHT = float(os.getenv("TIME_WEIGHT", "0.005")) 
+COST_LIMIT_ENABLED = _env_bool("COST_LIMIT_ENABLED", True)
+MAX_TASK_DOLLAR_COST = _env_float_prefer_new("MAX_TASK_DOLLAR_COST", "COST_LIMIT_VALUE", 0.05)  # USD
+# Backward-compatible alias.
+COST_LIMIT_VALUE = MAX_TASK_DOLLAR_COST
 
-# ── Validator Identity (IWAP) ────────────────────────────────────────────────
-VALIDATOR_NAME = _normalized(os.getenv("VALIDATOR_NAME"))
-VALIDATOR_IMAGE = _normalized(os.getenv("VALIDATOR_IMAGE"))
+# Stop evaluating a miner after this many tasks that exceed the per-task cost cap.
+# 0 disables this guard.
+_legacy_cost_limit_streak = int(os.getenv("COST_LIMIT_EARLY_STOP_STREAK", "10") or "10")
+COST_LIMIT_EXCEED_COUNT = _env_int("COST_LIMIT_EXCEED_COUNT", _legacy_cost_limit_streak)
+# Backward-compatible alias (deprecated; keep for rollout compatibility only).
+COST_LIMIT_EARLY_STOP_STREAK = COST_LIMIT_EXCEED_COUNT
+
+MAXIMUM_EXECUTION_TIME = _env_float("MAXIMUM_EXECUTION_TIME", 90.0)  # seconds
+
+
+def _env_float_multi_prefer_new(
+    primary_name: str,
+    legacy_names: list[str],
+    default: float,
+    test_default: float | None = None,
+) -> float:
+    if os.getenv(primary_name) is not None:
+        return _env_float(primary_name, default, test_default=test_default)
+    if TESTING and os.getenv(f"TEST_{primary_name}") is not None:
+        return _env_float(f"TEST_{primary_name}", default, test_default=test_default)
+    for legacy_name in legacy_names:
+        if os.getenv(legacy_name) is not None:
+            return _env_float(legacy_name, default, test_default=test_default)
+    return _env_float(primary_name, default, test_default=test_default)
+
+
+REWARD_TASK_DOLLAR_COST_NORMALIZATOR = _env_float_multi_prefer_new(
+    "REWARD_TASK_DOLLAR_COST_NORMALIZATOR",
+    ["REWARD_DOLLAR_COST_NORMALIZATOR", "MAXIMUM_TOKEN_COST"],
+    0.05,
+)  # USD
+# Backward-compatible aliases.
+REWARD_DOLLAR_COST_NORMALIZATOR = REWARD_TASK_DOLLAR_COST_NORMALIZATOR
+MAXIMUM_TOKEN_COST = REWARD_TASK_DOLLAR_COST_NORMALIZATOR
+
+EVAL_SCORE_WEIGHT = _env_float("EVAL_SCORE_WEIGHT", 1.0)
+TIME_WEIGHT = _env_float("TIME_WEIGHT", 0.0)
+COST_WEIGHT = _env_float("COST_WEIGHT", 0.0)
+
+SAME_SOLUTION_PENALTY = _env_float("SAME_SOLUTION_PENALTY", 0.0)
+SAME_SOLUTION_SIM_THRESHOLD = _env_float("SAME_SOLUTION_SIM_THRESHOLD", 0.90)
+
+# Miner submission policy:
+# Require an explicit git ref (branch/tag) or a pinned commit URL, instead of
+# accepting bare repo URLs (which implicitly track the default branch).
+REQUIRE_MINER_GITHUB_REF = _env_bool("REQUIRE_MINER_GITHUB_REF", True)
+
+# Evaluation resource controls:
+# 1) Per-round stake window: only handshake/evaluate the top N miners by stake.
+#    Set to 0 to disable.
+MAX_MINERS_PER_ROUND_BY_STAKE = _env_int("MAX_MINERS_PER_ROUND_BY_STAKE", 30)
+# 2) Anti-sybil controls during handshake: cap unique active miners sharing the same coldkey/repo.
+#    REPO caps are applied per season (resets when a new season starts).
+MAX_MINERS_PER_COLDKEY = _env_int("MAX_MINERS_PER_COLDKEY", 1)
+MAX_MINERS_PER_REPO = _env_int("MAX_MINERS_PER_REPO", 2)
+# 2) Cooldown: minimum number of rounds between evaluations for the same miner.
+#    Set to 0 to disable.
+EVALUATION_COOLDOWN_ROUNDS = _env_int("EVALUATION_COOLDOWN_ROUNDS", 2)
+# Dynamic cooldown (stake + score aware):
+USE_DYNAMIC_EVALUATION_COOLDOWN = _env_bool("USE_DYNAMIC_EVALUATION_COOLDOWN", True)
+DYNAMIC_EVALUATION_COOLDOWN_MIN_ROUNDS = _env_int("DYNAMIC_EVALUATION_COOLDOWN_MIN_ROUNDS", 4)
+DYNAMIC_EVALUATION_COOLDOWN_MAX_ROUNDS = _env_int("DYNAMIC_EVALUATION_COOLDOWN_MAX_ROUNDS", 12)
+DYNAMIC_EVALUATION_COOLDOWN_STAKE_REFERENCE_ALPHA = _env_float("DYNAMIC_EVALUATION_COOLDOWN_STAKE_REFERENCE_ALPHA", 10000.0)
+DYNAMIC_EVALUATION_COOLDOWN_STAKE_BONUS = _env_float("DYNAMIC_EVALUATION_COOLDOWN_STAKE_BONUS", 0.70)
+DYNAMIC_EVALUATION_COOLDOWN_SCORE_SMOOTH_EPS = _env_float("DYNAMIC_EVALUATION_COOLDOWN_SCORE_SMOOTH_EPS", 1e-6)
+
+# Early stop: abort evaluating a miner when it can no longer beat the current best
+# possible average reward (winner-takes-all settlement), saving time and cost.
+EARLY_STOP_BEHIND_BEST = _env_bool("EARLY_STOP_BEHIND_BEST", True)
+
+VALIDATOR_NAME = _env_str("VALIDATOR_NAME")
+VALIDATOR_IMAGE = _env_str("VALIDATOR_IMAGE")
+IWAP_VALIDATOR_AUTH_MESSAGE = _env_str("IWAP_VALIDATOR_AUTH_MESSAGE", "I am a honest validator")
 MAX_MINER_AGENT_NAME_LENGTH = _env_int("MAX_MINER_AGENT_NAME_LENGTH", 12)
+MIN_MINER_STAKE_TAO = _env_float("MIN_MINER_STAKE_TAO", 100.0, test_default=0.0)
+IPFS_API_URL = _env_str("IPFS_API_URL", "http://ipfs.metahash73.com:5001/api/v0")
+# Comma-separated gateways for fetch fallback
+IPFS_GATEWAYS = [gw.strip() for gw in (_env_str("IPFS_GATEWAYS", "https://ipfs.io/ipfs,https://cloudflare-ipfs.com/ipfs") or "").split(",") if gw.strip()]
 
-# ── IWAP Leaderboard API ─────────────────────────────────────────────────────
 
-IWAP_VALIDATOR_AUTH_MESSAGE = _normalized(os.getenv("IWAP_VALIDATOR_AUTH_MESSAGE", "I am a honest validator"))
+# ═══════════════════════════════════════════════════════════════════════════
+# SETTLEMENT CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════
+
+SETTLEMENT_FRACTION = _env_float("SETTLEMENT_FRACTION", 0.95, test_default=0.8)
+LAST_WINNER_BONUS_PCT = _env_float("LAST_WINNER_BONUS_PCT", 0.05)
 
 
-# ── Distributed Consensus (IPFS + Blockchain) ────────────────────────────────
-# Enabled by default, can be disabled via .env (works in both testing and production)
-ENABLE_DISTRIBUTED_CONSENSUS = _str_to_bool(os.getenv("ENABLE_DISTRIBUTED_CONSENSUS", "true"))
+# ═══════════════════════════════════════════════════════════════════════════
+# SANDBOX / DEPLOYMENT CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════
 
-# ── IPFS Storage ─────────────────────────────────────────────────────────────
-IPFS_API_URL = os.getenv("IPFS_API_URL", "http://ipfs.metahash73.com:5001/api/v0")
-IPFS_GATEWAYS = [g.strip() for g in (os.getenv("IPFS_GATEWAYS", "https://ipfs.io/ipfs,https://cloudflare-ipfs.com/ipfs,https://gateway.pinata.cloud/ipfs") or "").split(",") if g.strip()]
+SANDBOX_NETWORK_NAME = _env_str("SANDBOX_NETWORK_NAME", "sandbox-network")
+SANDBOX_GATEWAY_IMAGE = _env_str("SANDBOX_GATEWAY_IMAGE", "autoppia-sandbox-gateway-image")
+
+# Multi-validator support on the same machine:
+# Each validator should run its own gateway container to avoid name/port/token conflicts.
+#
+# Recommended:
+# - Set `SANDBOX_GATEWAY_INSTANCE` to a unique string per validator process.
+# - Set `SANDBOX_GATEWAY_PORT_OFFSET` to a unique integer per validator process.
+#
+# You can always override `SANDBOX_GATEWAY_HOST` / `SANDBOX_GATEWAY_PORT` explicitly.
+_SANDBOX_GATEWAY_INSTANCE = (_env_str("SANDBOX_GATEWAY_INSTANCE", "") or "").strip()
+
+if (os.getenv("SANDBOX_GATEWAY_HOST") or "").strip():
+    SANDBOX_GATEWAY_HOST = _env_str("SANDBOX_GATEWAY_HOST", "sandbox-gateway")
+else:
+    _base = "sandbox-gateway"
+    SANDBOX_GATEWAY_HOST = f"{_base}-{_SANDBOX_GATEWAY_INSTANCE}" if _SANDBOX_GATEWAY_INSTANCE else _base
+
+if (os.getenv("SANDBOX_GATEWAY_PORT") or "").strip():
+    SANDBOX_GATEWAY_PORT = _env_int("SANDBOX_GATEWAY_PORT", 9000)
+else:
+    _offset = _env_int("SANDBOX_GATEWAY_PORT_OFFSET", 0)
+    SANDBOX_GATEWAY_PORT = 9000 + int(_offset)
+SANDBOX_AGENT_IMAGE = _env_str("SANDBOX_IMAGE", "autoppia-sandbox-agent-image")
+SANDBOX_AGENT_PORT = _env_int("SANDBOX_AGENT_PORT", 8000)
+SANDBOX_CLONE_TIMEOUT = _env_int("SANDBOX_CLONE_TIMEOUT", 90)
+# Debug/testing: keep agent containers (and clone dirs) after evaluation so you can inspect
+# logs via `docker logs` and examine the cloned repo. Default is False for safety/cleanup.
+SANDBOX_KEEP_AGENT_CONTAINERS = _env_bool("SANDBOX_KEEP_AGENT_CONTAINERS", False)
+if TESTING:
+    SANDBOX_KEEP_AGENT_CONTAINERS = _env_bool("TEST_SANDBOX_KEEP_AGENT_CONTAINERS", SANDBOX_KEEP_AGENT_CONTAINERS)
+
+# Debug/testing: enable miner agent diagnostics (logged to container stdout).
+# Keep this off by default to avoid noisy logs in production.
+SANDBOX_AGENT_LOG_ERRORS = _env_bool("SANDBOX_AGENT_LOG_ERRORS", False)
+SANDBOX_AGENT_LOG_DECISIONS = _env_bool("SANDBOX_AGENT_LOG_DECISIONS", False)
+SANDBOX_AGENT_RETURN_METRICS = _env_bool("SANDBOX_AGENT_RETURN_METRICS", False)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CONSENSUS CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════
+
+CONSENSUS_VERSION = _env_int("CONSENSUS_VERSION", 1)
+ENABLE_DISTRIBUTED_CONSENSUS = _env_bool(
+    "ENABLE_DISTRIBUTED_CONSENSUS",
+    True,
+    test_default=True,
+)
+MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO = _env_float(
+    "MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO",
+    10000.0,
+    test_default=0.0,
+)
+UPLOAD_TASK_LOGS = _env_bool("UPLOAD_TASK_LOGS", False, test_default=True)
+IWAP_API_BASE_URL = _env_str("IWAP_API_BASE_URL", "https://api-leaderboard.autoppia.com" if not TESTING else "https://dev-api-leaderboard.autoppia.com")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CONFIG VALIDATION
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def validate_config():
+    import sys
+    import bittensor as bt
+
+    if not VALIDATOR_NAME or not VALIDATOR_IMAGE:
+        bt.logging.error("VALIDATOR_NAME and VALIDATOR_IMAGE must be set in the environment before starting the validator.")
+        sys.exit(1)
+
+
+validate_config()

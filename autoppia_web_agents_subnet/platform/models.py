@@ -43,7 +43,8 @@ class ValidatorSnapshotIWAP:
 @dataclass
 class ValidatorRoundIWAP:
     validator_round_id: str
-    round_number: int
+    season_number: int
+    round_number_in_season: int
     validator_uid: int
     validator_hotkey: str
     validator_coldkey: Optional[str]
@@ -115,7 +116,6 @@ class TaskIWAP:
     prompt: str
     specifications: Dict[str, Any]
     tests: List[Dict[str, Any]]
-    relevant_data: Dict[str, Any]
     use_case: Dict[str, Any]
     web_project_id: Optional[str] = None
     web_version: Optional[str] = None
@@ -138,7 +138,6 @@ class TaskIWAP:
         data = asdict(self)
         data["specifications"] = make_json_serializable(self.specifications or {})
         data["tests"] = make_json_serializable(self.tests or [])
-        data["relevant_data"] = make_json_serializable(self.relevant_data or {})
         data["use_case"] = make_json_serializable(self.use_case or {})
         # All fields are now clean, just serialize and return
         return _drop_nones(data)
@@ -202,6 +201,7 @@ class EvaluationResultIWAP:
     task_id: str
     task_solution_id: str
     validator_uid: int
+    validator_hotkey: str  # Required field for Evaluation model
     miner_uid: Optional[int]
     eval_score: float  # Evaluation score (tests/actions only, 0-1)
     reward: float  # Reward value (eval_score + time_score, used for consensus)
@@ -212,6 +212,8 @@ class EvaluationResultIWAP:
     stats: Optional[Dict[str, Any]] = None
     gif_recording: Optional[str] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+    # LLM usage tracking (single source of truth)
+    llm_usage: Optional[List[Dict[str, Any]]] = None  # Per-call usage [{provider, model?, tokens?, cost?}]
 
     def to_payload(self) -> Dict[str, Any]:
         data = asdict(self)
@@ -295,7 +297,7 @@ class FinishRoundIWAP:
             "summary": self.summary or {},
             "agent_runs": [run.to_payload() for run in self.agent_runs],
         }
-        
+
         # Add new fields if present
         if self.round_metadata:
             payload["round"] = self.round_metadata.to_payload()
@@ -307,7 +309,7 @@ class FinishRoundIWAP:
             payload["ipfs_uploaded"] = self.ipfs_uploaded
         if self.ipfs_downloaded:
             payload["ipfs_downloaded"] = self.ipfs_downloaded
-            
+
         # Deprecated fields (only included if populated for backward compatibility)
         if self.winners:
             payload["winners"] = [winner.to_payload() for winner in self.winners]
@@ -315,5 +317,5 @@ class FinishRoundIWAP:
             payload["winner_scores"] = self.winner_scores
         if self.weights:
             payload["weights"] = self.weights
-            
+
         return payload

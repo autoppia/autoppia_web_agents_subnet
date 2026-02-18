@@ -17,6 +17,7 @@ from autoppia_web_agents_subnet.validator.config import (
 
 from autoppia_iwa.src.data_generation.tasks.classes import Task
 from autoppia_iwa.src.evaluation.stateful_evaluator import AsyncStatefulEvaluator, ScoreDetails
+from autoppia_iwa.src.web_agents.classes import TaskSolution, sanitize_snapshot_html
 
 try:
     from autoppia_iwa.src.web_agents.apified_iterative_agent import (  # type: ignore
@@ -28,22 +29,15 @@ except Exception:  # pragma: no cover - compatibility with older IWA layouts
             ApifiedWebAgent,
         )
     except Exception:
+
         class ApifiedWebAgent:  # type: ignore[valid-type]
             def __init__(self, *_, **__):  # pragma: no cover
-                raise RuntimeError(
-                    "ApifiedWebAgent unavailable: configure OPENAI_API_KEY/LLM_PROVIDER in IWA "
-                    "environment or install web_agents module."
-                )
+                raise RuntimeError("ApifiedWebAgent unavailable: configure OPENAI_API_KEY/LLM_PROVIDER in IWA environment or install web_agents module.")
 
-try:
-    from autoppia_iwa.src.execution.actions.base import BaseAction
-except Exception:  # pragma: no cover
-    BaseAction = Any
 
 # Compatibility alias for legacy imports.
 ApifiedWebCUA = ApifiedWebAgent
 WebAgentClass = ApifiedWebAgent
-from autoppia_iwa.src.web_agents.classes import TaskSolution, sanitize_snapshot_html
 
 
 def _to_screenshot_b64(raw: Any) -> str | None:
@@ -55,9 +49,11 @@ def _to_screenshot_b64(raw: Any) -> str | None:
         return base64.b64encode(bytes(raw)).decode("ascii")
     return None
 
+
 try:
     from autoppia_iwa.src.evaluation.shared.utils import make_gif_from_screenshots
 except Exception:
+
     def make_gif_from_screenshots(frames: list[str]) -> str | None:  # pragma: no cover - env-specific compatibility
         return None
 
@@ -81,7 +77,6 @@ def _augment_demo_web_url(url: str, *, web_agent_id: str, validator_id: str) -> 
         return urlunsplit(split._replace(query=urlencode(q, doseq=True)))
     except Exception:
         return url
-
 
 
 async def evaluate_with_stateful_cua(
@@ -149,10 +144,7 @@ async def evaluate_with_stateful_cua(
 
         while step_index < max_steps and not bool(final_score.success):
             if time.time() - start_ts >= MAXIMUM_EXECUTION_TIME:
-                bt.logging.warning(
-                    f"[stateful_cua_eval] miner {uid} hard timeout reached for task {getattr(task, 'id', '?')}: "
-                    f"{time.time() - start_ts:.2f}s >= {MAXIMUM_EXECUTION_TIME:.2f}s"
-                )
+                bt.logging.warning(f"[stateful_cua_eval] miner {uid} hard timeout reached for task {getattr(task, 'id', '?')}: {time.time() - start_ts:.2f}s >= {MAXIMUM_EXECUTION_TIME:.2f}s")
                 break
 
             snapshot = step_result.snapshot
@@ -172,7 +164,6 @@ async def evaluate_with_stateful_cua(
                     step_index=step_index,
                     history=history,
                 )
-                actions = actions if isinstance(actions, list) else []
             except Exception as exc:
                 bt.logging.warning(f"[stateful_cua_eval] miner {uid} /act failed: {exc}")
                 actions = []
@@ -213,10 +204,7 @@ async def evaluate_with_stateful_cua(
             step_index += 1
 
             if time.time() - start_ts >= MAXIMUM_EXECUTION_TIME:
-                bt.logging.warning(
-                    f"[stateful_cua_eval] miner {uid} hard timeout reached after step {step_index}: "
-                    f"{time.time() - start_ts:.2f}s >= {MAXIMUM_EXECUTION_TIME:.2f}s"
-                )
+                bt.logging.warning(f"[stateful_cua_eval] miner {uid} hard timeout reached after step {step_index}: {time.time() - start_ts:.2f}s >= {MAXIMUM_EXECUTION_TIME:.2f}s")
                 break
 
     except Exception as exc:

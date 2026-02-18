@@ -25,6 +25,7 @@ from autoppia_web_agents_subnet.platform.utils.iwa_core import (
 from autoppia_web_agents_subnet.platform.utils.round_flow import (
     start_round_flow as _utils_start_round_flow,
     finish_round_flow as _utils_finish_round_flow,
+    register_participating_miners_in_iwap as _utils_register_participating_miners_in_iwap,
 )
 from autoppia_web_agents_subnet.platform.utils.task_flow import (
     submit_task_results as _utils_submit_task_results,
@@ -60,27 +61,29 @@ class ValidatorPlatformMixin:
 
     def _generate_validator_round_id(self, *, current_block: int) -> str:
         """
-        Generate a unique validator round ID with round number.
+        Generate a unique validator round ID with season and round information.
 
-        Calculates round number via round_manager.calculate_round(current_block).
+        Format: validator_round_{season}_{round_in_season}_{hash}
+        Example: validator_round_4_6_abc123def456
         """
         rm = getattr(self, "round_manager", None)
-        if rm is None or not getattr(rm, "ROUND_BLOCK_LENGTH", 0):
+        if rm is None or not getattr(rm, "round_block_length", 0):
             raise RuntimeError("Round manager is not initialized; cannot derive validator round id")
 
-        base_block = int(getattr(rm, "minimum_start_block", 0) or 0)
-        if current_block < base_block:
-            raise RuntimeError(f"Current block {current_block} predates configured minimum start block {base_block}")
-
-        round_length = int(rm.ROUND_BLOCK_LENGTH)
+        round_length = int(rm.round_block_length)
         if round_length <= 0:
-            raise RuntimeError("ROUND_BLOCK_LENGTH must be a positive integer")
+            raise RuntimeError("round_block_length must be a positive integer")
 
-        blocks_since_start = current_block - base_block
-        round_index = blocks_since_start // round_length
-        round_number = int(round_index + 1)
+        # Calculate season and round within season
+        season_number = iwa_main.compute_season_number(current_block)
+        round_number_in_season = iwa_main.compute_round_number_in_season(
+            current_block, round_length
+        )
 
-        return iwa_main.generate_validator_round_id(round_number=round_number)
+        return iwa_main.generate_validator_round_id(
+            season_number=season_number,
+            round_number_in_season=round_number_in_season
+        )
 
     def _build_iwap_auth_headers(self) -> Dict[str, str]:
         hotkey = getattr(self.wallet.hotkey, "ss58_address", None)
@@ -123,6 +126,16 @@ class ValidatorPlatformMixin:
 
     async def _iwap_start_round(self, *, current_block: int, n_tasks: int) -> None:
         await _utils_start_round_flow(self, current_block=current_block, n_tasks=n_tasks)
+    
+    async def _iwap_register_miners(self) -> None:
+        """
+        Register all participating miners in IWAP dashboard after handshake.
+        
+        Creates records for each miner that responded to handshake:
+        - validator_round_miners (miner identity and snapshot)
+        - miner_evaluation_runs (agent run for this round)
+        """
+        await _utils_register_participating_miners_in_iwap(self)
 
     async def _iwap_submit_task_results(
         self,

@@ -3,11 +3,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import os
-import shutil
-import subprocess
-import tempfile
-from pathlib import Path
 from typing import Any, Optional, Sequence, Tuple
 
 try:
@@ -130,7 +125,7 @@ def ipfs_get_json(
     return obj, norm, h
 
 
-async def aadd_json(
+async def add_json_async(
     obj: Any,
     *,
     filename: str = "commit.json",
@@ -144,7 +139,7 @@ async def aadd_json(
     )
 
 
-async def aget_json(
+async def get_json_async(
     cid: str,
     *,
     api_url: Optional[str] = None,

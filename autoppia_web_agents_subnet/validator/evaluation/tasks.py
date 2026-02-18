@@ -1,269 +1,143 @@
-# file: autoppia_web_agents_subnet/validator/tasks.py
 """
 Task generation and processing utilities for validator.
 Handles both task generation and task data processing.
 """
+
 from __future__ import annotations
 
-import math
-import random
-from typing import List, Optional, Tuple
+import time
+from typing import List
 
 import bittensor as bt
 
-from autoppia_web_agents_subnet.validator.models import TaskWithProject, ProjectTasks
-from autoppia_web_agents_subnet.utils.random import split_tasks_evenly
-from autoppia_web_agents_subnet.protocol import TaskSynapse
-from autoppia_web_agents_subnet.validator.config import MAX_ACTIONS_LENGTH, TIMEOUT, ENABLE_DYNAMIC
+from autoppia_web_agents_subnet.validator.models import TaskWithProject
 
 # IWA (module-wrapped) imports
 from autoppia_iwa.src.demo_webs.config import demo_web_projects
 from autoppia_iwa.src.demo_webs.classes import WebProject
 from autoppia_iwa.src.data_generation.tasks.classes import Task, TaskGenerationConfig
-from autoppia_iwa.src.data_generation.tasks.pipeline import (
-    TaskGenerationPipeline,
-)
-from autoppia_iwa.src.data_generation.tasks.classes import Task as IWATask
-from autoppia_iwa.src.web_agents.classes import TaskSolution
+from autoppia_iwa.src.data_generation.tasks.pipeline import TaskGenerationPipeline
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# TASK GENERATION - Generate tasks for miners
+# TASK GENERATION - Generate tasks for agents
 # ═══════════════════════════════════════════════════════════════════════════════
 
-async def _generate_tasks_limited_use_cases(
-    project: WebProject,
-    total_tasks: int,
-    prompts_per_use_case: int,
-    num_use_cases: int,
-) -> List[Task]:
-    """
-    Generate up to `total_tasks` tasks for `project` sampling `num_use_cases` use-cases.
-    """
-    config = TaskGenerationConfig(
-        prompts_per_use_case=prompts_per_use_case,
-        generate_global_tasks=True,
-        final_task_limit=total_tasks,
-        num_use_cases=num_use_cases,
-        dynamic=ENABLE_DYNAMIC,  # Enable dynamic features (v1, v2, v3) if configured
-    )
-    pipeline = TaskGenerationPipeline(web_project=project, config=config)
-    return await pipeline.generate()
 
-
-async def get_task_collection_interleaved(
-    *,
-    prompts_per_use_case: int,
-) -> List[TaskWithProject]:
+async def _generate_task_for_project(project: WebProject, use_case_name: str) -> Task:
     """
-    Generate tasks across demo web projects and return them as an interleaved list.
-
-    Tasks are distributed evenly across projects and then interleaved using round-robin
-    to ensure variety (alternating between different projects).
+    Generate a single task for a project (1 prompt per use case).
 
     Args:
-        prompts_per_use_case: Number of prompts to generate per use case
+        project: Web project to generate task for
 
     Returns:
-        List[TaskWithProject]: Flat list of tasks already interleaved across projects
+        Single generated task
     """
-    num_projects = len(demo_web_projects)
-    total_prompts = num_projects
-
-    if total_prompts <= 0:
-        bt.logging.warning("[tasks] total_prompts <= 0 -> returning empty list")
-        return []
-
-    if num_projects == 0:
-        bt.logging.warning("[tasks] no demo_web_projects found -> returning empty list")
-        return []
-
-    # Even split total prompts; remainder distributed one-by-one from the end
-    task_distribution = split_tasks_evenly(total_prompts, num_projects)
-
-    # Heuristic: cap how many distinct use-cases we touch per project
-    use_cases_per_project = max(1, math.ceil(total_prompts / max(1, num_projects)))
-
-    bt.logging.debug(
-        f"[tasks] Generating {total_prompts} tasks across {num_projects} projects: "
-        f"distribution={task_distribution}, use_cases/project={use_cases_per_project}, "
-        f"prompts_per_use_case={prompts_per_use_case}"
+    config = TaskGenerationConfig(
+        prompts_per_use_case=1,
+        # Limit generation to a single use case to avoid N×LLM calls per project.
+        use_cases=[use_case_name],
+        # Dynamic tasks include ?seed=... in the URL (required for deterministic variants)
+        dynamic=True,
     )
+    pipeline = TaskGenerationPipeline(web_project=project, config=config)
+    tasks = await pipeline.generate()
 
-    projects_tasks: List[ProjectTasks] = []
+    if not tasks:
+        raise ValueError(f"Failed to generate task for project {project.name} (use_case={use_case_name})")
 
-    # Generate tasks for each project
-    for project, num_tasks in zip(demo_web_projects, task_distribution):
-        if num_tasks <= 0:
-            continue
-
-        try:
-            project_tasks = await _generate_tasks_limited_use_cases(
-                project=project,
-                total_tasks=num_tasks,
-                prompts_per_use_case=prompts_per_use_case,
-                num_use_cases=use_cases_per_project,
-            )
-        except Exception as e:
-            bt.logging.error(f"[tasks] generation failed for project '{getattr(project, 'name', 'unknown')}': {e}")
-            continue
-
-        if not project_tasks:
-            bt.logging.warning(f"[tasks] project '{getattr(project, 'name', 'unknown')}' produced 0 tasks.")
-            continue
-
-        # Add intra-project variety
-        random.shuffle(project_tasks)
-        projects_tasks.append(ProjectTasks(project=project, tasks=project_tasks))
-
-    if not projects_tasks:
-        bt.logging.warning("[tasks] No tasks generated in any project.")
-        return []
-
-    # Interleave tasks using round-robin across projects
-    interleaved_tasks: List[TaskWithProject] = []
-    queues = [(pt.project, list(pt.tasks)) for pt in projects_tasks if pt.tasks]
-
-    while queues:
-        for project, task_queue in list(queues):
-            if task_queue:
-                task = task_queue.pop(0)
-                interleaved_tasks.append(TaskWithProject(project=project, task=task))
-            if not task_queue:
-                queues.remove((project, task_queue))
-
-    bt.logging.debug(
-        f"[tasks] Generated {len(interleaved_tasks)} interleaved tasks "
-        f"across {len(projects_tasks)} projects"
-    )
-
-    # Apply seed to ALL task URLs (default behavior - seeds are always required)
-    # Seed range: 1-999 as per seed system specification
-    from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
-    
-    bt.logging.debug("[tasks] Ensuring all tasks have seeds in URLs (range: 1-999)")
-    for task_with_project in interleaved_tasks:
-        task = task_with_project.task
-        # Set assign_seed attribute if it exists (for compatibility)
-        if hasattr(task, 'assign_seed'):
-            task.assign_seed = True
-        
-        # Add seed to URL if not already present
-        if "?seed=" not in task.url:
-            parsed = urlparse(task.url)
-            query_params = parse_qs(parsed.query)
-            
-            # Generate a random seed if not already in URL (range: 1-999)
-            if "seed" not in query_params:
-                seed = random.randint(1, 999)
-                query_params["seed"] = [str(seed)]
-                
-                # Rebuild URL with seed
-                new_query = urlencode(query_params, doseq=True)
-                new_parsed = parsed._replace(query=new_query)
-                task.url = urlunparse(new_parsed)
-                bt.logging.debug(f"[tasks] Added seed={seed} to task URL: {task.url}")
-    
-    bt.logging.debug(f"[tasks] Seeds assigned to {len(interleaved_tasks)} tasks (all tasks have seeds)")
-
-    return interleaved_tasks
+    return tasks[0]
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# TASK PROCESSING - Process task data and miner responses
-# ═══════════════════════════════════════════════════════════════════════════════
-
-def get_task_solution_from_synapse(
-    task_id: str,
-    synapse: TaskSynapse,
-    max_actions_length: int = MAX_ACTIONS_LENGTH,
-    miner_uid: Optional[int] = None,
-) -> TaskSolution:
+async def generate_tasks(num_tasks: int) -> List[TaskWithProject]:
     """
-    Safely extract actions from a TaskSynapse response and limit their length.
-    NOTE: correct slicing is [:max], not [max].
-    
+    Generate tasks across demo web projects with balanced coverage.
+
+    Rules:
+    - Avoid repeating a project until all projects have been used.
+    - Within a project, avoid repeating a use case until all its use cases have been used.
+    - When a pool is exhausted (projects or a project's use cases), reshuffle and continue.
+
     Args:
-        task_id: Task identifier
-        synapse: TaskSynapse response from miner
-        max_actions_length: Maximum number of actions to extract
-        miner_uid: Miner UID to use for web_agent_id if not provided in synapse
-    """
-    actions = []
-    if synapse and hasattr(synapse, "actions") and isinstance(synapse.actions, list):
-        actions = synapse.actions[:max_actions_length]
-    
-    # Try to get web_agent_id from synapse if available
-    web_agent_id = None
-    if synapse and hasattr(synapse, "web_agent_id"):
-        web_agent_id = synapse.web_agent_id
-    
-    # Fallback to miner_uid-based ID if not provided
-    if not web_agent_id and miner_uid is not None:
-        web_agent_id = f"miner_{miner_uid}"
-    
-    return TaskSolution(task_id=task_id, actions=actions, web_agent_id=web_agent_id)
+        num_tasks: Total number of tasks to generate
 
-
-def collect_task_solutions_and_execution_times(
-    task: IWATask,
-    responses: List[TaskSynapse | None],
-    miner_uids: List[int],
-) -> Tuple[List[TaskSolution], List[float]]:
+    Returns:
+        List of TaskWithProject objects
     """
-    Convert miner responses into TaskSolution and gather process times.
-    Handles None responses (failed requests) gracefully.
-    """
-    task_solutions: List[TaskSolution] = []
-    execution_times: List[float] = []
+    start_time = time.time()
+    all_tasks: List[TaskWithProject] = []
 
-    for miner_uid, response in zip(miner_uids, responses):
-        # Handle None or failed responses
-        if response is None:
-            bt.logging.warning(f"Miner {miner_uid} returned None response")
-            task_solutions.append(
-                TaskSolution(task_id=task.id, actions=[], web_agent_id=f"miner_{miner_uid}")
-            )
-            execution_times.append(TIMEOUT)
-            bt.logging.debug(
-                f"[TIME] uid={miner_uid} response=None -> using TIMEOUT={TIMEOUT:.3f}s"
-            )
+    num_projects = len(demo_web_projects)
+    if num_projects == 0:
+        bt.logging.warning("[tasks] No demo_web_projects found")
+        return []
+
+    bt.logging.info(f"[tasks] Generating {num_tasks} tasks across {num_projects} projects")
+
+    # Build per-project use case queues (shuffled).
+    project_use_cases: dict[str, list[str]] = {}
+    for project in demo_web_projects:
+        use_cases = [uc.name for uc in (project.use_cases or []) if getattr(uc, "name", None)]
+        if not use_cases:
+            bt.logging.warning(f"[tasks] Project '{project.name}' has no use cases; skipping")
+            continue
+        project_use_cases[project.id] = use_cases
+
+    if not project_use_cases:
+        bt.logging.warning("[tasks] No projects with use cases available")
+        return []
+
+    # Project cycle: shuffled list of project ids, reshuffled when exhausted.
+    import random
+
+    project_cycle = list(project_use_cases.keys())
+    random.shuffle(project_cycle)
+    project_index = 0
+
+    # Per-project use case cycles (shuffled, reshuffled when exhausted).
+    use_case_cycles: dict[str, list[str]] = {}
+    for project_id, use_cases in project_use_cases.items():
+        uc_list = list(use_cases)
+        random.shuffle(uc_list)
+        use_case_cycles[project_id] = uc_list
+
+    while len(all_tasks) < num_tasks:
+        if project_index >= len(project_cycle):
+            random.shuffle(project_cycle)
+            project_index = 0
+
+        project_id = project_cycle[project_index]
+        project_index += 1
+
+        # Find the actual project object
+        project = next((p for p in demo_web_projects if p.id == project_id), None)
+        if project is None:
+            bt.logging.warning(f"[tasks] Missing project for id={project_id}; skipping")
             continue
 
-        # Try to parse valid response
+        # Refill use case cycle if exhausted
+        if not use_case_cycles.get(project_id):
+            uc_list = list(project_use_cases[project_id])
+            random.shuffle(uc_list)
+            use_case_cycles[project_id] = uc_list
+
+        use_case_name = use_case_cycles[project_id].pop(0)
+
         try:
-            task_solutions.append(
-                get_task_solution_from_synapse(
-                    task_id=task.id,
-                    synapse=response,
-                    miner_uid=miner_uid,
-                )
-            )
+            task = await _generate_task_for_project(project, use_case_name)
+            all_tasks.append(TaskWithProject(project=project, task=task))
+
+            if len(all_tasks) % 10 == 0:  # Log progress every 10 tasks
+                bt.logging.debug(f"[tasks] Generated {len(all_tasks)}/{num_tasks} tasks")
+
         except Exception as e:
-            bt.logging.error(f"Miner response format error: {e}")
-            task_solutions.append(
-                TaskSolution(task_id=task.id, actions=[], web_agent_id=f"miner_{miner_uid}")
+            bt.logging.error(
+                f"[tasks] Failed to generate task for project '{project.name}' (use_case={use_case_name}): {e}"
             )
-            execution_times.append(TIMEOUT)
-            bt.logging.debug(
-                f"[TIME] uid={miner_uid} process_time=None -> using TIMEOUT={TIMEOUT:.3f}s"
-            )
-            continue
+            # Continue with next project instead of failing
 
-        if (
-            response
-            and hasattr(response, "dendrite")
-            and hasattr(response.dendrite, "process_time")
-            and response.dendrite.process_time is not None
-        ):
-            execution_times.append(response.dendrite.process_time)
-            bt.logging.debug(
-                f"[TIME] uid={miner_uid} process_time={response.dendrite.process_time:.3f}s (taken)"
-            )
-        else:
-            execution_times.append(TIMEOUT)
-            bt.logging.debug(
-                f"[TIME] uid={miner_uid} process_time=None -> using TIMEOUT={TIMEOUT:.3f}s"
-            )
+    elapsed = time.time() - start_time
+    bt.logging.info(f"✅ Generated {len(all_tasks)} tasks in {elapsed:.1f}s")
 
-    return task_solutions, execution_times
+    return all_tasks
