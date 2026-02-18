@@ -26,7 +26,7 @@ A miner only announces **metadata** (name, image, GitHub URL). Validators then c
 
 ## 🧪 Test Locally First
 
-Use the benchmark to validate your agent **before** advertising it to validators. See the [Benchmark Guide](docs/advanced/benchmark-README.md).
+Use the benchmark to validate your agent **before** advertising it to validators. See the [Benchmark Guide](docs/advanced/benchmark_readme.md).
 
 ```bash
 IWA_PATH=${IWA_PATH:-../autoppia_iwa}
@@ -124,7 +124,7 @@ Validators only read your metadata, then clone your repo and run it locally in a
 
 | Phase                | Time  | Action               | Guide                                    |
 | -------------------- | ----- | -------------------- | ---------------------------------------- |
-| **Local Testing**    | 30min | Develop & test agent | [Benchmark Guide](./benchmark-README.md) |
+| **Local Testing**    | 30min | Develop & test agent | [Benchmark Guide](./benchmark_readme.md) |
 | **Miner Deployment** | 10min | Deploy to mainnet    | This guide (Phase 2)                     |
 
 ### **Key Benefits**

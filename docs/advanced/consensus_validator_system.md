@@ -747,6 +747,5 @@ Each validator will then work independently (no IPFS sharing).
 
 - [IPFS Documentation](https://docs.ipfs.tech/)
 - [Bittensor Commit-Reveal](https://docs.bittensor.com/)
-- [Round System Documentation](./round_system.md)
 
 ---
