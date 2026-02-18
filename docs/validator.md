@@ -94,8 +94,9 @@ cp .env.validator-example .env
 
 The validator uses IWA to generate tasks, which requires an LLM provider. Choose one:
 
-> Startup safety check: the validator now validates gateway provider keys at boot.
-> Set `GATEWAY_ALLOWED_PROVIDERS` in `.env` (for example `openai` or `openai,chutes`).
+> Startup safety check: the validator validates gateway provider keys at boot.
+> Default allowed providers are `openai` and `chutes` (see gateway config). Override with
+> `GATEWAY_ALLOWED_PROVIDERS` only if you need to narrow the list.
 > If any allowed provider key is missing, validator exits immediately with an explicit error.
 
 ### **Option A: OpenAI API** 🌐 (No GPU Required)
