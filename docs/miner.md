@@ -145,6 +145,15 @@ cp .env.miner-example .env
 # Edit .env with your agent configuration
 ```
 
+Minimum fields to set:
+
+- `MINER_AGENT_NAME` (public name shown to validators)
+- `MINER_GITHUB_URL` (repo URL that validators clone in the sandbox)
+- `MINER_AGENT_VERSION` (semantic version string)
+- `MINER_HAS_RL` (set `1` if your agent uses RL)
+
+Note: **demo webs are only required for local benchmarking**. A miner does not need demo webs running in production.
+
 **Step 3: Deploy Miner**
 
 ```bash
@@ -161,6 +170,17 @@ pm2 start neurons/miner.py \
   --logging.debug \
   --axon.port 8091
 ```
+
+### **Validator Compatibility Checklist**
+
+Your miner must expose a `/solve_task` endpoint compatible with the validator.
+Validators will:
+
+- Read your `MINER_GITHUB_URL` during handshake
+- Clone the repo into a sandbox container
+- Call the agent HTTP server inside that container
+
+If the validator cannot clone or start your repo, your miner will be scored as failed.
 
 ### **Configuration Options**
 

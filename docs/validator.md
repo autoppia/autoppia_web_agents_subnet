@@ -171,7 +171,39 @@ DEMO_WEBS_STARTING_PORT=8000
 
 ---
 
-## ✅ 4. Validator Deployment
+## 🧪 4. Prerequisite Checklist (Demo Webs + DB + Web Server)
+
+Before running the validator, ensure demo webs are actually up and reachable:
+
+1. **Demo web containers are running** (expected set of demo sites).
+2. **Database container** is running (Postgres for demo apps).
+3. **Web server / API container** is running (webs_server / API).
+
+Quick check (example):
+
+```bash
+docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
+```
+
+You should see multiple demo web containers (ports like `8000+`), plus a DB container and a `webs_server` API container. Some deployments run a single container per demo site; others reuse shared services—so **do not rely on the exact container count**.
+
+---
+
+## 🧱 5. Sandbox Gateway (Required for Miner Isolation)
+
+The validator runs miner code in sandboxed containers through a gateway. This requires Docker and will be auto-managed by the validator on first evaluation.
+
+Key env vars (set in `.env`):
+
+- `SANDBOX_GATEWAY_INSTANCE` (unique string per validator process)
+- `SANDBOX_GATEWAY_PORT_OFFSET` (unique port offset per validator process)
+- `SANDBOX_INSTANCE` (unique string for container naming)
+
+If you are running **multiple validators on one host**, each must use a unique combination of these values.
+
+---
+
+## ✅ 6. Validator Deployment
 
 ### **Starting the Validator**
 
@@ -193,7 +225,7 @@ pm2 start neurons/validator.py \
 
 ---
 
-## 🔄 5. Updates & Maintenance
+## 🔄 7. Updates & Maintenance
 
 ### **Auto-Update Setup**
 
