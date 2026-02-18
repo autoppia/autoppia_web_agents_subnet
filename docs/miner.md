@@ -150,7 +150,6 @@ Minimum fields to set:
 - `MINER_AGENT_NAME` (public name shown to validators)
 - `MINER_GITHUB_URL` (repo URL that validators clone in the sandbox)
 - `MINER_AGENT_VERSION` (semantic version string)
-- `MINER_HAS_RL` (set `1` if your agent uses RL)
 
 Note: **demo webs are only required for local benchmarking**. A miner does not need demo webs running in production.
 

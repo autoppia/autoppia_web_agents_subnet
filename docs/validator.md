@@ -199,6 +199,8 @@ Key env vars (set in `.env`):
 - `SANDBOX_GATEWAY_PORT_OFFSET` (unique port offset per validator process)
 - `SANDBOX_INSTANCE` (unique string for container naming)
 
+Defaults: if you run a single validator, you can omit these and use the defaults from `autoppia_web_agents_subnet/validator/config.py`.
+
 If you are running **multiple validators on one host**, each must use a unique combination of these values.
 
 ---
