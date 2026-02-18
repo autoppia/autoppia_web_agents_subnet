@@ -294,6 +294,9 @@ class ValidatorRoundStartMixin:
         # Filter candidate miner UIDs by minimum stake and excluding validator itself.
         candidate_uids: list[int] = []
         candidate_stakes: list[tuple[float, int, str]] = []
+        skipped_below_stake = 0
+        skipped_coldkey_cap = 0
+        skipped_stake_cap = 0
 
         for uid in range(n):
             if uid == validator_uid:
@@ -307,11 +310,14 @@ class ValidatorRoundStartMixin:
                         coldkey = str(raw_coldkey).strip()
                 candidate_stakes.append((stake_val, uid, coldkey))
             else:
+                skipped_below_stake += 1
                 bt.logging.debug(f"[handshake] Skipping uid={uid} stake={stake_val:.4f} < MIN_MINER_STAKE_TAO={min_stake:.4f}")
 
         if not candidate_stakes:
             bt.logging.warning(f"No miners meet MIN_MINER_STAKE_TAO={min_stake:.4f}; active_miner_uids will be empty")
             return
+
+        candidates_after_stake = len(candidate_stakes)
 
         # Sort by stake before capping per coldkey and per round.
         candidate_stakes.sort(key=lambda item: float(item[0]), reverse=True)
@@ -323,6 +329,7 @@ class ValidatorRoundStartMixin:
             for _, uid, coldkey in candidate_stakes:
                 key = coldkey or f"__coldkey_unknown__:{uid}"
                 if coldkey_counts.get(key, 0) >= max_by_coldkey:
+                    skipped_coldkey_cap += 1
                     bt.logging.warning(
                         f"[handshake] Skipping uid={uid} due MAX_MINERS_PER_COLDKEY={max_by_coldkey}"
                     )
@@ -343,12 +350,21 @@ class ValidatorRoundStartMixin:
         # Optional: restrict to the top N miners by stake to bound evaluation work.
         max_by_stake = int(MAX_MINERS_PER_ROUND_BY_STAKE)
         if max_by_stake > 0 and len(candidate_stakes) > max_by_stake:
+            skipped_stake_cap = max(0, len(candidate_stakes) - max_by_stake)
             try:
                 candidate_uids = [uid for _, uid in candidate_stakes[:max_by_stake]]
             except Exception:
                 candidate_uids = candidate_uids[:max_by_stake]
         else:
             candidate_uids = [uid for _, uid in candidate_stakes]
+
+        bt.logging.info(
+            "[handshake] Candidate selection summary "
+            f"total={n-1}|eligible_by_stake={candidates_after_stake}|"
+            f"below_stake={skipped_below_stake}|"
+            f"coldkey_cap_skip={skipped_coldkey_cap}|stake_cap_skip={skipped_stake_cap}|"
+            f"final_candidates={len(candidate_uids)}"
+        )
 
         # Expose the eligible window for the evaluation phase (and for logs).
         try:
@@ -397,10 +413,20 @@ class ValidatorRoundStartMixin:
             self._season_repo_owners = repo_owner_by_season
         cooldown_rounds = int(EVALUATION_COOLDOWN_ROUNDS)
         active_handshake_uids: list[int] = []
+        responded_count = 0
+        response_missing_count = 0
+        restored_from_pending_count = 0
+        missing_handshake_field_count = 0
+        invalid_repo_count = 0
+        repo_cap_skip_count = 0
+        cooldown_skip_count = 0
+        unchanged_commit_skip_count = 0
+        queued_for_eval_count = 0
 
         for idx, uid in enumerate(candidate_uids):
             resp = responses[idx] if idx < len(responses) else None
             if resp is None:
+                response_missing_count += 1
                 # If we have a pending submission recorded during cooldown, we
                 # can evaluate it once the cooldown expires even if the miner
                 # fails to respond in this round.
@@ -428,8 +454,11 @@ class ValidatorRoundStartMixin:
                         )
                         self.agents_queue.put(pending_info)
                         new_agents_count += 1
+                        queued_for_eval_count += 1
+                        restored_from_pending_count += 1
                 continue
 
+            responded_count += 1
             agent_name = getattr(resp, "agent_name", None)
             raw_github_url = getattr(resp, "github_url", None)
             agent_image = getattr(resp, "agent_image", None)
@@ -463,6 +492,7 @@ class ValidatorRoundStartMixin:
                     )
                     if self.round_manager.round_number == 1:
                         self.agents_on_first_handshake.append(uid)
+                missing_handshake_field_count += 1
                 continue
 
             # Miner provided the required handshake fields; treat as active for IWAP.
@@ -508,6 +538,7 @@ class ValidatorRoundStartMixin:
                     )
                     if self.round_manager.round_number == 1:
                         self.agents_on_first_handshake.append(uid)
+                invalid_repo_count += 1
                 continue
 
             if max_by_repo > 0 and normalized_repo:
@@ -548,6 +579,7 @@ class ValidatorRoundStartMixin:
                         )
                     if self.round_manager.round_number == 1:
                         self.agents_on_first_handshake.append(uid)
+                    repo_cap_skip_count += 1
                     continue
 
                 if owner_key not in repo_owner_history:
@@ -633,6 +665,7 @@ class ValidatorRoundStartMixin:
                         except Exception:
                             pass
                         self.agents_dict[uid] = existing
+                        unchanged_commit_skip_count += 1
                         continue
 
                 # Submission changed (or unknown): enqueue for evaluation, but do
@@ -661,10 +694,12 @@ class ValidatorRoundStartMixin:
                     except Exception:
                         pass
                     self.agents_dict[uid] = existing
+                    cooldown_skip_count += 1
                     continue
 
                 self.agents_queue.put(agent_info)
                 new_agents_count += 1
+                queued_for_eval_count += 1
                 continue
 
             # New uid: track it immediately and enqueue for evaluation.
@@ -673,8 +708,21 @@ class ValidatorRoundStartMixin:
             if self.round_manager.round_number == 1:
                 self.agents_on_first_handshake.append(uid)
             new_agents_count += 1
-
-        bt.logging.info(f"Handshake complete: {new_agents_count} new agents submitted (min_stake={min_stake})")
+            queued_for_eval_count += 1
+        bt.logging.info(
+            "[handshake] complete "
+            f"min_stake={min_stake:.4f} "
+            f"responded={responded_count}/{len(responses)} "
+            f"missing_response={response_missing_count} "
+            f"queued_for_eval={queued_for_eval_count} "
+            f"restored_from_pending={restored_from_pending_count} "
+            f"missing_fields={missing_handshake_field_count} "
+            f"invalid_repo={invalid_repo_count} "
+            f"repo_cap_skip={repo_cap_skip_count} "
+            f"cooldown_skip={cooldown_skip_count} "
+            f"unchanged_commit={unchanged_commit_skip_count} "
+            f"new_agents={new_agents_count}"
+        )
 
         # Only miners that responded this round should be treated as "active"
         # for IWAP registration and per-round reporting. Keeping this bounded
