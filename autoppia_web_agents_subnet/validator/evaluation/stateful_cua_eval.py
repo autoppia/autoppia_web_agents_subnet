@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import os
 import time
 from typing import Tuple, Any
@@ -7,6 +8,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import bittensor as bt
 
+from autoppia_web_agents_subnet.utils.iwa_log_filter import enforce_iwa_log_filter
 from autoppia_web_agents_subnet.validator.config import (
     AGENT_STEP_TIMEOUT,
     MAXIMUM_EXECUTION_TIME,
@@ -18,21 +20,36 @@ from autoppia_iwa.src.evaluation.stateful_evaluator import AsyncStatefulEvaluato
 
 try:
     from autoppia_iwa.src.web_agents.apified_iterative_agent import (  # type: ignore
-        ApifiedIterativeWebAgent as ApifiedWebCUA,
+        ApifiedWebAgent,
     )
 except Exception:  # pragma: no cover - compatibility with older IWA layouts
     try:
         from autoppia_iwa.src.web_agents import (  # type: ignore
-            ApifiedIterativeWebAgent as ApifiedWebCUA,
+            ApifiedWebAgent,
         )
     except Exception:
-        class ApifiedWebCUA:  # type: ignore[valid-type]
+        class ApifiedWebAgent:  # type: ignore[valid-type]
             def __init__(self, *_, **__):  # pragma: no cover
                 raise RuntimeError(
-                    "ApifiedWebCUA unavailable: configure OPENAI_API_KEY/LLM_PROVIDER in IWA "
+                    "ApifiedWebAgent unavailable: configure OPENAI_API_KEY/LLM_PROVIDER in IWA "
                     "environment or install web_agents module."
                 )
+
+
+# Compatibility alias for legacy imports.
+ApifiedWebCUA = ApifiedWebAgent
+WebAgentClass = ApifiedWebAgent
 from autoppia_iwa.src.web_agents.classes import TaskSolution, sanitize_snapshot_html
+
+
+def _to_screenshot_b64(raw: Any) -> str | None:
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        return raw or None
+    if isinstance(raw, (bytes, bytearray, memoryview)):
+        return base64.b64encode(bytes(raw)).decode("ascii")
+    return None
 
 try:
     from autoppia_iwa.src.evaluation.shared.utils import make_gif_from_screenshots
@@ -70,8 +87,10 @@ async def evaluate_with_stateful_cua(
     max_steps: int = 30,
 ) -> Tuple[float, float, TaskSolution]:
     """
-    Evaluate a sandboxed miner agent using AsyncStatefulEvaluator + ApifiedWebCUA.
+    Evaluate a sandboxed miner agent using AsyncStatefulEvaluator + ApifiedWebAgent.
     """
+    enforce_iwa_log_filter()
+
     # Avoid mutating a shared task object across miners/batches.
     try:
         task_for_eval = task.model_copy(deep=True)  # type: ignore[attr-defined]
@@ -137,9 +156,13 @@ async def evaluate_with_stateful_cua(
 
             try:
                 # Send task WITH placeholders to agent - agent should return actions with placeholders
+                screenshot = getattr(snapshot, "screenshot", None)
+                if screenshot is None:
+                    screenshot = getattr(snapshot, "screenshot_after", None)
                 actions = await agent.act(
                     task=task_for_eval,  # Send task with placeholders, NOT replaced
                     snapshot_html=html,
+                    screenshot=_to_screenshot_b64(screenshot),
                     url=current_url,
                     step_index=step_index,
                     history=history,
