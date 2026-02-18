@@ -26,7 +26,7 @@ A miner only announces **metadata** (name, image, GitHub URL). Validators then c
 
 ## 🧪 Test Locally First
 
-Use the benchmark to validate your agent **before** advertising it to validators. See the Benchmark Guide: `docs/advanced/benchmark-README.md`.
+Use the benchmark to validate your agent **before** advertising it to validators. See the [Benchmark Guide](docs/advanced/benchmark-README.md).
 
 ```bash
 IWA_PATH=${IWA_PATH:-../autoppia_iwa}
