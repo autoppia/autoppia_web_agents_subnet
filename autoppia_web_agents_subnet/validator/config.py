@@ -29,7 +29,7 @@ def _env_float_prefer_new(
 # BURN_AMOUNT_PERCENTAGE: 0.0-1.0 (qué fracción se quema, el resto premia a miners)
 # 1.0 = quemar todo. 0.9 = 90% burn, 10% a winner. Igual que en main.
 BURN_UID = _env_int("BURN_UID", 5)
-BURN_AMOUNT_PERCENTAGE = _env_float("BURN_AMOUNT_PERCENTAGE", 0.9)
+BURN_AMOUNT_PERCENTAGE = _env_float("BURN_AMOUNT_PERCENTAGE", 0.925)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -37,11 +37,24 @@ BURN_AMOUNT_PERCENTAGE = _env_float("BURN_AMOUNT_PERCENTAGE", 0.9)
 # ═══════════════════════════════════════════════════════════════════════════
 
 SEASON_SIZE_EPOCHS = _env_float("SEASON_SIZE_EPOCHS", 280.0, test_default=2)
-ROUND_SIZE_EPOCHS = _env_float("ROUND_SIZE_EPOCHS", 4.0, test_default=0.5)
+ROUND_SIZE_EPOCHS = _env_float("ROUND_SIZE_EPOCHS", 10.0, test_default=0.5)
 MINIMUM_START_BLOCK = _env_int("MINIMUM_START_BLOCK", 7572327, test_default=1000)
-ROUND_START_UNTIL_FRACTION = _env_float("ROUND_START_UNTIL_FRACTION", 0.3, test_default=0.6)
-MAXIMUM_EVALUATION_TIME = _env_float("MAXIMUM_EVALUATION_TIME", 30.0, test_default=6.0)  # minutes
-MAXIMUM_CONSENSUS_TIME = _env_float("MAXIMUM_CONSENSUS_TIME", 15.0, test_default=3.0)  # minutes
+# Maximum fraction of the current round elapsed at which a validator may start.
+VALIDATOR_ROUND_START_UNTIL_FRACTION = _env_float(
+    "VALIDATOR_ROUND_START_UNTIL_FRACTION",
+    0.75,
+    test_default=0.6,
+)
+MAXIMUM_EVALUATION_TIME_MINUTES = _env_float(
+    "MAXIMUM_EVALUATION_TIME_MINUTES",
+    30.0,
+    test_default=6.0,
+)
+MAXIMUM_CONSENSUS_TIME_MINUTES = _env_float(
+    "MAXIMUM_CONSENSUS_TIME_MINUTES",
+    15.0,
+    test_default=3.0,
+)
 SAFETY_BUFFER_EPOCHS = _env_float("SAFETY_BUFFER_EPOCHS", 0.02, test_default=0.02)
 AVG_TASK_DURATION_SECONDS = _env_float("AVG_TASK_DURATION_SECONDS", 600.0, test_default=600.0)
 STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION = _env_float("STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION", 0.90, test_default=0.65)
@@ -54,10 +67,10 @@ TASKS_PER_SEASON = _env_int("TASKS_PER_SEASON", 100, test_default=3)
 CONCURRENT_EVALUATION_NUM = _env_int("CONCURRENT_EVALUATION_NUM", 5)
 SCREENING_TASKS_FOR_EARLY_STOP = _env_int("SCREENING_TASKS_FOR_EARLY_STOP", 10)
 AGENT_MAX_STEPS = _env_int("AGENT_MAX_STEPS", 12, test_default=12)
-AGENT_STEP_TIMEOUT = _env_int("AGENT_STEP_TIMEOUT", 10)  # seconds
+AGENT_STEP_TIMEOUT_SECONDS = _env_int("AGENT_STEP_TIMEOUT_SECONDS", 10)
 MAX_ACTIONS_LENGTH = _env_int("MAX_ACTIONS_LENGTH", 30, test_default=30)
-TIMEOUT = _env_float("TIMEOUT", 180.0, test_default=180.0)  # seconds
-FEEDBACK_TIMEOUT = _env_float("FEEDBACK_TIMEOUT", 30.0, test_default=30.0)  # seconds
+TASK_TIMEOUT_SECONDS = _env_float("TASK_TIMEOUT_SECONDS", 180.0, test_default=180.0)
+FEEDBACK_TIMEOUT_SECONDS = _env_float("FEEDBACK_TIMEOUT_SECONDS", 30.0, test_default=30.0)
 SHOULD_RECORD_GIF = _env_bool("SHOULD_RECORD_GIF", True)
 
 COST_LIMIT_ENABLED = _env_bool("COST_LIMIT_ENABLED", True)
@@ -72,7 +85,7 @@ COST_LIMIT_EXCEED_COUNT = _env_int("COST_LIMIT_EXCEED_COUNT", _legacy_cost_limit
 # Backward-compatible alias (deprecated; keep for rollout compatibility only).
 COST_LIMIT_EARLY_STOP_STREAK = COST_LIMIT_EXCEED_COUNT
 
-MAXIMUM_EXECUTION_TIME = _env_float("MAXIMUM_EXECUTION_TIME", 90.0)  # seconds
+MAXIMUM_EXECUTION_TIME_SECONDS = _env_float("MAXIMUM_EXECUTION_TIME_SECONDS", 90.0)
 
 
 def _env_float_multi_prefer_new(
@@ -180,7 +193,7 @@ else:
     SANDBOX_GATEWAY_PORT = 9000 + int(_offset)
 SANDBOX_AGENT_IMAGE = _env_str("SANDBOX_IMAGE", "autoppia-sandbox-agent-image")
 SANDBOX_AGENT_PORT = _env_int("SANDBOX_AGENT_PORT", 8000)
-SANDBOX_CLONE_TIMEOUT = _env_int("SANDBOX_CLONE_TIMEOUT", 90)
+SANDBOX_CLONE_TIMEOUT_SECONDS = _env_int("SANDBOX_CLONE_TIMEOUT_SECONDS", 90)
 # Debug/testing: keep agent containers (and clone dirs) after evaluation so you can inspect
 # logs via `docker logs` and examine the cloned repo. Default is False for safety/cleanup.
 SANDBOX_KEEP_AGENT_CONTAINERS = _env_bool("SANDBOX_KEEP_AGENT_CONTAINERS", False)

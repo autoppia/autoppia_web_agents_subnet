@@ -428,10 +428,7 @@ def _build_task_log_payload(
             # so the log still preserves the LLM trace.
             try:
                 if payload.get("steps"):
-                    has_calls = any(
-                        isinstance(s, dict) and isinstance(s.get("llm_calls"), list) and s.get("llm_calls")
-                        for s in payload["steps"]
-                    )
+                    has_calls = any(isinstance(s, dict) and isinstance(s.get("llm_calls"), list) and s.get("llm_calls") for s in payload["steps"])
                     if not has_calls:
                         payload["steps"][0].setdefault("llm_calls", [])
                         payload["steps"][0]["llm_calls"].extend(calls)
@@ -538,13 +535,13 @@ def prepare_evaluation_payload(
     evaluation_metadata.pop("evaluation_time", None)
     evaluation_metadata.pop("stats", None)
 
-    # Mark timeout in metadata if execution time reaches TIMEOUT
+    # Mark timeout in metadata if execution time reaches TASK_TIMEOUT_SECONDS.
     try:
-        from autoppia_web_agents_subnet.validator.config import TIMEOUT
+        from autoppia_web_agents_subnet.validator.config import TASK_TIMEOUT_SECONDS
 
         is_timeout = False
-        if exec_time is not None and TIMEOUT is not None:
-            is_timeout = float(exec_time) >= float(TIMEOUT)
+        if exec_time is not None and TASK_TIMEOUT_SECONDS is not None:
+            is_timeout = float(exec_time) >= float(TASK_TIMEOUT_SECONDS)
         if evaluation_metadata.get("timeout") is True:
             is_timeout = True
         if is_timeout:
@@ -645,9 +642,9 @@ async def submit_task_results(
     validator_hotkey = ctx.wallet.hotkey.ss58_address
 
     try:
-        from autoppia_web_agents_subnet.validator.config import TIMEOUT
+        from autoppia_web_agents_subnet.validator.config import TASK_TIMEOUT_SECONDS
     except ImportError:
-        TIMEOUT = 180.0
+        TASK_TIMEOUT_SECONDS = 180.0
 
     # CRITICAL: Always create evaluations for ALL miners that have agent_runs
     # active_miner_uids should match current_agent_runs, but iterate over agent_runs to be safe
@@ -667,7 +664,7 @@ async def submit_task_results(
             eval_score = float(eval_scores[idx]) if idx < len(eval_scores) else 0.0
             evaluation_meta = evaluation_results[idx] if idx < len(evaluation_results) else {}
             test_results_data = test_results_list[idx] if idx < len(test_results_list) else []
-            exec_time = float(execution_times[idx]) if idx < len(execution_times) else TIMEOUT
+            exec_time = float(execution_times[idx]) if idx < len(execution_times) else TASK_TIMEOUT_SECONDS
         else:
             # Shouldn't happen - task_solutions should have same length as active_miner_uids
             # But handle gracefully: create empty evaluation
@@ -675,7 +672,7 @@ async def submit_task_results(
             eval_score = 0.0
             evaluation_meta = {}
             test_results_data = []
-            exec_time = TIMEOUT
+            exec_time = TASK_TIMEOUT_SECONDS
 
         miner_hotkey = None
         try:
@@ -737,13 +734,13 @@ async def submit_task_results(
         if not evaluation_metadata:
             evaluation_metadata = {}
 
-        # Marcar timeout en metadata si el tiempo de ejecución alcanza el TIMEOUT
+        # Marcar timeout en metadata si el tiempo de ejecución alcanza TASK_TIMEOUT_SECONDS.
         try:
-            from autoppia_web_agents_subnet.validator.config import TIMEOUT
+            from autoppia_web_agents_subnet.validator.config import TASK_TIMEOUT_SECONDS
 
             is_timeout = False
-            if exec_time is not None and TIMEOUT is not None:
-                is_timeout = float(exec_time) >= float(TIMEOUT)
+            if exec_time is not None and TASK_TIMEOUT_SECONDS is not None:
+                is_timeout = float(exec_time) >= float(TASK_TIMEOUT_SECONDS)
             if evaluation_metadata.get("timeout") is True:
                 is_timeout = True
             if is_timeout:

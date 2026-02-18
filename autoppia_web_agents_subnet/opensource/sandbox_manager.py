@@ -34,7 +34,7 @@ from autoppia_web_agents_subnet.validator.config import (
     SANDBOX_GATEWAY_PORT,
     SANDBOX_AGENT_IMAGE,
     SANDBOX_AGENT_PORT,
-    SANDBOX_CLONE_TIMEOUT,
+    SANDBOX_CLONE_TIMEOUT_SECONDS,
     SANDBOX_KEEP_AGENT_CONTAINERS,
     SANDBOX_AGENT_LOG_ERRORS,
     SANDBOX_AGENT_LOG_DECISIONS,
@@ -533,7 +533,7 @@ class SandboxManager:
     def _clone_repo(self, github_url: str) -> str:
         temp_dir = temp_workdir()
         repo_dir = os.path.join(temp_dir, "repo")
-        clone_repo(github_url, repo_dir, timeout=SANDBOX_CLONE_TIMEOUT)
+        clone_repo(github_url, repo_dir, timeout=SANDBOX_CLONE_TIMEOUT_SECONDS)
         return repo_dir
 
     def _start_container(self, uid: int, temp_dir: str, *, git_commit: Optional[str] = None) -> AgentInstance:

@@ -17,7 +17,7 @@ from autoppia_web_agents_subnet.opensource.utils_git import (
 )
 from autoppia_web_agents_subnet.validator.config import (
     MINIMUM_START_BLOCK,
-    ROUND_START_UNTIL_FRACTION,
+    VALIDATOR_ROUND_START_UNTIL_FRACTION,
     MIN_MINER_STAKE_TAO,
     SETTLEMENT_FRACTION,
     REQUIRE_MINER_GITHUB_REF,
@@ -182,7 +182,7 @@ class ValidatorRoundStartMixin:
         self.round_manager.sync_boundaries(current_block)
         current_fraction = float(self.round_manager.fraction_elapsed(current_block))
 
-        if current_fraction > ROUND_START_UNTIL_FRACTION:
+        if current_fraction > VALIDATOR_ROUND_START_UNTIL_FRACTION:
             # Too late to start a clean round; wait for the next boundary if a
             # waiter helper is available (tests patch this).
             try:

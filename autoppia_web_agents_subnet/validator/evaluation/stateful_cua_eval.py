@@ -10,8 +10,8 @@ import bittensor as bt
 
 from autoppia_web_agents_subnet.utils.iwa_log_filter import enforce_iwa_log_filter
 from autoppia_web_agents_subnet.validator.config import (
-    AGENT_STEP_TIMEOUT,
-    MAXIMUM_EXECUTION_TIME,
+    AGENT_STEP_TIMEOUT_SECONDS,
+    MAXIMUM_EXECUTION_TIME_SECONDS,
     SHOULD_RECORD_GIF,
 )
 
@@ -125,7 +125,7 @@ async def evaluate_with_stateful_cua(
         id=str(uid),
         name=f"miner-{uid}",
         base_url=base_url,
-        timeout=AGENT_STEP_TIMEOUT,
+        timeout=AGENT_STEP_TIMEOUT_SECONDS,
     )
     evaluator = AsyncStatefulEvaluator(
         task=task_for_eval,
@@ -143,8 +143,8 @@ async def evaluate_with_stateful_cua(
         history: list[dict[str, Any]] = []
 
         while step_index < max_steps and not bool(final_score.success):
-            if time.time() - start_ts >= MAXIMUM_EXECUTION_TIME:
-                bt.logging.warning(f"[stateful_cua_eval] miner {uid} hard timeout reached for task {getattr(task, 'id', '?')}: {time.time() - start_ts:.2f}s >= {MAXIMUM_EXECUTION_TIME:.2f}s")
+            if time.time() - start_ts >= MAXIMUM_EXECUTION_TIME_SECONDS:
+                bt.logging.warning(f"[stateful_cua_eval] miner {uid} hard timeout reached for task {getattr(task, 'id', '?')}: {time.time() - start_ts:.2f}s >= {MAXIMUM_EXECUTION_TIME_SECONDS:.2f}s")
                 break
 
             snapshot = step_result.snapshot
@@ -203,8 +203,8 @@ async def evaluate_with_stateful_cua(
             final_score = step_result.score
             step_index += 1
 
-            if time.time() - start_ts >= MAXIMUM_EXECUTION_TIME:
-                bt.logging.warning(f"[stateful_cua_eval] miner {uid} hard timeout reached after step {step_index}: {time.time() - start_ts:.2f}s >= {MAXIMUM_EXECUTION_TIME:.2f}s")
+            if time.time() - start_ts >= MAXIMUM_EXECUTION_TIME_SECONDS:
+                bt.logging.warning(f"[stateful_cua_eval] miner {uid} hard timeout reached after step {step_index}: {time.time() - start_ts:.2f}s >= {MAXIMUM_EXECUTION_TIME_SECONDS:.2f}s")
                 break
 
     except Exception as exc:

@@ -52,7 +52,7 @@ Each round follows these steps (see `neurons/validator.py`):
    - Tasks are submitted through IWAP (`set_tasks`) and cached for local tracking.
 
 4. **Phase 3 – Task Execution**
-   - For each task, miners run agent simulations; validator waits for responses within `TIMEOUT`/`FEEDBACK_TIMEOUT`.
+   - For each task, miners run agent simulations; validator waits for responses within `TASK_TIMEOUT_SECONDS`/`FEEDBACK_TIMEOUT_SECONDS`.
    - IWAP `start_agent_run` is called per miner to record progress.
 
 5. **Phase 4 – Evaluation**

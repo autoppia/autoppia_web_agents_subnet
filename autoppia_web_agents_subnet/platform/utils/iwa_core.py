@@ -255,8 +255,8 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
         MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO,
         ENABLE_DISTRIBUTED_CONSENSUS,
         SHOULD_RECORD_GIF,
-        TIMEOUT,
-        FEEDBACK_TIMEOUT,
+        TASK_TIMEOUT_SECONDS,
+        FEEDBACK_TIMEOUT_SECONDS,
         MAX_ACTIONS_LENGTH,
         EVAL_SCORE_WEIGHT,
         TIME_WEIGHT,
@@ -297,8 +297,8 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
         "execution": {
             "enable_dynamic": True,
             "should_record_gif": SHOULD_RECORD_GIF,
-            "timeout": TIMEOUT,
-            "feedback_timeout": FEEDBACK_TIMEOUT,
+            "timeout": TASK_TIMEOUT_SECONDS,
+            "feedback_timeout": FEEDBACK_TIMEOUT_SECONDS,
             "max_actions_length": MAX_ACTIONS_LENGTH,
         },
         "scoring": {
