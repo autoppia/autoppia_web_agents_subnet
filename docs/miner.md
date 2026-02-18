@@ -4,101 +4,21 @@
 
 ## 📋 Overview
 
-## 🎯 How It Works: Two Simple Steps
+A miner only announces **metadata** (name, image, GitHub URL). Validators then clone your repo at that URL and run your agent in a sandbox. The miner itself does not receive tasks or execute them.
 
-### Step 1: Build & Test Your Agent Locally
+## 🎯 How It Works (Simple)
 
-First, you'll create a web agent that can solve tasks. Test it thoroughly using our Benchmark Framework - no blockchain required!
-
-### **Benefits of Local Testing**
-
-| Benefit                   | Description                             |
-| ------------------------- | --------------------------------------- |
-| 💰 **Save Money**         | No network fees during development      |
-| 🚀 **Faster Iteration**   | Instant feedback vs network cycles      |
-| 🛡️ **Risk-Free**          | Test without risking rewards/reputation |
-| 🎯 **Better Performance** | Optimize before competing               |
-| 📊 **Detailed Analytics** | Comprehensive performance metrics       |
-| 🔧 **Easy Debugging**     | Full logs and error tracking            |
-| ⚡ **Quick Setup**        | Start testing in minutes                |
-
-### Step 2: Deploy as a Miner
-
-Once your agent performs well locally, deploy it to the network to start earning rewards.
-
-**Your deployed miner will:**
-
-- 📥 **Receive tasks** from validators
-- 🧠 **Process requirements** using your logic
-- ✅ **Return a list of actions** (see actions allowed)
-- 💰 **Earn rewards** based on performance
+1. You publish your agent code in a GitHub repo (commit or branch).
+2. Your miner advertises `MINER_AGENT_NAME`, `MINER_GITHUB_URL`, and `MINER_AGENT_IMAGE`.
+3. Validators clone your repo and run it locally in a sandbox for evaluation.
 
 ---
 
-## 🏆 **Steps to Be the Best Miner**
+## 🧪 Test Locally First
 
-**Local Testing (Do this first!):**
-
-1. **Configure .env** → Generate tasks as validator does
-2. **Deploy demo projects** → Test target websites
-3. **Install requirements** → Setup validator dependencies
-4. **Create agent** → Build `/solve_task` endpoint
-5. **Check endpoint** → Verify task reception
-6. **Implement logic** → Return action sequences
-7. **See results** → Get performance scores
-8. **Deploy miner** → Go live when ready!
-
----
-
-# 🔬 PHASE 1: LOCAL TESTING
-
-## 📋 Repository Setup
-
-Clona los tres repos como hermanos:
+Use the benchmark to validate your agent **before** advertising it to validators.
 
 ```bash
-git clone https://github.com/autoppia/autoppia_web_agents_subnet
-git clone https://github.com/autoppia/autoppia_iwa.git
-git clone https://github.com/autoppia/autoppia_webs_demo.git
-```
-
-Trabaja dentro de `autoppia_web_agents_subnet` y apunta `IWA_PATH` y `WEBS_DEMO_PATH` a los repos hermanos (por defecto `../autoppia_iwa` y `../autoppia_webs_demo`).
-
-> Los scripts de setup usan `IWA_PATH`/`WEBS_DEMO_PATH`; si tienes otra ruta, exporta estas variables antes de ejecutarlos.
-
-## ⚠️ IMPORTANT: Test Locally First!
-
-> **Before deploying your miner, you MUST test your agent locally using our Benchmark Framework.**
-
-**Why local testing is crucial:**
-
-- ✅ **Free development** - no network fees for testing
-- ✅ **Instant feedback** - immediate performance metrics
-- ✅ **Risk-free iteration** - test before deploying
-- ✅ **Production-ready** - benchmark = production behavior
-
-## 📚 Local Testing Guide
-
-**Complete guide for local testing and agent development:**
-
-📖 **👉 Go to**: [Benchmark Guide](./benchmark-README.md)
-
-**What the benchmark does:**
-The benchmark **generates tasks the same way a validator would** and sends them to your deployed agent, then **evaluates the results exactly like a validator would**. This gives you production-identical testing without any blockchain interaction.
-
-**This guide covers:**
-
-- 🕷️ **What is a Web Agent** and how it works
-- 🎯 **Available Actions** your agent can use
-- 🚀 **Setup & Configuration** for local testing
-- 🧪 **Creating Your Agent** with code examples
-- ⚙️ **Benchmark Configuration** and customization
-- 📊 **Performance Testing** and optimization
-
-**Quick start for local testing:**
-
-```bash
-# From the main repository root
 IWA_PATH=${IWA_PATH:-../autoppia_iwa}
 cd "$IWA_PATH"
 python -m autoppia_iwa.entrypoints.benchmark.run
@@ -106,7 +26,7 @@ python -m autoppia_iwa.entrypoints.benchmark.run
 
 ---
 
-# ⛏️ PHASE 2: MINER DEPLOYMENT
+# ⛏️ Miner Deployment
 
 ## 🚀 Deploy Your Miner to Mainnet
 
@@ -114,15 +34,9 @@ python -m autoppia_iwa.entrypoints.benchmark.run
 
 ### **Before Deploying**
 
-Ensure your agent:
+Make sure your agent repo runs locally and passes the benchmark.
 
-- ✅ **Thoroughly tested** with benchmark framework
-- ✅ **Good performance results** in local testing
-- ✅ **Ready for production** deployment
-
-### **Miner Deployment**
-
-**A miner is like the benchmark** - configure `.env` with your agent's port and run it.
+### **Configure .env**
 
 **Step 1: Setup Miner Environment**
 
@@ -148,10 +62,10 @@ cp .env.miner-example .env
 Minimum fields to set:
 
 - `MINER_AGENT_NAME` (public name shown to validators)
-- `MINER_GITHUB_URL` (repo URL that validators clone in the sandbox)
-- `MINER_AGENT_VERSION` (semantic version string)
+- `MINER_GITHUB_URL` (repo URL or commit URL that validators clone in the sandbox)
+- `MINER_AGENT_IMAGE` (public image URL shown in UI, optional but recommended)
 
-Note: **demo webs are only required for local benchmarking**. A miner does not need demo webs running in production.
+Note: demo webs are only required for local benchmarking. A miner does not need demo webs running in production.
 
 **Step 3: Deploy Miner**
 
@@ -170,16 +84,9 @@ pm2 start neurons/miner.py \
   --axon.port 8091
 ```
 
-### **Validator Compatibility Checklist**
+### **Validator Compatibility**
 
-Your miner must expose a `/solve_task` endpoint compatible with the validator.
-Validators will:
-
-- Read your `MINER_GITHUB_URL` during handshake
-- Clone the repo into a sandbox container
-- Call the agent HTTP server inside that container
-
-If the validator cannot clone or start your repo, your miner will be scored as failed.
+Validators only read your metadata, then clone your repo and run it locally in a sandbox. If the repo cannot be cloned or run, you will score 0.
 
 ### **Configuration Options**
 
