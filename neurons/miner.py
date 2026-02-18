@@ -58,74 +58,23 @@ class Miner(BaseMinerNeuron):
         No side-effects beyond logging and returning metadata.
         """
         try:
-            validator_hotkey = getattr(synapse.dendrite, "hotkey", None)
-
-            # 🔍 DEBUG: Log received synapse details
-            ColoredLogger.info("=" * 80, ColoredLogger.CYAN)
             ColoredLogger.info(
-                f"[StartRound] from validator: {validator_hotkey} round_id={getattr(synapse, 'round_id', '')}",
+                f"[StartRound] handshake received from validator: {getattr(synapse.dendrite, 'hotkey', None)}",
                 ColoredLogger.YELLOW,
             )
-            ColoredLogger.info(f"  - version: {getattr(synapse, 'version', 'NOT_SET')}", ColoredLogger.GRAY)
-            ColoredLogger.info(f"  - validator_id: {getattr(synapse, 'validator_id', 'NOT_SET')}", ColoredLogger.GRAY)
-            ColoredLogger.info(f"  - total_prompts: {getattr(synapse, 'total_prompts', 'NOT_SET')}", ColoredLogger.GRAY)
-            ColoredLogger.info(f"  - has_rl (received): {getattr(synapse, 'has_rl', 'NOT_SET')}", ColoredLogger.GRAY)
-            ColoredLogger.info("=" * 80, ColoredLogger.CYAN)
 
             # Respond with our metadata
             agent_name = AGENT_NAME.strip() if isinstance(AGENT_NAME, str) else ""
             agent_image = AGENT_IMAGE.strip() if isinstance(AGENT_IMAGE, str) else ""
             github_url = GITHUB_URL.strip() if isinstance(GITHUB_URL, str) else ""
 
-            # 🔍 DEBUG: Set each field individually with error handling
-            try:
-                ColoredLogger.info(f"  Setting agent_name = {agent_name or None}", ColoredLogger.GRAY)
-                synapse.agent_name = agent_name or None
-            except Exception as e:
-                ColoredLogger.error(f"  ❌ Failed to set agent_name: {e}", ColoredLogger.RED)
-                raise
+            synapse.agent_name = agent_name or None
+            synapse.agent_image = agent_image or None
+            synapse.github_url = github_url or None
+            synapse.agent_version = AGENT_VERSION
+            synapse.has_rl = HAS_RL
 
-            try:
-                ColoredLogger.info(f"  Setting agent_image = {agent_image[:50] if agent_image else None}...", ColoredLogger.GRAY)
-                synapse.agent_image = agent_image or None
-            except Exception as e:
-                ColoredLogger.error(f"  ❌ Failed to set agent_image: {e}", ColoredLogger.RED)
-                raise
-
-            try:
-                ColoredLogger.info(f"  Setting github_url = {github_url or None}", ColoredLogger.GRAY)
-                synapse.github_url = github_url or None
-            except Exception as e:
-                ColoredLogger.error(f"  ❌ Failed to set github_url: {e}", ColoredLogger.RED)
-                raise
-
-            try:
-                ColoredLogger.info(f"  Setting agent_version = {AGENT_VERSION}", ColoredLogger.GRAY)
-                synapse.agent_version = AGENT_VERSION
-            except Exception as e:
-                ColoredLogger.error(f"  ❌ Failed to set agent_version: {e}", ColoredLogger.RED)
-                raise
-
-            try:
-                ColoredLogger.info(f"  Setting has_rl = {HAS_RL} (type: {type(HAS_RL)})", ColoredLogger.GRAY)
-                synapse.has_rl = HAS_RL
-            except Exception as e:
-                ColoredLogger.error(f"  ❌ Failed to set has_rl: {e}", ColoredLogger.RED)
-                raise
-
-            ColoredLogger.success(
-                f"[StartRound] ✅ All fields set successfully! agent={agent_name or 'Unknown'} v{AGENT_VERSION} RL={HAS_RL}",
-                ColoredLogger.GREEN,
-            )
-
-            # 🔍 DEBUG: Validate synapse before returning
-            try:
-                ColoredLogger.info("  Final synapse state:", ColoredLogger.GRAY)
-                ColoredLogger.info(f"    - agent_name: {synapse.agent_name}", ColoredLogger.GRAY)
-                ColoredLogger.info(f"    - agent_version: {synapse.agent_version}", ColoredLogger.GRAY)
-                ColoredLogger.info(f"    - has_rl: {synapse.has_rl}", ColoredLogger.GRAY)
-            except Exception as e:
-                ColoredLogger.warning(f"  ⚠️  Could not read synapse fields: {e}", ColoredLogger.YELLOW)
+            ColoredLogger.success("[StartRound] handshake response prepared", ColoredLogger.GREEN)
 
             return synapse
         except Exception as e:
