@@ -61,30 +61,7 @@ async def send_start_round_synapse_to_miners(
         retries=3,
     )
 
-    # DEBUG: Log all responses with detailed status codes
-    successful_responses = []
-    failed_responses = []
-    status_422_responses = []
-
-    for i, response in enumerate(responses):
-        if response is not None:
-            status_code = getattr(response.dendrite, 'status_code', None)
-            agent_name = getattr(response, 'agent_name', None)
-
-            if status_code == 422:
-                # Log 422 errors with full details
-                status_422_responses.append({
-                    'uid': i,
-                    'hotkey': miner_axons[i].hotkey[:10] if i < len(miner_axons) else 'unknown',
-                    'status': status_code,
-                    'agent_name': agent_name,
-                })
-            elif agent_name:
-                successful_responses.append(f"  UID {i}: agent_name='{agent_name}' status={status_code}")
-            else:
-                failed_responses.append(f"  UID {i}: status={status_code}")
-
-    # Summary only (detailed table is shown in validator.py)
+    # Summary only.
     successful = sum(1 for r in responses if r is not None and hasattr(r, 'agent_name') and r.agent_name)
     if successful > 0:
         bt.logging.success(f"✅ Handshake complete: {successful}/{len(miner_axons)} miners responded")
