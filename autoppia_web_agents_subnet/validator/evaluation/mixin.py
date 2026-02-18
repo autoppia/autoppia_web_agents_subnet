@@ -34,36 +34,6 @@ from autoppia_web_agents_subnet.validator.evaluation.tasks import (
 )
 
 
-def _normalize_local_task_url(raw_url: str | None) -> str:
-    """
-    Force task URLs used in miner task payloads to localhost for demo-web runs.
-
-    Some validator envs still keep remote DEMO_WEBS_ENDPOINT while sandboxes evaluate
-    on localhost, causing NavigateAction host rejection. Keep path/query/fragment.
-    """
-    if not raw_url:
-        return ""
-
-    normalized = str(raw_url).strip()
-    if not normalized:
-        return ""
-    if "://" not in normalized:
-        if not normalized.startswith("/"):
-            normalized = f"/{normalized}"
-        return f"http://127.0.0.1{normalized}"
-
-    try:
-        from urllib.parse import urlsplit, urlunsplit
-
-        parsed = urlsplit(normalized)
-        netloc = "127.0.0.1"
-        if parsed.port:
-            netloc = f"127.0.0.1:{parsed.port}"
-        return urlunsplit((parsed.scheme or "http", netloc, parsed.path or "/", parsed.query, parsed.fragment))
-    except Exception:
-        return "http://127.0.0.1/"
-
-
 class EvaluationPhaseMixin:
     """Handles task dispatch, evaluation, and mid-round consensus triggers."""
 
@@ -315,7 +285,7 @@ class EvaluationPhaseMixin:
                     ColoredLogger.CYAN,
                 )
 
-            task_url = _normalize_local_task_url(project.frontend_url)
+            task_url = str(project.frontend_url)
             if seed is not None:
                 separator = "&" if "?" in task_url else "?"
                 task_url = f"{task_url}{separator}seed={seed}"

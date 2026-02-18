@@ -83,85 +83,6 @@ def _augment_demo_web_url(url: str, *, web_agent_id: str, validator_id: str) -> 
         return url
 
 
-def _sanitize_navigation_url(raw_url: str | None) -> str | None:
-    if not raw_url:
-        return raw_url
-    normalized = str(raw_url).strip()
-    if not normalized:
-        return normalized
-    try:
-        if "://" not in normalized:
-            if not normalized.startswith("/"):
-                normalized = f"/{normalized}"
-            return f"http://127.0.0.1{normalized}"
-        parsed = urlsplit(normalized)
-        return urlunsplit(("http", "127.0.0.1", parsed.path or "/", parsed.query, parsed.fragment))
-    except Exception:
-        return "http://127.0.0.1/"
-
-
-def _sanitize_task_start_url(raw_url: str | None) -> str | None:
-    """
-    Normalize task start URLs to localhost for demo-web evaluation.
-
-    Some runtime configs pass non-local demo hostnames/IPs in task URLs, and the
-    stateful evaluator blocks those on NavigateAction validation for demo tasks.
-    Keep path/query/fragment so task-seeded routes remain stable.
-    """
-    if not raw_url:
-        return raw_url
-
-    normalized = str(raw_url).strip()
-    if not normalized:
-        return normalized
-
-    try:
-        if "://" not in normalized:
-            if not normalized.startswith("/"):
-                normalized = f"/{normalized}"
-            return f"http://127.0.0.1{normalized}"
-
-        parsed = urlsplit(normalized)
-        netloc = "127.0.0.1"
-        if parsed.port:
-            netloc = f"127.0.0.1:{parsed.port}"
-        return urlunsplit((parsed.scheme or "http", netloc, parsed.path or "/", parsed.query, parsed.fragment))
-    except Exception:
-        return "http://127.0.0.1/"
-
-
-def _sanitize_action(action: Any) -> Any:
-    if action is None:
-        return action
-
-    action_type = str(getattr(action, "type", "") or "").strip().lower()
-    is_navigate = action_type in {"navigateaction", "navigate"}
-    if not is_navigate:
-        return action
-
-    raw_url = getattr(action, "url", None)
-    if raw_url is None:
-        return action
-
-    safe_url = _sanitize_navigation_url(str(raw_url))
-    try:
-        if isinstance(action, BaseAction):
-            action.url = safe_url  # type: ignore[attr-defined]
-    except Exception:
-        try:
-            if hasattr(action, "model_dump"):
-                action_dict = action.model_dump()
-                action_dict["url"] = safe_url
-                return action_dict
-        except Exception:
-            pass
-        try:
-            if isinstance(action, dict):
-                action["url"] = safe_url
-        except Exception:
-            pass
-    return action
-
 
 async def evaluate_with_stateful_cua(
     *,
@@ -194,11 +115,6 @@ async def evaluate_with_stateful_cua(
             web_agent_id = str(uid)
             validator_id = os.getenv("VALIDATOR_ID", "custom_validator")
             original_url = str(getattr(task_for_eval, "url", "") or "")
-            normalized_url = _sanitize_task_start_url(original_url)
-            if normalized_url and normalized_url != original_url:
-                setattr(task_for_eval, "url", normalized_url)
-                bt.logging.debug(f"[stateful_cua_eval] localized task URL for uid={uid}: {normalized_url}")
-                original_url = normalized_url
             augmented_url = _augment_demo_web_url(
                 original_url,
                 web_agent_id=web_agent_id,
@@ -256,7 +172,7 @@ async def evaluate_with_stateful_cua(
                     step_index=step_index,
                     history=history,
                 )
-                actions = [_sanitize_action(a) for a in actions] if isinstance(actions, list) else []
+                actions = actions if isinstance(actions, list) else []
             except Exception as exc:
                 bt.logging.warning(f"[stateful_cua_eval] miner {uid} /act failed: {exc}")
                 actions = []
