@@ -41,6 +41,7 @@ class Validator(
         self.agents_dict: dict[int, AgentInfo] = {}
         self.agents_on_first_handshake: list[int] = []
         self.should_update_weights: bool = False
+        self._season_repo_owners: dict[str, set[str]] = {}
 
         try:
             self.sandbox_manager = SandboxManager()

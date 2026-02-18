@@ -40,7 +40,7 @@ from autoppia_web_agents_subnet.validator.config import (
     SANDBOX_AGENT_LOG_DECISIONS,
     SANDBOX_AGENT_RETURN_METRICS,
     COST_LIMIT_ENABLED,
-    COST_LIMIT_VALUE,
+    MAX_TASK_DOLLAR_COST,
 )
 
 
@@ -317,8 +317,8 @@ class SandboxManager:
         _ensure_writable_file(os.path.join(self.host_log_dir, "gateway.log"))
         env = {
             "COST_LIMIT_ENABLED": str(COST_LIMIT_ENABLED),
-            "COST_LIMIT_PER_TASK": str(COST_LIMIT_VALUE),
-            "COST_LIMIT_VALUE": str(COST_LIMIT_VALUE),
+            "COST_LIMIT_PER_TASK": str(MAX_TASK_DOLLAR_COST),
+            "COST_LIMIT_VALUE": str(MAX_TASK_DOLLAR_COST),
             "SANDBOX_GATEWAY_PORT": str(SANDBOX_GATEWAY_PORT),
             "SANDBOX_GATEWAY_ADMIN_TOKEN": str(self.gateway_admin_token),
         }
