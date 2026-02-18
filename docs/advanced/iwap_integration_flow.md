@@ -77,7 +77,9 @@ If backend returns an existing run id (idempotent case), the client updates loca
 
 ## 4) Evaluation Submission
 
-### 4.1 Current path: `POST /api/v1/validator-rounds/{validator_round_id}/agent-runs/{agent_run_id}/evaluations/batch`
+### 4.1 Current path
+
+`POST /api/v1/validator-rounds/{validator_round_id}/agent-runs/{agent_run_id}/evaluations/batch`
 
 The current validator path submits evaluations grouped by miner (`agent_run_id`) in batch for performance.
 
@@ -92,8 +94,7 @@ This endpoint is called after all evaluator tasks for the miner are prepared and
 
 ### 4.2 Note on non-batch path
 
-There is still a single-evaluation client method in code (`add_evaluation`) that targets
-`/evaluations`, but the active batch evaluator flow uses `evaluations/batch` and posts per miner.
+There is still a single-evaluation client method in code (`add_evaluation`) that targets `/evaluations`, but the active batch evaluator flow uses `evaluations/batch` and posts per miner.
 
 ---
 
@@ -169,15 +170,7 @@ You can detect this in logs by:
 ## 9) Quick reference: key flow order
 
 ```text
-auth-check
-  -> start_round
-     -> set_tasks
-        -> start_agent_run (per active miner)
-            -> evaluate tasks locally
-               -> upload_task_log (optional)
-               -> upload_evaluation_gif (optional)
-            -> add_evaluations_batch (per miner)
-  -> finish_round
+auth-check -> start_round -> set_tasks -> start_agent_run (per active miner) -> evaluate tasks locally -> upload_task_log (optional) -> upload_evaluation_gif (optional) -> add_evaluations_batch (per miner) -> finish_round
 ```
 
 ---
