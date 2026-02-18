@@ -93,6 +93,33 @@ class ValidatorEvaluationMixin:
         except Exception:
             best_score_so_far = 0.0
 
+        # WTA bonus for last round winner can raise the bar for overtaking.
+        # Use this as an adjusted early-stop threshold so we don't evaluate miners
+        # that cannot beat the boosted previous winner.
+        early_stop_last_winner_bonus_pct = 0.0
+        if best_score_so_far > 0.0:
+            try:
+                last_winner_uid = getattr(self, "_last_round_winner_uid", None)
+                bonus_pct = max(
+                    float(getattr(validator_config, "LAST_WINNER_BONUS_PCT", 0.0)),
+                    0.0,
+                )
+                early_stop_last_winner_bonus_pct = bonus_pct
+                if bonus_pct > 0.0 and isinstance(last_winner_uid, int):
+                    agents_dict = getattr(self, "agents_dict", None)
+                    last_winner_info = None
+                    if isinstance(agents_dict, dict):
+                        last_winner_info = agents_dict.get(int(last_winner_uid))
+                    if last_winner_info is not None:
+                        last_winner_score = float(getattr(last_winner_info, "score", 0.0) or 0.0)
+                        if last_winner_score > 0.0:
+                            best_score_so_far = max(
+                                best_score_so_far,
+                                last_winner_score * (1.0 + bonus_pct),
+                            )
+            except Exception:
+                pass
+
         # Round-based rate limiting metadata.
         round_number = 0
         season_number = None
@@ -109,11 +136,22 @@ class ValidatorEvaluationMixin:
             """
             Mark an AgentInfo-like object as evaluated and persist it in agents_dict.
             """
+            finalized_score: float = 0.0
             try:
-                agent.score = float(score)  # type: ignore[attr-defined]
+                finalized_score = float(score)
+                agent.score = finalized_score  # type: ignore[attr-defined]
             except Exception:
                 try:
                     agent.score = 0.0  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+            try:
+                current_best = float(getattr(self, "_best_score_ever", 0.0) or 0.0)
+            except Exception:
+                current_best = 0.0
+            if finalized_score > current_best:
+                try:
+                    self._best_score_ever = finalized_score
                 except Exception:
                     pass
             try:
@@ -270,6 +308,19 @@ class ValidatorEvaluationMixin:
             max_steps = int(getattr(validator_config, "AGENT_MAX_STEPS", 30) or 30)
             screening = int(getattr(validator_config, "SCREENING_TASKS_FOR_EARLY_STOP", 0) or 0)
             early_stop_behind_best = bool(getattr(validator_config, "EARLY_STOP_BEHIND_BEST", False))
+            cost_limit_exceed_count = int(
+                getattr(
+                    validator_config,
+                    "COST_LIMIT_EXCEED_COUNT",
+                    getattr(validator_config, "COST_LIMIT_EARLY_STOP_STREAK", 0),
+                )
+                or 0
+            )
+            cost_limit_enabled = bool(getattr(validator_config, "COST_LIMIT_ENABLED", True))
+            max_cost_per_task = float(getattr(validator_config, "MAX_TASK_DOLLAR_COST", 0.0) or 0.0)
+            cost_limit_hits = 0
+            tasks_evaluated_for_agent = 0
+            stop_for_cost_limit_streak = False
 
             try:
                 for i in range(0, len(season_tasks), batch_size):
@@ -291,6 +342,7 @@ class ValidatorEvaluationMixin:
                     batch_eval_data = []  # Store (task_item, score, exec_time, cost, reward, eval_result)
 
                     for task_item, eval_result in zip(batch_tasks, eval_results):
+                        tasks_evaluated_for_agent += 1
                         if isinstance(eval_result, Exception):
                             ColoredLogger.error(
                                 f"Error evaluating agent {agent.uid} on task {task_item.task.id}: {eval_result}",
@@ -504,6 +556,25 @@ class ValidatorEvaluationMixin:
                         )
                         rewards.append(reward)
 
+                        if (
+                            cost_limit_enabled
+                            and cost_limit_exceed_count > 0
+                            and max_cost_per_task > 0.0
+                            and cost >= max_cost_per_task - 1e-12
+                        ):
+                            cost_limit_hits += 1
+                            ColoredLogger.warning(
+                                f"Agent {agent.uid} exceeded task cost limit on task {tasks_evaluated_for_agent}/{total_tasks}: "
+                                f"${cost:.4f} (limit={max_cost_per_task:.4f}, count={cost_limit_hits}/{cost_limit_exceed_count})",
+                                ColoredLogger.YELLOW,
+                            )
+                            if cost_limit_hits >= cost_limit_exceed_count:
+                                ColoredLogger.warning(
+                                    f"Agent {agent.uid} hit max over-cost task limit ({cost_limit_exceed_count}); stopping remaining tasks and forcing score=0",
+                                    ColoredLogger.YELLOW,
+                                )
+                                stop_for_cost_limit_streak = True
+
                         # Store evaluation data for batch submission
                         batch_eval_data.append(
                             {
@@ -543,14 +614,17 @@ class ValidatorEvaluationMixin:
                         )
                         break
 
+                    if stop_for_cost_limit_streak:
+                        break
+
                     # WTA early stop: if even perfect rewards on remaining tasks cannot
                     # beat the current best, abort to save time/cost.
                     if early_stop_behind_best and total_tasks > 0:
                         tasks_done = min(i + len(batch_tasks), total_tasks)
                         upper_bound_avg = (sum(rewards) + float(total_tasks - tasks_done)) / float(total_tasks)
-                        if upper_bound_avg < best_score_so_far:
+                        if upper_bound_avg <= best_score_so_far:
                             ColoredLogger.warning(
-                                f"Agent {agent.uid} cannot beat best_score={best_score_so_far:.4f} (upper_bound={upper_bound_avg:.4f} after {tasks_done}/{total_tasks} tasks); stopping evaluation",
+                                f"Agent {agent.uid} cannot beat threshold={best_score_so_far:.4f} (upper_bound={upper_bound_avg:.4f}, bonus={early_stop_last_winner_bonus_pct:.1%} from last winner) after {tasks_done}/{total_tasks} tasks; stopping evaluation",
                                 ColoredLogger.YELLOW,
                             )
                             break
@@ -564,8 +638,16 @@ class ValidatorEvaluationMixin:
                     pass
 
             # Update agent score/evaluated state and increment the counter.
-            avg_reward = (sum(rewards) / float(total_tasks)) if total_tasks > 0 else 0.0
-            _finalize_agent(agent, score=float(avg_reward))
+            if stop_for_cost_limit_streak:
+                ColoredLogger.warning(
+                    f"Agent {agent.uid} stopped after {tasks_evaluated_for_agent}/{total_tasks} evaluated tasks "
+                    f"due to {cost_limit_hits} over-cost tasks (limit={cost_limit_exceed_count}); final score forced to 0",
+                    ColoredLogger.YELLOW,
+                )
+                _finalize_agent(agent, score=0.0)
+            else:
+                avg_reward = (sum(rewards) / float(total_tasks)) if total_tasks > 0 else 0.0
+                _finalize_agent(agent, score=float(avg_reward))
             agents_evaluated += 1
             if agent.score > best_score_so_far:
                 best_score_so_far = float(agent.score)

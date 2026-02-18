@@ -10,6 +10,19 @@ import os
 TESTING = _env_bool("TESTING", False)
 
 
+def _env_float_prefer_new(
+    primary_name: str,
+    legacy_name: str,
+    default: float,
+    test_default: float | None = None,
+) -> float:
+    if os.getenv(primary_name) is not None:
+        return _env_float(primary_name, default, test_default=test_default)
+    if TESTING and os.getenv(f"TEST_{primary_name}") is not None:
+        return _env_float(primary_name, default, test_default=test_default)
+    return _env_float(legacy_name, default, test_default=test_default)
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # BURN CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
@@ -17,6 +30,9 @@ TESTING = _env_bool("TESTING", False)
 # 1.0 = quemar todo. 0.9 = 90% burn, 10% a winner. Igual que en main.
 BURN_UID = _env_int("BURN_UID", 5)
 BURN_AMOUNT_PERCENTAGE = _env_float("BURN_AMOUNT_PERCENTAGE", 0.9)
+BURN_ALL = _env_bool("BURN_ALL", False)
+if BURN_ALL:
+    BURN_AMOUNT_PERCENTAGE = 1.0
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -25,7 +41,7 @@ BURN_AMOUNT_PERCENTAGE = _env_float("BURN_AMOUNT_PERCENTAGE", 0.9)
 
 SEASON_SIZE_EPOCHS = _env_float("SEASON_SIZE_EPOCHS", 280.0, test_default=2)
 ROUND_SIZE_EPOCHS = _env_float("ROUND_SIZE_EPOCHS", 4.0, test_default=0.5)
-MINIMUM_START_BLOCK = _env_int("MINIMUM_START_BLOCK", 7478200, test_default=1000)
+MINIMUM_START_BLOCK = _env_int("MINIMUM_START_BLOCK", 7572327, test_default=1000)
 ROUND_START_UNTIL_FRACTION = _env_float("ROUND_START_UNTIL_FRACTION", 0.3, test_default=0.6)
 MAXIMUM_EVALUATION_TIME = _env_float("MAXIMUM_EVALUATION_TIME", 30.0, test_default=6.0)  # minutes
 MAXIMUM_CONSENSUS_TIME = _env_float("MAXIMUM_CONSENSUS_TIME", 15.0, test_default=3.0)  # minutes
@@ -41,18 +57,50 @@ TASKS_PER_SEASON = _env_int("TASKS_PER_SEASON", 100, test_default=3)
 PROMPTS_PER_USE_CASE = _env_int("PROMPTS_PER_USE_CASE", 1)
 CONCURRENT_EVALUATION_NUM = _env_int("CONCURRENT_EVALUATION_NUM", 5)
 SCREENING_TASKS_FOR_EARLY_STOP = _env_int("SCREENING_TASKS_FOR_EARLY_STOP", 10)
-AGENT_MAX_STEPS = _env_int("AGENT_MAX_STEPS", 30, test_default=1)
-AGENT_STEP_TIMEOUT = _env_int("AGENT_STEP_TIMEOUT", 180)  # seconds
+AGENT_MAX_STEPS = _env_int("AGENT_MAX_STEPS", 12, test_default=12)
+AGENT_STEP_TIMEOUT = _env_int("AGENT_STEP_TIMEOUT", 10)  # seconds
 MAX_ACTIONS_LENGTH = _env_int("MAX_ACTIONS_LENGTH", 30, test_default=30)
 TIMEOUT = _env_float("TIMEOUT", 180.0, test_default=180.0)  # seconds
 FEEDBACK_TIMEOUT = _env_float("FEEDBACK_TIMEOUT", 30.0, test_default=30.0)  # seconds
 SHOULD_RECORD_GIF = _env_bool("SHOULD_RECORD_GIF", True)
 
 COST_LIMIT_ENABLED = _env_bool("COST_LIMIT_ENABLED", True)
-COST_LIMIT_VALUE = _env_float("COST_LIMIT_VALUE", 10.0)  # USD
+MAX_TASK_DOLLAR_COST = _env_float_prefer_new("MAX_TASK_DOLLAR_COST", "COST_LIMIT_VALUE", 0.05)  # USD
+ # Backward-compatible alias.
+COST_LIMIT_VALUE = MAX_TASK_DOLLAR_COST
 
-MAXIMUM_EXECUTION_TIME = _env_float("MAXIMUM_EXECUTION_TIME", 300.0)  # seconds
-MAXIMUM_TOKEN_COST = _env_float("MAXIMUM_TOKEN_COST", 0.1)  # USD
+# Stop evaluating a miner after this many tasks that exceed the per-task cost cap.
+# 0 disables this guard.
+_legacy_cost_limit_streak = int(os.getenv("COST_LIMIT_EARLY_STOP_STREAK", "10") or "10")
+COST_LIMIT_EXCEED_COUNT = _env_int("COST_LIMIT_EXCEED_COUNT", _legacy_cost_limit_streak)
+# Backward-compatible alias (deprecated; keep for rollout compatibility only).
+COST_LIMIT_EARLY_STOP_STREAK = COST_LIMIT_EXCEED_COUNT
+
+MAXIMUM_EXECUTION_TIME = _env_float("MAXIMUM_EXECUTION_TIME", 90.0)  # seconds
+def _env_float_multi_prefer_new(
+    primary_name: str,
+    legacy_names: list[str],
+    default: float,
+    test_default: float | None = None,
+) -> float:
+    if os.getenv(primary_name) is not None:
+        return _env_float(primary_name, default, test_default=test_default)
+    if TESTING and os.getenv(f"TEST_{primary_name}") is not None:
+        return _env_float(f"TEST_{primary_name}", default, test_default=test_default)
+    for legacy_name in legacy_names:
+        if os.getenv(legacy_name) is not None:
+            return _env_float(legacy_name, default, test_default=test_default)
+    return _env_float(primary_name, default, test_default=test_default)
+
+
+REWARD_TASK_DOLLAR_COST_NORMALIZATOR = _env_float_multi_prefer_new(
+    "REWARD_TASK_DOLLAR_COST_NORMALIZATOR",
+    ["REWARD_DOLLAR_COST_NORMALIZATOR", "MAXIMUM_TOKEN_COST"],
+    0.05,
+)  # USD
+# Backward-compatible aliases.
+REWARD_DOLLAR_COST_NORMALIZATOR = REWARD_TASK_DOLLAR_COST_NORMALIZATOR
+MAXIMUM_TOKEN_COST = REWARD_TASK_DOLLAR_COST_NORMALIZATOR
 
 EVAL_SCORE_WEIGHT = _env_float("EVAL_SCORE_WEIGHT", 1.0)
 TIME_WEIGHT = _env_float("TIME_WEIGHT", 0.0)
@@ -69,20 +117,31 @@ REQUIRE_MINER_GITHUB_REF = _env_bool("REQUIRE_MINER_GITHUB_REF", True)
 # Evaluation resource controls:
 # 1) Per-round stake window: only handshake/evaluate the top N miners by stake.
 #    Set to 0 to disable.
-MAX_MINERS_PER_ROUND_BY_STAKE = _env_int("MAX_MINERS_PER_ROUND_BY_STAKE", 10)
+MAX_MINERS_PER_ROUND_BY_STAKE = _env_int("MAX_MINERS_PER_ROUND_BY_STAKE", 30)
+# 2) Anti-sybil controls during handshake: cap unique active miners sharing the same coldkey/repo.
+#    REPO caps are applied per season (resets when a new season starts).
+MAX_MINERS_PER_COLDKEY = _env_int("MAX_MINERS_PER_COLDKEY", 1)
+MAX_MINERS_PER_REPO = _env_int("MAX_MINERS_PER_REPO", 2)
 # 2) Cooldown: minimum number of rounds between evaluations for the same miner.
 #    Set to 0 to disable.
 EVALUATION_COOLDOWN_ROUNDS = _env_int("EVALUATION_COOLDOWN_ROUNDS", 2)
+# Dynamic cooldown (stake + score aware):
+USE_DYNAMIC_EVALUATION_COOLDOWN = _env_bool("USE_DYNAMIC_EVALUATION_COOLDOWN", True)
+DYNAMIC_EVALUATION_COOLDOWN_MIN_ROUNDS = _env_int("DYNAMIC_EVALUATION_COOLDOWN_MIN_ROUNDS", 4)
+DYNAMIC_EVALUATION_COOLDOWN_MAX_ROUNDS = _env_int("DYNAMIC_EVALUATION_COOLDOWN_MAX_ROUNDS", 12)
+DYNAMIC_EVALUATION_COOLDOWN_STAKE_REFERENCE_ALPHA = _env_float("DYNAMIC_EVALUATION_COOLDOWN_STAKE_REFERENCE_ALPHA", 10000.0)
+DYNAMIC_EVALUATION_COOLDOWN_STAKE_BONUS = _env_float("DYNAMIC_EVALUATION_COOLDOWN_STAKE_BONUS", 0.70)
+DYNAMIC_EVALUATION_COOLDOWN_SCORE_SMOOTH_EPS = _env_float("DYNAMIC_EVALUATION_COOLDOWN_SCORE_SMOOTH_EPS", 1e-6)
 
 # Early stop: abort evaluating a miner when it can no longer beat the current best
 # possible average reward (winner-takes-all settlement), saving time and cost.
-EARLY_STOP_BEHIND_BEST = _env_bool("EARLY_STOP_BEHIND_BEST", False)
+EARLY_STOP_BEHIND_BEST = _env_bool("EARLY_STOP_BEHIND_BEST", True)
 
 VALIDATOR_NAME = _env_str("VALIDATOR_NAME")
 VALIDATOR_IMAGE = _env_str("VALIDATOR_IMAGE")
 IWAP_VALIDATOR_AUTH_MESSAGE = _env_str("IWAP_VALIDATOR_AUTH_MESSAGE", "I am a honest validator")
 MAX_MINER_AGENT_NAME_LENGTH = _env_int("MAX_MINER_AGENT_NAME_LENGTH", 12)
-MIN_MINER_STAKE_TAO = _env_float("MIN_MINER_STAKE_TAO", 0.0, test_default=0.0)
+MIN_MINER_STAKE_TAO = _env_float("MIN_MINER_STAKE_TAO", 100.0, test_default=0.0)
 IPFS_API_URL = _env_str("IPFS_API_URL", "http://ipfs.metahash73.com:5001/api/v0")
 # Comma-separated gateways for fetch fallback
 IPFS_GATEWAYS = [gw.strip() for gw in (_env_str("IPFS_GATEWAYS", "https://ipfs.io/ipfs,https://cloudflare-ipfs.com/ipfs") or "").split(",") if gw.strip()]
