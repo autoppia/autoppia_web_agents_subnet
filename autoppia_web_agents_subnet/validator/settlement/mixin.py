@@ -59,9 +59,25 @@ class ValidatorSettlementMixin:
             st = await self._get_async_subtensor()
             await publish_round_snapshot(self, st=st, scores={str(int(uid)): float(agent.score) for uid, agent in (self.agents_dict or {}).items()})
 
+            fetch_fraction = float(
+                getattr(
+                    validator_config,
+                    "FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION",
+                    0.97,
+                )
+                or 0.97
+            )
+            fetch_fraction = max(0.0, min(1.0, fetch_fraction))
+            if self.round_manager.start_block is None:
+                self.round_manager.sync_boundaries(self.block)
+            start_block = int(self.round_manager.start_block or self.block)
+            target_block = int(self.round_manager.target_block or self.round_manager.settlement_block or start_block)
+            fetch_block = int(start_block + int(self.round_manager.round_block_length * fetch_fraction))
+            fetch_block = max(start_block, min(fetch_block, target_block))
+
             await self._wait_until_specific_block(
-                target_block=self.round_manager.settlement_block,
-                target_description="round settlement block",
+                target_block=fetch_block,
+                target_description=f"consensus fetch block ({fetch_fraction:.2%} of round)",
             )
 
             try:

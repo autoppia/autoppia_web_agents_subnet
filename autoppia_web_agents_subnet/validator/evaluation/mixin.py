@@ -189,11 +189,21 @@ class ValidatorEvaluationMixin:
         while not self.agents_queue.empty():
             # Refresh block each loop iteration so settlement cutoff checks don't drift.
             current_block = self.block
-            wait_info = self.round_manager.get_wait_info(current_block)
-            max_eval = float(getattr(validator_config, "MAXIMUM_EVALUATION_TIME_MINUTES", 0.0) or 0.0)
-            max_consensus = float(getattr(validator_config, "MAXIMUM_CONSENSUS_TIME_MINUTES", 0.0) or 0.0)
-            if wait_info["minutes_to_settlement"] < (max_eval + max_consensus):
-                ColoredLogger.info("Stopping evaluation phase for settlement", ColoredLogger.YELLOW)
+            stop_fraction = float(
+                getattr(
+                    validator_config,
+                    "STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION",
+                    1.0,
+                )
+                or 1.0
+            )
+            stop_fraction = max(0.0, min(1.0, stop_fraction))
+            fraction_elapsed = float(self.round_manager.fraction_elapsed(current_block))
+            if fraction_elapsed >= stop_fraction:
+                ColoredLogger.info(
+                    f"Stopping evaluation at round fraction {fraction_elapsed:.4f} (limit={stop_fraction:.4f})",
+                    ColoredLogger.YELLOW,
+                )
                 return agents_evaluated
 
             agent = self.agents_queue.get()

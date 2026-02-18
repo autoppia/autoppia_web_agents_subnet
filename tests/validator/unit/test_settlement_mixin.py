@@ -34,12 +34,12 @@ class TestSettlementPhase:
                 # Should have called publish_round_snapshot
                 mock_publish.assert_called_once()
 
-    async def test_settlement_waits_for_settlement_block(self, dummy_validator):
+    async def test_settlement_waits_for_consensus_fetch_block(self, dummy_validator):
         from tests.conftest import _bind_settlement_mixin
 
         dummy_validator = _bind_settlement_mixin(dummy_validator)
 
-        """Test that settlement waits until settlement_block is reached."""
+        """Test that settlement waits until configured fetch fraction block is reached."""
         dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
         dummy_validator._wait_until_specific_block = AsyncMock()
         dummy_validator._calculate_final_weights = AsyncMock()
@@ -48,12 +48,16 @@ class TestSettlementPhase:
             with patch("autoppia_web_agents_subnet.validator.settlement.mixin.aggregate_scores_from_commitments") as mock_aggregate:
                 mock_aggregate.return_value = ({}, None)
 
-                await dummy_validator._run_settlement_phase(agents_evaluated=3)
+                with patch(
+                    "autoppia_web_agents_subnet.validator.config.FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION",
+                    0.80,
+                ):
+                    await dummy_validator._run_settlement_phase(agents_evaluated=3)
 
-                # Should have waited for settlement_block
                 assert dummy_validator._wait_until_specific_block.call_count >= 1
                 first_call = dummy_validator._wait_until_specific_block.call_args_list[0]
-                assert first_call[1]["target_block"] == dummy_validator.round_manager.settlement_block
+                expected_fetch_block = int(dummy_validator.round_manager.start_block + int(dummy_validator.round_manager.round_block_length * 0.80))
+                assert first_call[1]["target_block"] == expected_fetch_block
 
     async def test_settlement_aggregates_scores_from_commitments(self, dummy_validator):
         from tests.conftest import _bind_settlement_mixin

@@ -44,27 +44,21 @@ class TestEvaluationPhase:
                 # Should have evaluated 3 agents
                 assert agents_evaluated == 3
 
-    async def test_evaluation_respects_maximum_evaluation_time(self, validator_with_agents, season_tasks):
-        """Test that evaluation stops when approaching settlement time."""
+    async def test_evaluation_stops_at_configured_round_fraction(self, validator_with_agents, season_tasks):
+        """Test that evaluation stops when round fraction reaches configured limit."""
         from tests.conftest import _bind_evaluation_mixin
 
         validator_with_agents = _bind_evaluation_mixin(validator_with_agents)
 
         validator_with_agents.season_manager.get_season_tasks = AsyncMock(return_value=season_tasks)
         validator_with_agents.sandbox_manager = Mock()
+        validator_with_agents.round_manager.fraction_elapsed = Mock(return_value=0.95)
 
-        # Mock wait_info to show insufficient time
-        validator_with_agents.round_manager.get_wait_info = Mock(
-            return_value={
-                "minutes_to_settlement": 5.0,  # Less than MAXIMUM_EVALUATION_TIME_MINUTES
-                "blocks_to_settlement": 25,
-            }
-        )
-
-        with patch("autoppia_web_agents_subnet.validator.config.MAXIMUM_EVALUATION_TIME_MINUTES", 10.0):
+        with patch(
+            "autoppia_web_agents_subnet.validator.config.STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION",
+            0.94,
+        ):
             agents_evaluated = await validator_with_agents._run_evaluation_phase()
-
-            # Should stop early due to time constraint
             assert agents_evaluated == 0
 
     async def test_evaluation_updates_current_block_during_loop(self, validator_with_agents, season_tasks):
