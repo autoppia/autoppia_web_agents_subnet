@@ -10,7 +10,12 @@ IWA (Infinite Web Arena) is the evaluation engine. It generates web tasks, runs 
 
 - **Miner**: announces **metadata** (name, image, GitHub URL). The validator will clone and deploy the GitHub URL inside a sandbox.
 - **Validator**: generates **tasks**, deploys agents in the sandbox, evaluates them, publishes **scores/weights**, and sends data to **IWAP**.
-- **IWAP**: backend that stores **rounds, tasks, evaluations, and artifacts**. `https://infinitewebarena.autoppia.com/home`
+
+## 📊 Dashboard (IWAP)
+
+**IWAP** stores **rounds, tasks, evaluations, and artifacts**.
+
+`https://infinitewebarena.autoppia.com/home`
 
 ## 📆 Seasons, Rounds, and Tasks
 
