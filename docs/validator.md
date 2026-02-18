@@ -270,12 +270,12 @@ pm2 start --name auto_update_validator \
   scripts/validator/update/auto_update_deploy.sh
 ```
 
-**Auto-Update Features**:
+**Auto-Update Notes**:
 
-- ✅ Automatic version checking (every 2 minutes by default)
-- ✅ Safe deployment with rollback capability
-- ✅ Zero-downtime updates
-- ✅ Configurable check intervals
+- Checks for updates by comparing `__version__` in `autoppia_web_agents_subnet/__init__.py`.
+- Default check interval is **600s (10 minutes)**. Override with `SLEEP_INTERVAL` env var.
+- Requires `WALLET_NAME` and `WALLET_HOTKEY` configured in the script or environment.
+- Uses `update_deploy.sh` for the actual update flow.
 
 ### **Manual Updates**
 
@@ -285,6 +285,16 @@ Update all components manually (from repository directory):
 # Complete update
 chmod +x scripts/validator/update/update_deploy.sh
 ./scripts/validator/update/update_deploy.sh
+
+Common overrides:
+
+```bash
+# Skip demo web redeploy
+DEPLOY_DEMO_WEBS=false ./scripts/validator/update/update_deploy.sh
+
+# Add validator flags when PM2 process needs to be created
+VALIDATOR_ARGS="--logging.info --neuron.disable_set_weights" ./scripts/validator/update/update_deploy.sh
+```
 ```
 
 ---

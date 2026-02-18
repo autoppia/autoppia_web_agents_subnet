@@ -9,16 +9,16 @@ IFS=$'\n\t'
 ########################################
 # ⚠️ IMPORTANT: You MUST configure these values before using auto-update!
 # Set your validator process name, wallet coldkey and hotkey below:
-PROCESS_NAME="subnet-36-validator"      # Your PM2 process name (default: subnet-36-validator)
-WALLET_NAME=""                           # ⚠️ REQUIRED: Your coldkey name (e.g., "my_coldkey")
-WALLET_HOTKEY=""                         # ⚠️ REQUIRED: Your hotkey name (e.g., "my_hotkey")
-SUBTENSOR_PARAM="--subtensor.network finney"  # Subtensor network (default: finney)
+PROCESS_NAME="${PROCESS_NAME:-subnet-36-validator}"      # Your PM2 process name (default: subnet-36-validator)
+WALLET_NAME="${WALLET_NAME:-}"                           # ⚠️ REQUIRED: Your coldkey name (e.g., "my_coldkey")
+WALLET_HOTKEY="${WALLET_HOTKEY:-}"                       # ⚠️ REQUIRED: Your hotkey name (e.g., "my_hotkey")
+SUBTENSOR_PARAM="${SUBTENSOR_PARAM:---subtensor.network finney}"  # Subtensor network (default: finney)
 
 ########################################
 # Interval (seconds)
 ########################################
 # Adjust how often the script checks for a new version
-SLEEP_INTERVAL=600
+SLEEP_INTERVAL="${SLEEP_INTERVAL:-600}"
 
 ########################################
 # Paths

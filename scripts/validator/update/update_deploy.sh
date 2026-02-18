@@ -24,6 +24,10 @@ PROCESS_NAME="${PROCESS_NAME:-subnet-36-validator}"
 WALLET_NAME="${WALLET_NAME:-}"      # will prompt if empty
 WALLET_HOTKEY="${WALLET_HOTKEY:-}"  # will prompt if empty
 SUBTENSOR_PARAM="${SUBTENSOR_PARAM:---subtensor.network finney}"
+# Optional extra flags for validator start (only used when PM2 process does not exist).
+VALIDATOR_ARGS="${VALIDATOR_ARGS:-}"
+# Optional: skip demo-web redeploy (set to "false" to skip).
+DEPLOY_DEMO_WEBS="${DEPLOY_DEMO_WEBS:-true}"
 
 # Override via args
 if [ $# -ge 1 ]; then PROCESS_NAME="$1"; fi
@@ -81,11 +85,15 @@ echo
 step "Deploying web demos"
 DEPLOY_DEMO_WRAPPER="$REPO_ROOT/scripts/validator/demo-webs/deploy_demo_webs.sh"
 echo "Looking for demo deploy wrapper at: $DEPLOY_DEMO_WRAPPER"
-if [ ! -x "$DEPLOY_DEMO_WRAPPER" ]; then
-  echo "Error: demo deploy wrapper not found or not executable: $DEPLOY_DEMO_WRAPPER" >&2
-  exit 1
+if [ "$DEPLOY_DEMO_WEBS" = "true" ]; then
+  if [ ! -x "$DEPLOY_DEMO_WRAPPER" ]; then
+    echo "Error: demo deploy wrapper not found or not executable: $DEPLOY_DEMO_WRAPPER" >&2
+    exit 1
+  fi
+  bash "$DEPLOY_DEMO_WRAPPER"
+else
+  echo "Skipping demo web deploy (DEPLOY_DEMO_WEBS=$DEPLOY_DEMO_WEBS)"
 fi
-bash "$DEPLOY_DEMO_WRAPPER"
 echo
 
 ########################################
@@ -107,7 +115,8 @@ if ! pm2 restart "$PROCESS_NAME"; then
     --interpreter python \
     -- --netuid 36 $SUBTENSOR_PARAM \
        --wallet.name "$WALLET_NAME" \
-       --wallet.hotkey "$WALLET_HOTKEY"
+       --wallet.hotkey "$WALLET_HOTKEY" \
+       $VALIDATOR_ARGS
 fi
 
 echo
