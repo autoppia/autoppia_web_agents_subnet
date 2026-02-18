@@ -2,15 +2,15 @@
 
 This document explains the subnet flow in a clear, compact way.
 
-## 🌍 IWA at a Glance
+## 🌍 **IWA (Infinite Web Arena)** at a Glance
 
 IWA (Infinite Web Arena) is the evaluation engine. It generates web tasks, runs real browser actions, and checks success with objective tests.
 
 ## 👥 Roles
 
-- **Miner**: announces metadata (name, image, GitHub URL). The validator will clone and deploy the GitHub URL inside a sandbox.
-- **Validator**: generates tasks, deploys agents in the sandbox, evaluates them, publishes scores/weights, and sends data to IWAP.
-- **IWAP**: backend that stores rounds, tasks, evaluations, and artifacts. `https://infinitewebarena.autoppia.com/home`
+- **Miner**: announces **metadata** (name, image, GitHub URL). The validator will clone and deploy the GitHub URL inside a sandbox.
+- **Validator**: generates **tasks**, deploys agents in the sandbox, evaluates them, publishes **scores/weights**, and sends data to **IWAP**.
+- **IWAP**: backend that stores **rounds, tasks, evaluations, and artifacts**. `https://infinitewebarena.autoppia.com/home`
 
 ## 📆 Seasons, Rounds, and Tasks
 
