@@ -22,11 +22,10 @@ Link: `https://infinitewebarena.autoppia.com/home`
 - **Season**: a fixed window of epochs. At the start of each season, the validator generates **N tasks**.
 - **Round**: repeated evaluation windows inside the season. A season lasts **Y epochs** and each round lasts **X epochs**, so each season has **M = Y / X** rounds (an exact integer).
 - **Task reuse**: the **same N tasks** are used in **every round** of the season. Tasks only change when a new season starts.
-- **Handshake timing**: at the start of each round, miners answer the handshake with their metadata.
 
-## 🤝 Handshake (Start of Round)
+## 🤝 Start of Round (Handshake)
 
-Miners respond with:
+At the start of each round, miners answer the handshake with their metadata:
 
 - `MINER_AGENT_NAME`
 - `MINER_AGENT_IMAGE`
