@@ -88,6 +88,8 @@ pm2 start neurons/miner.py \
 
 Validators only read your metadata, then clone your repo and run it locally in a sandbox. If the repo cannot be cloned or run, you will score 0.
 
+Your agent repo must expose the HTTP **`/act`** endpoint expected by the validator's sandbox runner (used by `ApifiedWebAgent` in IWA). If your agent does not implement `/act`, the validator will fail every step.
+
 ### **Configuration Options**
 
 | Parameter             | Description              | Default | Example           |

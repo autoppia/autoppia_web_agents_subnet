@@ -185,7 +185,14 @@ Quick check (example):
 docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
 ```
 
-You should see multiple demo web containers (ports like `8000+`), plus a DB container and a `webs_server` API container. Some deployments run a single container per demo site; others reuse shared services—so **do not rely on the exact container count**.
+You should see multiple demo web containers (ports like `8000+`), plus a DB container and a `webs_server` API container. With the default `autoppia_webs_demo` setup you should see **~14 demo sites**, but the exact count depends on the project list—so **do not hardcode the number**.
+
+Optional endpoint checks:
+
+```bash
+curl -sSf http://localhost:8090/health
+curl -sSf http://localhost:8000
+```
 
 ---
 
@@ -200,6 +207,8 @@ Key env vars (set in `.env`):
 - `SANDBOX_INSTANCE` (unique string for container naming)
 
 Defaults: if you run a single validator, you can omit these and use the defaults from `autoppia_web_agents_subnet/validator/config.py`.
+
+Note: you do not need to manually start the gateway. The validator will build and start the sandbox gateway/agent containers when it first evaluates a miner.
 
 If you are running **multiple validators on one host**, each must use a unique combination of these values.
 
