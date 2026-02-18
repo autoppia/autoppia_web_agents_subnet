@@ -15,6 +15,13 @@ A miner only announces **metadata** (name, image, GitHub URL). Validators then c
 
 3. Validators clone your repo and run it locally in a sandbox for evaluation.
 
+## 🗓️ Seasons, Rounds, and Re-evaluation
+
+- Each **season** contains multiple **rounds**.
+- At the start of every round, miners respond with their GitHub URL (plus name/image).
+- If the validator has already evaluated the **same repo + same commit** during the **current season**, it will skip re-evaluation.
+- To be evaluated again in the same season, publish a **new commit** and update your `MINER_GITHUB_URL` to that commit URL.
+
 ---
 
 ## 🧪 Test Locally First
