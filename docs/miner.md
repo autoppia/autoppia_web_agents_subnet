@@ -10,6 +10,9 @@ A miner only announces **metadata** (name, image, GitHub URL). Validators then c
 
 1. You publish your agent code in a GitHub repo (commit or branch).
 2. Your miner advertises `MINER_AGENT_NAME`, `MINER_GITHUB_URL`, and `MINER_AGENT_IMAGE`.
+
+**Important:** your agent repo must expose the HTTP **`/act`** endpoint expected by the validator's sandbox runner (used by `ApifiedWebAgent` in IWA). If your agent does not implement `/act`, the validator will fail every step.
+
 3. Validators clone your repo and run it locally in a sandbox for evaluation.
 
 ---
@@ -87,8 +90,6 @@ pm2 start neurons/miner.py \
 ### **Validator Compatibility**
 
 Validators only read your metadata, then clone your repo and run it locally in a sandbox. If the repo cannot be cloned or run, you will score 0.
-
-Your agent repo must expose the HTTP **`/act`** endpoint expected by the validator's sandbox runner (used by `ApifiedWebAgent` in IWA). If your agent does not implement `/act`, the validator will fail every step.
 
 ### **Configuration Options**
 
