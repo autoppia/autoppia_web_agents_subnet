@@ -285,8 +285,7 @@ Update all components manually (from repository directory):
 # Complete update
 chmod +x scripts/validator/update/update_deploy.sh
 ./scripts/validator/update/update_deploy.sh
-
-Common overrides:
+```
 
 ```bash
 # Skip demo web redeploy
@@ -295,11 +294,10 @@ DEPLOY_DEMO_WEBS=false ./scripts/validator/update/update_deploy.sh
 # Add validator flags when PM2 process needs to be created
 VALIDATOR_ARGS="--logging.info --neuron.disable_set_weights" ./scripts/validator/update/update_deploy.sh
 ```
-```
 
 ---
 
-## 📊 6. Reports Module
+## 📊 8. Reports Module
 
 The validator automatically generates and sends detailed round reports via email at the end of each round. Reports include round statistics, miner performance, consensus data, and any errors or warnings.
 
@@ -356,7 +354,3 @@ Need help? Contact our team on Discord:
 - 🌍 **Scalability**: All components support distributed deployment across multiple machines
 - 🔒 **Security**: Ensure proper firewall configuration for remote deployments
 - 🔄 **Auto-Updates**: Option 1 (editing script) is recommended as it persists configuration across restarts
-
-```
-
-```

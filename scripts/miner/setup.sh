@@ -1,6 +1,6 @@
 #!/bin/bash
-# setup.sh - Setup miner Python environment and dependencies
-set -e
+# setup.sh - Setup miner runtime environment (metadata-only miner)
+set -euo pipefail
 
 handle_error() {
   echo -e "\e[31m[ERROR]\e[0m $1" >&2
@@ -43,51 +43,8 @@ upgrade_pip() {
   success_msg "pip and setuptools upgraded."
 }
 
-install_python_reqs() {
-  info_msg "Installing Python dependencies from requirements.txt..."
-  [ -f "requirements.txt" ] || handle_error "requirements.txt not found"
-  
-  pip install -r requirements.txt \
-    || handle_error "Failed to install Python dependencies"
-
-  info_msg "Installing Playwright package..."
-  pip install playwright \
-    || handle_error "Failed to install Playwright package"
-  
-  # Verify that the playwright CLI is available
-  if ! command -v playwright >/dev/null 2>&1; then
-    handle_error "playwright CLI not found after installation. Make sure 'playwright' is in PATH."
-  fi
-  
-  info_msg "Downloading Playwright browsers..."
-  python -m playwright install \
-    || handle_error "Failed to download Playwright browsers"
-  
-  # Install any additional OS dependencies for Playwright (silently ignore errors)
-  python -m playwright install-deps 2>/dev/null || true
-  
-  success_msg "Playwright and browsers installed."
-}
-
-install_modules() {
-  info_msg "Installing current package in editable mode..."
-  pip install -e . \
-    || handle_error "Failed to install current package"
-  success_msg "Main package installed."
-
-  IWA_PATH="${IWA_PATH:-../autoppia_iwa}"
-  info_msg "Installing autoppia_iwa from ${IWA_PATH}..."
-  [ -d "$IWA_PATH" ] || handle_error "IWA_PATH not found: ${IWA_PATH}. Clone autoppia_iwa as a sibling repo or set IWA_PATH."
-  
-  pushd "$IWA_PATH" >/dev/null
-  pip install -e . \
-    || handle_error "Failed to install autoppia_iwa"
-  popd >/dev/null
-  success_msg "autoppia_iwa installed."
-}
-
 install_bittensor() {
-  info_msg "Installing Bittensor v9.9.0 and CLI v9.4.2..."
+  info_msg "Installing Bittensor v9.9.0 and CLI v9.9.0..."
   pip install bittensor==9.9.0 bittensor-cli==9.9.0 \
     || handle_error "Failed to install Bittensor"
   success_msg "Bittensor installed."
@@ -95,15 +52,15 @@ install_bittensor() {
 
 verify_installation() {
   info_msg "Verifying miner environment setup..."
-  
+
   # Check Bittensor
   python -c "import bittensor; print(f'✓ Bittensor: {bittensor.__version__}')" || \
     info_msg "⚠ Warning: Bittensor import failed"
-  
-  # Check Playwright
-  python -c "import playwright; print('✓ Playwright: imported successfully')" || \
-    info_msg "⚠ Warning: Playwright import failed"
-  
+
+  # Check subnet protocol import used by miner
+  python -c "from autoppia_web_agents_subnet.protocol import StartRoundSynapse; print('✓ Protocol import: OK')" || \
+    info_msg "⚠ Warning: protocol import failed"
+
   success_msg "Installation verification completed."
 }
 
@@ -123,17 +80,20 @@ show_completion_info() {
   echo "   pm2 start neurons/miner.py --name miner --interpreter python -- \\"
   echo "     --netuid 36 --subtensor.network finney \\"
   echo "     --wallet.name your_coldkey --wallet.hotkey your_hotkey"
+  echo
+  echo -e "\e[34m[NOTE]\e[0m Miner does not run task evaluation. It only sends AGENT_NAME/GITHUB_URL/AGENT_IMAGE in handshake."
 }
 
 main() {
+  REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+  cd "$REPO_ROOT" || handle_error "Failed to navigate to repo root"
+
   check_python
   create_activate_venv
   upgrade_pip
-  install_python_reqs
-  install_modules
   install_bittensor
   verify_installation
-  
+
   show_completion_info
 }
 

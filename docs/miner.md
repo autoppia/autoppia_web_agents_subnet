@@ -9,7 +9,7 @@ A miner only announces **metadata** (name, image, GitHub URL). Validators then c
 ## 🎯 How It Works (Simple)
 
 1. You publish your agent code in a GitHub repo (commit or branch).
-2. Your miner advertises `MINER_AGENT_NAME`, `MINER_GITHUB_URL`, and `MINER_AGENT_IMAGE`.
+2. Your miner advertises `AGENT_NAME`, `GITHUB_URL`, and `AGENT_IMAGE`.
 
 **Important:** your agent repo must expose the HTTP **`/act`** endpoint expected by the validator's sandbox runner (used by `ApifiedWebAgent` in IWA). If your agent does not implement `/act`, the validator will fail every step.
 
@@ -20,13 +20,13 @@ A miner only announces **metadata** (name, image, GitHub URL). Validators then c
 - Each **season** contains multiple **rounds**.
 - At the start of every round, miners respond with their GitHub URL (plus name/image).
 - If the validator has already evaluated the **same repo + same commit** during the **current season**, it will skip re-evaluation.
-- To be evaluated again in the same season, publish a **new commit** and update your `MINER_GITHUB_URL` to that commit URL.
+- To be evaluated again in the same season, publish a **new commit** and update your `GITHUB_URL` to that commit URL.
 
 ---
 
 ## 🧪 Test Locally First
 
-Use the benchmark to validate your agent **before** advertising it to validators. See the [Benchmark Guide](docs/advanced/benchmark_readme.md).
+Use the benchmark to validate your agent **before** advertising it to validators. See the [Benchmark Guide](./advanced/benchmark_readme.md).
 
 ```bash
 IWA_PATH=${IWA_PATH:-../autoppia_iwa}
@@ -44,7 +44,7 @@ python -m autoppia_iwa.entrypoints.benchmark.run
 
 ### **Configure .env**
 
-**Step 1: Setup Miner Environment**
+**Step 1: Setup Miner Environment (minimal runtime)**
 
 ```bash
 # Install miner dependencies
@@ -55,6 +55,8 @@ chmod +x scripts/miner/install_dependencies.sh
 chmod +x scripts/miner/setup.sh
 ./scripts/miner/setup.sh
 ```
+
+These scripts install only what the miner needs to answer handshake metadata (Python, PM2, bittensor). They do **not** install Playwright/IWA.
 
 **Step 2: Configure Agent in .env**
 
@@ -67,9 +69,9 @@ cp .env.miner-example .env
 
 Minimum fields to set:
 
-- `MINER_AGENT_NAME` (public name shown to validators)
-- `MINER_GITHUB_URL` (repo URL or commit URL that validators clone in the sandbox)
-- `MINER_AGENT_IMAGE` (public image URL shown in UI, optional but recommended)
+- `AGENT_NAME` (public name shown to validators)
+- `GITHUB_URL` (repo URL or commit URL that validators clone in the sandbox)
+- `AGENT_IMAGE` (public image URL shown in UI, optional but recommended)
 
 Note: demo webs are only required for local benchmarking. A miner does not need demo webs running in production.
 
@@ -124,7 +126,7 @@ Validators only read your metadata, then clone your repo and run it locally in a
 
 | Phase                | Time  | Action               | Guide                                    |
 | -------------------- | ----- | -------------------- | ---------------------------------------- |
-| **Local Testing**    | 30min | Develop & test agent | [Benchmark Guide](./benchmark_readme.md) |
+| **Local Testing**    | 30min | Develop & test agent | [Benchmark Guide](./advanced/benchmark_readme.md) |
 | **Miner Deployment** | 10min | Deploy to mainnet    | This guide (Phase 2)                     |
 
 ### **Key Benefits**

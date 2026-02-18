@@ -1,7 +1,13 @@
 import os
 from typing import Optional
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except Exception:  # pragma: no cover - optional dependency for miner-only setups
+
+    def load_dotenv(*_args, **_kwargs):
+        return False
+
 
 load_dotenv()
 

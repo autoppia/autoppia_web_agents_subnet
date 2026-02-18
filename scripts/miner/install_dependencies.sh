@@ -1,6 +1,6 @@
 #!/bin/bash
-# install_dependencies.sh - Install ONLY system dependencies for miner
-set -e
+# install_dependencies.sh - Install ONLY system dependencies for miner runtime
+set -euo pipefail
 
 handle_error() {
   echo -e "\e[31m[ERROR]\e[0m $1" >&2
@@ -18,43 +18,20 @@ info_msg() {
 install_system_dependencies() {
   info_msg "Updating apt package lists..."
   sudo apt update -y || handle_error "Failed to update apt lists"
-  sudo apt upgrade -y || handle_error "Failed to upgrade packages"
-  
+
   info_msg "Installing core tools..."
-  sudo apt install -y sudo software-properties-common lsb-release \
+  sudo apt install -y sudo software-properties-common lsb-release curl git \
     || handle_error "Failed to install core tools"
-  
+
   info_msg "Adding Python 3.11 PPA..."
   sudo add-apt-repository ppa:deadsnakes/ppa -y \
     || handle_error "Failed to add Python PPA"
   sudo apt update -y || handle_error "Failed to refresh apt lists"
-  
-  # Same packages as validator (miners need browser automation too)
-  COMMON_PACKAGES=(
-    python3.11 python3.11-venv python3.11-dev
-    build-essential cmake wget unzip sqlite3
-    libnss3 libnss3-dev
-    libatk1.0-0 libatk-bridge2.0-0 libcups2
-    libx11-xcb1 libxcomposite1 libxcursor1 libxdamage1 libxrandr2
-    libgbm1 libpango-1.0-0 libgtk-3-0
-    libvpx-dev libevent-dev libopus0
-    libgstreamer1.0-0
-    libgstreamer-plugins-base1.0-0 libgstreamer-plugins-good1.0-0 libgstreamer-plugins-bad1.0-0
-    libwebp-dev libharfbuzz-dev libsecret-1-dev libhyphen0 libflite1 libgles2-mesa-dev
-    libx264-dev gnupg curl
-  )
-  
-  # Add version-specific audio package
-  UBUNTU_CODENAME=$(lsb_release -cs)
-  case "$UBUNTU_CODENAME" in
-    jammy)  EXTRA_PACKAGES=(libasound2)   ;;
-    noble)  EXTRA_PACKAGES=(libasound2t64) ;;
-    *)      EXTRA_PACKAGES=(libasound2)   ;;
-  esac
-  
-  info_msg "Installing system dependencies for $UBUNTU_CODENAME..."
-  sudo apt install -y "${COMMON_PACKAGES[@]}" "${EXTRA_PACKAGES[@]}" \
-    || handle_error "Failed to install system dependencies"
+
+  # Minimal runtime deps: miner only responds to round handshake metadata.
+  info_msg "Installing minimal miner runtime dependencies..."
+  sudo apt install -y python3.11 python3.11-venv python3.11-dev build-essential \
+    || handle_error "Failed to install miner runtime dependencies"
 }
 
 install_pm2() {
@@ -70,13 +47,13 @@ install_pm2() {
 
 verify_installation() {
   info_msg "Verifying system dependencies..."
-  
+
   # Check Python
   python3.11 --version || handle_error "Python 3.11 verification failed"
-  
+
   # Check PM2
   pm2 --version || handle_error "PM2 verification failed"
-  
+
   success_msg "System dependencies verification passed"
 }
 
@@ -85,7 +62,7 @@ main() {
   install_system_dependencies
   install_pm2
   verify_installation
-  
+
   success_msg "System dependencies installed successfully!"
   echo -e "\e[33m[NEXT]\e[0m Run: ./scripts/miner/setup.sh"
 }
