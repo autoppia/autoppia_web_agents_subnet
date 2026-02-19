@@ -13,6 +13,7 @@ WALLET_HOTKEY="${WALLET_HOTKEY:-}"                              # Needed only if
 SUBTENSOR_PARAM="${SUBTENSOR_PARAM:---subtensor.network finney}" # Subtensor network
 IWA_PATH="${IWA_PATH:-../autoppia_iwa}"                         # Relative to subnet repo
 WEBS_DEMO_PATH="${WEBS_DEMO_PATH:-../autoppia_webs_demo}"       # Relative to subnet repo
+STATE_FILE="${STATE_FILE:-.auto_update_state}"                  # Persist deployed component versions
 
 ########################################
 # Interval (seconds)
@@ -34,6 +35,9 @@ if [[ "$IWA_PATH" != /* ]]; then
 fi
 if [[ "$WEBS_DEMO_PATH" != /* ]]; then
   WEBS_DEMO_PATH="$REPO_ROOT/$WEBS_DEMO_PATH"
+fi
+if [[ "$STATE_FILE" != /* ]]; then
+  STATE_FILE="$REPO_ROOT/$STATE_FILE"
 fi
 # Paths to update scripts
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -73,6 +77,26 @@ get_remote_webs_demo_version() {
     extract_named_version "WEBS_DEMO_VERSION" /dev/stdin || echo ""
 }
 
+read_state_value() {
+  local key="$1"
+  [ -f "$STATE_FILE" ] || { echo ""; return 0; }
+  grep "^${key}=" "$STATE_FILE" 2>/dev/null | head -n1 | cut -d= -f2- || echo ""
+}
+
+upsert_state_value() {
+  local key="$1"
+  local value="$2"
+  local tmp_file
+
+  mkdir -p "$(dirname "$STATE_FILE")"
+  tmp_file="$(mktemp)"
+  if [ -f "$STATE_FILE" ]; then
+    grep -v "^${key}=" "$STATE_FILE" > "$tmp_file" || true
+  fi
+  printf '%s=%s\n' "$key" "$value" >> "$tmp_file"
+  mv "$tmp_file" "$STATE_FILE"
+}
+
 is_remote_newer() {
   # Returns true when local_version < remote_version
   [ -z "$1" ] && return 1
@@ -106,6 +130,7 @@ if [ -z "$WALLET_NAME" ] || [ -z "$WALLET_HOTKEY" ]; then
 fi
 echo "[INFO] Using parameters: process=$PROCESS_NAME, wallet=$WALLET_NAME, hotkey=$WALLET_HOTKEY, subtensor='$SUBTENSOR_PARAM'"
 echo "[INFO] Paths: iwa=$IWA_PATH webs_demo=$WEBS_DEMO_PATH"
+echo "[INFO] State file: $STATE_FILE"
 echo "[INFO] Checking every $((SLEEP_INTERVAL/60)) minutes for new release"
 
 ########################################
@@ -125,10 +150,15 @@ while true; do
     echo "[INFO] Subnet + IWA: no update needed"
   fi
 
-  WEBS_DEMO_LOCAL_VERSION=$(get_local_webs_demo_version)
+  WEBS_DEMO_GATES_VERSION=$(get_local_webs_demo_version)
+  WEBS_DEMO_DEPLOYED_VERSION=$(read_state_value "LAST_DEPLOYED_WEBS_DEMO_VERSION")
+  WEBS_DEMO_LOCAL_VERSION="$WEBS_DEMO_GATES_VERSION"
+  if is_remote_newer "$WEBS_DEMO_LOCAL_VERSION" "$WEBS_DEMO_DEPLOYED_VERSION"; then
+    WEBS_DEMO_LOCAL_VERSION="$WEBS_DEMO_DEPLOYED_VERSION"
+  fi
   WEBS_DEMO_REMOTE_VERSION=$(get_remote_webs_demo_version)
-  if [ -n "${WEBS_DEMO_LOCAL_VERSION:-}" ] || [ -n "${WEBS_DEMO_REMOTE_VERSION:-}" ]; then
-    echo "[INFO] WEBS_DEMO_VERSION local=$WEBS_DEMO_LOCAL_VERSION remote=$WEBS_DEMO_REMOTE_VERSION"
+  if [ -n "${WEBS_DEMO_GATES_VERSION:-}" ] || [ -n "${WEBS_DEMO_REMOTE_VERSION:-}" ] || [ -n "${WEBS_DEMO_DEPLOYED_VERSION:-}" ]; then
+    echo "[INFO] WEBS_DEMO_VERSION gate_local=$WEBS_DEMO_GATES_VERSION deployed_local=$WEBS_DEMO_DEPLOYED_VERSION effective_local=$WEBS_DEMO_LOCAL_VERSION remote=$WEBS_DEMO_REMOTE_VERSION"
   else
     echo "[WARN] WEBS_DEMO_VERSION not available in $VERSION_GATES_FILE"
   fi
@@ -136,6 +166,8 @@ while true; do
   if is_remote_newer "$WEBS_DEMO_LOCAL_VERSION" "$WEBS_DEMO_REMOTE_VERSION"; then
     echo "[INFO] WEBS_DEMO_VERSION bump detected -> updating webs_demo"
     WEBS_DEMO_PATH="$WEBS_DEMO_PATH" bash -x "$UPDATE_WEBS_DEMO_SCRIPT"
+    upsert_state_value "LAST_DEPLOYED_WEBS_DEMO_VERSION" "$WEBS_DEMO_REMOTE_VERSION"
+    echo "[INFO] Persisted LAST_DEPLOYED_WEBS_DEMO_VERSION=$WEBS_DEMO_REMOTE_VERSION"
     echo "[INFO] webs_demo update completed"
   else
     echo "[INFO] WebsDemo: no update needed"
