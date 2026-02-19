@@ -23,13 +23,10 @@ from autoppia_web_agents_subnet.validator.config import (
     MAX_MINERS_PER_ROUND_BY_STAKE,
     MAX_MINERS_PER_COLDKEY,
     MAX_MINERS_PER_REPO,
-    EVALUATION_COOLDOWN_ROUNDS,
-    USE_DYNAMIC_EVALUATION_COOLDOWN,
-    DYNAMIC_EVALUATION_COOLDOWN_MIN_ROUNDS,
-    DYNAMIC_EVALUATION_COOLDOWN_MAX_ROUNDS,
-    DYNAMIC_EVALUATION_COOLDOWN_STAKE_REFERENCE_ALPHA,
-    DYNAMIC_EVALUATION_COOLDOWN_STAKE_BONUS,
-    DYNAMIC_EVALUATION_COOLDOWN_SCORE_SMOOTH_EPS,
+    EVALUATION_COOLDOWN_MIN_ROUNDS,
+    EVALUATION_COOLDOWN_MAX_ROUNDS,
+    EVALUATION_COOLDOWN_NO_RESPONSE_BADNESS,
+    EVALUATION_COOLDOWN_ZERO_SCORE_BADNESS,
 )
 from autoppia_web_agents_subnet.validator.round_start.synapse_handler import send_start_round_synapse_to_miners
 
@@ -77,96 +74,53 @@ def _clear_queue_best_effort(q: object) -> None:
         pass
 
 
-def _resolve_dynamic_cooldown_rounds(
+def _resolve_adaptive_cooldown_rounds(
     *,
-    base_rounds: int,
-    miner_stake_alpha: float,
     miner_score: float | None,
     best_score_ever: float | None,
+    handshake_responded: bool,
 ) -> int:
-    if not USE_DYNAMIC_EVALUATION_COOLDOWN:
-        return max(0, int(base_rounds))
-
-    if DYNAMIC_EVALUATION_COOLDOWN_MAX_ROUNDS <= DYNAMIC_EVALUATION_COOLDOWN_MIN_ROUNDS:
-        return max(0, int(DYNAMIC_EVALUATION_COOLDOWN_MIN_ROUNDS))
-
-    min_rounds = max(0, int(DYNAMIC_EVALUATION_COOLDOWN_MIN_ROUNDS))
-    max_rounds = max(min_rounds, int(DYNAMIC_EVALUATION_COOLDOWN_MAX_ROUNDS))
+    min_rounds = max(0, int(EVALUATION_COOLDOWN_MIN_ROUNDS))
+    max_rounds = max(min_rounds, int(EVALUATION_COOLDOWN_MAX_ROUNDS))
     if min_rounds == max_rounds:
         return min_rounds
 
-    best_score = float(best_score_ever) if isinstance(best_score_ever, (int, float)) else float(DYNAMIC_EVALUATION_COOLDOWN_SCORE_SMOOTH_EPS)
-    if not (best_score > 0.0):
-        best_score = float(DYNAMIC_EVALUATION_COOLDOWN_SCORE_SMOOTH_EPS)
+    best_score = float(best_score_ever) if isinstance(best_score_ever, (int, float)) else 1.0
+    if best_score <= 0.0:
+        best_score = 1.0
 
     score = float(miner_score or 0.0)
-    if score < 0.0:
-        score = 0.0
-    if score > best_score:
-        score = best_score
-    normalized_score = score / best_score
-    quality_ratio = max(0.0, min(1.0, normalized_score))
+    score = max(0.0, min(score, best_score))
+    quality_ratio = score / best_score
 
-    # 0 => perfect latest miner score, 1 => very bad latest score.
-    quality_penalty = 1.0 - quality_ratio
-    quality_penalty = quality_penalty * quality_penalty  # stronger penalty for low scores.
+    # Higher value => worse miner => longer cooldown.
+    badness = 1.0 - quality_ratio
+    if score <= 0.0:
+        badness += float(EVALUATION_COOLDOWN_ZERO_SCORE_BADNESS)
+    if not handshake_responded:
+        badness += float(EVALUATION_COOLDOWN_NO_RESPONSE_BADNESS)
 
-    # Stake discount: higher stake can reduce cooldown.
-    stake_ref = max(float(DYNAMIC_EVALUATION_COOLDOWN_STAKE_REFERENCE_ALPHA), 1.0)
-    stake_ratio = max(0.0, min(1.0, float(miner_stake_alpha) / stake_ref))
-    bonus = max(0.0, 1.0 - float(DYNAMIC_EVALUATION_COOLDOWN_STAKE_BONUS) * stake_ratio)
-
-    cooldown = min_rounds + (max_rounds - min_rounds) * quality_penalty * bonus
-    dynamic_rounds = int(round(max(min_rounds, min(max_rounds, cooldown))))
-    return dynamic_rounds
+    badness = max(0.0, min(1.0, badness))
+    cooldown = min_rounds + int(round(badness * (max_rounds - min_rounds)))
+    return max(min_rounds, min(max_rounds, cooldown))
 
 
 def _is_cooldown_active(
     *,
     current_round: int,
     last_evaluated_round: int | None,
-    cooldown_rounds: int,
-    miner_stake_alpha: float,
     miner_score: float | None,
     best_score_ever: float | None = None,
+    handshake_responded: bool = True,
 ) -> bool:
-    if cooldown_rounds <= 0 and not USE_DYNAMIC_EVALUATION_COOLDOWN:
-        return False
     if not isinstance(last_evaluated_round, int):
         return False
-    effective_cooldown = _resolve_dynamic_cooldown_rounds(
-        base_rounds=cooldown_rounds,
-        miner_stake_alpha=miner_stake_alpha,
+    effective_cooldown = _resolve_adaptive_cooldown_rounds(
         miner_score=miner_score,
         best_score_ever=best_score_ever,
+        handshake_responded=handshake_responded,
     )
     return (current_round - last_evaluated_round) < effective_cooldown
-
-
-def _resolve_miner_stake_alpha(
-    *,
-    metagraph: object,
-    uid: int,
-    fallback_stake_alpha: float,
-) -> float:
-    """
-    Resolve miner stake in TAO for the dynamic cooldown calculation.
-
-    Some environments expose stake in raw chain units (RAO); this helper
-    attempts to normalise using the existing iwa_core utility and falls back to
-    the original value if unavailable.
-    """
-
-    try:
-        from autoppia_web_agents_subnet.platform.utils.iwa_core import normalized_stake_tao
-
-        normalized = normalized_stake_tao(metagraph, uid)
-        if normalized is not None:
-            return float(normalized)
-    except Exception:
-        pass
-
-    return float(fallback_stake_alpha)
 
 
 class ValidatorRoundStartMixin:
@@ -401,7 +355,6 @@ class ValidatorRoundStartMixin:
         if not isinstance(repo_owner_by_season, dict):
             repo_owner_by_season = {}
             self._season_repo_owners = repo_owner_by_season
-        cooldown_rounds = int(EVALUATION_COOLDOWN_ROUNDS)
         active_handshake_uids: list[int] = []
         responded_count = 0
         response_missing_count = 0
@@ -425,14 +378,9 @@ class ValidatorRoundStartMixin:
                     if not _is_cooldown_active(
                         current_round=current_round,
                         last_evaluated_round=getattr(existing, "last_evaluated_round", None),
-                        cooldown_rounds=cooldown_rounds,
-                        miner_stake_alpha=_resolve_miner_stake_alpha(
-                            metagraph=metagraph,
-                            uid=uid,
-                            fallback_stake_alpha=float(stakes[uid]) if uid < len(stakes) else 0.0,
-                        ),
                         miner_score=getattr(existing, "score", 0.0),
                         best_score_ever=getattr(self, "_best_score_ever", None),
+                        handshake_responded=False,
                     ):
                         pending_info = AgentInfo(
                             uid=uid,
@@ -662,14 +610,9 @@ class ValidatorRoundStartMixin:
                 if _is_cooldown_active(
                     current_round=current_round,
                     last_evaluated_round=getattr(existing, "last_evaluated_round", None),
-                    cooldown_rounds=cooldown_rounds,
-                    miner_stake_alpha=_resolve_miner_stake_alpha(
-                        metagraph=metagraph,
-                        uid=uid,
-                        fallback_stake_alpha=float(stakes[uid]) if uid < len(stakes) else 0.0,
-                    ),
                     miner_score=getattr(existing, "score", 0.0),
                     best_score_ever=getattr(self, "_best_score_ever", None),
+                    handshake_responded=True,
                 ):
                     # Store pending submission and skip enqueuing for now.
                     try:

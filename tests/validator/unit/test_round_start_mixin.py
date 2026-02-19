@@ -36,7 +36,7 @@ class TestRoundStart:
         dummy_validator.block = 1650  # Late in round (fraction > 0.2)
         dummy_validator._wait_until_specific_block = AsyncMock()
 
-        with patch("autoppia_web_agents_subnet.validator.config.VALIDATOR_ROUND_START_UNTIL_FRACTION", 0.2):
+        with patch("autoppia_web_agents_subnet.validator.config.SKIP_ROUND_IF_STARTED_AFTER_FRACTION", 0.2):
             result = await dummy_validator._start_round()
 
         assert result.continue_forward is False
@@ -335,7 +335,10 @@ class TestHandshake:
         dummy_validator.agents_dict = {1: existing}
 
         with (
-            patch("autoppia_web_agents_subnet.validator.round_start.mixin.EVALUATION_COOLDOWN_ROUNDS", 2),
+            patch("autoppia_web_agents_subnet.validator.round_start.mixin.EVALUATION_COOLDOWN_MIN_ROUNDS", 1),
+            patch("autoppia_web_agents_subnet.validator.round_start.mixin.EVALUATION_COOLDOWN_MAX_ROUNDS", 2),
+            patch("autoppia_web_agents_subnet.validator.round_start.mixin.EVALUATION_COOLDOWN_NO_RESPONSE_BADNESS", 0.0),
+            patch("autoppia_web_agents_subnet.validator.round_start.mixin.EVALUATION_COOLDOWN_ZERO_SCORE_BADNESS", 0.0),
             patch("autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners", new_callable=AsyncMock) as mock_send,
             patch("autoppia_web_agents_subnet.validator.round_start.mixin.resolve_remote_ref_commit") as mock_resolve,
         ):
