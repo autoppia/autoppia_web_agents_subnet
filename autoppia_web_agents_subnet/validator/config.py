@@ -9,20 +9,6 @@ import os
 
 TESTING = _env_bool("TESTING", False)
 
-
-def _env_float_prefer_new(
-    primary_name: str,
-    legacy_name: str,
-    default: float,
-    test_default: float | None = None,
-) -> float:
-    if os.getenv(primary_name) is not None:
-        return _env_float(primary_name, default, test_default=test_default)
-    if TESTING and os.getenv(f"TEST_{primary_name}") is not None:
-        return _env_float(primary_name, default, test_default=test_default)
-    return _env_float(legacy_name, default, test_default=test_default)
-
-
 # ═══════════════════════════════════════════════════════════════════════════
 # BURN CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
@@ -47,25 +33,16 @@ SKIP_ROUND_IF_STARTED_AFTER_FRACTION = _env_float("SKIP_ROUND_IF_STARTED_AFTER_F
 # Tasks are distributed round-robin across all demo projects (1 task per project per cycle)
 TASKS_PER_SEASON = _env_int("TASKS_PER_SEASON", 100, test_default=3)
 CONCURRENT_EVALUATION_NUM = _env_int("CONCURRENT_EVALUATION_NUM", 5)
-SCREENING_TASKS_FOR_EARLY_STOP = _env_int("SCREENING_TASKS_FOR_EARLY_STOP", 10)
 AGENT_MAX_STEPS = _env_int("AGENT_MAX_STEPS", 12, test_default=12)
-AGENT_STEP_TIMEOUT_SECONDS = _env_int("AGENT_STEP_TIMEOUT_SECONDS", 10)
-MAX_ACTIONS_LENGTH = _env_int("MAX_ACTIONS_LENGTH", 30, test_default=30)
+AGENT_STEP_TIMEOUT_SECONDS = _env_int("AGENT_STEP_TIMEOUT_SECONDS", 25)
 TASK_TIMEOUT_SECONDS = _env_float("TASK_TIMEOUT_SECONDS", 180.0, test_default=180.0)
-FEEDBACK_TIMEOUT_SECONDS = _env_float("FEEDBACK_TIMEOUT_SECONDS", 30.0, test_default=30.0)
 SHOULD_RECORD_GIF = _env_bool("SHOULD_RECORD_GIF", True)
 
-COST_LIMIT_ENABLED = _env_bool("COST_LIMIT_ENABLED", True)
-MAX_TASK_DOLLAR_COST = _env_float_prefer_new("MAX_TASK_DOLLAR_COST", "COST_LIMIT_VALUE", 0.05)  # USD
-# Backward-compatible alias.
-COST_LIMIT_VALUE = MAX_TASK_DOLLAR_COST
+MAX_TASK_DOLLAR_COST_USD = _env_float("MAX_TASK_DOLLAR_COST_USD", 0.05)
 
 # Stop evaluating a miner after this many tasks that exceed the per-task cost cap.
 # 0 disables this guard.
-_legacy_cost_limit_streak = int(os.getenv("COST_LIMIT_EARLY_STOP_STREAK", "10") or "10")
-COST_LIMIT_EXCEED_COUNT = _env_int("COST_LIMIT_EXCEED_COUNT", _legacy_cost_limit_streak)
-# Backward-compatible alias (deprecated; keep for rollout compatibility only).
-COST_LIMIT_EARLY_STOP_STREAK = COST_LIMIT_EXCEED_COUNT
+COST_LIMIT_EXCEED_COUNT = _env_int("COST_LIMIT_EXCEED_COUNT", 10)
 
 MAXIMUM_EXECUTION_TIME_SECONDS = _env_float("MAXIMUM_EXECUTION_TIME_SECONDS", 90.0)
 
@@ -122,10 +99,6 @@ DYNAMIC_EVALUATION_COOLDOWN_MAX_ROUNDS = _env_int("DYNAMIC_EVALUATION_COOLDOWN_M
 DYNAMIC_EVALUATION_COOLDOWN_STAKE_REFERENCE_ALPHA = _env_float("DYNAMIC_EVALUATION_COOLDOWN_STAKE_REFERENCE_ALPHA", 10000.0)
 DYNAMIC_EVALUATION_COOLDOWN_STAKE_BONUS = _env_float("DYNAMIC_EVALUATION_COOLDOWN_STAKE_BONUS", 0.70)
 DYNAMIC_EVALUATION_COOLDOWN_SCORE_SMOOTH_EPS = _env_float("DYNAMIC_EVALUATION_COOLDOWN_SCORE_SMOOTH_EPS", 1e-6)
-
-# Early stop: abort evaluating a miner when it can no longer beat the current best
-# possible average reward (winner-takes-all settlement), saving time and cost.
-EARLY_STOP_BEHIND_BEST = _env_bool("EARLY_STOP_BEHIND_BEST", True)
 
 VALIDATOR_NAME = _env_str("VALIDATOR_NAME")
 VALIDATOR_IMAGE = _env_str("VALIDATOR_IMAGE")
