@@ -258,7 +258,7 @@ class ValidatorEvaluationMixin:
             cost_limit_exceed_count = int(
                 getattr(
                     validator_config,
-                    "COST_LIMIT_EXCEED_COUNT",
+                    "MAX_OVER_COST_TASKS_BEFORE_FORCED_ZERO_SCORE",
                     0,
                 )
                 or 0

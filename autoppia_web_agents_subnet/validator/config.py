@@ -42,36 +42,19 @@ MAX_TASK_DOLLAR_COST_USD = _env_float("MAX_TASK_DOLLAR_COST_USD", 0.05)
 
 # Stop evaluating a miner after this many tasks that exceed the per-task cost cap.
 # 0 disables this guard.
-COST_LIMIT_EXCEED_COUNT = _env_int("COST_LIMIT_EXCEED_COUNT", 10)
+MAX_OVER_COST_TASKS_BEFORE_FORCED_ZERO_SCORE = _env_int(
+    "MAX_OVER_COST_TASKS_BEFORE_FORCED_ZERO_SCORE",
+    10,
+)
 
-MAXIMUM_EXECUTION_TIME_SECONDS = _env_float("MAXIMUM_EXECUTION_TIME_SECONDS", 90.0)
-
-
-def _env_float_multi_prefer_new(
-    primary_name: str,
-    legacy_names: list[str],
-    default: float,
-    test_default: float | None = None,
-) -> float:
-    if os.getenv(primary_name) is not None:
-        return _env_float(primary_name, default, test_default=test_default)
-    if TESTING and os.getenv(f"TEST_{primary_name}") is not None:
-        return _env_float(f"TEST_{primary_name}", default, test_default=test_default)
-    for legacy_name in legacy_names:
-        if os.getenv(legacy_name) is not None:
-            return _env_float(legacy_name, default, test_default=test_default)
-    return _env_float(primary_name, default, test_default=test_default)
-
-
-REWARD_TASK_DOLLAR_COST_NORMALIZATOR = _env_float_multi_prefer_new(
+REWARD_TASK_DOLLAR_COST_NORMALIZATOR = _env_float(
     "REWARD_TASK_DOLLAR_COST_NORMALIZATOR",
-    ["REWARD_DOLLAR_COST_NORMALIZATOR", "MAXIMUM_TOKEN_COST"],
     0.05,
 )  # USD
 
-EVAL_SCORE_WEIGHT = _env_float("EVAL_SCORE_WEIGHT", 1.0)
-TIME_WEIGHT = _env_float("TIME_WEIGHT", 0.0)
-COST_WEIGHT = _env_float("COST_WEIGHT", 0.0)
+EVAL_SCORE_WEIGHT = _env_float("EVAL_SCORE_WEIGHT", 0.7)
+TIME_WEIGHT = _env_float("TIME_WEIGHT", 0.1)
+COST_WEIGHT = _env_float("COST_WEIGHT", 0.2)
 
 SAME_SOLUTION_PENALTY = _env_float("SAME_SOLUTION_PENALTY", 0.0)
 SAME_SOLUTION_SIM_THRESHOLD = _env_float("SAME_SOLUTION_SIM_THRESHOLD", 0.90)

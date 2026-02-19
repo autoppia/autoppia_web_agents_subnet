@@ -13,7 +13,6 @@ import secrets
 
 from models import LLMUsage, DEFAULT_PROVIDER_CONFIGS
 from config import (
-    COST_LIMIT_ENABLED,
     COST_LIMIT_PER_TASK,
     OPENAI_API_KEY,
     CHUTES_API_KEY,
@@ -450,7 +449,7 @@ async def proxy_request(request: Request, path: str):
         if not task_id:
             raise HTTPException(status_code=400, detail="Task ID not found!")
 
-        if COST_LIMIT_ENABLED and gateway.is_cost_exceeded(task_id):
+        if gateway.is_cost_exceeded(task_id):
             current_usage = gateway.get_usage_for_task(task_id)
             raise HTTPException(status_code=402, detail=f"Cost limit exceeded. Current: ${current_usage.total_cost:.2f}, Limit: ${COST_LIMIT_PER_TASK:.2f}")
 

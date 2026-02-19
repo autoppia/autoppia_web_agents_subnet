@@ -52,7 +52,7 @@ Each round follows these steps (see `neurons/validator.py`):
    - Tasks are submitted through IWAP (`set_tasks`) and cached for local tracking.
 
 4. **Phase 3 – Task Execution**
-   - For each task, miners run agent simulations; validator waits for responses within `TASK_TIMEOUT_SECONDS`/`FEEDBACK_TIMEOUT_SECONDS`.
+   - For each task, miners run agent simulations; validator waits for responses within `TASK_TIMEOUT_SECONDS`.
    - IWAP `start_agent_run` is called per miner to record progress.
 
 5. **Phase 4 – Evaluation**
@@ -93,7 +93,6 @@ All IWAP requests include validator-hotkey signature headers (set in `platform/c
 | `STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION` | 0.65 | Stop task evaluation and upload to IPFS at 65% of round. |
 | `FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION` | 0.75 | Fetch IPFS payloads and calculate consensus weights at 75% of round. |
 | `SKIP_ROUND_IF_STARTED_AFTER_FRACTION` | 0.95 | Skip if starting too late (looser in testing). |
-| `SAFETY_BUFFER_EPOCHS` | 0.02 | Buffer before the round boundary when we park and wait. |
 
 **Publish Flow** (`validator/consensus.publish_round_snapshot`):
 1. Aggregate task rewards → average scores per miner (`RoundManager.round_rewards`).

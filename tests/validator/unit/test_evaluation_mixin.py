@@ -7,7 +7,6 @@ Tests evaluation phase, agent deployment, and score calculation.
 import pytest
 from unittest.mock import Mock, AsyncMock, patch
 from autoppia_web_agents_subnet.validator.round_manager import RoundPhase
-from autoppia_web_agents_subnet.validator.models import AgentInfo
 
 
 @pytest.mark.unit
@@ -110,8 +109,8 @@ class TestEvaluationPhase:
 
             assert validator_with_agents.round_manager.current_phase == RoundPhase.EVALUATION
 
-    async def test_evaluation_early_stops_when_cannot_beat_best(self, validator_with_agents, season_tasks):
-        """Test that evaluation can early-stop miners that cannot beat the best score."""
+    async def test_evaluation_runs_all_tasks_even_when_rewards_are_zero(self, validator_with_agents, season_tasks):
+        """Test that evaluation does not stop early based on competitive score."""
         from tests.conftest import _bind_evaluation_mixin
 
         validator_with_agents = _bind_evaluation_mixin(validator_with_agents)
@@ -125,30 +124,20 @@ class TestEvaluationPhase:
         validator_with_agents.sandbox_manager.deploy_agent = Mock(return_value=mock_instance)
         validator_with_agents.sandbox_manager.cleanup_agent = Mock()
 
-        # Seed a best already-evaluated agent so new miners can be stopped quickly.
-        validator_with_agents.agents_dict[99] = AgentInfo(
-            uid=99,
-            agent_name="best",
-            github_url="https://github.com/test/best",
-            score=0.9,
-            evaluated=True,
-        )
+        with patch("autoppia_web_agents_subnet.validator.config.CONCURRENT_EVALUATION_NUM", 1):
+            with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua") as mock_eval:
+                with (
+                    patch("autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url") as mock_normalize,
+                    patch("autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit") as mock_ls_remote,
+                ):
+                    mock_normalize.return_value = ("https://github.com/test/agent", "main")
+                    mock_ls_remote.return_value = "deadbeef"
+                    mock_eval.return_value = (0.0, 0.0, None)
 
-        with patch("autoppia_web_agents_subnet.validator.config.EARLY_STOP_BEHIND_BEST", True):
-            with patch("autoppia_web_agents_subnet.validator.config.CONCURRENT_EVALUATION_NUM", 1):
-                with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua") as mock_eval:
-                    with (
-                        patch("autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url") as mock_normalize,
-                        patch("autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit") as mock_ls_remote,
-                    ):
-                        mock_normalize.return_value = ("https://github.com/test/agent", "main")
-                        mock_ls_remote.return_value = "deadbeef"
-                        mock_eval.return_value = (0.0, 0.0, None)
+                    await validator_with_agents._run_evaluation_phase()
 
-                        await validator_with_agents._run_evaluation_phase()
-
-                        # With early-stop and batch_size=1, each of the 3 agents should only run ~1 task.
-                        assert mock_eval.call_count == 3
+                    expected_calls = len(season_tasks) * 3
+                    assert mock_eval.call_count == expected_calls
 
 
 @pytest.mark.unit

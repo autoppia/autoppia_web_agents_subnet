@@ -245,10 +245,8 @@ def build_validator_identity(validator) -> iwa_models.ValidatorIdentityIWAP:
 def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.ValidatorSnapshotIWAP:
     from autoppia_web_agents_subnet.validator.config import (
         ROUND_SIZE_EPOCHS,
-        SAFETY_BUFFER_EPOCHS,
         MINIMUM_START_BLOCK,
         TASKS_PER_SEASON,
-        AVG_TASK_DURATION_SECONDS,
         STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION,
         FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION,
         SKIP_ROUND_IF_STARTED_AFTER_FRACTION,
@@ -256,8 +254,6 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
         ENABLE_DISTRIBUTED_CONSENSUS,
         SHOULD_RECORD_GIF,
         TASK_TIMEOUT_SECONDS,
-        FEEDBACK_TIMEOUT_SECONDS,
-        MAX_ACTIONS_LENGTH,
         EVAL_SCORE_WEIGHT,
         TIME_WEIGHT,
         TESTING,
@@ -280,10 +276,8 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
     validator_config: Dict[str, Any] = {
         "round": {
             "round_size_epochs": ROUND_SIZE_EPOCHS,
-            "safety_buffer_epochs": SAFETY_BUFFER_EPOCHS,
             "minimum_start_block": MINIMUM_START_BLOCK,
             "tasks_per_season": TASKS_PER_SEASON,
-            "avg_task_duration_seconds": AVG_TASK_DURATION_SECONDS,
         },
         "timing": {
             "stop_task_evaluation_at_round_fraction": STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION,
@@ -298,8 +292,6 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
             "enable_dynamic": True,
             "should_record_gif": SHOULD_RECORD_GIF,
             "timeout": TASK_TIMEOUT_SECONDS,
-            "feedback_timeout": FEEDBACK_TIMEOUT_SECONDS,
-            "max_actions_length": MAX_ACTIONS_LENGTH,
         },
         "scoring": {
             "eval_score_weight": EVAL_SCORE_WEIGHT,
