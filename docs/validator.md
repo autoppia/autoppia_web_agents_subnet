@@ -245,7 +245,7 @@ pm2 start neurons/validator.py \
 
 ### **Auto-Update Setup**
 
-Enable automatic updates with safe rollback:
+Enable automatic updates with separated triggers:
 
 #### **Edit Script Configuration (Recommended)**
 
@@ -258,11 +258,15 @@ nano scripts/validator/update/auto_update_deploy.sh
 **Step 2**: Modify these configuration lines in the script:
 
 ```bash
-# Change these lines to match your setup:
-PROCESS_NAME="subnet-36-validator"      # Your PM2 process name
-WALLET_NAME="your_coldkey"              # Your actual coldkey
-WALLET_HOTKEY="your_hotkey"             # Your actual hotkey
-SUBTENSOR_PARAM="--subtensor.network finney"  # Subtensor network
+# Core
+PROCESS_NAME="subnet-36-validator"
+WALLET_NAME="your_coldkey"
+WALLET_HOTKEY="your_hotkey"
+SUBTENSOR_PARAM="--subtensor.network finney"
+
+# Paths
+IWA_PATH="../autoppia_iwa"
+WEBS_DEMO_PATH="../autoppia_webs_demo"
 ```
 
 **Step 3**: Start the auto-update service (from repository directory):
@@ -276,27 +280,33 @@ pm2 start --name auto_update_validator \
 
 **Auto-Update Notes**:
 
-- Checks for updates by comparing `__version__` in `autoppia_web_agents_subnet/__init__.py`.
+- Checks two release gates from one file in subnet:
+  - `SUBNET_IWA_VERSION` in `autoppia_web_agents_subnet/__init__.py` (subnet + IWA update trigger).
+  - `WEBS_DEMO_VERSION` in `autoppia_web_agents_subnet/__init__.py` (webs demo update trigger).
+- If subnet version increases, it runs `scripts/validator/update/update_iwa_and_subnet.sh` (pull subnet + IWA, reinstall, restart validator).
+- If webs demo version increases, it runs `scripts/validator/update/update_webs_demo.sh` (pull webs_demo and redeploy demos).
 - Default check interval is **600s (10 minutes)**. Override with `SLEEP_INTERVAL` env var.
-- Requires `WALLET_NAME` and `WALLET_HOTKEY` configured in the script or environment.
-- Uses `update_deploy.sh` for the actual update flow.
 
 ### **Manual Updates**
 
-Update all components manually (from repository directory):
+Manual update options (from repository directory):
 
 ```bash
-# Complete update
-chmod +x scripts/validator/update/update_deploy.sh
-./scripts/validator/update/update_deploy.sh
+# Update subnet + IWA only
+chmod +x scripts/validator/update/update_iwa_and_subnet.sh
+./scripts/validator/update/update_iwa_and_subnet.sh
 ```
 
 ```bash
-# Skip demo web redeploy
-DEPLOY_DEMO_WEBS=false ./scripts/validator/update/update_deploy.sh
+# Update webs_demo and redeploy demos
+chmod +x scripts/validator/update/update_webs_demo.sh
+./scripts/validator/update/update_webs_demo.sh
+```
 
-# Add validator flags when PM2 process needs to be created
-VALIDATOR_ARGS="--logging.info --neuron.disable_set_weights" ./scripts/validator/update/update_deploy.sh
+```bash
+# Full flow (legacy convenience script)
+chmod +x scripts/validator/update/update_deploy.sh
+./scripts/validator/update/update_deploy.sh
 ```
 
 ---

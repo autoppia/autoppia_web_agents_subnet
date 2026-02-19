@@ -26,7 +26,7 @@ from autoppia_web_agents_subnet.utils.logging_filter import apply_subnet_module_
 import time
 import traceback
 import re
-from autoppia_web_agents_subnet import __version__, __least_acceptable_version__, __spec_version__
+from autoppia_web_agents_subnet import SUBNET_IWA_VERSION, __least_acceptable_version__, __spec_version__
 
 
 class BaseNeuron(ABC):
@@ -245,6 +245,6 @@ class BaseNeuron(ABC):
     def parse_versions(self):
         # No network version check: validators should not block startup on an
         # external request. Local package versions are the source of truth.
-        self.version = __version__
+        self.version = SUBNET_IWA_VERSION
         self.least_acceptable_version = __least_acceptable_version__
         return

@@ -49,7 +49,7 @@ with open(path.join(here, "README.md"), encoding="utf-8") as f:
 
 # TODO: If your version is stored elsewhere, update the path below or set manually.
 with codecs.open(os.path.join(here, "autoppia_web_agents_subnet/__init__.py"), encoding="utf-8") as init_file:
-    version_match = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]", init_file.read(), re.M)
+    version_match = re.search(r"^SUBNET_IWA_VERSION = ['\"]([^'\"]*)['\"]", init_file.read(), re.M)
     version_string = version_match.group(1)
 
 setup(
@@ -58,9 +58,9 @@ setup(
     description="Autoppia - Web Agents Subnet 36 in Bittensor",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/autoppia/autoppia_web_agents_subnet", 
-    author="Autoppia", 
-    author_email="", 
+    url="https://github.com/autoppia/autoppia_web_agents_subnet",
+    author="Autoppia",
+    author_email="",
     license="MIT",
     packages=find_packages(),
     include_package_data=True,

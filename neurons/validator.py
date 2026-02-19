@@ -6,7 +6,7 @@ import queue
 from pathlib import Path
 import bittensor as bt
 
-from autoppia_web_agents_subnet import __version__
+from autoppia_web_agents_subnet import SUBNET_IWA_VERSION
 
 from autoppia_web_agents_subnet.base.validator import BaseValidatorNeuron
 from autoppia_web_agents_subnet.bittensor_config import config
@@ -36,7 +36,7 @@ class Validator(
     def __init__(self, config=None):
         super().__init__(config=config)
 
-        self.version: str = __version__
+        self.version: str = SUBNET_IWA_VERSION
 
         self.agents_queue: queue.Queue[AgentInfo] = queue.Queue()
         self.agents_dict: dict[int, AgentInfo] = {}
