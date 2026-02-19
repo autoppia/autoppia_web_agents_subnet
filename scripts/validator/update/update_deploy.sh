@@ -102,13 +102,26 @@ echo
 step "Installing and restarting validator"
 echo "Activating virtualenv and installing code..."
 source "$REPO_ROOT/validator_env/bin/activate"
+if [ -f "$REPO_ROOT/requirements.txt" ]; then
+  pip install -r "$REPO_ROOT/requirements.txt"
+fi
 pip install -e .
 if [ -d "$IWA_PATH" ]; then
-  pip install -e "$IWA_PATH" || true
+  if [ -f "$IWA_PATH/requirements.txt" ]; then
+    pip install -r "$IWA_PATH/requirements.txt"
+  fi
+  pip install -e "$IWA_PATH"
+fi
+
+if [ -f "$REPO_ROOT/.env" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$REPO_ROOT/.env"
+  set +a
 fi
 
 echo "Restarting PM2 process '$PROCESS_NAME'..."
-if ! pm2 restart "$PROCESS_NAME"; then
+if ! pm2 restart "$PROCESS_NAME" --update-env; then
   echo "PM2 restart failed; starting fresh instance"
   pm2 start neurons/validator.py \
     --name "$PROCESS_NAME" \
