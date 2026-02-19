@@ -7,10 +7,10 @@ from collections import Counter
 import numpy as np
 import bittensor as bt
 
-from autoppia_web_agents_subnet.validator.config import (
-    SAME_SOLUTION_PENALTY,
-    SAME_SOLUTION_SIM_THRESHOLD,
-)
+# Hard-coded defaults (no env/config knobs).
+SAME_SOLUTION_PENALTY = 0.0
+SAME_SOLUTION_SIM_THRESHOLD = 0.90
+
 
 def detect_same_solution_groups(solutions: List[Any]) -> List[List[int]]:
     """
@@ -21,9 +21,7 @@ def detect_same_solution_groups(solutions: List[Any]) -> List[List[int]]:
         return []
     try:
         # Normalize solutions and build simple bag-of-words representations
-        safe_solutions = [
-            s if s is not None else type("_Empty", (), {"actions": []})() for s in solutions
-        ]
+        safe_solutions = [s if s is not None else type("_Empty", (), {"actions": []})() for s in solutions]
         bows: List[Counter[str]] = []
         norms: List[float] = []
 
@@ -33,11 +31,7 @@ def detect_same_solution_groups(solutions: List[Any]) -> List[List[int]]:
                 try:
                     a_type = str(getattr(a, "type", "") or "").lower()
                     url = str(getattr(a, "url", "") or "").lower()
-                    text = str(
-                        getattr(a, "text", None)
-                        or getattr(a, "value", None)
-                        or ""
-                    ).lower()
+                    text = str(getattr(a, "text", None) or getattr(a, "value", None) or "").lower()
                     # Keep only coarse information to avoid overfitting to noise
                     token = f"{a_type}|{url}|{text[:64]}"
                     tokens.append(token)
@@ -107,10 +101,7 @@ def apply_same_solution_penalty_with_meta(
     if groups:
         idxs = sorted({i for g in groups for i in g})
         scores_arr[idxs] *= float(SAME_SOLUTION_PENALTY)
-        bt.logging.warning(
-            f"[EVAL] SAME-SOLUTION penalty applied to {len(idxs)} miners. "
-            f"Threshold={SAME_SOLUTION_SIM_THRESHOLD}, Penalty={SAME_SOLUTION_PENALTY}"
-        )
+        bt.logging.warning(f"[EVAL] SAME-SOLUTION penalty applied to {len(idxs)} miners. Threshold={SAME_SOLUTION_SIM_THRESHOLD}, Penalty={SAME_SOLUTION_PENALTY}")
     return scores_arr, groups
 
 

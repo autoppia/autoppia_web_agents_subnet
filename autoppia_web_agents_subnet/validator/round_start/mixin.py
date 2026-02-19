@@ -17,10 +17,9 @@ from autoppia_web_agents_subnet.opensource.utils_git import (
 )
 from autoppia_web_agents_subnet.validator.config import (
     MINIMUM_START_BLOCK,
-    VALIDATOR_ROUND_START_UNTIL_FRACTION,
+    SKIP_ROUND_IF_STARTED_AFTER_FRACTION,
     MIN_MINER_STAKE_TAO,
     SETTLEMENT_FRACTION,
-    REQUIRE_MINER_GITHUB_REF,
     MAX_MINERS_PER_ROUND_BY_STAKE,
     MAX_MINERS_PER_COLDKEY,
     MAX_MINERS_PER_REPO,
@@ -182,7 +181,7 @@ class ValidatorRoundStartMixin:
         self.round_manager.sync_boundaries(current_block)
         current_fraction = float(self.round_manager.fraction_elapsed(current_block))
 
-        if current_fraction > VALIDATOR_ROUND_START_UNTIL_FRACTION:
+        if current_fraction > SKIP_ROUND_IF_STARTED_AFTER_FRACTION:
             # Too late to start a clean round; wait for the next boundary if a
             # waiter helper is available (tests patch this).
             try:
@@ -497,7 +496,7 @@ class ValidatorRoundStartMixin:
             normalized_repo, ref = normalize_and_validate_github_url(
                 raw_github_url,
                 miner_uid=uid,
-                require_ref=bool(REQUIRE_MINER_GITHUB_REF),
+                require_ref=True,
             )
 
             # Strict submission policy: if miner didn't provide a valid repo + ref/commit URL,

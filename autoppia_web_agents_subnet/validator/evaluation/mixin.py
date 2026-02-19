@@ -151,7 +151,7 @@ class ValidatorEvaluationMixin:
             # Pre-validate GitHub URL to avoid expensive docker/git work for
             # obviously invalid miner submissions.
             raw_github_url = getattr(agent, "github_url", None)
-            require_ref = bool(getattr(validator_config, "REQUIRE_MINER_GITHUB_REF", False))
+            require_ref = True
             try:
                 validated = normalize_and_validate_github_url(
                     raw_github_url,

@@ -56,14 +56,6 @@ EVAL_SCORE_WEIGHT = _env_float("EVAL_SCORE_WEIGHT", 0.7)
 TIME_WEIGHT = _env_float("TIME_WEIGHT", 0.1)
 COST_WEIGHT = _env_float("COST_WEIGHT", 0.2)
 
-SAME_SOLUTION_PENALTY = _env_float("SAME_SOLUTION_PENALTY", 0.0)
-SAME_SOLUTION_SIM_THRESHOLD = _env_float("SAME_SOLUTION_SIM_THRESHOLD", 0.90)
-
-# Miner submission policy:
-# Require an explicit git ref (branch/tag) or a pinned commit URL, instead of
-# accepting bare repo URLs (which implicitly track the default branch).
-REQUIRE_MINER_GITHUB_REF = _env_bool("REQUIRE_MINER_GITHUB_REF", True)
-
 # Evaluation resource controls:
 # 1) Per-round stake window: only handshake/evaluate the top N miners by stake.
 #    Set to 0 to disable.
