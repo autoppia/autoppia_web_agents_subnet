@@ -98,6 +98,10 @@ The validator uses IWA to generate tasks, which requires an LLM provider. Choose
 > Default allowed providers are `openai` and `chutes` (see gateway config). Override with
 > `GATEWAY_ALLOWED_PROVIDERS` only if you need to narrow the list.
 > If any allowed provider key is missing, validator exits immediately with an explicit error.
+>
+> Important: `LLM_PROVIDER` is only for IWA task generation. It does **not** replace gateway keys.
+> If `GATEWAY_ALLOWED_PROVIDERS` includes both `openai,chutes` (default), you must set **both**
+> `OPENAI_API_KEY` and `CHUTES_API_KEY` in `.env`, even if `LLM_PROVIDER` is only one of them.
 
 ### **Option A: OpenAI API** 🌐 (No GPU Required)
 
