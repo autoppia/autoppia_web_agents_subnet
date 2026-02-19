@@ -84,9 +84,10 @@ IPFS_GATEWAYS = [gw.strip() for gw in (_env_str("IPFS_GATEWAYS", "https://ipfs.i
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# SETTLEMENT / WINNER BONUS CONFIGURATION
+# SETTLEMENT / WINNER PERSISTENCE CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
-
+# Required % over the current season winner's best score to dethrone it.
+# Example: 0.05 => challenger must score > winner_best * 1.05
 LAST_WINNER_BONUS_PCT = _env_float("LAST_WINNER_BONUS_PCT", 0.05)
 
 

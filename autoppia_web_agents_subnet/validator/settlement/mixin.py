@@ -253,13 +253,42 @@ class ValidatorSettlementMixin:
             )
 
     async def _calculate_final_weights(self, scores: Dict[int, float]):
-        """Calculate averages, apply WTA, and set final on-chain weights."""
+        """
+        Calculate and set final weights using season-best winner persistence.
+
+        Winner policy:
+        - Track per-miner historical round scores within the current season.
+        - Keep each miner's best score in the season.
+        - Keep the current season winner until another miner beats that winner
+          by more than LAST_WINNER_BONUS_PCT (e.g. 5%).
+        """
         round_number = getattr(self, "_current_round_number", None)
 
         if round_number is not None:
             ColoredLogger.info(f"🏁 Finishing Round: {int(round_number)}", ColoredLogger.GOLD)
         else:
             ColoredLogger.info("🏁 Finishing current round", ColoredLogger.GOLD)
+
+        # Resolve season/round identifiers for per-season tracking.
+        current_block = int(getattr(self, "block", 0) or 0)
+        season_number = 0
+        try:
+            season_number = int(getattr(getattr(self, "season_manager", None), "season_number", 0) or 0)
+        except Exception:
+            season_number = 0
+        if season_number <= 0:
+            try:
+                sm = getattr(self, "season_manager", None)
+                if sm is not None and hasattr(sm, "get_season_number"):
+                    season_number = int(sm.get_season_number(current_block))
+            except Exception:
+                season_number = 0
+
+        round_number_in_season = 0
+        try:
+            round_number_in_season = int(getattr(getattr(self, "round_manager", None), "round_number", 0) or 0)
+        except Exception:
+            round_number_in_season = 0
 
         burn_reason: Optional[str] = None
         burn_pct = float(max(0.0, min(1.0, BURN_AMOUNT_PERCENTAGE)))
@@ -270,9 +299,176 @@ class ValidatorSettlementMixin:
             )
             burn_reason = "burn (forced)"
 
-        valid_scores = {uid: score for uid, score in scores.items() if score > 0.0}
+        # Normalize incoming round scores.
+        round_scores: Dict[int, float] = {}
+        for uid, raw_score in (scores or {}).items():
+            try:
+                uid_i = int(uid)
+                score_f = float(raw_score)
+            except Exception:
+                continue
+            if not np.isfinite(score_f):
+                continue
+            round_scores[uid_i] = score_f
+        valid_scores = {uid: score for uid, score in round_scores.items() if score > 0.0}
+
+        # Persistent in-memory season history. Real validator persists this to disk
+        # (best-effort) via _save_competition_state.
+        season_history = getattr(self, "_season_competition_history", None)
+        if not isinstance(season_history, dict):
+            season_history = {}
+            setattr(self, "_season_competition_history", season_history)
+
+        try:
+            required_improvement_pct = max(float(getattr(validator_config, "LAST_WINNER_BONUS_PCT", 0.0)), 0.0)
+        except Exception:
+            required_improvement_pct = 0.0
+
+        season_key = int(season_number)
+        season_state = season_history.get(season_key)
+        if not isinstance(season_state, dict):
+            season_state = {}
+        rounds_state = season_state.get("rounds")
+        if not isinstance(rounds_state, dict):
+            rounds_state = {}
+        summary_state = season_state.get("summary")
+        if not isinstance(summary_state, dict):
+            summary_state = {}
+
+        best_by_miner = summary_state.get("best_by_miner")
+        if not isinstance(best_by_miner, dict):
+            best_by_miner = {}
+        best_round_by_miner = summary_state.get("best_round_by_miner")
+        if not isinstance(best_round_by_miner, dict):
+            best_round_by_miner = {}
+
+        if round_number_in_season > 0:
+            round_key = int(round_number_in_season)
+        else:
+            existing_rounds: list[int] = []
+            for rk in rounds_state.keys():
+                try:
+                    existing_rounds.append(int(rk))
+                except Exception:
+                    continue
+            round_key = (max(existing_rounds) + 1) if existing_rounds else 1
+
+        # Update per-miner best-of-season index and capture this round scores.
+        miner_scores_for_round: Dict[int, float] = {}
+        for uid, score in round_scores.items():
+            uid_i = int(uid)
+            score_f = float(score)
+            miner_scores_for_round[uid_i] = score_f
+
+            prev_best_raw = best_by_miner.get(uid_i, None)
+            prev_best: Optional[float]
+            try:
+                prev_best = float(prev_best_raw) if prev_best_raw is not None else None
+            except Exception:
+                prev_best = None
+
+            if score_f > 0.0:
+                if prev_best is None or score_f > prev_best:
+                    best_by_miner[uid_i] = score_f
+                    best_round_by_miner[uid_i] = int(round_key)
+                elif uid_i not in best_round_by_miner:
+                    best_round_by_miner[uid_i] = int(round_key)
+
+        # Resolve current contender by best season score.
+        best_uid: Optional[int] = None
+        best_score = 0.0
+        for uid, best in best_by_miner.items():
+            try:
+                uid_i = int(uid)
+                best_f = float(best or 0.0)
+            except Exception:
+                continue
+            if best_f > best_score:
+                best_score = best_f
+                best_uid = uid_i
+
+        reigning_uid_raw = summary_state.get("current_winner_uid")
+        reigning_uid: Optional[int]
+        try:
+            reigning_uid = int(reigning_uid_raw) if reigning_uid_raw is not None else None
+        except Exception:
+            reigning_uid = None
+
+        reigning_score = 0.0
+        if reigning_uid is not None:
+            try:
+                reigning_score = float(summary_state.get("current_winner_score", 0.0) or 0.0)
+            except Exception:
+                reigning_score = 0.0
+            if reigning_score <= 0.0:
+                try:
+                    reigning_score = float(best_by_miner.get(reigning_uid, 0.0) or 0.0)
+                except Exception:
+                    reigning_score = 0.0
+            if reigning_score <= 0.0:
+                reigning_uid = None
+
+        winner_uid: Optional[int] = None
+        winner_score = 0.0
+        dethroned = False
+        required_score_to_dethrone: Optional[float] = None
+
+        if best_uid is not None and best_score > 0.0:
+            winner_uid = best_uid
+            winner_score = best_score
+
+            if reigning_uid is not None and reigning_score > 0.0:
+                if best_uid != reigning_uid:
+                    required_score_to_dethrone = float(reigning_score * (1.0 + required_improvement_pct))
+                    if best_score > required_score_to_dethrone:
+                        dethroned = True
+                    else:
+                        winner_uid = reigning_uid
+                        winner_score = reigning_score
+                else:
+                    winner_uid = reigning_uid
+                    winner_score = reigning_score
+
+        # Keep backward-compatible field used in tests and logs.
+        self._last_round_winner_uid = winner_uid
+
+        round_entry = {
+            "winner": {
+                "miner_uid": int(winner_uid) if winner_uid is not None else None,
+                "score": float(winner_score),
+            },
+            "miner_scores": {int(uid): float(score) for uid, score in miner_scores_for_round.items()},
+            "decision": {
+                "top_candidate_uid": int(best_uid) if best_uid is not None else None,
+                "top_candidate_score": float(best_score),
+                "reigning_uid_before_round": int(reigning_uid) if reigning_uid is not None else None,
+                "reigning_score_before_round": float(reigning_score),
+                "required_improvement_pct": float(required_improvement_pct),
+                "required_score_to_dethrone": float(required_score_to_dethrone) if required_score_to_dethrone is not None else None,
+                "dethroned": bool(dethroned),
+            },
+        }
+        rounds_state[int(round_key)] = round_entry
+
+        summary_state["current_winner_uid"] = int(winner_uid) if winner_uid is not None else None
+        summary_state["current_winner_score"] = float(winner_score)
+        summary_state["required_improvement_pct"] = float(required_improvement_pct)
+        summary_state["best_by_miner"] = {int(uid): float(score) for uid, score in best_by_miner.items()}
+        summary_state["best_round_by_miner"] = {int(uid): int(rnd) for uid, rnd in best_round_by_miner.items()}
+
+        season_state["rounds"] = rounds_state
+        season_state["summary"] = summary_state
+        season_history[season_key] = season_state
+
+        # Best-effort persistence to disk if implemented by concrete validator.
+        try:
+            persist_fn = getattr(self, "_save_competition_state", None)
+            if callable(persist_fn):
+                persist_fn()
+        except Exception:
+            pass
+
         if (not valid_scores) or burn_reason:
-            self._last_round_winner_uid = None
             await self._burn_all(
                 reason=burn_reason or "burn (no rewards)",
             )
@@ -283,21 +479,40 @@ class ValidatorSettlementMixin:
             if 0 <= int(uid) < self.metagraph.n:
                 avg_rewards_array[int(uid)] = float(score)
 
-        try:
-            bonus_pct = max(float(getattr(validator_config, "LAST_WINNER_BONUS_PCT", 0.0)), 0.0)
-        except Exception:
-            bonus_pct = 0.0
-        if bonus_pct > 0.0 and getattr(self, "_last_round_winner_uid", None) is not None:
-            prev = int(self._last_round_winner_uid)
-            if 0 <= prev < avg_rewards_array.shape[0]:
-                avg_rewards_array[prev] *= 1.0 + bonus_pct
-                ColoredLogger.info(
-                    f"🏆 Applying previous-winner bonus to UID {prev}: x{1.0 + bonus_pct:.3f}",
-                    ColoredLogger.GOLD,
-                )
+        # Build season-best score array and call WTA for observability/tests.
+        season_best_array = np.zeros(self.metagraph.n, dtype=np.float32)
+        for uid, best in best_by_miner.items():
+            try:
+                uid_i = int(uid)
+                best_f = float(best or 0.0)
+            except Exception:
+                continue
+            if 0 <= uid_i < self.metagraph.n:
+                season_best_array[uid_i] = best_f
+        _ = wta_rewards(season_best_array)
 
-        final_rewards_array = wta_rewards(avg_rewards_array)
-        winner_uid = int(np.argmax(final_rewards_array))
+        if winner_uid is None or not (0 <= int(winner_uid) < self.metagraph.n):
+            # Defensive fallback: if winner state is unavailable, select the best
+            # current-round score.
+            winner_uid = int(np.argmax(avg_rewards_array))
+            winner_score = float(avg_rewards_array[winner_uid])
+            self._last_round_winner_uid = winner_uid
+            summary_state["current_winner_uid"] = winner_uid
+            summary_state["current_winner_score"] = winner_score
+
+        final_rewards_array = np.zeros(self.metagraph.n, dtype=np.float32)
+        final_rewards_array[int(winner_uid)] = 1.0
+
+        if reigning_uid is not None and int(winner_uid) == int(reigning_uid):
+            ColoredLogger.info(
+                f"🏆 Keeping season winner UID {winner_uid} | best={winner_score:.4f} | required_overtake={required_improvement_pct:.2%}",
+                ColoredLogger.GOLD,
+            )
+        elif dethroned:
+            ColoredLogger.info(
+                f"🥇 New season leader UID {winner_uid} | score={winner_score:.4f} | beat previous by > {required_improvement_pct:.2%}",
+                ColoredLogger.GOLD,
+            )
         # Antes de set_weights: SIEMPRE repartimos entre 2 destinos:
         #   - BURN_UID (ej. 5): BURN_AMOUNT_PERCENTAGE (ej. 0.8 = 80%)
         #   - Ganador de la season: (1 - BURN_AMOUNT_PERCENTAGE) (ej. 0.2 = 20%)
@@ -310,9 +525,7 @@ class ValidatorSettlementMixin:
         bt.logging.info(f"🎯 WEIGHT DISTRIBUTION | Winner UID {winner_uid}: {winner_percentage:.1%} | Burn UID {burn_idx}: {burn_pct:.1%} | BURN_AMOUNT_PERCENTAGE={BURN_AMOUNT_PERCENTAGE}")
         final_rewards_dict = {uid: float(final_rewards_array[uid]) for uid in range(len(final_rewards_array)) if float(final_rewards_array[uid]) > 0.0}
 
-        if final_rewards_dict:
-            self._last_round_winner_uid = winner_uid
-        else:
+        if not final_rewards_dict:
             self._last_round_winner_uid = None
 
         render_round_summary_table(

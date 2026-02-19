@@ -66,29 +66,31 @@ class TestMultiRound:
         # Should have regenerated tasks
         validator.season_manager.generate_season_tasks.assert_called_once()
 
-    async def test_winner_bonus_applies_across_rounds(self, dummy_validator):
+    async def test_season_winner_persists_across_rounds_until_threshold(self, dummy_validator):
         from tests.conftest import _bind_settlement_mixin, _bind_round_start_mixin
 
         dummy_validator = _bind_round_start_mixin(dummy_validator)
         dummy_validator = _bind_settlement_mixin(dummy_validator)
 
-        """Test that winner bonus applies to previous round winner."""
+        """Winner should persist across rounds unless another beats by configured threshold."""
         validator = dummy_validator
-        validator._last_round_winner_uid = 1  # UID 1 won last round
+        validator.season_manager.season_number = 12
 
-        scores = {1: 0.8, 2: 0.6}
+        with patch("autoppia_web_agents_subnet.validator.settlement.mixin.render_round_summary_table"):
+            with patch("autoppia_web_agents_subnet.validator.config.LAST_WINNER_BONUS_PCT", 0.05):
+                validator.round_manager.round_number = 1
+                await validator._calculate_final_weights(scores={1: 0.9, 2: 0.8})
+                assert validator._last_round_winner_uid == 1
 
-        with patch("autoppia_web_agents_subnet.validator.settlement.mixin.wta_rewards") as mock_wta:
-            with patch("autoppia_web_agents_subnet.validator.settlement.mixin.render_round_summary_table"):
-                with patch("autoppia_web_agents_subnet.validator.config.LAST_WINNER_BONUS_PCT", 0.1):
-                    mock_wta.return_value = __import__("numpy").zeros(10, dtype=__import__("numpy").float32)
+                # 0.93 does not beat 0.9 by >5% (needs >0.945)
+                validator.round_manager.round_number = 2
+                await validator._calculate_final_weights(scores={1: 0.6, 2: 0.93})
+                assert validator._last_round_winner_uid == 1
 
-                    await validator._calculate_final_weights(scores=scores)
-
-                    # Should have applied bonus to UID 1
-                    call_args = mock_wta.call_args[0][0]
-                    # UID 1 should have bonus applied (0.8 * 1.1 = 0.88)
-                    assert call_args[1] > 0.8
+                # 0.96 beats 0.9 by >5%
+                validator.round_manager.round_number = 3
+                await validator._calculate_final_weights(scores={1: 0.7, 2: 0.96})
+                assert validator._last_round_winner_uid == 2
 
     async def test_state_resets_between_rounds(self, dummy_validator):
         from tests.conftest import _bind_settlement_mixin, _bind_round_start_mixin
@@ -198,7 +200,7 @@ class TestRoundBoundaries:
         validator.block = 1650  # Late in round (90% through)
         validator._wait_until_specific_block = AsyncMock()
 
-        with patch("autoppia_web_agents_subnet.validator.config.VALIDATOR_ROUND_START_UNTIL_FRACTION", 0.2):
+        with patch("autoppia_web_agents_subnet.validator.round_start.mixin.SKIP_ROUND_IF_STARTED_AFTER_FRACTION", 0.2):
             result = await validator._start_round()
 
             # Should wait for next boundary
@@ -215,7 +217,7 @@ class TestRoundBoundaries:
         validator = dummy_validator
         validator.block = 1050  # Early in round (7% through)
 
-        with patch("autoppia_web_agents_subnet.validator.config.VALIDATOR_ROUND_START_UNTIL_FRACTION", 0.2):
+        with patch("autoppia_web_agents_subnet.validator.round_start.mixin.SKIP_ROUND_IF_STARTED_AFTER_FRACTION", 0.2):
             result = await validator._start_round()
 
             # Should continue forward

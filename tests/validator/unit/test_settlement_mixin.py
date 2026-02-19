@@ -205,26 +205,74 @@ class TestWeightCalculation:
                 # Should have called wta_rewards
                 mock_wta.assert_called_once()
 
-    async def test_weight_calculation_applies_winner_bonus(self, dummy_validator):
+    async def test_weight_calculation_keeps_reigning_winner_until_threshold_is_beaten(self, dummy_validator):
         from tests.conftest import _bind_settlement_mixin
 
         dummy_validator = _bind_settlement_mixin(dummy_validator)
 
-        """Test that weight calculation applies previous winner bonus."""
-        scores = {1: 0.8, 2: 0.6}
-        dummy_validator._last_round_winner_uid = 1  # UID 1 won last round
+        """Winner should persist if challenger does not exceed required +% threshold."""
+        dummy_validator.season_manager.season_number = 7
+        dummy_validator.round_manager.round_number = 1
 
-        with patch("autoppia_web_agents_subnet.validator.settlement.mixin.wta_rewards") as mock_wta:
+        with patch("autoppia_web_agents_subnet.validator.config.LAST_WINNER_BONUS_PCT", 0.05):
             with patch("autoppia_web_agents_subnet.validator.settlement.mixin.render_round_summary_table"):
-                with patch("autoppia_web_agents_subnet.validator.config.LAST_WINNER_BONUS_PCT", 0.1):
-                    mock_wta.return_value = np.zeros(10, dtype=np.float32)
+                await dummy_validator._calculate_final_weights(scores={1: 0.9, 2: 0.8})
+                assert dummy_validator._last_round_winner_uid == 1
 
-                    await dummy_validator._calculate_final_weights(scores=scores)
+                # Round 2: miner 2 improves, but not enough (> 0.9 * 1.05 = 0.945 required)
+                dummy_validator.round_manager.round_number = 2
+                await dummy_validator._calculate_final_weights(scores={1: 0.7, 2: 0.93})
+                assert dummy_validator._last_round_winner_uid == 1
 
-                    # Should have applied bonus to UID 1
-                    call_args = mock_wta.call_args[0][0]
-                    # UID 1 should have bonus applied (0.8 * 1.1 = 0.88)
-                    assert call_args[1] > 0.8
+                # Confirm rewards still point to UID 1 in last update
+                rewards = dummy_validator.update_scores.call_args[1]["rewards"]
+                assert float(rewards[1]) == pytest.approx(1.0)
+                assert float(rewards[2]) == pytest.approx(0.0)
+
+    async def test_weight_calculation_switches_winner_when_threshold_is_beaten(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin
+
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+
+        """Winner should switch when challenger beats reigning best by required threshold."""
+        dummy_validator.season_manager.season_number = 8
+        dummy_validator.round_manager.round_number = 1
+
+        with patch("autoppia_web_agents_subnet.validator.config.LAST_WINNER_BONUS_PCT", 0.05):
+            with patch("autoppia_web_agents_subnet.validator.settlement.mixin.render_round_summary_table"):
+                await dummy_validator._calculate_final_weights(scores={1: 0.9, 2: 0.8})
+                assert dummy_validator._last_round_winner_uid == 1
+
+                # Round 2: 0.96 > 0.945, so UID 2 dethrones UID 1
+                dummy_validator.round_manager.round_number = 2
+                await dummy_validator._calculate_final_weights(scores={1: 0.7, 2: 0.96})
+                assert dummy_validator._last_round_winner_uid == 2
+
+                rewards = dummy_validator.update_scores.call_args[1]["rewards"]
+                assert float(rewards[2]) == pytest.approx(1.0)
+                assert float(rewards[1]) == pytest.approx(0.0)
+
+    async def test_weight_calculation_records_season_history_and_round_winners(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin
+
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+
+        """Settlement should store per-season round history and round winners."""
+        dummy_validator.season_manager.season_number = 9
+        dummy_validator.round_manager.round_number = 1
+
+        with patch("autoppia_web_agents_subnet.validator.config.LAST_WINNER_BONUS_PCT", 0.05):
+            with patch("autoppia_web_agents_subnet.validator.settlement.mixin.render_round_summary_table"):
+                await dummy_validator._calculate_final_weights(scores={1: 0.91, 2: 0.82})
+                dummy_validator.round_manager.round_number = 2
+                await dummy_validator._calculate_final_weights(scores={1: 0.55, 2: 0.86})
+
+        season_state = dummy_validator._season_competition_history[9]
+        assert season_state["summary"]["best_by_miner"][1] == pytest.approx(0.91)
+        assert season_state["rounds"][1]["miner_scores"][1] == pytest.approx(0.91)
+        assert season_state["rounds"][2]["miner_scores"][1] == pytest.approx(0.55)
+        assert season_state["rounds"][1]["winner"]["miner_uid"] == 1
+        assert season_state["rounds"][2]["winner"]["miner_uid"] == 1
 
     async def test_weight_calculation_calls_update_scores_and_set_weights(self, dummy_validator):
         from tests.conftest import _bind_settlement_mixin
