@@ -118,7 +118,7 @@ if (os.getenv("SANDBOX_GATEWAY_PORT") or "").strip():
 else:
     _offset = _env_int("SANDBOX_GATEWAY_PORT_OFFSET", 0)
     SANDBOX_GATEWAY_PORT = 9000 + int(_offset)
-SANDBOX_AGENT_IMAGE = _env_str("SANDBOX_IMAGE", "autoppia-sandbox-agent-image")
+SANDBOX_AGENT_IMAGE = _env_str("SANDBOX_AGENT_IMAGE", "autoppia-sandbox-agent-image")
 SANDBOX_AGENT_PORT = _env_int("SANDBOX_AGENT_PORT", 8000)
 SANDBOX_CLONE_TIMEOUT_SECONDS = _env_int("SANDBOX_CLONE_TIMEOUT_SECONDS", 90)
 # Debug/testing: keep agent containers (and clone dirs) after evaluation so you can inspect
@@ -139,18 +139,16 @@ SANDBOX_AGENT_RETURN_METRICS = _env_bool("SANDBOX_AGENT_RETURN_METRICS", False)
 # ═══════════════════════════════════════════════════════════════════════════
 
 CONSENSUS_VERSION = _env_int("CONSENSUS_VERSION", 1)
-ENABLE_DISTRIBUTED_CONSENSUS = _env_bool(
-    "ENABLE_DISTRIBUTED_CONSENSUS",
-    True,
-    test_default=True,
-)
 MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO = _env_float(
     "MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO",
     10000.0,
     test_default=0.0,
 )
-UPLOAD_TASK_LOGS = _env_bool("UPLOAD_TASK_LOGS", False, test_default=True)
-IWAP_API_BASE_URL = _env_str("IWAP_API_BASE_URL", "https://api-leaderboard.autoppia.com" if not TESTING else "https://dev-api-leaderboard.autoppia.com")
+IWAP_API_BASE_URL = _env_str(
+    "IWAP_API_BASE_URL",
+    "https://api-leaderboard.autoppia.com",
+    test_default="https://dev-api-leaderboard.autoppia.com",
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

@@ -251,7 +251,6 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
         FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION,
         SKIP_ROUND_IF_STARTED_AFTER_FRACTION,
         MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO,
-        ENABLE_DISTRIBUTED_CONSENSUS,
         SHOULD_RECORD_GIF,
         TASK_TIMEOUT_SECONDS,
         EVAL_SCORE_WEIGHT,
@@ -286,7 +285,7 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
         },
         "consensus": {
             "min_validator_stake_for_consensus_tao": MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO,
-            "enable_distributed_consensus": ENABLE_DISTRIBUTED_CONSENSUS,
+            "enable_distributed_consensus": True,
         },
         "execution": {
             "enable_dynamic": True,

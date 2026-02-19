@@ -12,10 +12,25 @@ except Exception:  # pragma: no cover - optional dependency for miner-only setup
 load_dotenv()
 
 
-def _env_str(name: str, default: str = "") -> str:
+def _env_str(name: str, default: str = "", *, test_default: Optional[str] = None) -> str:
     """
-    Retrieve a string environment variable, falling back to default for empty values.
+    Retrieve a string environment variable.
+    Supports TEST_* overrides when TESTING=true.
     """
+
+    def _parse_bool(value: str) -> bool:
+        return value.strip().lower() in {"y", "yes", "t", "true", "on", "1"}
+
+    testing = _parse_bool(os.getenv("TESTING", "false"))
+    if testing:
+        test_key = f"TEST_{name}"
+        test_val = os.getenv(test_key)
+        if test_val is not None and test_val.strip() != "":
+            return test_val.strip()
+
+        if test_default is not None:
+            return str(test_default).strip()
+
     return os.getenv(name, default).strip()
 
 

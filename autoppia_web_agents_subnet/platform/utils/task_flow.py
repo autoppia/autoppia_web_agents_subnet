@@ -897,11 +897,7 @@ async def submit_task_results(
                         level="warning",
                     )
 
-            try:
-                from autoppia_web_agents_subnet.validator.config import UPLOAD_TASK_LOGS
-            except Exception:
-                UPLOAD_TASK_LOGS = False
-            if UPLOAD_TASK_LOGS:
+            if getattr(ctx, "iwap_client", None):
                 try:
                     task_log_payload = _build_task_log_payload(
                         task_payload=task_payload,

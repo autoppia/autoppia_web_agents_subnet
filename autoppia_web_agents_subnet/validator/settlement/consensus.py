@@ -7,7 +7,6 @@ from bittensor import AsyncSubtensor  # type: ignore
 
 from autoppia_web_agents_subnet.validator.config import (
     CONSENSUS_VERSION,
-    ENABLE_DISTRIBUTED_CONSENSUS,
     MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO,
     IPFS_API_URL,
 )
@@ -77,10 +76,6 @@ async def publish_round_snapshot(
 
     Returns the CID if successful, else None.
     """
-    if not ENABLE_DISTRIBUTED_CONSENSUS:
-        bt.logging.warning(consensus_tag("Disabled - skipping publish"))
-        return None
-
     self.round_manager.enter_phase(
         RoundPhase.CONSENSUS,
         block=self.block,

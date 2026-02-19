@@ -17,14 +17,11 @@ from bittensor import AsyncSubtensor  # type: ignore
 from autoppia_web_agents_subnet.utils.commitments import read_all_plain_commitments
 from autoppia_web_agents_subnet.utils.ipfs_client import IPFSError, aget_json
 from autoppia_web_agents_subnet.validator.config import (
-    AVG_TASK_DURATION_SECONDS,
     MINIMUM_START_BLOCK,
-    ENABLE_DISTRIBUTED_CONSENSUS,
     IPFS_API_URL,
     IPFS_GATEWAYS,
     MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO,
     ROUND_SIZE_EPOCHS,
-    SAFETY_BUFFER_EPOCHS,
 )
 from autoppia_web_agents_subnet.validator.round_manager import RoundManager
 
@@ -33,8 +30,6 @@ DEFAULT_NETWORK = os.getenv("SUBTENSOR_NETWORK", "finney")
 
 ROUND_MANAGER = RoundManager(
     round_size_epochs=ROUND_SIZE_EPOCHS,
-    avg_task_duration_seconds=AVG_TASK_DURATION_SECONDS,
-    safety_buffer_epochs=SAFETY_BUFFER_EPOCHS,
     minimum_start_block=MINIMUM_START_BLOCK,
 )
 BLOCKS_PER_EPOCH = RoundManager.BLOCKS_PER_EPOCH
@@ -877,9 +872,6 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
         if args.ipfs_gateways
         else IPFS_GATEWAYS
     )
-
-    if not ENABLE_DISTRIBUTED_CONSENSUS:
-        print("Distributed consensus is disabled; commitments may be absent.")
 
     try:
         asyncio.run(

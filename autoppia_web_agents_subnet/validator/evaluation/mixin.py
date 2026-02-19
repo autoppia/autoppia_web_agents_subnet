@@ -801,11 +801,7 @@ class ValidatorEvaluationMixin:
                 pass
 
             # Optional: upload task execution log for S3-backed storage (batch path)
-            try:
-                from autoppia_web_agents_subnet.validator.config import UPLOAD_TASK_LOGS
-            except Exception:
-                UPLOAD_TASK_LOGS = False
-            if UPLOAD_TASK_LOGS and getattr(self, "iwap_client", None):
+            if getattr(self, "iwap_client", None):
                 try:
                     from autoppia_web_agents_subnet.platform.utils.task_flow import _build_task_log_payload
 
