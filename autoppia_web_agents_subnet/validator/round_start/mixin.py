@@ -19,7 +19,6 @@ from autoppia_web_agents_subnet.validator.config import (
     MINIMUM_START_BLOCK,
     SKIP_ROUND_IF_STARTED_AFTER_FRACTION,
     MIN_MINER_STAKE_TAO,
-    SETTLEMENT_FRACTION,
     MAX_MINERS_PER_ROUND_BY_STAKE,
     MAX_MINERS_PER_COLDKEY,
     MAX_MINERS_PER_REPO,
@@ -198,7 +197,7 @@ class ValidatorRoundStartMixin:
         bt.logging.info(round_details_tag(f"Current Block: {current_block:,}"))
         bt.logging.info(round_details_tag(f"Duration: ~{wait_info['minutes_to_target']:.1f} minutes"))
         bt.logging.info(round_details_tag(f"Total Blocks: {self.round_manager.target_block - current_block}"))
-        bt.logging.info(round_details_tag(f"Settlement: {SETTLEMENT_FRACTION:.0%} — block {settlement_block:,} (epoch {settlement_epoch:.2f}) — ~{minutes_to_settlement:.1f}m"))
+        bt.logging.info(round_details_tag(f"Consensus fetch: {self.round_manager.settlement_fraction:.0%} — block {settlement_block:,} (epoch {settlement_epoch:.2f}) — ~{minutes_to_settlement:.1f}m"))
         bt.logging.info("=" * 100)
 
         return RoundStartResult(

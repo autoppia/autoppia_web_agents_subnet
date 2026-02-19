@@ -84,10 +84,9 @@ IPFS_GATEWAYS = [gw.strip() for gw in (_env_str("IPFS_GATEWAYS", "https://ipfs.i
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# SETTLEMENT CONFIGURATION
+# SETTLEMENT / WINNER BONUS CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
 
-SETTLEMENT_FRACTION = _env_float("SETTLEMENT_FRACTION", 0.95, test_default=0.8)
 LAST_WINNER_BONUS_PCT = _env_float("LAST_WINNER_BONUS_PCT", 0.05)
 
 
