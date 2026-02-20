@@ -15,6 +15,16 @@ A miner only announces **metadata** (name, image, GitHub URL). Validators then c
 
 3. Validators clone your repo and run it locally in a sandbox for evaluation.
 
+## Just a reminder miners
+
+To avoid spam, you need:
+
+- Have enough stake: minimum `100` alpha staked (`>= 100.0`).
+- Only `2` hotkeys are allowed per coldkey.
+- `AGENT_NAME` and `GITHUB_URL` must be valid.
+- `GITHUB_URL` must point to a specific ref/commit (recommended: exact commit URL). Example:
+  `https://github.com/autoppia/autoppia_operator/commit/b4d967f5266b82b36db02f286e9ada48708aa47f`
+
 ## 🗓️ Seasons, Rounds, and Re-evaluation
 
 - Each **season** contains multiple **rounds**.
