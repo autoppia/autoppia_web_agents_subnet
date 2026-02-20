@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import time
 import queue
+import os
 from pathlib import Path
 import bittensor as bt
 
@@ -451,6 +452,19 @@ if __name__ == "__main__":
     AppBootstrap()
 
     with Validator(config=config(role="validator")) as validator:
+        heartbeat_seconds = 120
+        sync_interval_seconds = max(60, int(os.getenv("HEARTBEAT_SYNC_INTERVAL_SECONDS", "1800")))
+        last_sync_ts = time.monotonic()
         while True:
             bt.logging.debug(f"Heartbeat — validator running... {time.time()}")
-            time.sleep(120)
+            now = time.monotonic()
+            if now - last_sync_ts >= sync_interval_seconds:
+                try:
+                    bt.logging.info(f"Heartbeat sync triggered (interval={sync_interval_seconds}s)")
+                    validator.sync()
+                    bt.logging.info("Heartbeat sync completed")
+                except Exception as exc:
+                    bt.logging.error(f"Heartbeat sync failed: {exc}")
+                finally:
+                    last_sync_ts = time.monotonic()
+            time.sleep(heartbeat_seconds)

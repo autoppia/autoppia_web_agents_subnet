@@ -17,6 +17,7 @@
 
 import copy
 import bittensor as bt
+import threading
 from abc import ABC, abstractmethod
 
 # Sync calls set weights and also resyncs the metagraph.
@@ -161,6 +162,7 @@ class BaseNeuron(ABC):
         bt.logging.info(f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: {self.subtensor.chain_endpoint}")
         self.step = 0
         self.last_update = 0
+        self._sync_lock = threading.RLock()
 
     @abstractmethod
     async def forward(self, synapse: bt.Synapse) -> bt.Synapse: ...
@@ -185,23 +187,24 @@ class BaseNeuron(ABC):
         """
         Wrapper for synchronizing the state of the network for the given miner or validator.
         """
-        # Ensure miner or validator hotkey is still registered on the network.
-        self.check_registered()
+        with self._sync_lock:
+            # Ensure miner or validator hotkey is still registered on the network.
+            self.check_registered()
 
-        try:
-            if self.should_sync_metagraph():
-                self.last_update = self.block
-                self.resync_metagraph()
+            try:
+                if self.should_sync_metagraph():
+                    self.last_update = self.block
+                    self.resync_metagraph()
 
-            if self.should_set_weights():
-                self.set_weights()
+                if self.should_set_weights():
+                    self.set_weights()
 
-            # Always save state.
-            self.save_state()
-        except Exception:
-            bt.logging.error("Coundn't sync metagraph or set weights: {}".format(traceback.format_exc()))
-            bt.logging.error("If you use public RPC endpoint try to move to local node")
-            time.sleep(5)
+                # Always save state.
+                self.save_state()
+            except Exception:
+                bt.logging.error("Coundn't sync metagraph or set weights: {}".format(traceback.format_exc()))
+                bt.logging.error("If you use public RPC endpoint try to move to local node")
+                time.sleep(5)
 
     def check_registered(self):
         # --- Check for registration.
