@@ -63,7 +63,7 @@ DEFAULT_PROVIDER_CONFIGS = {
             "gpt-5-codex": {"input": 1.25, "input_cache_read": 0.125, "output": 10.0},
             "gpt-5.2-pro": {"input": 21.0, "output": 168.0},
             "gpt-5-pro": {"input": 15.0, "output": 120.0},
-            "gpt-4.1": {"input": 3.5, "input_cache_read": 0.875, "output": 14.0},
+            "gpt-4.1": {"input": 3.0, "input_cache_read": 0.75, "output": 12.0},
             "gpt-4.1-mini": {"input": 0.80, "input_cache_read": 0.20, "output": 3.20},
             "gpt-4.1-nano": {"input": 0.20, "input_cache_read": 0.05, "output": 0.80},
             "gpt-4.5": {"input": 75.0, "input_cache_read": 37.5, "output": 150.0},
