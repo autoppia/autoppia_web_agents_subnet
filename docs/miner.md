@@ -44,6 +44,27 @@ cd "$IWA_PATH"
 python -m autoppia_iwa.entrypoints.benchmark.run
 ```
 
+You can also run a validator-like sandbox evaluation against your exact `GITHUB_URL` submission:
+
+```bash
+python -m scripts.miner.eval_github \
+  --github "https://github.com/<owner>/<repo>/commit/<sha>" \
+  --tasks 1
+```
+
+Options:
+- `--tasks-json /path/to/season_tasks.json`: evaluate tasks from a JSON file instead of generating new tasks.
+- `--output-json /tmp/miner_eval_report.json`: save a structured report.
+- `--env-file .env`: load API keys/settings from an env file before running.
+- `--keep-containers`: preserve sandbox containers for debugging.
+
+Scoring parity with validator:
+- Uses the same reward function as validator (`score` + time/cost shaping via `calculate_reward_for_task`).
+- Applies the same over-cost safety rule:
+  - Task is counted as over-cost when `cost_usd >= MAX_TASK_DOLLAR_COST_USD`.
+  - If over-cost hits reach `MAX_OVER_COST_TASKS_BEFORE_FORCED_ZERO_SCORE` (default `10`), remaining tasks stop and final validator-equivalent score is forced to `0`.
+- Report includes `summary.validator_final_score` (the score miners should expect for that run) plus cost-limit counters.
+
 ---
 
 # ⛏️ Miner Deployment
