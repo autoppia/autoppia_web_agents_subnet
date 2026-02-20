@@ -62,7 +62,7 @@ COST_WEIGHT = _env_float("COST_WEIGHT", 0.2)
 MAX_MINERS_PER_ROUND_BY_STAKE = _env_int("MAX_MINERS_PER_ROUND_BY_STAKE", 30)
 # 2) Anti-sybil controls during handshake: cap unique active miners sharing the same coldkey/repo.
 #    REPO caps are applied per season (resets when a new season starts).
-MAX_MINERS_PER_COLDKEY = _env_int("MAX_MINERS_PER_COLDKEY", 1)
+MAX_MINERS_PER_COLDKEY = _env_int("MAX_MINERS_PER_COLDKEY", 2)
 MAX_MINERS_PER_REPO = _env_int("MAX_MINERS_PER_REPO", 2)
 # Adaptive cooldown policy:
 # - Better miners wait fewer rounds.
@@ -77,7 +77,7 @@ VALIDATOR_NAME = _env_str("VALIDATOR_NAME")
 VALIDATOR_IMAGE = _env_str("VALIDATOR_IMAGE")
 IWAP_VALIDATOR_AUTH_MESSAGE = _env_str("IWAP_VALIDATOR_AUTH_MESSAGE", "I am a honest validator")
 MAX_MINER_AGENT_NAME_LENGTH = _env_int("MAX_MINER_AGENT_NAME_LENGTH", 32)
-MIN_MINER_STAKE_TAO = _env_float("MIN_MINER_STAKE_TAO", 100.0, test_default=0.0)
+MIN_MINER_STAKE_ALPHA = _env_float("MIN_MINER_STAKE_ALPHA", 100.0, test_default=0.0)
 IPFS_API_URL = _env_str("IPFS_API_URL", "http://ipfs.metahash73.com:5001/api/v0")
 # Comma-separated gateways for fetch fallback
 IPFS_GATEWAYS = [gw.strip() for gw in (_env_str("IPFS_GATEWAYS", "https://ipfs.io/ipfs,https://cloudflare-ipfs.com/ipfs") or "").split(",") if gw.strip()]

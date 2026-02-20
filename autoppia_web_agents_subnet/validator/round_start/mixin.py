@@ -18,7 +18,7 @@ from autoppia_web_agents_subnet.opensource.utils_git import (
 from autoppia_web_agents_subnet.validator.config import (
     MINIMUM_START_BLOCK,
     SKIP_ROUND_IF_STARTED_AFTER_FRACTION,
-    MIN_MINER_STAKE_TAO,
+    MIN_MINER_STAKE_ALPHA,
     MAX_MINERS_PER_ROUND_BY_STAKE,
     MAX_MINERS_PER_COLDKEY,
     MAX_MINERS_PER_REPO,
@@ -237,7 +237,7 @@ class ValidatorRoundStartMixin:
         max_by_repo = int(MAX_MINERS_PER_REPO)
 
         validator_uid = int(getattr(self, "uid", 0) or 0)
-        min_stake = float(MIN_MINER_STAKE_TAO)
+        min_stake = float(MIN_MINER_STAKE_ALPHA)
 
         # Filter candidate miner UIDs by minimum stake and excluding validator itself.
         candidate_uids: list[int] = []
@@ -259,10 +259,10 @@ class ValidatorRoundStartMixin:
                 candidate_stakes.append((stake_val, uid, coldkey))
             else:
                 skipped_below_stake += 1
-                bt.logging.debug(f"[handshake] Skipping uid={uid} stake={stake_val:.4f} < MIN_MINER_STAKE_TAO={min_stake:.4f}")
+                bt.logging.debug(f"[handshake] Skipping uid={uid} stake={stake_val:.4f} < MIN_MINER_STAKE_ALPHA={min_stake:.4f}")
 
         if not candidate_stakes:
-            bt.logging.warning(f"No miners meet MIN_MINER_STAKE_TAO={min_stake:.4f}; active_miner_uids will be empty")
+            bt.logging.warning(f"No miners meet MIN_MINER_STAKE_ALPHA={min_stake:.4f}; active_miner_uids will be empty")
             return
 
         candidates_after_stake = len(candidate_stakes)
@@ -319,7 +319,7 @@ class ValidatorRoundStartMixin:
         try:
             sample = candidate_uids[:10]
             sample_str = ", ".join(f"{uid}:{float(stakes[uid]) if uid < len(stakes) else 0.0:.4f}" for uid in sample)
-            bt.logging.info(f"[handshake] Candidates meeting MIN_MINER_STAKE_TAO={min_stake:.4f}: {len(candidate_uids)} miners (sample: {sample_str})")
+            bt.logging.info(f"[handshake] Candidates meeting MIN_MINER_STAKE_ALPHA={min_stake:.4f}: {len(candidate_uids)} miners (sample: {sample_str})")
         except Exception:
             pass
 

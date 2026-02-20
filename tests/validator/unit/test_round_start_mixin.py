@@ -112,14 +112,14 @@ class TestHandshake:
 
         dummy_validator = _bind_round_start_mixin(dummy_validator)
 
-        """Test that handshake filters out miners below MIN_MINER_STAKE_TAO."""
+        """Test that handshake filters out miners below MIN_MINER_STAKE_ALPHA."""
         # Set stakes: UIDs 1,2,3 have sufficient stake (UID 0 is validator)
         # UID 0: 100.0 (validator, excluded), UID 1: 150.0, UID 2: 200.0, UID 3: 100.0, rest < 100.0
         dummy_validator.metagraph.S = [100.0, 150.0, 200.0, 100.0, 50.0, 30.0, 10.0, 0.0, 0.0, 0.0]
         dummy_validator.metagraph.stake = [100.0, 150.0, 200.0, 100.0, 50.0, 30.0, 10.0, 0.0, 0.0, 0.0]
 
         with patch("autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners") as mock_send:
-            with patch("autoppia_web_agents_subnet.validator.round_start.mixin.MIN_MINER_STAKE_TAO", 100.0):
+            with patch("autoppia_web_agents_subnet.validator.round_start.mixin.MIN_MINER_STAKE_ALPHA", 100.0):
                 mock_send.return_value = []
 
                 await dummy_validator._perform_handshake()
@@ -291,7 +291,7 @@ class TestHandshake:
         dummy_validator.metagraph.axons = [Mock(ip="127.0.0.1", port=8000 + i) for i in range(6)]
 
         with (
-            patch("autoppia_web_agents_subnet.validator.round_start.mixin.MIN_MINER_STAKE_TAO", 0.0),
+            patch("autoppia_web_agents_subnet.validator.round_start.mixin.MIN_MINER_STAKE_ALPHA", 0.0),
             patch("autoppia_web_agents_subnet.validator.round_start.mixin.MAX_MINERS_PER_ROUND_BY_STAKE", 2),
             patch("autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners", new_callable=AsyncMock) as mock_send,
         ):
@@ -449,6 +449,6 @@ class TestHandshakeEdgeCases:
         dummy_validator.metagraph.S = [10.0] * 10
         dummy_validator.metagraph.stake = [10.0] * 10
 
-        with patch("autoppia_web_agents_subnet.validator.round_start.mixin.MIN_MINER_STAKE_TAO", 100.0):
+        with patch("autoppia_web_agents_subnet.validator.round_start.mixin.MIN_MINER_STAKE_ALPHA", 100.0):
             # Should not raise exception
             await dummy_validator._perform_handshake()
