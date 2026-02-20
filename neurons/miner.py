@@ -1,9 +1,11 @@
+import sys
 import time
 
 import bittensor as bt
 
 from autoppia_web_agents_subnet.base.miner import BaseMinerNeuron
 from autoppia_web_agents_subnet.bittensor_config import config
+from autoppia_web_agents_subnet.opensource.utils_git import normalize_and_validate_github_url
 from autoppia_web_agents_subnet.protocol import StartRoundSynapse
 from autoppia_web_agents_subnet.utils.env import _env_str
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
@@ -12,10 +14,29 @@ AGENT_NAME = _env_str("AGENT_NAME")
 GITHUB_URL = _env_str("GITHUB_URL")
 AGENT_IMAGE = _env_str("AGENT_IMAGE")
 
+def _validate_miner_env() -> None:
+    """Validate AGENT_NAME and GITHUB_URL at startup, exit on failure."""
+    errors: list[str] = []
+
+    if not (AGENT_NAME.strip() if isinstance(AGENT_NAME, str) else ""):
+        errors.append("AGENT_NAME is not set. Validator will score this miner 0.")
+
+    raw_url = GITHUB_URL.strip() if isinstance(GITHUB_URL, str) else ""
+    if not raw_url:
+        errors.append("GITHUB_URL is not set. Validator will score this miner 0.")
+    elif normalize_and_validate_github_url(raw_url, require_ref=True)[0] is None:
+        errors.append(f"GITHUB_URL is invalid: '{raw_url}'. Must be https://github.com/owner/repo/tree/<ref> or /commit/<sha>.")
+
+    if errors:
+        for err in errors:
+            ColoredLogger.error(f"STARTUP VALIDATION FAILED: {err}", ColoredLogger.RED)
+        sys.exit(1)
+        
 
 class Miner(BaseMinerNeuron):
     def __init__(self, config=None):
         super(Miner, self).__init__(config=config)
+        _validate_miner_env()
 
     # ────────────────────────── Round Handshake ──────────────────────────
     async def forward(self, synapse: StartRoundSynapse) -> StartRoundSynapse:
