@@ -66,6 +66,11 @@ setup(
     include_package_data=True,
     install_requires=requirements,
     python_requires=">=3.11",
+    entry_points={
+        "console_scripts": [
+            "autoppia-miner-cli=autoppia_web_agents_subnet.miner.cli:main",
+        ],
+    },
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",

@@ -50,6 +50,13 @@ install_bittensor() {
   success_msg "Bittensor installed."
 }
 
+install_modules() {
+  echo -e "\e[34m[INFO]\e[0m Installing current package in editable mode..."
+  pip install -e . \
+    || handle_error "Failed to install current package"
+  success_msg "Main package installed."
+}
+
 verify_installation() {
   info_msg "Verifying miner environment setup..."
 
@@ -91,7 +98,8 @@ main() {
   check_python
   create_activate_venv
   upgrade_pip
-  install_bittensor
+  install_bittensor  # Install bittensor first
+  install_modules
   verify_installation
 
   show_completion_info
