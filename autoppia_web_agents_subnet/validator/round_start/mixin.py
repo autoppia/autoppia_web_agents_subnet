@@ -26,15 +26,6 @@ from autoppia_web_agents_subnet.validator.config import (
     EVALUATION_COOLDOWN_MAX_ROUNDS,
     EVALUATION_COOLDOWN_NO_RESPONSE_BADNESS,
     EVALUATION_COOLDOWN_ZERO_SCORE_BADNESS,
-    ENABLE_PAYMENT_GATING,
-    PAYMENT_WALLET_SS58,
-    ALPHA_PER_EVAL,
-    PAYMENT_SUBNET_ID,
-    PAYMENT_SCAN_LOOKBACK_BLOCKS,
-)
-from autoppia_web_agents_subnet.validator.payment.paid_alpha import (
-    allowed_evaluations_from_paid_rao,
-    get_paid_alpha_per_coldkey_async,
 )
 from autoppia_web_agents_subnet.validator.round_start.synapse_handler import send_start_round_synapse_to_miners
 
@@ -310,52 +301,12 @@ class ValidatorRoundStartMixin:
         else:
             candidate_uids = [uid for _, uid in candidate_stakes]
 
-        skipped_payment = 0
-        if ENABLE_PAYMENT_GATING and (PAYMENT_WALLET_SS58 or "").strip():
-            try:
-                current_block = int(getattr(self, "block", 0) or 0)
-                if current_block > 0:
-                    st = getattr(self, "_get_async_subtensor", None)
-                    if callable(st):
-                        st = await st()
-                    else:
-                        st = getattr(self, "subtensor", None)
-                    if st is not None:
-                        lookback = max(1, int(PAYMENT_SCAN_LOOKBACK_BLOCKS))
-                        from_block = max(int(MINIMUM_START_BLOCK), current_block - lookback)
-                        to_block = current_block
-                        paid = await get_paid_alpha_per_coldkey_async(
-                            st,
-                            from_block,
-                            to_block,
-                            PAYMENT_WALLET_SS58.strip(),
-                            int(PAYMENT_SUBNET_ID),
-                        )
-                        alpha_per_eval = float(ALPHA_PER_EVAL or 10.0)
-                        if alpha_per_eval <= 0:
-                            alpha_per_eval = 10.0
-                        allowed: set[int] = set()
-                        for uid in candidate_uids:
-                            ck = ""
-                            if 0 <= uid < len(coldkeys):
-                                ck = str((coldkeys[uid] or "")).strip()
-                            paid_rao = paid.get(ck, 0) if ck else 0
-                            if allowed_evaluations_from_paid_rao(paid_rao, alpha_per_eval) > 0:
-                                allowed.add(uid)
-                            else:
-                                skipped_payment += 1
-                        candidate_uids = [u for u in candidate_uids if u in allowed]
-                        candidate_stakes = [(float(stakes[uid]) if uid < len(stakes) else 0.0, uid) for uid in candidate_uids]
-                        candidate_stakes.sort(key=lambda item: item[0], reverse=True)
-            except Exception as exc:
-                bt.logging.warning(f"[handshake] Payment gating failed, proceeding without: {exc}")
-
         bt.logging.info(
             "[handshake] Candidate selection summary "
             f"total={n - 1}|eligible_by_stake={candidates_after_stake}|"
             f"below_stake={skipped_below_stake}|"
             f"coldkey_cap_skip={skipped_coldkey_cap}|stake_cap_skip={skipped_stake_cap}|"
-            f"payment_skip={skipped_payment}|final_candidates={len(candidate_uids)}"
+            f"final_candidates={len(candidate_uids)}"
         )
 
         # Expose the eligible window for the evaluation phase (and for logs).
