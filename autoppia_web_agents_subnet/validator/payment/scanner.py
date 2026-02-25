@@ -12,7 +12,10 @@ from typing import Dict
 
 import bittensor as bt
 
-from autoppia_web_agents_subnet.validator import config as validator_config
+from autoppia_web_agents_subnet.validator.payment.config import (
+    PAYMENT_SCAN_CHUNK,
+    PAYMENT_SCAN_LOOKBACK_BLOCKS,
+)
 
 
 class AlphaScanner:
@@ -35,7 +38,7 @@ class AlphaScanner:
     ) -> int:
         """
         Return total amount_rao that coldkey sent to payment_address on netuid in [from_block, to_block].
-        If from_block or to_block is None, uses config defaults (current block and lookback).
+        If from_block or to_block is None, uses defaults (current block and lookback).
         """
         if not (payment_address or "").strip() or not (coldkey or "").strip():
             return 0
@@ -57,13 +60,12 @@ class AlphaScanner:
                 return 0
         from_b = from_block
         if from_b is None:
-            lookback = max(1, int(getattr(validator_config, "PAYMENT_SCAN_LOOKBACK_BLOCKS", 50000) or 50000))
-            min_start = int(getattr(validator_config, "MINIMUM_START_BLOCK", 0) or 0)
-            from_b = max(min_start, to_b - lookback)
+            lookback = max(1, PAYMENT_SCAN_LOOKBACK_BLOCKS)
+            from_b = max(0, to_b - lookback)
         if from_b > to_b:
             return 0
 
-        chunk = max(1, int(getattr(validator_config, "PAYMENT_SCAN_CHUNK", 512) or 512))
+        chunk = max(1, PAYMENT_SCAN_CHUNK)
         backend = AlphaTransfersScanner(
             self.subtensor,
             dest_coldkey=payment_address.strip(),
@@ -114,9 +116,7 @@ async def get_paid_alpha_per_coldkey_async(
         bt.logging.warning(f"[payment] AlphaTransfersScanner not available (install metahash): {e}")
         return {}
 
-    chunk = chunk_size
-    if chunk is None:
-        chunk = int(getattr(validator_config, "PAYMENT_SCAN_CHUNK", 512) or 512)
+    chunk = chunk_size if chunk_size is not None else PAYMENT_SCAN_CHUNK
     chunk = max(1, chunk)
 
     lock = rpc_lock or asyncio.Lock()

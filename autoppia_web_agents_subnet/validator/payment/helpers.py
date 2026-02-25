@@ -7,10 +7,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from autoppia_web_agents_subnet.validator import config as validator_config
+from autoppia_web_agents_subnet.validator.payment.config import (
+    RAO_PER_ALPHA,
+    PAYMENT_WALLET_SS58,
+)
 from autoppia_web_agents_subnet.validator.payment.scanner import AlphaScanner
-
-RAO_PER_ALPHA = 10**9
 
 
 def allowed_evaluations_from_paid_rao(paid_rao: int, alpha_per_eval: float) -> int:
@@ -36,11 +37,11 @@ async def get_alpha_sent_by_miner(
 ) -> int:
     """
     Return total amount_rao that coldkey sent to the payment address in the optional block range.
-    Uses AlphaScanner internally. subtensor is required; payment_address defaults to config.
+    Uses AlphaScanner internally. subtensor is required; payment_address defaults to PAYMENT_WALLET_SS58.
     """
     if subtensor is None:
         return 0
-    addr = (payment_address or "").strip() or ((getattr(validator_config, "PAYMENT_WALLET_SS58", None) or "").strip())
+    addr = (payment_address or "").strip() or PAYMENT_WALLET_SS58
     if not addr:
         return 0
     scanner = AlphaScanner(subtensor)

@@ -78,16 +78,6 @@ VALIDATOR_IMAGE = _env_str("VALIDATOR_IMAGE")
 IWAP_VALIDATOR_AUTH_MESSAGE = _env_str("IWAP_VALIDATOR_AUTH_MESSAGE", "I am a honest validator")
 MAX_MINER_AGENT_NAME_LENGTH = _env_int("MAX_MINER_AGENT_NAME_LENGTH", 32)
 MIN_MINER_STAKE_ALPHA = _env_float("MIN_MINER_STAKE_ALPHA", 100.0, test_default=0.0)
-
-# Payment-per-eval gating: miners pay alpha to a wallet to receive evaluations (anti-spam).
-# Requires metahash.validator.alpha_transfers (AlphaTransfersScanner) when enabled.
-ENABLE_PAYMENT_GATING = _env_bool("ENABLE_PAYMENT_GATING", False, test_default=False)
-PAYMENT_WALLET_SS58 = _env_str("PAYMENT_WALLET_SS58", "", test_default="")
-ALPHA_PER_EVAL = _env_float("ALPHA_PER_EVAL", 10.0, test_default=10.0)
-PAYMENT_SCAN_CHUNK = _env_int("PAYMENT_SCAN_CHUNK", 512)
-PAYMENT_SUBNET_ID = _env_int("PAYMENT_SUBNET_ID", 36, test_default=36)
-PAYMENT_SCAN_LOOKBACK_BLOCKS = _env_int("PAYMENT_SCAN_LOOKBACK_BLOCKS", 50000, test_default=100)
-
 IPFS_API_URL = _env_str("IPFS_API_URL", "http://ipfs.metahash73.com:5001/api/v0")
 # Comma-separated gateways for fetch fallback
 IPFS_GATEWAYS = [gw.strip() for gw in (_env_str("IPFS_GATEWAYS", "https://ipfs.io/ipfs,https://cloudflare-ipfs.com/ipfs") or "").split(",") if gw.strip()]

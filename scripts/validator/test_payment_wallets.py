@@ -22,8 +22,8 @@ import argparse
 import asyncio
 import sys
 
-from autoppia_web_agents_subnet.validator.payment.scanner import AlphaScanner
-from autoppia_web_agents_subnet.validator.payment.helpers import (
+from autoppia_web_agents_subnet.validator.payment import (
+    AlphaScanner,
     RAO_PER_ALPHA,
     allowed_evaluations_from_paid_rao,
 )

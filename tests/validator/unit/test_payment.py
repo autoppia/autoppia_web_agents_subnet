@@ -9,13 +9,11 @@ import string
 
 import pytest
 
-from autoppia_web_agents_subnet.validator.payment.helpers import (
+from autoppia_web_agents_subnet.validator.payment import (
     RAO_PER_ALPHA,
+    AlphaScanner,
     allowed_evaluations_from_paid_rao,
     get_alpha_sent_by_miner,
-)
-from autoppia_web_agents_subnet.validator.payment.scanner import (
-    AlphaScanner,
     get_paid_alpha_per_coldkey_async,
 )
 
@@ -148,8 +146,7 @@ class TestGetAlphaSentByMiner:
     async def test_returns_zero_when_payment_address_and_config_empty(self):
         from unittest.mock import patch
 
-        with patch("autoppia_web_agents_subnet.validator.payment.helpers.validator_config") as cfg:
-            cfg.PAYMENT_WALLET_SS58 = ""
+        with patch("autoppia_web_agents_subnet.validator.payment.helpers.PAYMENT_WALLET_SS58", ""):
             result = await get_alpha_sent_by_miner("5SomeColdkey", payment_address="", subtensor=object())
         assert result == 0
 
