@@ -84,7 +84,7 @@ MIN_MINER_STAKE_ALPHA = _env_float("MIN_MINER_STAKE_ALPHA", 100.0, test_default=
 ENABLE_PAYMENT_GATING = _env_bool("ENABLE_PAYMENT_GATING", False, test_default=False)
 PAYMENT_WALLET_SS58 = _env_str("PAYMENT_WALLET_SS58", "", test_default="")
 ALPHA_PER_EVAL = _env_float("ALPHA_PER_EVAL", 10.0, test_default=10.0)
-PAYMENT_SCAN_CHUNK = _env_int("ALPHA_SCAN_CHUNK", 512)
+PAYMENT_SCAN_CHUNK = _env_int("PAYMENT_SCAN_CHUNK", 512)
 PAYMENT_SUBNET_ID = _env_int("PAYMENT_SUBNET_ID", 36, test_default=36)
 PAYMENT_SCAN_LOOKBACK_BLOCKS = _env_int("PAYMENT_SCAN_LOOKBACK_BLOCKS", 50000, test_default=100)
 

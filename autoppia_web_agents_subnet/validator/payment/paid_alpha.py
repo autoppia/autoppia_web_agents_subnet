@@ -51,9 +51,7 @@ async def get_paid_alpha_per_coldkey_async(
     try:
         from metahash.validator.alpha_transfers import AlphaTransfersScanner
     except ImportError as e:
-        bt.logging.warning(
-            f"[payment] AlphaTransfersScanner not available (install metahash for payment gating): {e}"
-        )
+        bt.logging.warning(f"[payment] AlphaTransfersScanner not available (install metahash for payment gating): {e}")
         return {}
 
     chunk = chunk_size
@@ -76,9 +74,7 @@ async def get_paid_alpha_per_coldkey_async(
         try:
             events = await scanner.scan(chunk_start, chunk_end)
         except Exception as exc:
-            bt.logging.warning(
-                f"[payment] Scanner failed for blocks {chunk_start}-{chunk_end}: {exc}"
-            )
+            bt.logging.warning(f"[payment] Scanner failed for blocks {chunk_start}-{chunk_end}: {exc}")
             continue
         for ev in events:
             src = getattr(ev, "src_coldkey", None)
