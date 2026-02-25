@@ -1,6 +1,7 @@
 """
-Unit tests for payment module: AlphaScanner, get_alpha_sent_by_miner, allowed_evaluations_from_paid_rao,
-get_paid_alpha_per_coldkey_async.
+Unit tests for payment module: AlphaScanner (scanner.py), helpers (helpers.py),
+get_alpha_sent_by_miner, get_paid_alpha_per_coldkey_async.
+Tests focus on functionality only — no validator handshake behavior.
 """
 
 import random
@@ -8,11 +9,13 @@ import string
 
 import pytest
 
-from autoppia_web_agents_subnet.validator.payment.paid_alpha import (
+from autoppia_web_agents_subnet.validator.payment.helpers import (
     RAO_PER_ALPHA,
-    AlphaScanner,
     allowed_evaluations_from_paid_rao,
     get_alpha_sent_by_miner,
+)
+from autoppia_web_agents_subnet.validator.payment.scanner import (
+    AlphaScanner,
     get_paid_alpha_per_coldkey_async,
 )
 
@@ -25,7 +28,7 @@ def _random_ss58_like(prefix: str = "5", length: int = 44) -> str:
 
 @pytest.mark.unit
 class TestAllowedEvaluationsFromPaidRao:
-    """Test allowed_evaluations_from_paid_rao."""
+    """Test allowed_evaluations_from_paid_rao helper."""
 
     def test_zero_paid_returns_zero(self):
         assert allowed_evaluations_from_paid_rao(0, 10.0) == 0
@@ -90,9 +93,7 @@ class TestAlphaScanner:
             },
         ):
             scanner = AlphaScanner(subtensor=MagicMock())
-            result = await scanner.scan(
-                payment_addr, coldkey_addr, netuid=netuid, from_block=from_b, to_block=to_b
-            )
+            result = await scanner.scan(payment_addr, coldkey_addr, netuid=netuid, from_block=from_b, to_block=to_b)
         assert result == 15 * RAO_PER_ALPHA
 
     async def test_scan_netuid_custom_completes(self):
@@ -106,16 +107,12 @@ class TestAlphaScanner:
                 "metahash": MagicMock(),
                 "metahash.validator": MagicMock(),
                 "metahash.validator.alpha_transfers": MagicMock(
-                    AlphaTransfersScanner=MagicMock(
-                        return_value=MagicMock(scan=AsyncMock(return_value=[]))
-                    )
+                    AlphaTransfersScanner=MagicMock(return_value=MagicMock(scan=AsyncMock(return_value=[])))
                 ),
             },
         ):
             scanner = AlphaScanner(subtensor=MagicMock())
-            result = await scanner.scan(
-                payment_addr, coldkey_addr, netuid=73, from_block=1, to_block=50
-            )
+            result = await scanner.scan(payment_addr, coldkey_addr, netuid=73, from_block=1, to_block=50)
         assert result == 0
 
     @pytest.mark.parametrize("netuid", [36, 73, 1])
@@ -130,9 +127,7 @@ class TestAlphaScanner:
                 "metahash": MagicMock(),
                 "metahash.validator": MagicMock(),
                 "metahash.validator.alpha_transfers": MagicMock(
-                    AlphaTransfersScanner=MagicMock(
-                        return_value=MagicMock(scan=AsyncMock(return_value=[]))
-                    )
+                    AlphaTransfersScanner=MagicMock(return_value=MagicMock(scan=AsyncMock(return_value=[])))
                 ),
             },
         ):
@@ -153,13 +148,9 @@ class TestGetAlphaSentByMiner:
     async def test_returns_zero_when_payment_address_and_config_empty(self):
         from unittest.mock import patch
 
-        with patch(
-            "autoppia_web_agents_subnet.validator.payment.paid_alpha.validator_config"
-        ) as cfg:
+        with patch("autoppia_web_agents_subnet.validator.payment.helpers.validator_config") as cfg:
             cfg.PAYMENT_WALLET_SS58 = ""
-            result = await get_alpha_sent_by_miner(
-                "5SomeColdkey", payment_address="", subtensor=object()
-            )
+            result = await get_alpha_sent_by_miner("5SomeColdkey", payment_address="", subtensor=object())
         assert result == 0
 
     async def test_uses_scanner_and_returns_result_with_randomized_args(self):
@@ -167,19 +158,9 @@ class TestGetAlphaSentByMiner:
 
         pay = _random_ss58_like("5Pay")
         ck = _random_ss58_like("5Ck")
-        with patch.object(
-            AlphaScanner,
-            "scan",
-            new_callable=AsyncMock,
-            return_value=7 * RAO_PER_ALPHA,
-        ):
+        with patch.object(AlphaScanner, "scan", new_callable=AsyncMock, return_value=7 * RAO_PER_ALPHA):
             result = await get_alpha_sent_by_miner(
-                ck,
-                payment_address=pay,
-                netuid=36,
-                from_block=1,
-                to_block=100,
-                subtensor=MagicMock(),
+                ck, payment_address=pay, netuid=36, from_block=1, to_block=100, subtensor=MagicMock()
             )
         assert result == 7 * RAO_PER_ALPHA
 
@@ -191,11 +172,7 @@ class TestGetAlphaSentByMiner:
         mock_scan = AsyncMock(return_value=0)
         with patch.object(AlphaScanner, "scan", mock_scan):
             result = await get_alpha_sent_by_miner(
-                _random_ss58_like(),
-                payment_address=_random_ss58_like(),
-                from_block=from_b,
-                to_block=to_b,
-                subtensor=st,
+                _random_ss58_like(), payment_address=_random_ss58_like(), from_block=from_b, to_block=to_b, subtensor=st
             )
         assert result == 0
         assert mock_scan.called
@@ -208,31 +185,19 @@ class TestGetPaidAlphaPerColdkeyAsync:
 
     async def test_from_block_gt_to_block_returns_empty(self):
         result = await get_paid_alpha_per_coldkey_async(
-            subtensor=object(),
-            from_block=100,
-            to_block=50,
-            dest_coldkey="5SomeWallet",
-            target_subnet_id=36,
+            subtensor=object(), from_block=100, to_block=50, dest_coldkey="5SomeWallet", target_subnet_id=36
         )
         assert result == {}
 
     async def test_empty_dest_coldkey_returns_empty(self):
         result = await get_paid_alpha_per_coldkey_async(
-            subtensor=object(),
-            from_block=1,
-            to_block=100,
-            dest_coldkey="",
-            target_subnet_id=36,
+            subtensor=object(), from_block=1, to_block=100, dest_coldkey="", target_subnet_id=36
         )
         assert result == {}
 
     async def test_whitespace_dest_coldkey_returns_empty(self):
         result = await get_paid_alpha_per_coldkey_async(
-            subtensor=object(),
-            from_block=1,
-            to_block=100,
-            dest_coldkey="   ",
-            target_subnet_id=36,
+            subtensor=object(), from_block=1, to_block=100, dest_coldkey="   ", target_subnet_id=36
         )
         assert result == {}
 
@@ -259,11 +224,7 @@ class TestGetPaidAlphaPerColdkeyAsync:
             },
         ):
             result = await get_paid_alpha_per_coldkey_async(
-                subtensor=MagicMock(),
-                from_block=1,
-                to_block=100,
-                dest_coldkey="5Treasury",
-                target_subnet_id=36,
+                subtensor=MagicMock(), from_block=1, to_block=100, dest_coldkey="5Treasury", target_subnet_id=36
             )
         assert result["5Alice"] == 15 * RAO_PER_ALPHA
         assert result["5Bob"] == ten_alpha_rao
