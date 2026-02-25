@@ -18,6 +18,37 @@ from autoppia_web_agents_subnet.validator.payment.config import (
 )
 
 
+def _make_scanner(
+    scanner_cls: type,
+    subtensor: Any,
+    *,
+    dest_coldkey: str,
+    netuid: int,
+    rpc_lock: asyncio.Lock,
+):
+    """
+    Build AlphaTransfersScanner compatible with current metahash API.
+    If target_subnet_id is not supported, returns (scanner, True) so caller filters by subnet_id.
+    """
+    try:
+        backend = scanner_cls(
+            subtensor,
+            dest_coldkey=dest_coldkey,
+            target_subnet_id=netuid,
+            allow_batch=True,
+            rpc_lock=rpc_lock,
+        )
+        return backend, False
+    except TypeError:
+        backend = scanner_cls(
+            subtensor,
+            dest_coldkey=dest_coldkey,
+            allow_batch=True,
+            rpc_lock=rpc_lock,
+        )
+        return backend, True
+
+
 class AlphaScanner:
     """
     Scans chain for α-stake transfers to a payment address and returns amount sent by a given coldkey.
@@ -66,11 +97,11 @@ class AlphaScanner:
             return 0
 
         chunk = max(1, PAYMENT_SCAN_CHUNK)
-        backend = AlphaTransfersScanner(
+        backend, filter_by_netuid = _make_scanner(
+            AlphaTransfersScanner,
             self.subtensor,
             dest_coldkey=payment_address.strip(),
-            target_subnet_id=netuid,
-            allow_batch=True,
+            netuid=netuid,
             rpc_lock=self._rpc_lock,
         )
         ck = coldkey.strip()
@@ -83,6 +114,8 @@ class AlphaScanner:
                 bt.logging.warning(f"[AlphaScanner] scan failed for blocks {chunk_start}-{chunk_end}: {exc}")
                 continue
             for ev in events:
+                if filter_by_netuid and getattr(ev, "subnet_id", None) != netuid:
+                    continue
                 src = getattr(ev, "src_coldkey", None)
                 if src and isinstance(src, str) and src.strip() == ck:
                     amt = int(getattr(ev, "amount_rao", 0) or 0)
@@ -120,11 +153,11 @@ async def get_paid_alpha_per_coldkey_async(
     chunk = max(1, chunk)
 
     lock = rpc_lock or asyncio.Lock()
-    scanner = AlphaTransfersScanner(
+    scanner, filter_by_netuid = _make_scanner(
+        AlphaTransfersScanner,
         subtensor,
         dest_coldkey=dest_coldkey.strip(),
-        target_subnet_id=target_subnet_id,
-        allow_batch=True,
+        netuid=target_subnet_id,
         rpc_lock=lock,
     )
 
@@ -137,6 +170,8 @@ async def get_paid_alpha_per_coldkey_async(
             bt.logging.warning(f"[payment] Scanner failed for blocks {chunk_start}-{chunk_end}: {exc}")
             continue
         for ev in events:
+            if filter_by_netuid and getattr(ev, "subnet_id", None) != target_subnet_id:
+                continue
             src = getattr(ev, "src_coldkey", None)
             if src and isinstance(src, str) and src.strip():
                 amt = int(getattr(ev, "amount_rao", 0) or 0)

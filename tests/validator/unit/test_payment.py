@@ -94,6 +94,70 @@ class TestAlphaScanner:
             result = await scanner.scan(payment_addr, coldkey_addr, netuid=netuid, from_block=from_b, to_block=to_b)
         assert result == 15 * RAO_PER_ALPHA
 
+    async def test_scan_returns_correct_alpha_as_rao(self):
+        """Scanner returns total amount_rao; rao / RAO_PER_ALPHA equals expected alpha."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        payment_addr = _random_ss58_like("5Pay")
+        coldkey_addr = _random_ss58_like("5Ck")
+        # 10 α + 5 α = 15 α total
+        events = [
+            MagicMock(src_coldkey=coldkey_addr, amount_rao=10 * RAO_PER_ALPHA),
+            MagicMock(src_coldkey=coldkey_addr, amount_rao=5 * RAO_PER_ALPHA),
+        ]
+        mock_backend = MagicMock()
+        mock_backend.scan = AsyncMock(return_value=events)
+        with patch.dict(
+            "sys.modules",
+            {
+                "metahash": MagicMock(),
+                "metahash.validator": MagicMock(),
+                "metahash.validator.alpha_transfers": MagicMock(
+                    AlphaTransfersScanner=MagicMock(return_value=mock_backend)
+                ),
+            },
+        ):
+            scanner = AlphaScanner(subtensor=MagicMock())
+            paid_rao = await scanner.scan(
+                payment_addr, coldkey_addr, netuid=36, from_block=1, to_block=100
+            )
+        expected_alpha = 15.0
+        assert paid_rao == int(expected_alpha * RAO_PER_ALPHA)
+        assert paid_rao / RAO_PER_ALPHA == expected_alpha
+        assert allowed_evaluations_from_paid_rao(paid_rao, 10.0) == 1
+        assert allowed_evaluations_from_paid_rao(paid_rao, 5.0) == 3
+
+    async def test_scan_aggregates_across_multiple_chunks(self):
+        """When backend.scan is called multiple times (chunked blocks), returned rao is sum of all events."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        payment_addr = _random_ss58_like("5Pay")
+        coldkey_addr = _random_ss58_like("5Ck")
+        chunk1_events = [
+            MagicMock(src_coldkey=coldkey_addr, amount_rao=10 * RAO_PER_ALPHA),
+        ]
+        chunk2_events = [
+            MagicMock(src_coldkey=coldkey_addr, amount_rao=5 * RAO_PER_ALPHA),
+        ]
+        mock_backend = MagicMock()
+        mock_backend.scan = AsyncMock(side_effect=[chunk1_events, chunk2_events])
+        with patch.dict(
+            "sys.modules",
+            {
+                "metahash": MagicMock(),
+                "metahash.validator": MagicMock(),
+                "metahash.validator.alpha_transfers": MagicMock(
+                    AlphaTransfersScanner=MagicMock(return_value=mock_backend)
+                ),
+            },
+        ):
+            scanner = AlphaScanner(subtensor=MagicMock())
+            paid_rao = await scanner.scan(
+                payment_addr, coldkey_addr, netuid=36, from_block=1, to_block=600
+            )
+        assert paid_rao == 15 * RAO_PER_ALPHA
+        assert paid_rao / RAO_PER_ALPHA == 15.0
+
     async def test_scan_netuid_custom_completes(self):
         from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -133,6 +197,43 @@ class TestAlphaScanner:
             result = await scanner.scan(pay, ck, netuid=netuid, from_block=10, to_block=20)
         assert result == 0
 
+    async def test_scan_fallback_when_target_subnet_id_not_supported(self):
+        """When metahash AlphaTransfersScanner does not accept target_subnet_id, we init without it and filter by subnet_id."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        payment_addr = _random_ss58_like("5Pay")
+        coldkey_addr = _random_ss58_like("5Ck")
+        netuid = 36
+        from_b, to_b = 1, 100
+        ten_rao = 10 * RAO_PER_ALPHA
+        # Events: one for our subnet, one for other subnet; only our subnet should be counted
+        fake_events = [
+            MagicMock(src_coldkey=coldkey_addr, amount_rao=ten_rao, subnet_id=36),
+            MagicMock(src_coldkey=coldkey_addr, amount_rao=5 * RAO_PER_ALPHA, subnet_id=73),
+        ]
+        mock_backend = MagicMock()
+        mock_backend.scan = AsyncMock(return_value=fake_events)
+
+        def scanner_side_effect(*args, **kwargs):
+            if "target_subnet_id" in kwargs:
+                raise TypeError("unexpected keyword argument 'target_subnet_id'")
+            return mock_backend
+
+        MockClass = MagicMock(side_effect=scanner_side_effect)
+        with patch.dict(
+            "sys.modules",
+            {
+                "metahash": MagicMock(),
+                "metahash.validator": MagicMock(),
+                "metahash.validator.alpha_transfers": MagicMock(AlphaTransfersScanner=MockClass),
+            },
+        ):
+            scanner = AlphaScanner(subtensor=MagicMock())
+            result = await scanner.scan(
+                payment_addr, coldkey_addr, netuid=netuid, from_block=from_b, to_block=to_b
+            )
+        assert result == ten_rao
+
 
 @pytest.mark.unit
 @pytest.mark.asyncio
@@ -160,6 +261,22 @@ class TestGetAlphaSentByMiner:
                 ck, payment_address=pay, netuid=36, from_block=1, to_block=100, subtensor=MagicMock()
             )
         assert result == 7 * RAO_PER_ALPHA
+
+    async def test_get_alpha_sent_by_miner_returned_rao_gives_correct_alpha_and_evals(self):
+        """get_alpha_sent_by_miner returns rao that converts to correct alpha and allowed evals."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        pay = _random_ss58_like("5Pay")
+        ck = _random_ss58_like("5Ck")
+        paid_rao = 25 * RAO_PER_ALPHA
+        with patch.object(AlphaScanner, "scan", new_callable=AsyncMock, return_value=paid_rao):
+            result_rao = await get_alpha_sent_by_miner(
+                ck, payment_address=pay, netuid=36, from_block=1, to_block=100, subtensor=MagicMock()
+            )
+        assert result_rao == paid_rao
+        assert result_rao / RAO_PER_ALPHA == 25.0
+        assert allowed_evaluations_from_paid_rao(result_rao, 10.0) == 2
+        assert allowed_evaluations_from_paid_rao(result_rao, 5.0) == 5
 
     @pytest.mark.parametrize("from_b,to_b", [(None, 500), (100, 200), (1, 100)])
     async def test_block_range_optional_coverage(self, from_b, to_b):
@@ -227,3 +344,67 @@ class TestGetPaidAlphaPerColdkeyAsync:
         assert result["5Bob"] == ten_alpha_rao
         assert allowed_evaluations_from_paid_rao(result["5Alice"], 10.0) == 1
         assert allowed_evaluations_from_paid_rao(result["5Bob"], 10.0) == 1
+
+    async def test_get_paid_returns_correct_alpha_per_coldkey_and_evals(self):
+        """get_paid_alpha_per_coldkey_async returns rao that converts to correct alpha and evals per coldkey."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        alice_rao = 30 * RAO_PER_ALPHA
+        bob_rao = 10 * RAO_PER_ALPHA
+        fake_events = [
+            MagicMock(src_coldkey="5Alice", amount_rao=alice_rao),
+            MagicMock(src_coldkey="5Bob", amount_rao=bob_rao),
+        ]
+        mock_scanner = MagicMock()
+        mock_scanner.scan = AsyncMock(return_value=fake_events)
+        with patch.dict(
+            "sys.modules",
+            {
+                "metahash": MagicMock(),
+                "metahash.validator": MagicMock(),
+                "metahash.validator.alpha_transfers": MagicMock(
+                    AlphaTransfersScanner=MagicMock(return_value=mock_scanner)
+                ),
+            },
+        ):
+            result = await get_paid_alpha_per_coldkey_async(
+                subtensor=MagicMock(), from_block=1, to_block=100, dest_coldkey="5Treasury", target_subnet_id=36
+            )
+        assert result["5Alice"] == alice_rao
+        assert result["5Bob"] == bob_rao
+        assert result["5Alice"] / RAO_PER_ALPHA == 30.0
+        assert result["5Bob"] / RAO_PER_ALPHA == 10.0
+        assert allowed_evaluations_from_paid_rao(result["5Alice"], 10.0) == 3
+        assert allowed_evaluations_from_paid_rao(result["5Bob"], 10.0) == 1
+
+    async def test_get_paid_fallback_filters_by_subnet_id_when_target_subnet_id_not_supported(self):
+        """When AlphaTransfersScanner rejects target_subnet_id, we filter events by subnet_id."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        ten_alpha_rao = 10 * RAO_PER_ALPHA
+        fake_events = [
+            MagicMock(src_coldkey="5Alice", amount_rao=ten_alpha_rao, subnet_id=36),
+            MagicMock(src_coldkey="5Bob", amount_rao=ten_alpha_rao, subnet_id=73),
+        ]
+        mock_scanner = MagicMock()
+        mock_scanner.scan = AsyncMock(return_value=fake_events)
+
+        def scanner_side_effect(*args, **kwargs):
+            if "target_subnet_id" in kwargs:
+                raise TypeError("unexpected keyword argument 'target_subnet_id'")
+            return mock_scanner
+
+        MockScannerClass = MagicMock(side_effect=scanner_side_effect)
+        with patch.dict(
+            "sys.modules",
+            {
+                "metahash": MagicMock(),
+                "metahash.validator": MagicMock(),
+                "metahash.validator.alpha_transfers": MagicMock(AlphaTransfersScanner=MockScannerClass),
+            },
+        ):
+            result = await get_paid_alpha_per_coldkey_async(
+                subtensor=MagicMock(), from_block=1, to_block=100, dest_coldkey="5Treasury", target_subnet_id=36
+            )
+        assert result["5Alice"] == ten_alpha_rao
+        assert "5Bob" not in result

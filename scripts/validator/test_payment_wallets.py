@@ -22,15 +22,22 @@ import argparse
 import asyncio
 import sys
 
-from autoppia_web_agents_subnet.validator.payment import (
-    AlphaScanner,
-    RAO_PER_ALPHA,
-    allowed_evaluations_from_paid_rao,
-)
+
+def _parse_args():
+    parser = argparse.ArgumentParser(description="Test payment wallets end-to-end")
+    parser.add_argument("--src-wallet-1", required=True, help="First source coldkey SS58")
+    parser.add_argument("--src-wallet-2", required=True, help="Second source coldkey SS58")
+    parser.add_argument("--dest-wallet", required=True, help="Destination payment wallet SS58")
+    parser.add_argument("--netuid", type=int, default=36, help="Subnet netuid (default: 36)")
+    parser.add_argument("--from-block", type=int, default=0, help="Start block (0 = use config lookback)")
+    parser.add_argument("--to-block", type=int, default=0, help="End block (0 = current block)")
+    parser.add_argument("--alpha-per-eval", type=float, default=10.0, help="Alpha required per eval (default: 10)")
+    parser.add_argument("--subtensor-network", default="finney", help="Subtensor network (default: finney)")
+    return parser.parse_args()
 
 
-def _alpha_from_rao(rao: int) -> float:
-    return rao / RAO_PER_ALPHA
+def _alpha_from_rao(rao: int, rao_per_alpha: int) -> float:
+    return rao / rao_per_alpha
 
 
 async def run_check(
@@ -43,6 +50,12 @@ async def run_check(
     network: str,
 ) -> bool:
     import bittensor as bt
+
+    from autoppia_web_agents_subnet.validator.payment import (
+        AlphaScanner,
+        RAO_PER_ALPHA,
+        allowed_evaluations_from_paid_rao,
+    )
 
     print(f"Connecting to subtensor ({network})...")
     try:
@@ -68,7 +81,7 @@ async def run_check(
                 paid_rao = await scanner.scan(
                     dest_wallet, src, netuid=netuid, from_block=from_block, to_block=to_block_resolved
                 )
-                paid_alpha = _alpha_from_rao(paid_rao)
+                paid_alpha = _alpha_from_rao(paid_rao, RAO_PER_ALPHA)
                 evals = allowed_evaluations_from_paid_rao(paid_rao, alpha_per_eval)
 
                 print(f"Paid:            {paid_rao} rao ({paid_alpha:.4f} α)")
@@ -96,16 +109,7 @@ async def run_check(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Test payment wallets end-to-end")
-    parser.add_argument("--src-wallet-1", required=True, help="First source coldkey SS58")
-    parser.add_argument("--src-wallet-2", required=True, help="Second source coldkey SS58")
-    parser.add_argument("--dest-wallet", required=True, help="Destination payment wallet SS58")
-    parser.add_argument("--netuid", type=int, default=36, help="Subnet netuid (default: 36)")
-    parser.add_argument("--from-block", type=int, default=0, help="Start block (0 = use config lookback)")
-    parser.add_argument("--to-block", type=int, default=0, help="End block (0 = current block)")
-    parser.add_argument("--alpha-per-eval", type=float, default=10.0, help="Alpha required per eval (default: 10)")
-    parser.add_argument("--subtensor-network", default="finney", help="Subtensor network (default: finney)")
-    args = parser.parse_args()
+    args = _parse_args()
 
     src_wallets = [args.src_wallet_1, args.src_wallet_2]
     passed = asyncio.run(
