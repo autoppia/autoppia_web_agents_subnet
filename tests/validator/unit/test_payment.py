@@ -6,6 +6,7 @@ Tests focus on functionality only — no validator handshake behavior.
 
 import random
 import string
+import json
 
 import pytest
 
@@ -13,6 +14,7 @@ from autoppia_web_agents_subnet.validator.payment import (
     RAO_PER_ALPHA,
     AlphaScanner,
     allowed_evaluations_from_paid_rao,
+    get_coldkey_balance,
     get_alpha_sent_by_miner,
     get_paid_alpha_per_coldkey_async,
 )
@@ -277,6 +279,148 @@ class TestGetAlphaSentByMiner:
         assert result_rao / RAO_PER_ALPHA == 25.0
         assert allowed_evaluations_from_paid_rao(result_rao, 10.0) == 2
         assert allowed_evaluations_from_paid_rao(result_rao, 5.0) == 5
+
+    async def test_season_cache_backfills_then_only_scans_new_blocks(self, tmp_path):
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        cache_path = str(tmp_path / "payment_cache.json")
+        coldkey = _random_ss58_like("5Ck")
+        payment_address = _random_ss58_like("5Pay")
+        subtensor = MagicMock()
+        subtensor.get_current_block = AsyncMock(side_effect=[120, 130])
+        scan_mock = AsyncMock(side_effect=[{coldkey: 3 * RAO_PER_ALPHA}, {coldkey: 2 * RAO_PER_ALPHA}])
+
+        with patch(
+            "autoppia_web_agents_subnet.validator.payment.helpers.get_paid_alpha_per_coldkey_async",
+            scan_mock,
+        ):
+            first = await get_alpha_sent_by_miner(
+                coldkey,
+                payment_address=payment_address,
+                netuid=36,
+                subtensor=subtensor,
+                season_start_block=100,
+                season_duration_blocks=1000,
+                cache_path=cache_path,
+            )
+            second = await get_alpha_sent_by_miner(
+                coldkey,
+                payment_address=payment_address,
+                netuid=36,
+                subtensor=subtensor,
+                season_start_block=100,
+                season_duration_blocks=1000,
+                cache_path=cache_path,
+            )
+
+        assert first == 3 * RAO_PER_ALPHA
+        assert second == 5 * RAO_PER_ALPHA
+        assert scan_mock.await_count == 2
+
+        first_kwargs = scan_mock.await_args_list[0].kwargs
+        second_kwargs = scan_mock.await_args_list[1].kwargs
+        assert first_kwargs["from_block"] == 100
+        assert first_kwargs["to_block"] == 120
+        assert second_kwargs["from_block"] == 121
+        assert second_kwargs["to_block"] == 130
+
+        with open(cache_path, "r", encoding="utf-8") as infile:
+            cache = json.load(infile)
+        assert isinstance(cache.get("entries"), dict)
+        only_entry = next(iter(cache["entries"].values()))
+        assert only_entry["last_processed_block"] == 130
+        assert only_entry["totals_by_coldkey"][coldkey] == 5 * RAO_PER_ALPHA
+
+    async def test_season_cache_no_new_blocks_does_not_rescan(self, tmp_path):
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        cache_path = str(tmp_path / "payment_cache.json")
+        coldkey = _random_ss58_like("5Ck")
+        payment_address = _random_ss58_like("5Pay")
+        subtensor = MagicMock()
+        subtensor.get_current_block = AsyncMock(side_effect=[220, 220])
+        scan_mock = AsyncMock(return_value={coldkey: 7 * RAO_PER_ALPHA})
+
+        with patch(
+            "autoppia_web_agents_subnet.validator.payment.helpers.get_paid_alpha_per_coldkey_async",
+            scan_mock,
+        ):
+            first = await get_alpha_sent_by_miner(
+                coldkey,
+                payment_address=payment_address,
+                netuid=36,
+                subtensor=subtensor,
+                season_start_block=200,
+                season_duration_blocks=500,
+                cache_path=cache_path,
+            )
+            second = await get_alpha_sent_by_miner(
+                coldkey,
+                payment_address=payment_address,
+                netuid=36,
+                subtensor=subtensor,
+                season_start_block=200,
+                season_duration_blocks=500,
+                cache_path=cache_path,
+            )
+
+        assert first == 7 * RAO_PER_ALPHA
+        assert second == 7 * RAO_PER_ALPHA
+        assert scan_mock.await_count == 1
+
+    async def test_season_cache_respects_season_end(self, tmp_path):
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        cache_path = str(tmp_path / "payment_cache.json")
+        coldkey = _random_ss58_like("5Ck")
+        payment_address = _random_ss58_like("5Pay")
+        subtensor = MagicMock()
+        subtensor.get_current_block = AsyncMock(return_value=1200)
+        scan_mock = AsyncMock(return_value={coldkey: RAO_PER_ALPHA})
+
+        with patch(
+            "autoppia_web_agents_subnet.validator.payment.helpers.get_paid_alpha_per_coldkey_async",
+            scan_mock,
+        ):
+            result = await get_alpha_sent_by_miner(
+                coldkey,
+                payment_address=payment_address,
+                netuid=36,
+                subtensor=subtensor,
+                season_start_block=1000,
+                season_duration_blocks=100,
+                cache_path=cache_path,
+            )
+        assert result == RAO_PER_ALPHA
+        assert scan_mock.await_count == 1
+        scan_kwargs = scan_mock.await_args_list[0].kwargs
+        assert scan_kwargs["from_block"] == 1000
+        assert scan_kwargs["to_block"] == 1099
+
+    async def test_get_coldkey_balance_wrapper_uses_same_result(self, tmp_path):
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        cache_path = str(tmp_path / "payment_cache.json")
+        coldkey = _random_ss58_like("5Ck")
+        payment_address = _random_ss58_like("5Pay")
+        subtensor = MagicMock()
+        subtensor.get_current_block = AsyncMock(return_value=500)
+        scan_mock = AsyncMock(return_value={coldkey: 11 * RAO_PER_ALPHA})
+
+        with patch(
+            "autoppia_web_agents_subnet.validator.payment.helpers.get_paid_alpha_per_coldkey_async",
+            scan_mock,
+        ):
+            result = await get_coldkey_balance(
+                coldkey,
+                payment_address=payment_address,
+                netuid=36,
+                subtensor=subtensor,
+                season_start_block=400,
+                season_duration_blocks=200,
+                cache_path=cache_path,
+            )
+        assert result == 11 * RAO_PER_ALPHA
 
     @pytest.mark.parametrize("from_b,to_b", [(None, 500), (100, 200), (1, 100)])
     async def test_block_range_optional_coverage(self, from_b, to_b):

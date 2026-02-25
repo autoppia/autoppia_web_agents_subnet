@@ -14,3 +14,4 @@ ALPHA_PER_EVAL: float = float(os.getenv("ALPHA_PER_EVAL", "10.0"))
 PAYMENT_SCAN_CHUNK: int = int(os.getenv("PAYMENT_SCAN_CHUNK", "512"))
 PAYMENT_SUBNET_ID: int = int(os.getenv("PAYMENT_SUBNET_ID", "36"))
 PAYMENT_SCAN_LOOKBACK_BLOCKS: int = int(os.getenv("PAYMENT_SCAN_LOOKBACK_BLOCKS", "50000"))
+PAYMENT_CACHE_PATH: str = (os.getenv("PAYMENT_CACHE_PATH", "data/payment_alpha_cache.json") or "").strip() or "data/payment_alpha_cache.json"

@@ -13,7 +13,10 @@ Usage:
     --from-block 100000 \
     --to-block   200000 \
     --alpha-per-eval 10 \
-    [--subtensor-network finney]
+    [--subtensor-network finney] \
+    [--season-start-block 7580000] \
+    [--season-duration-blocks 100800] \
+    [--cache-path data/payment_alpha_cache.json]
 """
 
 from __future__ import annotations
@@ -33,6 +36,9 @@ def _parse_args():
     parser.add_argument("--to-block", type=int, default=0, help="End block (0 = current block)")
     parser.add_argument("--alpha-per-eval", type=float, default=10.0, help="Alpha required per eval (default: 10)")
     parser.add_argument("--subtensor-network", default="finney", help="Subtensor network (default: finney)")
+    parser.add_argument("--season-start-block", type=int, default=0, help="Season start block for cached incremental scan")
+    parser.add_argument("--season-duration-blocks", type=int, default=0, help="Season duration in blocks for cached incremental scan")
+    parser.add_argument("--cache-path", default="", help="Local JSON cache path (optional)")
     return parser.parse_args()
 
 
@@ -44,17 +50,20 @@ async def run_check(
     src_wallets: list[str],
     dest_wallet: str,
     netuid: int,
-    from_block: int,
+    from_block: int | None,
     to_block: int,
     alpha_per_eval: float,
     network: str,
+    season_start_block: int | None = None,
+    season_duration_blocks: int | None = None,
+    cache_path: str | None = None,
 ) -> bool:
     import bittensor as bt
 
     from autoppia_web_agents_subnet.validator.payment import (
-        AlphaScanner,
         RAO_PER_ALPHA,
         allowed_evaluations_from_paid_rao,
+        get_alpha_sent_by_miner,
     )
 
     print(f"Connecting to subtensor ({network})...")
@@ -68,7 +77,6 @@ async def run_check(
             else:
                 to_block_resolved = to_block
 
-            scanner = AlphaScanner(st)
             all_pass = True
 
             for i, src in enumerate(src_wallets, 1):
@@ -78,8 +86,16 @@ async def run_check(
                 print(f"Netuid:          {netuid}")
                 print(f"Block range:     [{from_block}, {to_block_resolved}]")
 
-                paid_rao = await scanner.scan(
-                    dest_wallet, src, netuid=netuid, from_block=from_block, to_block=to_block_resolved
+                paid_rao = await get_alpha_sent_by_miner(
+                    src,
+                    payment_address=dest_wallet,
+                    netuid=netuid,
+                    from_block=from_block,
+                    to_block=to_block_resolved,
+                    subtensor=st,
+                    season_start_block=season_start_block,
+                    season_duration_blocks=season_duration_blocks,
+                    cache_path=cache_path,
                 )
                 paid_alpha = _alpha_from_rao(paid_rao, RAO_PER_ALPHA)
                 evals = allowed_evaluations_from_paid_rao(paid_rao, alpha_per_eval)
@@ -121,6 +137,9 @@ def main():
             to_block=args.to_block,
             alpha_per_eval=args.alpha_per_eval,
             network=args.subtensor_network,
+            season_start_block=args.season_start_block if args.season_start_block > 0 else None,
+            season_duration_blocks=args.season_duration_blocks if args.season_duration_blocks > 0 else None,
+            cache_path=(args.cache_path or "").strip() or None,
         )
     )
     sys.exit(0 if passed else 1)
