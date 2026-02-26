@@ -42,6 +42,8 @@ def _require_gateway_keys() -> None:
         missing.append("OPENAI_API_KEY")
     if "chutes" in providers and not (os.getenv("CHUTES_API_KEY") or "").strip():
         missing.append("CHUTES_API_KEY")
+    if "anthropic" in providers and not (os.getenv("ANTHROPIC_API_KEY") or "").strip():
+        missing.append("ANTHROPIC_API_KEY")
 
     if missing:
         raise RuntimeError(f"Missing required API key env vars: {', '.join(missing)}")

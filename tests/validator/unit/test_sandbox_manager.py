@@ -334,6 +334,7 @@ class TestGateway:
             {
                 "OPENAI_API_KEY": "test-openai",
                 "CHUTES_API_KEY": "test-chutes",
+                "ANTHROPIC_API_KEY": "test-anthropic",
                 # Unit test uses a mocked Docker container; skip real upstream egress checks.
                 "SANDBOX_GATEWAY_EGRESS_CHECK": "false",
             },
@@ -366,6 +367,7 @@ class TestGateway:
             {
                 "OPENAI_API_KEY": "test-openai",
                 "CHUTES_API_KEY": "test-chutes",
+                "ANTHROPIC_API_KEY": "test-anthropic",
                 # Unit test uses a mocked Docker container; skip real upstream egress checks.
                 "SANDBOX_GATEWAY_EGRESS_CHECK": "false",
             },
