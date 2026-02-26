@@ -423,8 +423,8 @@ class Validator(
             )
             return
 
-        # 1) Handshake & agent discovery
-        await self._perform_handshake()
+        # 1) Collect miner submissions from on-chain commitments
+        await self._collect_miner_commitments()
 
         # Initialize IWAP round after handshake (we now know how many miners participate)
         current_block = self.block

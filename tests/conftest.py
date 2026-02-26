@@ -388,7 +388,7 @@ def dummy_validator(mock_validator_config):
 
     # Mixin methods (mocked instead of inherited)
     validator._start_round = AsyncMock()
-    validator._perform_handshake = AsyncMock()
+    validator._collect_miner_commitments = AsyncMock()
     validator._wait_for_minimum_start_block = AsyncMock(return_value=False)
     validator._wait_until_specific_block = AsyncMock()
     validator._run_evaluation_phase = AsyncMock(return_value=0)
@@ -462,7 +462,7 @@ def _bind_round_start_mixin(validator):
     from autoppia_web_agents_subnet.validator.round_start.mixin import ValidatorRoundStartMixin
 
     validator._start_round = ValidatorRoundStartMixin._start_round.__get__(validator, type(validator))
-    validator._perform_handshake = ValidatorRoundStartMixin._perform_handshake.__get__(validator, type(validator))
+    validator._collect_miner_commitments = ValidatorRoundStartMixin._collect_miner_commitments.__get__(validator, type(validator))
     validator._wait_for_minimum_start_block = ValidatorRoundStartMixin._wait_for_minimum_start_block.__get__(validator, type(validator))
     return validator
 
@@ -499,6 +499,7 @@ def mock_metagraph():
     metagraph.S = [15000.0] * 10
     metagraph.stake = [15000.0] * 10
     metagraph.hotkeys = [f"hotkey{i}" for i in range(10)]
+    metagraph.coldkeys = [f"coldkey{i}" for i in range(10)]
     metagraph.axons = [Mock(ip="127.0.0.1", port=8000 + i) for i in range(10)]
 
     return metagraph

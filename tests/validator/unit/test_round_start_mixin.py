@@ -1,7 +1,7 @@
 """
 Unit tests for ValidatorRoundStartMixin.
 
-Tests round start logic, handshake, and minimum block waiting.
+Tests round start logic, commitment collection, and minimum block waiting.
 """
 
 import pytest
@@ -83,131 +83,146 @@ class TestRoundStart:
         assert len(dummy_validator.round_manager.phase_history) > 0
 
 
+def _mock_commitments_for_uids(hotkeys, uid_data):
+    """
+    Build a Dict[hotkey_ss58, commitment_dict] from a uid→data mapping.
+
+    ``uid_data`` maps uid (int) to a dict with keys ``n``, ``g``, and optionally ``i``.
+    """
+    result = {}
+    for uid, data in uid_data.items():
+        hk = hotkeys[uid] if uid < len(hotkeys) else f"hk_{uid}"
+        result[hk] = {"t": "m", **data}
+    return result
+
+
 @pytest.mark.unit
 @pytest.mark.asyncio
-class TestHandshake:
-    """Test handshake logic."""
+class TestCollectMinerCommitments:
+    """Test commitment collection logic."""
 
-    async def test_perform_handshake_sends_to_eligible_miners(self, dummy_validator):
+    async def test_collect_reads_commitments_for_eligible_miners(self, dummy_validator):
         from tests.conftest import _bind_round_start_mixin
 
         dummy_validator = _bind_round_start_mixin(dummy_validator)
+        dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
 
-        """Test that handshake sends synapse to miners meeting stake requirement."""
-        with patch("autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners") as mock_send:
-            # Mock responses with agent info
-            mock_responses = [
-                Mock(agent_name="agent1", github_url="https://github.com/test/agent1", agent_image=None),
-                Mock(agent_name="agent2", github_url="https://github.com/test/agent2", agent_image=None),
-            ]
-            mock_send.return_value = mock_responses
+        commitments = _mock_commitments_for_uids(
+            dummy_validator.metagraph.hotkeys,
+            {
+                1: {"n": "agent1", "g": "https://github.com/test/agent1/tree/main"},
+                2: {"n": "agent2", "g": "https://github.com/test/agent2/tree/main"},
+            },
+        )
 
-            await dummy_validator._perform_handshake()
+        with patch("autoppia_web_agents_subnet.validator.round_start.mixin.read_all_plain_commitments", new_callable=AsyncMock, return_value=commitments):
+            await dummy_validator._collect_miner_commitments()
 
-            # Should have called send_start_round_synapse_to_miners
-            assert mock_send.call_count == 1
+        # Should have active miners for UIDs with commitments
+        assert len(dummy_validator.active_miner_uids) >= 1
 
-    async def test_handshake_filters_miners_by_min_stake(self, dummy_validator):
+    async def test_collect_filters_miners_by_min_stake(self, dummy_validator):
         from tests.conftest import _bind_round_start_mixin
 
         dummy_validator = _bind_round_start_mixin(dummy_validator)
+        dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
 
-        """Test that handshake filters out miners below MIN_MINER_STAKE_ALPHA."""
         # Set stakes: UIDs 1,2,3 have sufficient stake (UID 0 is validator)
-        # UID 0: 100.0 (validator, excluded), UID 1: 150.0, UID 2: 200.0, UID 3: 100.0, rest < 100.0
         dummy_validator.metagraph.S = [100.0, 150.0, 200.0, 100.0, 50.0, 30.0, 10.0, 0.0, 0.0, 0.0]
         dummy_validator.metagraph.stake = [100.0, 150.0, 200.0, 100.0, 50.0, 30.0, 10.0, 0.0, 0.0, 0.0]
 
-        with patch("autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners") as mock_send:
-            with patch("autoppia_web_agents_subnet.validator.round_start.mixin.MIN_MINER_STAKE_ALPHA", 100.0):
-                mock_send.return_value = []
+        # Provide commitments for all UIDs 1-9
+        commitments = _mock_commitments_for_uids(
+            dummy_validator.metagraph.hotkeys,
+            {uid: {"n": f"agent{uid}", "g": f"https://github.com/test/agent{uid}/tree/main"} for uid in range(1, 10)},
+        )
 
-                await dummy_validator._perform_handshake()
+        with (
+            patch("autoppia_web_agents_subnet.validator.round_start.mixin.MIN_MINER_STAKE_ALPHA", 100.0),
+            patch("autoppia_web_agents_subnet.validator.round_start.mixin.read_all_plain_commitments", new_callable=AsyncMock, return_value=commitments),
+        ):
+            await dummy_validator._collect_miner_commitments()
 
-                # Should only send to UIDs with stake >= 100.0 (excluding validator UID 0)
-                call_args = mock_send.call_args
-                if call_args:
-                    miner_axons = call_args[1]["miner_axons"]
-                    # Should have 3 miners (UIDs 1, 2, 3)
-                    assert len(miner_axons) == 3
+        # Only UIDs 1, 2, 3 have stake >= 100 (uid 0 is validator)
+        # Active miners should be those with valid commitments AND sufficient stake
+        for uid in dummy_validator.active_miner_uids:
+            assert uid in [1, 2, 3]
 
-    async def test_handshake_populates_agents_dict_and_queue(self, dummy_validator):
+    async def test_collect_populates_agents_dict_and_queue(self, dummy_validator):
         from tests.conftest import _bind_round_start_mixin
 
         dummy_validator = _bind_round_start_mixin(dummy_validator)
+        dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
+        dummy_validator.agents_dict = {}
 
-        """Test that handshake populates agents_dict and agents_queue."""
-        with patch("autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners") as mock_send:
-            mock_responses = [
-                Mock(agent_name="agent1", github_url="https://github.com/test/agent1", agent_image=None),
-                Mock(agent_name="agent2", github_url="https://github.com/test/agent2", agent_image=None),
-            ]
-            mock_send.return_value = mock_responses
+        commitments = _mock_commitments_for_uids(
+            dummy_validator.metagraph.hotkeys,
+            {
+                1: {"n": "agent1", "g": "https://github.com/test/agent1/tree/main"},
+                2: {"n": "agent2", "g": "https://github.com/test/agent2/tree/main"},
+            },
+        )
 
-            # Clear existing agents
-            dummy_validator.agents_dict = {}
+        with patch("autoppia_web_agents_subnet.validator.round_start.mixin.read_all_plain_commitments", new_callable=AsyncMock, return_value=commitments):
+            await dummy_validator._collect_miner_commitments()
 
-            await dummy_validator._perform_handshake()
+        assert len(dummy_validator.agents_dict) > 0
 
-            # Should have populated agents_dict
-            assert len(dummy_validator.agents_dict) > 0
-
-    async def test_handshake_excludes_validator_own_uid(self, dummy_validator):
+    async def test_collect_excludes_validator_own_uid(self, dummy_validator):
         from tests.conftest import _bind_round_start_mixin
 
         dummy_validator = _bind_round_start_mixin(dummy_validator)
-
-        """Test that handshake excludes the validator's own UID."""
+        dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
         dummy_validator.uid = 0
 
-        with patch("autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners") as mock_send:
-            mock_send.return_value = []
+        # Provide commitment for the validator's own UID
+        commitments = _mock_commitments_for_uids(
+            dummy_validator.metagraph.hotkeys,
+            {
+                0: {"n": "validator_agent", "g": "https://github.com/test/validator/tree/main"},
+                1: {"n": "agent1", "g": "https://github.com/test/agent1/tree/main"},
+            },
+        )
 
-            await dummy_validator._perform_handshake()
+        with patch("autoppia_web_agents_subnet.validator.round_start.mixin.read_all_plain_commitments", new_callable=AsyncMock, return_value=commitments):
+            await dummy_validator._collect_miner_commitments()
 
-            # Validator UID should not be in candidate list
-            call_args = mock_send.call_args
-            if call_args:
-                miner_axons = call_args[1]["miner_axons"]
-                # Should not include validator's own axon
-                assert all(axon.port != 8000 for axon in miner_axons)
+        # UID 0 (validator) should not appear in active miners
+        assert 0 not in dummy_validator.active_miner_uids
 
-    async def test_handshake_handles_missing_agent_name_or_github_url(self, dummy_validator):
+    async def test_collect_handles_missing_agent_name_or_github_url(self, dummy_validator):
         from tests.conftest import _bind_round_start_mixin
 
         dummy_validator = _bind_round_start_mixin(dummy_validator)
+        dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
+        dummy_validator.agents_dict = {}
 
-        """Test that handshake skips responses with missing agent_name or github_url."""
-        with patch("autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners") as mock_send:
-            mock_responses = [
-                Mock(agent_name="agent1", github_url="https://github.com/test/agent1", agent_image=None),
-                Mock(agent_name=None, github_url="https://github.com/test/agent2", agent_image=None),  # Missing name
-                Mock(agent_name="agent3", github_url=None, agent_image=None),  # Missing URL
-                Mock(agent_name="", github_url="https://github.com/test/agent4", agent_image=None),  # Empty name
-            ]
-            mock_send.return_value = mock_responses
+        commitments = _mock_commitments_for_uids(
+            dummy_validator.metagraph.hotkeys,
+            {
+                1: {"n": "agent1", "g": "https://github.com/test/agent1/tree/main"},
+                2: {"n": "", "g": "https://github.com/test/agent2/tree/main"},  # Empty name
+                3: {"n": "agent3", "g": ""},  # Empty URL
+            },
+        )
 
-            dummy_validator.agents_dict = {}
+        with patch("autoppia_web_agents_subnet.validator.round_start.mixin.read_all_plain_commitments", new_callable=AsyncMock, return_value=commitments):
+            await dummy_validator._collect_miner_commitments()
 
-            await dummy_validator._perform_handshake()
+        # agent1 should be active; agent2/3 should be marked as evaluated with 0
+        valid_agents = [a for a in dummy_validator.agents_dict.values() if a.agent_name and a.github_url]
+        assert len(valid_agents) >= 1
 
-            # Should only add agent1 (valid response)
-            # Note: actual count depends on UID filtering
-            valid_agents = [a for a in dummy_validator.agents_dict.values() if a.agent_name and a.github_url]
-            assert len(valid_agents) >= 1
-
-    async def test_handshake_does_not_reenqueue_when_submission_unchanged(self, dummy_validator):
+    async def test_collect_does_not_reenqueue_when_submission_unchanged(self, dummy_validator):
         from tests.conftest import _bind_round_start_mixin
 
         dummy_validator = _bind_round_start_mixin(dummy_validator)
+        dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
 
-        # Keep the test small: validator uid 0, one eligible miner uid 1.
         dummy_validator.uid = 0
         dummy_validator.metagraph.n = 2
         dummy_validator.metagraph.stake = [15000.0, 15000.0]
-        dummy_validator.metagraph.axons = [Mock(ip="127.0.0.1", port=8000), Mock(ip="127.0.0.1", port=8001)]
 
-        # Existing evaluated agent with a non-default score.
         from autoppia_web_agents_subnet.validator.models import AgentInfo
 
         existing = AgentInfo(
@@ -222,32 +237,31 @@ class TestHandshake:
         )
         dummy_validator.agents_dict = {1: existing}
 
-        with (
-            patch("autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners") as mock_send,
-            patch("autoppia_web_agents_subnet.validator.round_start.mixin.resolve_remote_ref_commit") as mock_resolve,
-        ):
-            mock_send.return_value = [
-                Mock(agent_name="agent1", github_url="https://github.com/test/agent1/tree/main", agent_image=None),
-            ]
-            mock_resolve.return_value = "deadbeef"
+        commitments = _mock_commitments_for_uids(
+            dummy_validator.metagraph.hotkeys,
+            {1: {"n": "agent1", "g": "https://github.com/test/agent1/tree/main"}},
+        )
 
-            # Handshake should not enqueue unchanged submissions.
+        with (
+            patch("autoppia_web_agents_subnet.validator.round_start.mixin.read_all_plain_commitments", new_callable=AsyncMock, return_value=commitments),
+            patch("autoppia_web_agents_subnet.validator.round_start.mixin.resolve_remote_ref_commit", return_value="deadbeef"),
+        ):
             dummy_validator.agents_queue.put.reset_mock()
-            await dummy_validator._perform_handshake()
+            await dummy_validator._collect_miner_commitments()
 
             dummy_validator.agents_queue.put.assert_not_called()
             assert dummy_validator.agents_dict[1].score == 0.42
             assert dummy_validator.agents_dict[1].evaluated is True
 
-    async def test_handshake_reenqueues_when_submission_commit_changes(self, dummy_validator):
+    async def test_collect_reenqueues_when_submission_commit_changes(self, dummy_validator):
         from tests.conftest import _bind_round_start_mixin
 
         dummy_validator = _bind_round_start_mixin(dummy_validator)
+        dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
 
         dummy_validator.uid = 0
         dummy_validator.metagraph.n = 2
         dummy_validator.metagraph.stake = [15000.0, 15000.0]
-        dummy_validator.metagraph.axons = [Mock(ip="127.0.0.1", port=8000), Mock(ip="127.0.0.1", port=8001)]
 
         from autoppia_web_agents_subnet.validator.models import AgentInfo
 
@@ -263,58 +277,60 @@ class TestHandshake:
         )
         dummy_validator.agents_dict = {1: existing}
 
-        with (
-            patch("autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners") as mock_send,
-            patch("autoppia_web_agents_subnet.validator.round_start.mixin.resolve_remote_ref_commit") as mock_resolve,
-        ):
-            mock_send.return_value = [
-                Mock(agent_name="agent1", github_url="https://github.com/test/agent1/tree/main", agent_image=None),
-            ]
-            mock_resolve.return_value = "new"
+        commitments = _mock_commitments_for_uids(
+            dummy_validator.metagraph.hotkeys,
+            {1: {"n": "agent1", "g": "https://github.com/test/agent1/tree/main"}},
+        )
 
+        with (
+            patch("autoppia_web_agents_subnet.validator.round_start.mixin.read_all_plain_commitments", new_callable=AsyncMock, return_value=commitments),
+            patch("autoppia_web_agents_subnet.validator.round_start.mixin.resolve_remote_ref_commit", return_value="new"),
+        ):
             dummy_validator.agents_queue.put.reset_mock()
-            await dummy_validator._perform_handshake()
+            await dummy_validator._collect_miner_commitments()
 
             dummy_validator.agents_queue.put.assert_called_once()
             # Preserve existing evaluated score until new evaluation completes.
             assert dummy_validator.agents_dict[1].score == 0.42
             assert dummy_validator.agents_dict[1].git_commit == "old"
 
-    async def test_handshake_limits_candidates_to_top_stake_window(self, dummy_validator):
+    async def test_collect_limits_candidates_to_top_stake_window(self, dummy_validator):
         from tests.conftest import _bind_round_start_mixin
 
         dummy_validator = _bind_round_start_mixin(dummy_validator)
+        dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
 
         dummy_validator.uid = 0
         dummy_validator.metagraph.n = 6
         dummy_validator.metagraph.stake = [0.0, 1.0, 10.0, 5.0, 2.0, 8.0]
-        dummy_validator.metagraph.axons = [Mock(ip="127.0.0.1", port=8000 + i) for i in range(6)]
+        dummy_validator.metagraph.hotkeys = [f"hk_{i}" for i in range(6)]
+        dummy_validator.metagraph.coldkeys = [f"ck_{i}" for i in range(6)]
+
+        # Provide commitments for all
+        commitments = _mock_commitments_for_uids(
+            dummy_validator.metagraph.hotkeys,
+            {uid: {"n": f"agent{uid}", "g": f"https://github.com/test/agent{uid}/tree/main"} for uid in range(1, 6)},
+        )
 
         with (
             patch("autoppia_web_agents_subnet.validator.round_start.mixin.MIN_MINER_STAKE_ALPHA", 0.0),
             patch("autoppia_web_agents_subnet.validator.round_start.mixin.MAX_MINERS_PER_ROUND_BY_STAKE", 2),
-            patch("autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners", new_callable=AsyncMock) as mock_send,
+            patch("autoppia_web_agents_subnet.validator.round_start.mixin.read_all_plain_commitments", new_callable=AsyncMock, return_value=commitments),
         ):
-            mock_send.return_value = [
-                Mock(agent_name="agent2", github_url="https://github.com/test/agent2/tree/main", agent_image=None),
-                Mock(agent_name="agent5", github_url="https://github.com/test/agent5/tree/main", agent_image=None),
-            ]
+            await dummy_validator._collect_miner_commitments()
 
-            await dummy_validator._perform_handshake()
+            # Only top-2 stake miners (uids 2 and 5) should be candidates
+            assert set(dummy_validator.round_candidate_uids) == {2, 5}
 
-            # Only top-2 stake miners (uids 2 and 5) should be contacted.
-            miner_axons = mock_send.call_args.kwargs["miner_axons"]
-            assert [axon.port for axon in miner_axons] == [8002, 8005]
-
-    async def test_handshake_rate_limits_resubmissions_by_round_cooldown(self, dummy_validator):
+    async def test_collect_rate_limits_resubmissions_by_round_cooldown(self, dummy_validator):
         from tests.conftest import _bind_round_start_mixin
 
         dummy_validator = _bind_round_start_mixin(dummy_validator)
+        dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
 
         dummy_validator.uid = 0
         dummy_validator.metagraph.n = 2
         dummy_validator.metagraph.stake = [15000.0, 15000.0]
-        dummy_validator.metagraph.axons = [Mock(ip="127.0.0.1", port=8000), Mock(ip="127.0.0.1", port=8001)]
 
         # Set current round so cooldown math is deterministic.
         dummy_validator.round_manager.round_number = 5
@@ -334,35 +350,71 @@ class TestHandshake:
         )
         dummy_validator.agents_dict = {1: existing}
 
+        commitments = _mock_commitments_for_uids(
+            dummy_validator.metagraph.hotkeys,
+            {1: {"n": "agent1", "g": "https://github.com/test/agent1/tree/main"}},
+        )
+
         with (
             patch("autoppia_web_agents_subnet.validator.round_start.mixin.EVALUATION_COOLDOWN_MIN_ROUNDS", 1),
             patch("autoppia_web_agents_subnet.validator.round_start.mixin.EVALUATION_COOLDOWN_MAX_ROUNDS", 2),
             patch("autoppia_web_agents_subnet.validator.round_start.mixin.EVALUATION_COOLDOWN_NO_RESPONSE_BADNESS", 0.0),
             patch("autoppia_web_agents_subnet.validator.round_start.mixin.EVALUATION_COOLDOWN_ZERO_SCORE_BADNESS", 0.0),
-            patch("autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners", new_callable=AsyncMock) as mock_send,
-            patch("autoppia_web_agents_subnet.validator.round_start.mixin.resolve_remote_ref_commit") as mock_resolve,
+            patch("autoppia_web_agents_subnet.validator.round_start.mixin.read_all_plain_commitments", new_callable=AsyncMock, return_value=commitments),
+            patch("autoppia_web_agents_subnet.validator.round_start.mixin.resolve_remote_ref_commit", return_value="new"),
         ):
-            mock_send.return_value = [
-                Mock(agent_name="agent1", github_url="https://github.com/test/agent1/tree/main", agent_image=None),
-            ]
-            mock_resolve.return_value = "new"
-
             dummy_validator.agents_queue.put.reset_mock()
-            await dummy_validator._perform_handshake()
+            await dummy_validator._collect_miner_commitments()
 
             # Cooldown blocks evaluation enqueue, but stores a pending submission.
             dummy_validator.agents_queue.put.assert_not_called()
             assert dummy_validator.agents_dict[1].pending_github_url == "https://github.com/test/agent1/commit/new"
 
-            # Next eligible round: if miner does not respond, pending submission is enqueued.
+            # Next eligible round: miner has no commitment => pending enqueued.
             dummy_validator.round_manager.round_number = 6
-            mock_send.return_value = [None]
             dummy_validator.agents_queue.put.reset_mock()
-            await dummy_validator._perform_handshake()
+            # Remove commitment so uid has "no commitment" → pending restoration kicks in
+            empty_commitments: dict = {}
+            with patch("autoppia_web_agents_subnet.validator.round_start.mixin.read_all_plain_commitments", new_callable=AsyncMock, return_value=empty_commitments):
+                await dummy_validator._collect_miner_commitments()
             dummy_validator.agents_queue.put.assert_called_once()
             pending_agent_info = dummy_validator.agents_queue.put.call_args.args[0]
             assert pending_agent_info.uid == 1
             assert pending_agent_info.github_url == "https://github.com/test/agent1/commit/new"
+
+    async def test_collect_skips_non_miner_commitments(self, dummy_validator):
+        from tests.conftest import _bind_round_start_mixin
+
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+        dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
+        dummy_validator.agents_dict = {}
+
+        # Validator commitment (t=v) should be ignored
+        hotkeys = dummy_validator.metagraph.hotkeys
+        commitments = {
+            hotkeys[1]: {"t": "v", "v": 1, "s": 1, "r": 1, "c": "QmCID"},
+            hotkeys[2]: {"t": "m", "n": "agent2", "g": "https://github.com/test/agent2/tree/main"},
+        }
+
+        with patch("autoppia_web_agents_subnet.validator.round_start.mixin.read_all_plain_commitments", new_callable=AsyncMock, return_value=commitments):
+            await dummy_validator._collect_miner_commitments()
+
+        # Only uid 2 should be active (uid 1 is validator commitment)
+        assert 1 not in dummy_validator.active_miner_uids
+        assert 2 in dummy_validator.active_miner_uids
+
+    async def test_collect_handles_chain_read_failure_gracefully(self, dummy_validator):
+        from tests.conftest import _bind_round_start_mixin
+
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+        dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
+        dummy_validator.agents_dict = {}
+
+        with patch("autoppia_web_agents_subnet.validator.round_start.mixin.read_all_plain_commitments", new_callable=AsyncMock, side_effect=Exception("chain error")):
+            # Should not raise; treats as no commitments
+            await dummy_validator._collect_miner_commitments()
+
+        assert dummy_validator.active_miner_uids == []
 
 
 @pytest.mark.unit
@@ -414,41 +466,40 @@ class TestMinimumBlock:
 
 @pytest.mark.unit
 @pytest.mark.asyncio
-class TestHandshakeEdgeCases:
-    """Test edge cases in handshake logic."""
+class TestCollectMinerCommitmentsEdgeCases:
+    """Test edge cases in commitment collection logic."""
 
-    async def test_handshake_with_no_metagraph(self, dummy_validator):
+    async def test_collect_with_no_metagraph(self, dummy_validator):
         from tests.conftest import _bind_round_start_mixin
 
         dummy_validator = _bind_round_start_mixin(dummy_validator)
 
-        """Test handshake handles missing metagraph gracefully."""
+        """Test commitment collection handles missing metagraph gracefully."""
         dummy_validator.metagraph = None
 
         # Should not raise exception
-        await dummy_validator._perform_handshake()
+        await dummy_validator._collect_miner_commitments()
 
-    async def test_handshake_with_empty_metagraph(self, dummy_validator):
+    async def test_collect_with_empty_metagraph(self, dummy_validator):
         from tests.conftest import _bind_round_start_mixin
 
         dummy_validator = _bind_round_start_mixin(dummy_validator)
 
-        """Test handshake handles empty metagraph."""
+        """Test commitment collection handles empty metagraph."""
         dummy_validator.metagraph.n = 0
 
         # Should not raise exception
-        await dummy_validator._perform_handshake()
+        await dummy_validator._collect_miner_commitments()
 
-    async def test_handshake_with_no_eligible_miners(self, dummy_validator):
+    async def test_collect_with_no_eligible_miners(self, dummy_validator):
         from tests.conftest import _bind_round_start_mixin
 
         dummy_validator = _bind_round_start_mixin(dummy_validator)
 
-        """Test handshake when no miners meet minimum stake."""
-        # All miners have insufficient stake
+        """Test commitment collection when no miners meet minimum stake."""
         dummy_validator.metagraph.S = [10.0] * 10
         dummy_validator.metagraph.stake = [10.0] * 10
 
         with patch("autoppia_web_agents_subnet.validator.round_start.mixin.MIN_MINER_STAKE_ALPHA", 100.0):
             # Should not raise exception
-            await dummy_validator._perform_handshake()
+            await dummy_validator._collect_miner_commitments()

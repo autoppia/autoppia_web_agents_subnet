@@ -10,15 +10,14 @@ import typing
 import bittensor as bt
 
 from autoppia_web_agents_subnet.base.neuron import BaseNeuron
-from autoppia_web_agents_subnet.protocol import StartRoundSynapse
 
 
 class BaseMinerNeuron(BaseNeuron):
     """
     Base class for Bittensor miners in the Autoppia Web Agents subnet.
 
-    Exposes one endpoint:
-      - forward(StartRoundSynapse) → round handshake / miner metadata
+    Deprecated: Miners now submit metadata on-chain via autoppia-miner-cli.
+    This class is kept for backward compatibility (axon serving).
     """
 
     neuron_type: str = "MinerNeuron"
@@ -134,7 +133,7 @@ class BaseMinerNeuron(BaseNeuron):
 
     # ─────────────────────── Blacklists ───────────────────────
 
-    async def blacklist(self, synapse: StartRoundSynapse) -> typing.Tuple[bool, str]:
+    async def blacklist(self, synapse: bt.Synapse) -> typing.Tuple[bool, str]:
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
             bt.logging.warning("Received a request without a dendrite or hotkey.")
             return True, "Missing dendrite or hotkey"
@@ -171,7 +170,7 @@ class BaseMinerNeuron(BaseNeuron):
 
     # ─────────────────────── Priority ───────────────────────
 
-    async def priority(self, synapse: StartRoundSynapse) -> float:
+    async def priority(self, synapse: bt.Synapse) -> float:
         if synapse.dendrite is None or synapse.dendrite.hotkey is None:
             bt.logging.warning("Received a request without a dendrite or hotkey.")
             return 0.0
