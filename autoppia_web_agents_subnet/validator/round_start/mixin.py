@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import time
+from types import SimpleNamespace
 import bittensor as bt
 
 from autoppia_web_agents_subnet.utils.log_colors import round_details_tag
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
-from autoppia_web_agents_subnet.protocol import StartRoundSynapse
 from autoppia_web_agents_subnet.validator.models import AgentInfo
 from autoppia_web_agents_subnet.validator.round_manager import RoundPhase
 from autoppia_web_agents_subnet.validator.round_start.types import RoundStartResult
@@ -27,7 +27,7 @@ from autoppia_web_agents_subnet.validator.config import (
     EVALUATION_COOLDOWN_NO_RESPONSE_BADNESS,
     EVALUATION_COOLDOWN_ZERO_SCORE_BADNESS,
 )
-from autoppia_web_agents_subnet.validator.round_start.synapse_handler import send_start_round_synapse_to_miners
+from autoppia_web_agents_subnet.utils.commitments import read_all_plain_commitments
 
 
 def _commits_match(a: str | None, b: str | None) -> bool:
@@ -205,9 +205,14 @@ class ValidatorRoundStartMixin:
             reason="Round Started Successfully",
         )
 
-    async def _perform_handshake(self) -> None:
+    async def _collect_miner_commitments(self) -> None:
         """
-        Perform StartRound handshake and collect new submitted agents
+        Read miner agent metadata from on-chain commitments and build the
+        evaluation queue for this round.
+
+        Replaces the old synapse-based handshake: instead of broadcasting
+        ``StartRoundSynapse`` to miners and waiting for responses, commitments
+        written by ``autoppia-miner-cli submit`` are read directly from chain.
         """
         # Each round we rebuild the evaluation queue from scratch (based on the
         # current stake window + cooldown) to keep evaluation cost/time bounded.
@@ -219,12 +224,12 @@ class ValidatorRoundStartMixin:
         # Guard: metagraph must be available.
         metagraph = getattr(self, "metagraph", None)
         if metagraph is None:
-            bt.logging.warning("No metagraph on validator; skipping handshake")
+            bt.logging.warning("No metagraph on validator; skipping miner commitment collection")
             return
 
         n = int(getattr(metagraph, "n", 0) or 0)
         if n <= 0:
-            bt.logging.warning("Metagraph has no peers; skipping handshake")
+            bt.logging.warning("Metagraph has no peers; skipping miner commitment collection")
             return
 
         # Resolve stakes if present; otherwise treat as zero.
@@ -233,13 +238,14 @@ class ValidatorRoundStartMixin:
         except Exception:
             stakes = [0.0] * n
         coldkeys = list(getattr(metagraph, "coldkeys", []))
+        hotkeys = list(getattr(metagraph, "hotkeys", []))
         max_by_coldkey = int(MAX_MINERS_PER_COLDKEY)
         max_by_repo = int(MAX_MINERS_PER_REPO)
 
         validator_uid = int(getattr(self, "uid", 0) or 0)
         min_stake = float(MIN_MINER_STAKE_ALPHA)
 
-        # Filter candidate miner UIDs by minimum stake and excluding validator itself.
+        # ── Candidate selection (same pipeline as before) ─────────────────
         candidate_uids: list[int] = []
         candidate_stakes: list[tuple[float, int, str]] = []
         skipped_below_stake = 0
@@ -259,7 +265,7 @@ class ValidatorRoundStartMixin:
                 candidate_stakes.append((stake_val, uid, coldkey))
             else:
                 skipped_below_stake += 1
-                bt.logging.debug(f"[handshake] Skipping uid={uid} stake={stake_val:.4f} < MIN_MINER_STAKE_ALPHA={min_stake:.4f}")
+                bt.logging.debug(f"[collect_commitments] Skipping uid={uid} stake={stake_val:.4f} < MIN_MINER_STAKE_ALPHA={min_stake:.4f}")
 
         if not candidate_stakes:
             bt.logging.warning(f"No miners meet MIN_MINER_STAKE_ALPHA={min_stake:.4f}; active_miner_uids will be empty")
@@ -278,7 +284,7 @@ class ValidatorRoundStartMixin:
                 key = coldkey or f"__coldkey_unknown__:{uid}"
                 if coldkey_counts.get(key, 0) >= max_by_coldkey:
                     skipped_coldkey_cap += 1
-                    bt.logging.warning(f"[handshake] Skipping uid={uid} due MAX_MINERS_PER_COLDKEY={max_by_coldkey}")
+                    bt.logging.warning(f"[collect_commitments] Skipping uid={uid} due MAX_MINERS_PER_COLDKEY={max_by_coldkey}")
                     continue
                 coldkey_counts[key] = coldkey_counts.get(key, 0) + 1
                 filtered_candidates.append(uid)
@@ -302,7 +308,7 @@ class ValidatorRoundStartMixin:
             candidate_uids = [uid for _, uid in candidate_stakes]
 
         bt.logging.info(
-            "[handshake] Candidate selection summary "
+            "[collect_commitments] Candidate selection summary "
             f"total={n - 1}|eligible_by_stake={candidates_after_stake}|"
             f"below_stake={skipped_below_stake}|"
             f"coldkey_cap_skip={skipped_coldkey_cap}|stake_cap_skip={skipped_stake_cap}|"
@@ -319,34 +325,43 @@ class ValidatorRoundStartMixin:
         try:
             sample = candidate_uids[:10]
             sample_str = ", ".join(f"{uid}:{float(stakes[uid]) if uid < len(stakes) else 0.0:.4f}" for uid in sample)
-            bt.logging.info(f"[handshake] Candidates meeting MIN_MINER_STAKE_ALPHA={min_stake:.4f}: {len(candidate_uids)} miners (sample: {sample_str})")
+            bt.logging.info(f"[collect_commitments] Candidates meeting MIN_MINER_STAKE_ALPHA={min_stake:.4f}: {len(candidate_uids)} miners (sample: {sample_str})")
         except Exception:
             pass
 
-        # Build axon list aligned with candidate_uids.
+        # ── Read all on-chain commitments ─────────────────────────────────
+        netuid = int(getattr(self.config, "netuid", 36) or 36)
+        st = await self._get_async_subtensor()
         try:
-            miner_axons = [metagraph.axons[uid] for uid in candidate_uids]
+            all_commitments = await read_all_plain_commitments(st, netuid=netuid)
         except Exception as exc:
-            bt.logging.warning(f"Failed to resolve miner axons for handshake: {exc}")
-            return
+            bt.logging.error(f"[collect_commitments] Failed to read on-chain commitments: {exc}")
+            all_commitments = {}
 
-        round_id = str(getattr(self, "current_round_id", "") or getattr(self.round_manager, "round_number", ""))
-        validator_id = str(getattr(self, "uid", "unknown"))
+        # Build hotkey → uid lookup from metagraph.
+        hotkey_to_uid: dict[str, int] = {}
+        for uid_idx in range(len(hotkeys)):
+            hk = hotkeys[uid_idx]
+            if hk:
+                hotkey_to_uid[str(hk).strip()] = uid_idx
 
-        start_synapse = StartRoundSynapse(
-            version=getattr(self, "version", ""),
-            round_id=round_id,
-            validator_id=validator_id,
-            note="autoppia-web-agents-subnet",
+        # Index commitments by uid (only miner-type commitments).
+        commitment_by_uid: dict[int, dict] = {}
+        for hk, data in all_commitments.items():
+            if not isinstance(data, dict):
+                continue
+            if data.get("t") != "m":
+                continue
+            uid = hotkey_to_uid.get(str(hk).strip())
+            if uid is not None:
+                commitment_by_uid[uid] = data
+
+        bt.logging.info(
+            f"[collect_commitments] On-chain: {len(all_commitments)} total commitments, "
+            f"{len(commitment_by_uid)} miner commitments matched to UIDs"
         )
 
-        responses = await send_start_round_synapse_to_miners(
-            validator=self,
-            miner_axons=miner_axons,
-            start_synapse=start_synapse,
-            timeout=60,
-        )
-
+        # ── Process each candidate ────────────────────────────────────────
         new_agents_count = 0
         current_round = int(getattr(self.round_manager, "round_number", 0) or 0)
         repo_to_count: dict[str, int] = {}
@@ -354,24 +369,23 @@ class ValidatorRoundStartMixin:
         if not isinstance(repo_owner_by_season, dict):
             repo_owner_by_season = {}
             self._season_repo_owners = repo_owner_by_season
-        active_handshake_uids: list[int] = []
-        responded_count = 0
-        response_missing_count = 0
+        active_miner_uids_list: list[int] = []
+        no_commitment_count = 0
         restored_from_pending_count = 0
-        missing_handshake_field_count = 0
+        missing_field_count = 0
         invalid_repo_count = 0
         repo_cap_skip_count = 0
         cooldown_skip_count = 0
         unchanged_commit_skip_count = 0
         queued_for_eval_count = 0
 
-        for idx, uid in enumerate(candidate_uids):
-            resp = responses[idx] if idx < len(responses) else None
-            if resp is None:
-                response_missing_count += 1
-                # If we have a pending submission recorded during cooldown, we
-                # can evaluate it once the cooldown expires even if the miner
-                # fails to respond in this round.
+        for uid in candidate_uids:
+            commitment = commitment_by_uid.get(uid)
+
+            # No on-chain commitment for this uid.
+            if commitment is None:
+                no_commitment_count += 1
+                # Check for pending submission from a previous cooldown.
                 existing = self.agents_dict.get(uid)
                 if isinstance(existing, AgentInfo) and existing.pending_github_url:
                     if not _is_cooldown_active(
@@ -395,14 +409,13 @@ class ValidatorRoundStartMixin:
                         restored_from_pending_count += 1
                 continue
 
-            responded_count += 1
-            agent_name = getattr(resp, "agent_name", None)
-            raw_github_url = getattr(resp, "github_url", None)
-            agent_image = getattr(resp, "agent_image", None)
+            # Extract fields from commitment payload.
+            agent_name = str(commitment.get("n") or "").strip() or None
+            raw_github_url = str(commitment.get("g") or "").strip() or None
+            agent_image = str(commitment.get("i") or "").strip() or None
 
             if not agent_name or not raw_github_url:
-                # Strict: an explicit submission is required. Treat missing fields
-                # as an invalid submission for this uid.
+                # Strict: an explicit submission is required.
                 existing = self.agents_dict.get(uid)
                 if isinstance(existing, AgentInfo):
                     try:
@@ -429,16 +442,21 @@ class ValidatorRoundStartMixin:
                     )
                     if self.round_manager.round_number == 1:
                         self.agents_on_first_handshake.append(uid)
-                missing_handshake_field_count += 1
+                missing_field_count += 1
                 continue
 
-            # Miner provided the required handshake fields; treat as active for IWAP.
-            active_handshake_uids.append(int(uid))
+            # Miner has a valid commitment; treat as active for IWAP.
+            active_miner_uids_list.append(int(uid))
 
-            # Store handshake payload for IWAP registration
+            # Store a payload namespace for IWAP registration (replaces synapse).
             if not isinstance(getattr(self, "round_handshake_payloads", None), dict):
                 self.round_handshake_payloads = {}
-            self.round_handshake_payloads[int(uid)] = resp
+            self.round_handshake_payloads[int(uid)] = SimpleNamespace(
+                agent_name=agent_name,
+                github_url=raw_github_url,
+                agent_image=agent_image,
+                note=None,
+            )
 
             normalized_repo, ref = normalize_and_validate_github_url(
                 raw_github_url,
@@ -446,8 +464,7 @@ class ValidatorRoundStartMixin:
                 require_ref=True,
             )
 
-            # Strict submission policy: if miner didn't provide a valid repo + ref/commit URL,
-            # mark as evaluated with zero and do not enqueue expensive evaluation work.
+            # Strict submission policy: invalid repo + ref → zero score, no eval.
             if normalized_repo is None:
                 existing = self.agents_dict.get(uid)
                 if isinstance(existing, AgentInfo):
@@ -492,7 +509,7 @@ class ValidatorRoundStartMixin:
                 repo_count = int(repo_to_count.get(normalized_repo_key, 0))
                 history_count = len(repo_owner_history)
                 if owner_key not in repo_owner_history and history_count >= max_by_repo:
-                    bt.logging.warning(f"[handshake] Skipping uid={uid} repo={normalized_repo_key} due MAX_MINERS_PER_REPO={max_by_repo} (round={repo_count}, unique_history={history_count})")
+                    bt.logging.warning(f"[collect_commitments] Skipping uid={uid} repo={normalized_repo_key} due MAX_MINERS_PER_REPO={max_by_repo} (round={repo_count}, unique_history={history_count})")
                     existing = self.agents_dict.get(uid)
                     if isinstance(existing, AgentInfo):
                         try:
@@ -527,8 +544,8 @@ class ValidatorRoundStartMixin:
             commit_sha: str | None = None
             agent_info = AgentInfo(
                 uid=uid,
-                agent_name=getattr(resp, "agent_name", None),
-                agent_image=getattr(resp, "agent_image", None),
+                agent_name=agent_name,
+                agent_image=agent_image,
                 github_url=raw_github_url,
                 normalized_repo=normalized_repo,
                 git_commit=None,
@@ -547,9 +564,6 @@ class ValidatorRoundStartMixin:
                 existing_commit = getattr(existing, "git_commit", None)
                 if normalized_repo and existing_commit and existing_repo == normalized_repo:
                     try:
-                        # If miner submitted a pinned commit URL, we can use that SHA directly
-                        # without hitting the network (and without relying on ls-remote, which
-                        # typically only resolves refs, not arbitrary commit objects).
                         if "/commit/" in str(raw_github_url or "") and ref:
                             commit_sha = str(ref)
                         else:
@@ -562,13 +576,8 @@ class ValidatorRoundStartMixin:
                         agent_info.github_url = commit_url
                     except Exception:
                         pass
-                    try:
-                        setattr(resp, "github_url", commit_url)
-                    except Exception:
-                        pass
 
                 # Do not re-evaluate if the submission commit didn't change.
-                # If we cannot resolve a commit hash, be conservative and re-evaluate.
                 if normalized_repo and commit_sha and existing_repo == normalized_repo and _commits_match(existing_commit, commit_sha):
                     try:
                         current_season = int(getattr(getattr(self, "season_manager", None), "season_number", 0) or 0)
@@ -580,7 +589,7 @@ class ValidatorRoundStartMixin:
                     except Exception:
                         last_season_i = None
                     if current_season and last_season_i is not None and last_season_i != int(current_season):
-                        # New season -> tasks changed, force re-evaluation even if commit unchanged.
+                        # New season → tasks changed, force re-evaluation even if commit unchanged.
                         pass
                     else:
                         # Keep score/evaluated, but allow display metadata to update.
@@ -590,7 +599,6 @@ class ValidatorRoundStartMixin:
                             existing.github_url = agent_info.github_url
                             if not getattr(existing, "normalized_repo", None):
                                 existing.normalized_repo = normalized_repo
-                            # Clear any stale pending submission (we are already on this commit).
                             existing.pending_github_url = None
                             existing.pending_agent_name = None
                             existing.pending_agent_image = None
@@ -613,7 +621,6 @@ class ValidatorRoundStartMixin:
                     best_score_ever=getattr(self, "_best_score_ever", None),
                     handshake_responded=True,
                 ):
-                    # Store pending submission and skip enqueuing for now.
                     try:
                         existing.pending_github_url = agent_info.github_url
                         existing.pending_agent_name = agent_info.agent_name
@@ -639,14 +646,15 @@ class ValidatorRoundStartMixin:
                 self.agents_on_first_handshake.append(uid)
             new_agents_count += 1
             queued_for_eval_count += 1
+
         bt.logging.info(
-            "[handshake] complete "
+            "[collect_commitments] complete "
             f"min_stake={min_stake:.4f} "
-            f"responded={responded_count}/{len(responses)} "
-            f"missing_response={response_missing_count} "
+            f"with_commitment={len(commitment_by_uid)}/{len(candidate_uids)} "
+            f"no_commitment={no_commitment_count} "
             f"queued_for_eval={queued_for_eval_count} "
             f"restored_from_pending={restored_from_pending_count} "
-            f"missing_fields={missing_handshake_field_count} "
+            f"missing_fields={missing_field_count} "
             f"invalid_repo={invalid_repo_count} "
             f"repo_cap_skip={repo_cap_skip_count} "
             f"cooldown_skip={cooldown_skip_count} "
@@ -654,10 +662,9 @@ class ValidatorRoundStartMixin:
             f"new_agents={new_agents_count}"
         )
 
-        # Only miners that responded this round should be treated as "active"
-        # for IWAP registration and per-round reporting. Keeping this bounded
-        # avoids expensive IWAP loops when we handshake a wide UID window.
-        self.active_miner_uids = active_handshake_uids
+        # Miners with valid commitments are treated as "active" for IWAP
+        # registration and per-round reporting.
+        self.active_miner_uids = active_miner_uids_list
 
     async def _wait_for_minimum_start_block(self) -> bool:
         """

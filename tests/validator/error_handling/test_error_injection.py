@@ -32,7 +32,7 @@ class TestMinerResponseErrors:
         dummy_validator.dendrite.query = mock_query
         
         # Should not crash
-        await dummy_validator._perform_handshake()
+        await dummy_validator._collect_miner_commitments()
         
         # Agent should not be added
         assert len(dummy_validator.agents_dict) == 0
@@ -57,7 +57,7 @@ class TestMinerResponseErrors:
         dummy_validator.dendrite.query = mock_query
         
         # Should not crash
-        await dummy_validator._perform_handshake()
+        await dummy_validator._collect_miner_commitments()
         
         # Agent should not be added
         assert len(dummy_validator.agents_dict) == 0
@@ -82,7 +82,7 @@ class TestMinerResponseErrors:
         dummy_validator.dendrite.query = mock_query
         
         # Should not crash
-        await dummy_validator._perform_handshake()
+        await dummy_validator._collect_miner_commitments()
         
         # Agent might be added but evaluation should handle it
         # This is acceptable behavior
@@ -102,7 +102,7 @@ class TestMinerResponseErrors:
         dummy_validator.dendrite.query = mock_query
         
         # Should not crash
-        await dummy_validator._perform_handshake()
+        await dummy_validator._collect_miner_commitments()
         
         # No agents should be added
         assert len(dummy_validator.agents_dict) == 0
@@ -398,22 +398,23 @@ class TestNetworkErrors:
     """Test handling of network-related errors."""
 
     @pytest.mark.asyncio
-    async def test_handshake_handles_network_error(
+    async def test_commitment_read_handles_chain_error(
         self, validator_with_agents, mock_metagraph
     ):
-        """Test handshake handles network errors."""
+        """Test commitment reading handles chain read errors gracefully."""
         from tests.conftest import _bind_round_start_mixin
         validator_with_agents = _bind_round_start_mixin(validator_with_agents)
-        
+
         validator_with_agents.metagraph = mock_metagraph
         validator_with_agents.uid = 0
-        
-        # Mock dendrite_with_retries to raise network error
-        with patch('autoppia_web_agents_subnet.validator.round_start.synapse_handler.dendrite_with_retries',
-                   new=AsyncMock(side_effect=ConnectionError("Network unreachable"))):
-            # Should raise exception (handshake doesn't catch network errors)
-            with pytest.raises(ConnectionError):
-                await validator_with_agents._perform_handshake()
+        validator_with_agents._get_async_subtensor = AsyncMock(return_value=Mock())
+
+        # Mock read_all_plain_commitments to raise a chain error
+        with patch('autoppia_web_agents_subnet.utils.commitments.read_all_plain_commitments',
+                   new_callable=AsyncMock, side_effect=ConnectionError("Chain unreachable")):
+            # Should handle gracefully (logged + empty active miners)
+            await validator_with_agents._collect_miner_commitments()
+            assert len(validator_with_agents.active_miner_uids) == 0
 
     @pytest.mark.asyncio
     async def test_evaluation_handles_agent_timeout(

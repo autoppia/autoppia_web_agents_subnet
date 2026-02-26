@@ -107,7 +107,7 @@ def dummy_validator(mock_validator_config: Dict[str, Any]) -> Mock:
     
     # Mixin methods (will be tested separately)
     validator._start_round = AsyncMock()
-    validator._perform_handshake = AsyncMock()
+    validator._collect_miner_commitments = AsyncMock()
     validator._wait_for_minimum_start_block = AsyncMock(return_value=False)
     validator._wait_until_specific_block = AsyncMock()
     validator._run_evaluation_phase = AsyncMock(return_value=0)

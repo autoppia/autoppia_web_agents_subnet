@@ -36,7 +36,7 @@ class TestCompleteRound:
             with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize:
                 with patch('autoppia_web_agents_subnet.validator.settlement.mixin.publish_round_snapshot'):
                     with patch('autoppia_web_agents_subnet.validator.settlement.mixin.aggregate_scores_from_commitments') as mock_aggregate:
-                        with patch('autoppia_web_agents_subnet.validator.round_start.synapse_handler.dendrite_with_retries', new_callable=AsyncMock, return_value=[]) as mock_dendrite:
+                        with patch('autoppia_web_agents_subnet.utils.commitments.read_all_plain_commitments', new_callable=AsyncMock, return_value={}):
                             mock_normalize.return_value = ("https://github.com/test/agent", "main")
                             mock_eval.return_value = (0.8, None, None)
                             mock_aggregate.return_value = ({1: 0.8, 2: 0.6, 3: 0.9}, None)
@@ -47,10 +47,10 @@ class TestCompleteRound:
                             ):
                                 # Run complete round
                                 await validator._start_round()
-                                await validator._perform_handshake()
+                                await validator._collect_miner_commitments()
                                 agents_evaluated = await validator._run_evaluation_phase()
                                 await validator._run_settlement_phase(agents_evaluated=agents_evaluated)
-                            
+
                             # Check phases
                             phases = [t.phase for t in validator.round_manager.phase_history]
                         assert RoundPhase.PREPARING in phases
@@ -64,10 +64,10 @@ class TestCompleteRound:
         validator_with_agents = _bind_evaluation_mixin(validator_with_agents)
         validator_with_agents = _bind_settlement_mixin(validator_with_agents)
         validator_with_agents = _bind_round_start_mixin(validator_with_agents)
-        
+
         """Test that round evaluates miners and calculates rewards."""
         validator = validator_with_agents
-        
+
         validator.season_manager.get_season_tasks = AsyncMock(return_value=season_tasks)
         validator.sandbox_manager = Mock()
         mock_instance = Mock()
@@ -75,12 +75,12 @@ class TestCompleteRound:
         validator.sandbox_manager.deploy_agent = Mock(return_value=mock_instance)
         validator.sandbox_manager.cleanup_agent = Mock()
         validator._get_async_subtensor = AsyncMock(return_value=Mock())
-        
+
         with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua') as mock_eval:
             with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize:
                 with patch('autoppia_web_agents_subnet.validator.settlement.mixin.publish_round_snapshot'):
                     with patch('autoppia_web_agents_subnet.validator.settlement.mixin.aggregate_scores_from_commitments') as mock_aggregate:
-                        with patch('autoppia_web_agents_subnet.validator.round_start.synapse_handler.dendrite_with_retries', new_callable=AsyncMock, return_value=[]):
+                        with patch('autoppia_web_agents_subnet.utils.commitments.read_all_plain_commitments', new_callable=AsyncMock, return_value={}):
                             mock_normalize.return_value = ("https://github.com/test/agent", "main")
                             mock_eval.return_value = (0.8, None, None)
                             mock_aggregate.return_value = ({1: 0.8, 2: 0.6, 3: 0.9}, None)
@@ -92,10 +92,10 @@ class TestCompleteRound:
                                 # Run evaluation
                                 await validator._start_round()
                                 agents_evaluated = await validator._run_evaluation_phase()
-                            
+
                             # Should have evaluated agents
                             assert agents_evaluated > 0
-                            
+
                             # Agents should have scores
                             for agent in validator.agents_dict.values():
                                 assert agent.score is not None

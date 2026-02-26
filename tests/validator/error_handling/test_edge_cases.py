@@ -29,7 +29,7 @@ class TestStakeEdgeCases:
         dummy_validator.dendrite.query = mock_query
 
         # Should not crash
-        await dummy_validator._perform_handshake()
+        await dummy_validator._collect_miner_commitments()
 
         # No agents should be added
         assert len(dummy_validator.agents_dict) == 0
@@ -297,7 +297,7 @@ class TestMetagraphEdgeCases:
         validator_with_agents.dendrite.query = mock_query
 
         # Should not crash
-        await validator_with_agents._perform_handshake()
+        await validator_with_agents._collect_miner_commitments()
 
         # No agents (validator excludes itself)
         assert len(validator_with_agents.agents_dict) == 0
@@ -328,7 +328,7 @@ class TestMetagraphEdgeCases:
         validator_with_agents.dendrite.query = mock_query
 
         # Should not crash
-        await validator_with_agents._perform_handshake()
+        await validator_with_agents._collect_miner_commitments()
 
         # Should have added agents
         assert len(validator_with_agents.agents_dict) > 0

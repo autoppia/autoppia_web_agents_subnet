@@ -64,9 +64,9 @@ verify_installation() {
   python -c "import bittensor; print(f'✓ Bittensor: {bittensor.__version__}')" || \
     info_msg "⚠ Warning: Bittensor import failed"
 
-  # Check subnet protocol import used by miner
-  python -c "from autoppia_web_agents_subnet.protocol import StartRoundSynapse; print('✓ Protocol import: OK')" || \
-    info_msg "⚠ Warning: protocol import failed"
+  # Check subnet package import
+  python -c "import autoppia_web_agents_subnet; print('✓ Subnet package import: OK')" || \
+    info_msg "⚠ Warning: subnet package import failed"
 
   success_msg "Installation verification completed."
 }
