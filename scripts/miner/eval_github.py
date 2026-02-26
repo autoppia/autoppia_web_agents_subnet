@@ -35,7 +35,7 @@ def _parse_args() -> argparse.Namespace:
 
 def _require_gateway_keys() -> None:
     allowed = (os.getenv("GATEWAY_ALLOWED_PROVIDERS") or "").strip().lower()
-    providers = [p.strip() for p in allowed.split(",") if p.strip()] if allowed else ["openai", "chutes"]
+    providers = [p.strip() for p in allowed.split(",") if p.strip()] if allowed else ["openai", "chutes", "anthropic"]
 
     missing: list[str] = []
     if "openai" in providers and not (os.getenv("OPENAI_API_KEY") or "").strip():
