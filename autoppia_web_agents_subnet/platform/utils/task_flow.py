@@ -459,6 +459,7 @@ def prepare_evaluation_payload(
     test_results_data: List[Any],
     exec_time: float,
     reward: float,
+    zero_reason: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Prepare a single evaluation payload for submission to IWAP.
@@ -590,6 +591,7 @@ def prepare_evaluation_payload(
         gif_recording=None,
         metadata=evaluation_metadata,
         llm_usage=llm_usage,
+        zero_reason=zero_reason,
     )
 
     return {
@@ -783,13 +785,13 @@ async def submit_task_results(
             evaluation_id=evaluation_id,
             validator_round_id=ctx.current_round_id,
             agent_run_id=agent_run.agent_run_id,
-            task_id=task_payload.task_id,  # Use the full task_id from IWAP payload
+            task_id=task_payload.task_id,
             task_solution_id=task_solution_id,
             validator_uid=int(ctx.uid),
             validator_hotkey=validator_hotkey,
             miner_uid=miner_uid,
-            eval_score=eval_score,  # Evaluation score (tests/actions only)
-            reward=reward_value,  # Reward (eval_score + time_score)
+            eval_score=eval_score,
+            reward=reward_value,
             test_results=test_results_data or [],
             execution_history=evaluation_meta.get("execution_history", []),
             feedback=evaluation_meta.get("feedback"),
@@ -798,6 +800,7 @@ async def submit_task_results(
             gif_recording=None,
             metadata=evaluation_metadata,
             llm_usage=llm_usage_inner,
+            zero_reason=zero_reason_inner,
         )
 
         if (miner_uid, iwap_task_id) in ctx._completed_pairs:
@@ -897,26 +900,43 @@ async def submit_task_results(
                         level="warning",
                     )
 
-            if getattr(ctx, "iwap_client", None):
-                try:
-                    task_log_payload = _build_task_log_payload(
-                        task_payload=task_payload,
-                        agent_run=agent_run,
-                        miner_uid=miner_uid,
-                        eval_score=eval_score,
-                        reward=reward_value,
-                        exec_time=exec_time,
-                        evaluation_meta=evaluation_meta,
-                        validator_round_id=ctx.current_round_id,
-                        validator_uid=int(ctx.uid),
-                    )
-                    await ctx.iwap_client.upload_task_log(task_log_payload)
-                except Exception as log_exc:  # noqa: BLE001
-                    log_iwap_phase(
-                        "Phase 4",
-                        f"Task log upload failed for task_id={iwap_task_id} miner_uid={miner_uid}: {log_exc}",
-                        level="warning",
-                    )
+                if getattr(ctx, "iwap_client", None):
+                    try:
+                        task_log_payload = _build_task_log_payload(
+                            task_payload=task_payload,
+                            agent_run=agent_run,
+                            miner_uid=miner_uid,
+                            eval_score=eval_score,
+                            reward=reward_value,
+                            exec_time=exec_time,
+                            evaluation_meta=evaluation_meta,
+                            validator_round_id=ctx.current_round_id,
+                            validator_uid=int(ctx.uid),
+                        )
+                        task_log_url = await ctx.iwap_client.upload_task_log(task_log_payload)
+                        if task_log_url:
+                            task_logs_payload = getattr(ctx, "_s3_task_log_urls", None)
+                            if not isinstance(task_logs_payload, list):
+                                task_logs_payload = []
+                            task_logs_payload.append(
+                                {
+                                    "task_id": getattr(task_payload, "task_id", None),
+                                    "agent_run_id": getattr(agent_run, "agent_run_id", None),
+                                    "miner_uid": miner_uid,
+                                    "url": task_log_url,
+                                    "payload": {
+                                        "season": task_log_payload.get("season"),
+                                        "round_in_season": task_log_payload.get("round_in_season"),
+                                    },
+                                }
+                            )
+                            ctx._s3_task_log_urls = task_logs_payload
+                    except Exception as log_exc:  # noqa: BLE001
+                        log_iwap_phase(
+                            "Phase 4",
+                            f"Task log upload failed for task_id={iwap_task_id} miner_uid={miner_uid}: {log_exc}",
+                            level="warning",
+                        )
 
         accumulators = ctx.agent_run_accumulators.setdefault(miner_uid, {"reward": 0.0, "eval_score": 0.0, "execution_time": 0.0, "tasks": 0})
         accumulators["reward"] += float(reward_value)

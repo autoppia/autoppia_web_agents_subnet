@@ -736,7 +736,10 @@ class SandboxManager:
             )
             if resp.status_code == 200:
                 return True
-            bt.logging.error(f"Gateway set-allowed-task-ids failed: status={resp.status_code} body={resp.text[:300]}")
+            hint = ""
+            if resp.status_code == 403:
+                hint = " (admin token rejected: if running multiple validators, set SANDBOX_GATEWAY_PORT_OFFSET and SANDBOX_GATEWAY_INSTANCE per validator)"
+            bt.logging.error(f"Gateway set-allowed-task-ids failed: status={resp.status_code} body={resp.text[:300]}{hint}")
         except Exception as e:
             bt.logging.error(f"Gateway set-allowed-task-ids request failed: {e}")
             return False
@@ -752,7 +755,10 @@ class SandboxManager:
             )
             if resp.status_code == 200:
                 return resp.json()
-            bt.logging.error(f"Gateway usage lookup failed for task_id={task_id}: status={resp.status_code} body={resp.text[:300]}")
+            hint = ""
+            if resp.status_code == 403:
+                hint = " (admin token rejected: if running multiple validators, set SANDBOX_GATEWAY_PORT_OFFSET and SANDBOX_GATEWAY_INSTANCE per validator)"
+            bt.logging.error(f"Gateway usage lookup failed for task_id={task_id}: status={resp.status_code} body={resp.text[:300]}{hint}")
         except Exception as e:
             bt.logging.error(f"Gateway usage lookup request failed for task_id={task_id}: {e}")
             return None

@@ -104,3 +104,5 @@ class AgentInfo:
     pending_normalized_repo: Optional[str] = None
     pending_ref: Optional[str] = None
     pending_received_round: Optional[int] = None
+    # When score is 0, optional reason for dashboard (e.g. over_cost_limit, task_timeout, deploy_failed).
+    zero_reason: Optional[str] = None

@@ -3,6 +3,7 @@
 from __future__ import annotations
 import asyncio
 import inspect
+from typing import Optional
 
 from autoppia_web_agents_subnet.validator.evaluation.stateful_cua_eval import evaluate_with_stateful_cua
 from autoppia_web_agents_subnet.validator.evaluation.rewards import calculate_reward_for_task
@@ -36,6 +37,13 @@ class ValidatorEvaluationMixin:
             note="Starting evaluation phase",
         )
         ColoredLogger.info("Starting evaluation phase", ColoredLogger.MAGENTA)
+        miners_reused = getattr(self, "miners_reused_this_round", None) or set()
+        if miners_reused:
+            reused_list = sorted(miners_reused)
+            ColoredLogger.info(
+                f"[reuse] {len(reused_list)} miner(s) reused this round (same commit), no re-eval: UIDs {reused_list}",
+                ColoredLogger.GREEN,
+            )
 
         # Get tasks for this round (all season tasks)
         season_tasks = None
@@ -71,9 +79,10 @@ class ValidatorEvaluationMixin:
         except Exception:
             season_number = None
 
-        def _finalize_agent(agent: object, *, score: float) -> None:
+        def _finalize_agent(agent: object, *, score: float, zero_reason: str | None = None) -> None:
             """
             Mark an AgentInfo-like object as evaluated and persist it in agents_dict.
+            When score is 0, zero_reason can be set for IWAP (e.g. over_cost_limit, task_timeout).
             """
             finalized_score: float = 0.0
             try:
@@ -82,6 +91,11 @@ class ValidatorEvaluationMixin:
             except Exception:
                 try:
                     agent.score = 0.0  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+            if finalized_score <= 0.0 and zero_reason:
+                try:
+                    agent.zero_reason = zero_reason  # type: ignore[attr-defined]
                 except Exception:
                     pass
             try:
@@ -121,6 +135,41 @@ class ValidatorEvaluationMixin:
                     pass
             try:
                 self.agents_dict[agent.uid] = agent  # type: ignore[attr-defined]
+            except Exception:
+                pass
+            # Register (repo, commit) so we don't re-evaluate this miner on same commit in future rounds
+            try:
+                run = getattr(self, "current_agent_runs", {}).get(getattr(agent, "uid", None))
+                normalized_repo = getattr(agent, "normalized_repo", None)
+                commit_sha = getattr(agent, "git_commit", None)
+                if run and normalized_repo and commit_sha:
+                    acc = getattr(self, "agent_run_accumulators", {}).get(agent.uid, {})  # type: ignore[attr-defined]
+                    tasks = int(acc.get("tasks", 0) or 0)
+                    reward_sum = float(acc.get("reward", 0.0) or 0.0)
+                    eval_sum = float(acc.get("eval_score", 0.0) or 0.0)
+                    time_sum = float(acc.get("execution_time", 0.0) or 0.0)
+                    avg_score = (eval_sum / tasks) if tasks else (getattr(run, "average_score", None) or 0.0)
+                    avg_reward = (reward_sum / tasks) if tasks else (getattr(run, "average_reward", None) or 0.0)
+                    avg_time = (time_sum / tasks) if tasks else (getattr(run, "average_execution_time", None) or 0.0)
+                    round_rewards = getattr(getattr(self, "round_manager", None), "round_rewards", {}) or {}
+                    miner_rewards = round_rewards.get(agent.uid, []) or []  # type: ignore[attr-defined]
+                    success_tasks = len([r for r in miner_rewards if float(r) >= 0.5])
+                    stats = {
+                        "average_score": avg_score,
+                        "average_reward": avg_reward,
+                        "average_execution_time": avg_time,
+                        "total_tasks": tasks or len(miner_rewards),
+                        "success_tasks": success_tasks,
+                        "failed_tasks": (tasks or len(miner_rewards)) - success_tasks,
+                        "zero_reason": getattr(agent, "zero_reason", None),
+                    }
+                    self._register_evaluated_commit(  # type: ignore[attr-defined]
+                        agent.uid,  # type: ignore[attr-defined]
+                        str(normalized_repo),
+                        str(commit_sha),
+                        run.agent_run_id,
+                        stats,
+                    )
             except Exception:
                 pass
 
@@ -167,7 +216,7 @@ class ValidatorEvaluationMixin:
                         f"Skipping agent {getattr(agent, 'uid', '?')}: invalid github_url={getattr(agent, 'github_url', None)}",
                         ColoredLogger.YELLOW,
                     )
-                    _finalize_agent(agent, score=0.0)
+                    _finalize_agent(agent, score=0.0, zero_reason="invalid_github_url")
                     continue
 
                 # Strict: ensure the submitted ref exists / repo is reachable via git
@@ -182,7 +231,7 @@ class ValidatorEvaluationMixin:
                             f"Skipping agent {getattr(agent, 'uid', '?')}: git ls-remote failed (repo unreachable)",
                             ColoredLogger.YELLOW,
                         )
-                        _finalize_agent(agent, score=0.0)
+                        _finalize_agent(agent, score=0.0, zero_reason="repo_unreachable")
                         continue
                 else:
                     if require_ref and not ref:
@@ -190,14 +239,14 @@ class ValidatorEvaluationMixin:
                             f"Skipping agent {getattr(agent, 'uid', '?')}: missing required ref in github_url={raw_s}",
                             ColoredLogger.YELLOW,
                         )
-                        _finalize_agent(agent, score=0.0)
+                        _finalize_agent(agent, score=0.0, zero_reason="missing_ref")
                         continue
                     if ref and resolve_remote_ref_commit(str(normalized_url), str(ref)) is None:
                         ColoredLogger.warning(
                             f"Skipping agent {getattr(agent, 'uid', '?')}: git ls-remote failed for ref={ref}",
                             ColoredLogger.YELLOW,
                         )
-                        _finalize_agent(agent, score=0.0)
+                        _finalize_agent(agent, score=0.0, zero_reason="ref_not_found")
                         continue
             except Exception as exc:
                 ColoredLogger.warning(
@@ -253,6 +302,8 @@ class ValidatorEvaluationMixin:
                 )
 
             rewards: list[float] = []
+            eval_details: list[tuple[float, float]] = []  # (score, exec_time_s) per evaluated task (for task_timeout detection)
+            task_timeout_sec = float(getattr(validator_config, "TASK_TIMEOUT_SECONDS", 180.0) or 180.0)
             batch_size = int(getattr(validator_config, "CONCURRENT_EVALUATION_NUM", 1) or 1)
             max_steps = int(getattr(validator_config, "AGENT_MAX_STEPS", 30) or 30)
             cost_limit_exceed_count = int(
@@ -437,7 +488,7 @@ class ValidatorEvaluationMixin:
                                 if t:
                                     action_types.append(str(t))
                             ColoredLogger.info(
-                                f"[ACTIONS] task_id={task_item.task.id} uid={agent.uid} actions={len(action_list)} types={action_types}",
+                                f"[MINER_ACTIONS] task_id={task_item.task.id} uid={agent.uid} actions={action_types}",
                                 ColoredLogger.CYAN,
                             )
                         except Exception:
@@ -476,7 +527,7 @@ class ValidatorEvaluationMixin:
                                         last_url = getattr(snap, "current_url", None) or last_url
 
                             ColoredLogger.info(
-                                f"[EXEC_ACTIONS] task_id={task_item.task.id} uid={agent.uid} exec_actions={len(exec_types)} types={exec_types} last_url={last_url}",
+                                f"[EXEC_ACTIONS] task_id={task_item.task.id} uid={agent.uid} actions={exec_types} last_url={last_url}",
                                 ColoredLogger.CYAN,
                             )
 
@@ -501,6 +552,7 @@ class ValidatorEvaluationMixin:
                             token_cost=cost,
                         )
                         rewards.append(reward)
+                        eval_details.append((score_f, exec_time_s))
 
                         if cost_limit_exceed_count > 0 and max_cost_per_task > 0.0 and cost >= max_cost_per_task - 1e-12:
                             cost_limit_hits += 1
@@ -516,6 +568,12 @@ class ValidatorEvaluationMixin:
                                 )
                                 stop_for_cost_limit_streak = True
 
+                        # zero_reason para IWAP cuando hay timeout (backend usa zero_reason, no metadata.timeout)
+                        zero_reason_task = (
+                            "task_timeout"
+                            if (score_f <= 0.0 and exec_time_s >= task_timeout_sec)
+                            else None
+                        )
                         # Store evaluation data for batch submission
                         batch_eval_data.append(
                             {
@@ -528,6 +586,7 @@ class ValidatorEvaluationMixin:
                                 "task_solution": task_solution,
                                 "llm_usage": llm_usage,
                                 "llm_calls": llm_calls,
+                                "zero_reason": zero_reason_task,
                             }
                         )
 
@@ -566,10 +625,21 @@ class ValidatorEvaluationMixin:
                     f"due to {cost_limit_hits} over-cost tasks (limit={cost_limit_exceed_count}); final score forced to 0",
                     ColoredLogger.YELLOW,
                 )
-                _finalize_agent(agent, score=0.0)
+                _finalize_agent(agent, score=0.0, zero_reason="over_cost_limit")
             else:
                 avg_reward = (sum(rewards) / float(total_tasks)) if total_tasks > 0 else 0.0
-                _finalize_agent(agent, score=float(avg_reward))
+                if avg_reward <= 0.0:
+                    # All evaluated tasks failed: distinguish timeout vs other failure
+                    if eval_details and all(
+                        score <= 0.0 and exec_time >= task_timeout_sec
+                        for score, exec_time in eval_details
+                    ):
+                        zero_reason = "task_timeout"
+                    else:
+                        zero_reason = "all_tasks_failed"
+                else:
+                    zero_reason = None
+                _finalize_agent(agent, score=float(avg_reward), zero_reason=zero_reason)
             agents_evaluated += 1
 
         ColoredLogger.info("Evaluation phase completed", ColoredLogger.MAGENTA)
@@ -708,6 +778,7 @@ class ValidatorEvaluationMixin:
                 test_results_data=test_results_data,
                 exec_time=eval_data["exec_time"],
                 reward=eval_data["reward"],
+                zero_reason=eval_data.get("zero_reason"),
             )
 
             evaluations_batch.append(evaluation_payload)
@@ -726,25 +797,6 @@ class ValidatorEvaluationMixin:
                 if sel is not None:
                     d["selector"] = sel if isinstance(sel, dict) else getattr(sel, "__dict__", str(sel))
                 return d or {"type": getattr(a, "type", type(a).__name__)}
-
-            def _preview_indices(n: int, limit: int = 6):
-                if n <= limit:
-                    return list(range(n))
-                head = list(range(3))
-                tail = list(range(max(0, n - 3), n))
-                return head + tail
-
-            def _fmt_action_line(a_dict):
-                if not isinstance(a_dict, dict):
-                    return str(a_dict)
-                t = a_dict.get("type")
-                url = a_dict.get("url")
-                text = a_dict.get("text")
-                sel = a_dict.get("selector")
-                # Keep logs grep-friendly and bounded.
-                if isinstance(text, str) and len(text) > 80:
-                    text = text[:80] + "…"
-                return f"type={t} url={url} selector={sel} text={text}"
 
             # Extract the executed actions from the evaluator recording (ground truth).
             exec_actions = []
@@ -774,41 +826,23 @@ class ValidatorEvaluationMixin:
                     if isinstance(a, dict) and a.get("type"):
                         action_types.append(str(a.get("type")))
                 ColoredLogger.info(
-                    f"[IWAP_ACTIONS] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} actions={len(actions)} types={action_types}",
+                    f"[IWAP_ACTIONS] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} actions={action_types}",
                     ColoredLogger.CYAN,
                 )
-
-                # Log a bounded preview of the actual action objects being sent to IWAP.
-                idxs = _preview_indices(len(actions))
-                for i in idxs:
-                    a = actions[i]
-                    ColoredLogger.info(
-                        f"[IWAP_ACTION] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} i={i} {_fmt_action_line(a)}",
-                        ColoredLogger.CYAN,
-                    )
-            except Exception:
-                pass
-
-            # Always emit a bounded preview of the actions the evaluator actually executed.
-            try:
-                idxs = _preview_indices(len(exec_actions))
-                for i in idxs:
-                    ColoredLogger.info(
-                        f"[EXEC_ACTION] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} i={i} {_fmt_action_line(exec_actions[i])}",
-                        ColoredLogger.CYAN,
-                    )
             except Exception:
                 pass
 
             # Optional: upload task execution log for S3-backed storage (batch path)
             if getattr(self, "iwap_client", None):
+                task_log_miner_uid = agent_uid
                 try:
+                    task_log_miner_uid = int(task_log_miner_uid)
                     from autoppia_web_agents_subnet.platform.utils.task_flow import _build_task_log_payload
 
                     task_log_payload = _build_task_log_payload(
                         task_payload=task_payload,
                         agent_run=agent_run,
-                        miner_uid=agent_uid,
+                        miner_uid=task_log_miner_uid,
                         eval_score=eval_data["score"],
                         reward=eval_data["reward"],
                         exec_time=eval_data["exec_time"],
@@ -819,14 +853,8 @@ class ValidatorEvaluationMixin:
                     try:
                         pl = task_log_payload.get("payload") if isinstance(task_log_payload, dict) else None
                         steps = pl.get("steps") if isinstance(pl, dict) else None
-                        last_type = None
                         s3_actions = []
                         if isinstance(steps, list) and steps:
-                            ao = steps[-1].get("agent_output") if isinstance(steps[-1], dict) else None
-                            act = ao.get("action") if isinstance(ao, dict) else None
-                            if isinstance(act, dict):
-                                last_type = act.get("type")
-                            # Collect actions for mismatch/debug preview.
                             for step in steps:
                                 if not isinstance(step, dict):
                                     continue
@@ -836,8 +864,9 @@ class ValidatorEvaluationMixin:
                                 act = ao.get("action")
                                 if isinstance(act, dict):
                                     s3_actions.append(act)
+                        s3_types = [a.get("type") for a in s3_actions if isinstance(a, dict) and a.get("type")]
                         ColoredLogger.info(
-                            f"[S3_ACTIONS] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} steps={len(steps) if isinstance(steps, list) else 0} last_action={last_type}",
+                            f"[S3_ACTIONS] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} actions={s3_types}",
                             ColoredLogger.CYAN,
                         )
 
@@ -851,35 +880,31 @@ class ValidatorEvaluationMixin:
                                     f"[MISMATCH_ACTIONS] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} exec={exec_n} iwap={iwap_n} s3={s3_n}",
                                     ColoredLogger.YELLOW,
                                 )
-                                for i in _preview_indices(exec_n):
-                                    ColoredLogger.info(
-                                        f"[EXEC_ACTION] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} i={i} {_fmt_action_line(exec_actions[i])}",
-                                        ColoredLogger.CYAN,
-                                    )
-                                for i in _preview_indices(iwap_n):
-                                    ColoredLogger.info(
-                                        f"[IWAP_ACTION] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} i={i} {_fmt_action_line(actions[i])}",
-                                        ColoredLogger.CYAN,
-                                    )
-                                for i in _preview_indices(s3_n):
-                                    ColoredLogger.info(
-                                        f"[S3_ACTION] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} i={i} {_fmt_action_line(s3_actions[i])}",
-                                        ColoredLogger.CYAN,
-                                    )
-                            else:
-                                # Still log the executed action summary for correlation when everything matches.
-                                ColoredLogger.info(
-                                    f"[EXEC_ACTIONS] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} exec_actions={exec_n}",
-                                    ColoredLogger.CYAN,
-                                )
                         except Exception:
                             pass
                     except Exception:
                         pass
-                    await self.iwap_client.upload_task_log(task_log_payload)
+                    task_log_url = await self.iwap_client.upload_task_log(task_log_payload)
+                    if task_log_url:
+                        task_logs_payload = getattr(self, "_s3_task_log_urls", None)
+                        if not isinstance(task_logs_payload, list):
+                            task_logs_payload = []
+                        task_logs_payload.append(
+                            {
+                                "task_id": full_task_id,
+                                "agent_run_id": agent_run.agent_run_id,
+                                "miner_uid": task_log_miner_uid,
+                                "url": task_log_url,
+                                "payload": {
+                                    "season": task_log_payload.get("season"),
+                                    "round_in_season": task_log_payload.get("round_in_season"),
+                                },
+                            }
+                        )
+                        self._s3_task_log_urls = task_logs_payload
                 except Exception as log_exc:  # noqa: BLE001
                     ColoredLogger.warning(
-                        f"Task log upload failed for task_id={getattr(task_payload, 'task_id', None)} miner_uid={agent_uid}: {log_exc}",
+                        f"Task log upload failed for task_id={getattr(task_payload, 'task_id', None)} miner_uid={task_log_miner_uid}: {log_exc}",
                         ColoredLogger.YELLOW,
                     )
             gif_payload = evaluation_meta_dict.get("gif_recording")

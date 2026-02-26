@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 from typing import List
 from datetime import datetime
@@ -32,7 +33,7 @@ class SeasonManager:
     """
 
     BLOCKS_PER_EPOCH = 360
-    TASKS_DIR = Path("data/season_tasks")
+    TASKS_DIR = Path("data")
 
     def __init__(self):
         self.season_size_epochs = SEASON_SIZE_EPOCHS
@@ -89,8 +90,34 @@ class SeasonManager:
         return int(season_start_block)
 
     def _get_season_tasks_file(self, season_number: int) -> Path:
-        """Get the path to the tasks JSON file for a given season."""
-        return self.TASKS_DIR / f"season_{season_number}_tasks.json"
+        """Get the path to the tasks JSON file for a given season.
+
+        New layout:
+          data/season_<n>/tasks.json
+        """
+        season_dir = self.TASKS_DIR / f"season_{season_number}"
+        return season_dir / "tasks.json"
+
+    def _get_legacy_season_tasks_file(self, season_number: int) -> Path:
+        """Legacy path kept for compatibility (read-only fallback)."""
+        return self.TASKS_DIR / "season_tasks" / f"season_{season_number}_tasks.json"
+
+    def _migrate_legacy_tasks_file(self, season_number: int) -> bool:
+        """Migrate legacy season tasks file to the new per-season folder layout."""
+        tasks_file = self._get_season_tasks_file(season_number)
+        legacy_tasks_file = self._get_legacy_season_tasks_file(season_number)
+
+        if tasks_file.exists() or not legacy_tasks_file.exists():
+            return False
+
+        try:
+            tasks_file.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(legacy_tasks_file, tasks_file)
+            ColoredLogger.info(f"📦 Migrated legacy tasks file {legacy_tasks_file} -> {tasks_file}")
+            return True
+        except Exception as e:
+            ColoredLogger.warning(f"Failed to migrate legacy tasks file for season {season_number}: {e}")
+            return False
 
     def _serialize_tasks(self, tasks: List[TaskWithProject]) -> List[dict]:
         """Serialize TaskWithProject objects to JSON-compatible format using native Task methods."""
@@ -145,6 +172,7 @@ class SeasonManager:
                 "tasks": serialized,
             }
 
+            tasks_file.parent.mkdir(parents=True, exist_ok=True)
             with tasks_file.open("w") as f:
                 json.dump(data, f, indent=2, default=str)
 
@@ -157,6 +185,12 @@ class SeasonManager:
     def load_season_tasks(self, season_number: int) -> bool:
         """Load season tasks from JSON file."""
         tasks_file = self._get_season_tasks_file(season_number)
+        legacy_tasks_file = self._get_legacy_season_tasks_file(season_number)
+
+        if not tasks_file.exists() and legacy_tasks_file.exists():
+            migrated = self._migrate_legacy_tasks_file(season_number)
+            if not migrated:
+                tasks_file = legacy_tasks_file
 
         if not tasks_file.exists():
             return False

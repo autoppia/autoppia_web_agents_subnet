@@ -79,6 +79,7 @@ def _env_int(name: str, default: int = 0, *, test_default: Optional[int] = None)
 def _env_float(name: str, default: float = 0.0, *, test_default: Optional[float] = None) -> float:
     """
     Retrieve a float environment variable, falling back to default for invalid values and testing default if provided.
+    When TESTING=true: use TEST_<name> if set, else use <name> from env if set (so .env is respected), else test_default.
     """
     TESTING = _env_bool("TESTING", False)
     if TESTING:
@@ -86,7 +87,9 @@ def _env_float(name: str, default: float = 0.0, *, test_default: Optional[float]
         test_val = os.getenv(test_key)
         if test_val is not None and test_val.strip() != "":
             return float(test_val.strip())
-
+        env_val = os.getenv(name)
+        if env_val is not None and env_val.strip() != "":
+            return float(env_val.strip())
         if test_default is not None:
             return float(str(test_default))
         return float(_env_str(name, str(default)))

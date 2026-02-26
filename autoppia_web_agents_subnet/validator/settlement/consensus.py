@@ -48,6 +48,17 @@ def _stake_to_float(stake_val: Any) -> float:
         return 0.0
 
 
+def _payload_log_summary(payload: dict) -> dict:
+    """Return a copy of payload with 'scores' replaced by a one-line summary for compact logs."""
+    out = dict(payload)
+    scores = out.get("scores")
+    if isinstance(scores, dict) and len(scores) > 10:
+        vals = [float(v) for v in scores.values() if v is not None]
+        nz = sum(1 for v in vals if float(v) > 0)
+        out["scores"] = f"<{len(scores)} miners, non_zero={nz}, sum={sum(vals):.4f}>"
+    return out
+
+
 def _hotkey_to_uid_map(metagraph) -> Dict[str, int]:
     mapping: Dict[str, int] = {}
     try:
@@ -108,11 +119,11 @@ async def publish_round_snapshot(
     try:
         import json
 
-        payload_json = json.dumps(payload, indent=2, sort_keys=True)
+        payload_json = json.dumps(_payload_log_summary(payload), separators=(",", ":"), sort_keys=True)
 
         bt.logging.info("=" * 80)
         bt.logging.info(ipfs_tag("UPLOAD", f"Round {payload.get('r')} | {len(payload.get('scores', {}))} miners"))
-        bt.logging.info(ipfs_tag("UPLOAD", f"Payload:\n{payload_json}"))
+        bt.logging.info(ipfs_tag("UPLOAD", f"Payload: {payload_json}"))
 
         cid, sha_hex, byte_len = await add_json_async(
             payload,
@@ -231,6 +242,9 @@ async def aggregate_scores_from_commitments(
         bt.logging.error(f"❌ Failed to read commitments from blockchain: {e}")
         commits = {}
 
+    # Descargado: en el bloque actual se leen los commitments on-chain; solo se aceptan los que
+    # cumplen s=season, r=round, v=1 (consensus version) y validator_version compatible; para
+    # cada uno se descarga ese CID y se obtiene ese JSON.
     bt.logging.info(f"[CONSENSUS] Filtering commitments for current round: {round_number}")
 
     weighted_sum: Dict[int, float] = {}
@@ -244,6 +258,7 @@ async def aggregate_scores_from_commitments(
     skipped_low_stake = 0
     skipped_ipfs = 0
     skipped_verification_fail = 0
+    skipped_wrong_validator_version = 0
     skipped_legacy_consensus_version_list: list[tuple[str, int]] = []  # (hk, version)
     skipped_wrong_season_list: list[tuple[str, int]] = []  # (hk, season_number)
     skipped_wrong_round_list: list[tuple[str, int]] = []  # (hk, round_number)
@@ -251,6 +266,7 @@ async def aggregate_scores_from_commitments(
     skipped_low_stake_list: list[tuple[str, float]] = []  # (hk, stake)
     skipped_ipfs_list: list[tuple[str, str]] = []  # (hk, cid)
     skipped_verification_fail_list: list[tuple[str, str]] = []  # (hk, reason)
+    skipped_wrong_validator_version_list: list[tuple[str, str]] = []  # (hk, payload_version)
 
     fetched: list[tuple[str, str, float]] = []
     scores_by_validator: Dict[str, Dict[int, float]] = {}
@@ -324,12 +340,12 @@ async def aggregate_scores_from_commitments(
             payload, _norm, _h = await get_json_async(cid, api_url=IPFS_API_URL)
             import json
 
-            payload_json = json.dumps(payload, indent=2, sort_keys=True)
+            payload_json = json.dumps(_payload_log_summary(payload), separators=(",", ":"), sort_keys=True)
 
             bt.logging.info("=" * 80)
             bt.logging.info(f"[IPFS] [DOWNLOAD] Validator {hk[:12]}... (UID {validator_uid}) | CID: {cid}")
             bt.logging.info(f"[IPFS] [DOWNLOAD] URL: http://ipfs.metahash73.com:5001/api/v0/cat?arg={cid}")
-            bt.logging.info(f"[IPFS] [DOWNLOAD] Payload:\n{payload_json}")
+            bt.logging.info(f"[IPFS] [DOWNLOAD] Payload: {payload_json}")
             bt.logging.success(f"[IPFS] [DOWNLOAD] ✅ SUCCESS - Round {payload.get('r')} | {len(payload.get('scores', {}))} miners | Stake: {st_val:.2f}τ")
             bt.logging.info("=" * 80)
         except Exception as e:
@@ -340,6 +356,19 @@ async def aggregate_scores_from_commitments(
         if not isinstance(payload, dict):
             bt.logging.info(f"[CONSENSUS] Skip {hk[:12]}... | Reason: payload is not dict")
             continue
+
+        # También debe coincidir el validator_version del payload con el de este validator.
+        expected_validator_version = getattr(self, "version", None)
+        if expected_validator_version is not None:
+            payload_validator_version = payload.get("validator_version")
+            if payload_validator_version != expected_validator_version:
+                skipped_wrong_validator_version += 1
+                pv_str = str(payload_validator_version) if payload_validator_version is not None else "missing"
+                skipped_wrong_validator_version_list.append((hk, pv_str))
+                bt.logging.debug(
+                    f"⏭️ Skip {hk[:10]}…: wrong validator_version (payload has {pv_str}, need {expected_validator_version})"
+                )
+                continue
 
         scores = payload.get("scores")
         if not isinstance(scores, dict):
@@ -382,6 +411,7 @@ async def aggregate_scores_from_commitments(
             f"Missing CID: {skipped_missing_cid} | "
             f"Low stake: {skipped_low_stake} | "
             f"IPFS fail: {skipped_ipfs} | "
+            f"Wrong validator_version: {skipped_wrong_validator_version} | "
             f"Verify fail: {skipped_verification_fail} | "
         )
 
@@ -405,13 +435,15 @@ async def aggregate_scores_from_commitments(
             if skipped_ipfs_list:
                 ipfs_str = ", ".join([f"{hk[:10]}…:{cid[:10]}…" for hk, cid in skipped_ipfs_list])
                 bt.logging.debug(f"   ⏭️ IPFS-failed: {ipfs_str}")
+            if skipped_wrong_validator_version_list:
+                vv_str = ", ".join([f"{hk[:10]}…(payload={pv})" for hk, pv in skipped_wrong_validator_version_list])
+                bt.logging.debug(f"   ⏭️ Wrong-validator_version excluded: {vv_str}")
         except Exception:
             pass
         if len(result) > 0:
-            bt.logging.info(f"[CONSENSUS] Aggregated scores ({len(result)} miners):")
             top_sample = list(sorted(result.items(), key=lambda x: x[1], reverse=True))[:10]
-            for uid, score in top_sample:
-                bt.logging.info(f"[CONSENSUS]   UID {uid}: {score:.4f}")
+            top_str = ", ".join(f"UID {uid}={score:.4f}" for uid, score in top_sample)
+            bt.logging.info(f"[CONSENSUS] Aggregated scores ({len(result)} miners) top10: {top_str}")
         else:
             bt.logging.warning(f"[CONSENSUS] ⚠️ No miners aggregated (all scores were <= 0 or no common miners)")
     else:
@@ -443,6 +475,7 @@ async def aggregate_scores_from_commitments(
             "missing_cid": skipped_missing_cid_list,
             "low_stake": skipped_low_stake_list,
             "ipfs_fail": skipped_ipfs_list,
+            "wrong_validator_version": skipped_wrong_validator_version_list,
             "verify_fail": skipped_verification_fail_list,
         },
     }

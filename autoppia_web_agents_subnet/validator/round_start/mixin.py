@@ -160,6 +160,13 @@ class ValidatorRoundStartMixin:
             self.should_update_weights = False
             # Reset per-season repo-owner gating to allow fresh distribution each season.
             self._season_repo_owners = {}
+            # New season = new tasks → re-evaluate all commits; clear "already evaluated" map.
+            if hasattr(self, "_evaluated_commits_by_miner"):
+                self._evaluated_commits_by_miner = {}
+                try:
+                    self._save_iwap_prev_round_state()
+                except Exception:
+                    pass
 
         current_block = self.block
         self.round_manager.start_new_round(current_block)
@@ -199,6 +206,12 @@ class ValidatorRoundStartMixin:
         bt.logging.info(round_details_tag(f"Total Blocks: {self.round_manager.target_block - current_block}"))
         bt.logging.info(round_details_tag(f"Consensus fetch: {self.round_manager.settlement_fraction:.0%} — block {settlement_block:,} (epoch {settlement_epoch:.2f}) — ~{minutes_to_settlement:.1f}m"))
         bt.logging.info("=" * 100)
+
+        # Save round boundaries for settlement so we wait for *this* round's 97% and end,
+        # not the next round's (sync_boundaries(current_block) later would advance to next round).
+        self._settlement_round_start_block = self.round_manager.start_block
+        self._settlement_round_target_block = self.round_manager.target_block
+        self._settlement_round_fetch_block = settlement_block
 
         return RoundStartResult(
             continue_forward=True,
@@ -243,7 +256,7 @@ class ValidatorRoundStartMixin:
         candidate_uids: list[int] = []
         candidate_stakes: list[tuple[float, int, str]] = []
         skipped_below_stake = 0
-        skipped_coldkey_cap = 0
+        coldkey_cap_skip_count = 0
         skipped_stake_cap = 0
 
         for uid in range(n):
@@ -270,21 +283,9 @@ class ValidatorRoundStartMixin:
         # Sort by stake before capping per coldkey and per round.
         candidate_stakes.sort(key=lambda item: float(item[0]), reverse=True)
 
-        # Optional: cap miner selection per coldkey to avoid one coldkey taking the whole window.
-        if max_by_coldkey > 0:
-            coldkey_counts: dict[str, int] = {}
-            filtered_candidates: list[int] = []
-            for _, uid, coldkey in candidate_stakes:
-                key = coldkey or f"__coldkey_unknown__:{uid}"
-                if coldkey_counts.get(key, 0) >= max_by_coldkey:
-                    skipped_coldkey_cap += 1
-                    bt.logging.warning(f"[handshake] Skipping uid={uid} due MAX_MINERS_PER_COLDKEY={max_by_coldkey}")
-                    continue
-                coldkey_counts[key] = coldkey_counts.get(key, 0) + 1
-                filtered_candidates.append(uid)
-            candidate_uids = filtered_candidates
-        else:
-            candidate_uids = [uid for _, uid, _ in candidate_stakes]
+        # Coldkey cap is enforced after handshakes on valid submissions (after missing-fields validation).
+        coldkey_counts: dict[str, int] = {}
+        candidate_uids = [uid for _, uid, _ in candidate_stakes]
 
         # Rebuild stake-sorted list after coldkey capping.
         candidate_stakes = [(float(stakes[uid]) if uid < len(stakes) else 0.0, uid) for uid in candidate_uids]
@@ -305,7 +306,7 @@ class ValidatorRoundStartMixin:
             "[handshake] Candidate selection summary "
             f"total={n - 1}|eligible_by_stake={candidates_after_stake}|"
             f"below_stake={skipped_below_stake}|"
-            f"coldkey_cap_skip={skipped_coldkey_cap}|stake_cap_skip={skipped_stake_cap}|"
+            f"coldkey_cap_skip={coldkey_cap_skip_count}|stake_cap_skip={skipped_stake_cap}|"
             f"final_candidates={len(candidate_uids)}"
         )
 
@@ -364,11 +365,14 @@ class ValidatorRoundStartMixin:
         cooldown_skip_count = 0
         unchanged_commit_skip_count = 0
         queued_for_eval_count = 0
+        self.miners_reused_this_round = set()
+        self.handshake_results: dict[int, str] = {}
 
         for idx, uid in enumerate(candidate_uids):
             resp = responses[idx] if idx < len(responses) else None
             if resp is None:
                 response_missing_count += 1
+                self.handshake_results[int(uid)] = "no_response"
                 # If we have a pending submission recorded during cooldown, we
                 # can evaluate it once the cooldown expires even if the miner
                 # fails to respond in this round.
@@ -430,10 +434,55 @@ class ValidatorRoundStartMixin:
                     if self.round_manager.round_number == 1:
                         self.agents_on_first_handshake.append(uid)
                 missing_handshake_field_count += 1
+                if not agent_name:
+                    self.handshake_results[int(uid)] = "missing_agent_name"
+                elif not raw_github_url:
+                    self.handshake_results[int(uid)] = "missing_github_url"
+                else:
+                    self.handshake_results[int(uid)] = "missing_fields"
                 continue
 
             # Miner provided the required handshake fields; treat as active for IWAP.
             active_handshake_uids.append(int(uid))
+
+            if max_by_coldkey > 0:
+                response_coldkey = ""
+                if 0 <= uid < len(coldkeys):
+                    raw_coldkey = coldkeys[uid]
+                    if raw_coldkey:
+                        response_coldkey = str(raw_coldkey).strip()
+                response_coldkey = response_coldkey or f"__coldkey_unknown__:{uid}"
+
+                if coldkey_counts.get(response_coldkey, 0) >= max_by_coldkey:
+                    bt.logging.warning(
+                        f"[handshake] Skipping uid={uid} due MAX_MINERS_PER_COLDKEY={max_by_coldkey} (post-handshake)"
+                    )
+                    existing = self.agents_dict.get(uid)
+                    if isinstance(existing, AgentInfo):
+                        try:
+                            existing.score = 0.0
+                            existing.evaluated = True
+                        except Exception:
+                            pass
+                        self.agents_dict[uid] = existing
+                    else:
+                        self.agents_dict[uid] = AgentInfo(
+                            uid=uid,
+                            agent_name=agent_name or "",
+                            agent_image=agent_image,
+                            github_url=raw_github_url or "",
+                            normalized_repo=None,
+                            git_commit=None,
+                            score=0.0,
+                            evaluated=True,
+                        )
+                    if self.round_manager.round_number == 1:
+                        self.agents_on_first_handshake.append(uid)
+                    coldkey_cap_skip_count += 1
+                    self.handshake_results[int(uid)] = "coldkey_cap"
+                    continue
+
+                coldkey_counts[response_coldkey] = coldkey_counts.get(response_coldkey, 0) + 1
 
             # Store handshake payload for IWAP registration
             if not isinstance(getattr(self, "round_handshake_payloads", None), dict):
@@ -476,6 +525,7 @@ class ValidatorRoundStartMixin:
                     if self.round_manager.round_number == 1:
                         self.agents_on_first_handshake.append(uid)
                 invalid_repo_count += 1
+                self.handshake_results[int(uid)] = "invalid_github_url"
                 continue
 
             if max_by_repo > 0 and normalized_repo:
@@ -515,6 +565,7 @@ class ValidatorRoundStartMixin:
                     if self.round_manager.round_number == 1:
                         self.agents_on_first_handshake.append(uid)
                     repo_cap_skip_count += 1
+                    self.handshake_results[int(uid)] = "repo_cap"
                     continue
 
                 if owner_key not in repo_owner_history:
@@ -523,17 +574,36 @@ class ValidatorRoundStartMixin:
 
                 repo_to_count[normalized_repo_key] = repo_count + 1
 
-            # Resolve commit only when we have a previous commit to compare against.
+            self.handshake_results[int(uid)] = "ok"
+
+            # Resolve commit for all (needed for unchanged check, already-evaluated check, and display).
             commit_sha: str | None = None
+            if normalized_repo and ref:
+                try:
+                    if "/commit/" in str(raw_github_url or ""):
+                        commit_sha = str(ref)
+                    else:
+                        commit_sha = resolve_remote_ref_commit(normalized_repo, ref)
+                except Exception:
+                    commit_sha = None
+            if commit_sha and normalized_repo:
+                commit_url = f"{normalized_repo}/commit/{commit_sha}"
+            else:
+                commit_url = raw_github_url
+
             agent_info = AgentInfo(
                 uid=uid,
                 agent_name=getattr(resp, "agent_name", None),
                 agent_image=getattr(resp, "agent_image", None),
-                github_url=raw_github_url,
+                github_url=commit_url,
                 normalized_repo=normalized_repo,
-                git_commit=None,
+                git_commit=commit_sha,
             )
             ColoredLogger.info(agent_info.__repr__(), ColoredLogger.GREEN)
+            try:
+                setattr(resp, "github_url", commit_url)
+            except Exception:
+                pass
 
             existing = self.agents_dict.get(uid)
             if isinstance(existing, AgentInfo):
@@ -545,27 +615,6 @@ class ValidatorRoundStartMixin:
                         existing_repo = None
 
                 existing_commit = getattr(existing, "git_commit", None)
-                if normalized_repo and existing_commit and existing_repo == normalized_repo:
-                    try:
-                        # If miner submitted a pinned commit URL, we can use that SHA directly
-                        # without hitting the network (and without relying on ls-remote, which
-                        # typically only resolves refs, not arbitrary commit objects).
-                        if "/commit/" in str(raw_github_url or "") and ref:
-                            commit_sha = str(ref)
-                        else:
-                            commit_sha = resolve_remote_ref_commit(normalized_repo, ref)
-                    except Exception:
-                        commit_sha = None
-                if commit_sha and normalized_repo:
-                    commit_url = f"{normalized_repo}/commit/{commit_sha}"
-                    try:
-                        agent_info.github_url = commit_url
-                    except Exception:
-                        pass
-                    try:
-                        setattr(resp, "github_url", commit_url)
-                    except Exception:
-                        pass
 
                 # Do not re-evaluate if the submission commit didn't change.
                 # If we cannot resolve a commit hash, be conservative and re-evaluate.
@@ -584,6 +633,17 @@ class ValidatorRoundStartMixin:
                         pass
                     else:
                         # Keep score/evaluated, but allow display metadata to update.
+                        # Use _evaluated_commits_by_miner so reused_from points to the FIRST evaluated run, not the previous round (which may be reused).
+                        evaluated_map = getattr(self, "_evaluated_commits_by_miner", None) or {}
+                        key = f"{normalized_repo.strip()}|{commit_sha.strip()}"
+                        stored = (evaluated_map.get(uid) or {}).get(key)
+                        if isinstance(stored, dict) and stored.get("agent_run_id"):
+                            if not isinstance(getattr(self, "reused_from_agent_run_id_by_uid", None), dict):
+                                self.reused_from_agent_run_id_by_uid = {}
+                            if not isinstance(getattr(self, "reused_stats_by_uid", None), dict):
+                                self.reused_stats_by_uid = {}
+                            self.reused_from_agent_run_id_by_uid[uid] = str(stored["agent_run_id"])
+                            self.reused_stats_by_uid[uid] = {k: v for k, v in stored.items() if k != "agent_run_id"}
                         try:
                             existing.agent_name = agent_info.agent_name
                             existing.agent_image = agent_info.agent_image
@@ -597,6 +657,36 @@ class ValidatorRoundStartMixin:
                             existing.pending_normalized_repo = None
                             existing.pending_ref = None
                             existing.pending_received_round = None
+                        except Exception:
+                            pass
+                        self.agents_dict[uid] = existing
+                        unchanged_commit_skip_count += 1
+                        self.miners_reused_this_round.add(uid)
+                        continue
+
+                # Already evaluated this (repo, commit) in a past round: do not re-evaluate.
+                if normalized_repo and commit_sha:
+                    evaluated_map = getattr(self, "_evaluated_commits_by_miner", None) or {}
+                    key = f"{normalized_repo.strip()}|{commit_sha.strip()}"
+                    stored = (evaluated_map.get(uid) or {}).get(key)
+                    if isinstance(stored, dict) and stored.get("agent_run_id"):
+                        if not isinstance(getattr(self, "reused_from_agent_run_id_by_uid", None), dict):
+                            self.reused_from_agent_run_id_by_uid = {}
+                        if not isinstance(getattr(self, "reused_stats_by_uid", None), dict):
+                            self.reused_stats_by_uid = {}
+                        ref_run_id = str(stored["agent_run_id"])
+                        self.reused_from_agent_run_id_by_uid[uid] = ref_run_id
+                        self.reused_stats_by_uid[uid] = {k: v for k, v in stored.items() if k != "agent_run_id"}
+                        self.miners_reused_this_round.add(uid)
+                        bt.logging.info(
+                            f"[reuse] Miner {uid}: same (repo, commit) as previous run {ref_run_id}; reusing results (no re-eval)."
+                        )
+                        try:
+                            existing.agent_name = agent_info.agent_name
+                            existing.agent_image = agent_info.agent_image
+                            existing.github_url = agent_info.github_url
+                            if not getattr(existing, "normalized_repo", None):
+                                existing.normalized_repo = normalized_repo
                         except Exception:
                             pass
                         self.agents_dict[uid] = existing
@@ -632,6 +722,28 @@ class ValidatorRoundStartMixin:
                 queued_for_eval_count += 1
                 continue
 
+            # New uid (e.g. after validator restart): still check if this
+            # (repo, commit) was already evaluated in this season.
+            if normalized_repo and commit_sha:
+                evaluated_map = getattr(self, "_evaluated_commits_by_miner", None) or {}
+                key = f"{normalized_repo.strip()}|{commit_sha.strip()}"
+                stored = (evaluated_map.get(uid) or {}).get(key)
+                if isinstance(stored, dict) and stored.get("agent_run_id"):
+                    if not isinstance(getattr(self, "reused_from_agent_run_id_by_uid", None), dict):
+                        self.reused_from_agent_run_id_by_uid = {}
+                    if not isinstance(getattr(self, "reused_stats_by_uid", None), dict):
+                        self.reused_stats_by_uid = {}
+                    ref_run_id = str(stored["agent_run_id"])
+                    self.reused_from_agent_run_id_by_uid[uid] = ref_run_id
+                    self.reused_stats_by_uid[uid] = {k: v for k, v in stored.items() if k != "agent_run_id"}
+                    self.miners_reused_this_round.add(uid)
+                    bt.logging.info(
+                        f"[reuse] Miner {uid}: same (repo, commit) as previous run {ref_run_id}; reusing results (no re-eval)."
+                    )
+                    self.agents_dict[uid] = agent_info
+                    unchanged_commit_skip_count += 1
+                    continue
+
             # New uid: track it immediately and enqueue for evaluation.
             self.agents_dict[uid] = agent_info
             self.agents_queue.put(agent_info)
@@ -647,6 +759,7 @@ class ValidatorRoundStartMixin:
             f"queued_for_eval={queued_for_eval_count} "
             f"restored_from_pending={restored_from_pending_count} "
             f"missing_fields={missing_handshake_field_count} "
+            f"coldkey_cap_skip={coldkey_cap_skip_count} "
             f"invalid_repo={invalid_repo_count} "
             f"repo_cap_skip={repo_cap_skip_count} "
             f"cooldown_skip={cooldown_skip_count} "

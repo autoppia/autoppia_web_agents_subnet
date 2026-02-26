@@ -117,7 +117,6 @@ async def evaluate_with_stateful_cua(
             )
             if augmented_url and augmented_url != original_url:
                 setattr(task_for_eval, "url", augmented_url)
-                bt.logging.debug(f"[stateful_cua_eval] augmented demo url for uid={uid} validator_id={validator_id}: {augmented_url}")
     except Exception:
         pass
 
