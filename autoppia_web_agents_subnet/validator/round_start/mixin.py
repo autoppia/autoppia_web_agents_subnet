@@ -28,6 +28,13 @@ from autoppia_web_agents_subnet.validator.config import (
     EVALUATION_COOLDOWN_ZERO_SCORE_BADNESS,
 )
 from autoppia_web_agents_subnet.utils.commitments import read_all_plain_commitments
+from autoppia_web_agents_subnet.validator.payment.config import (
+    ALPHA_PER_EVAL, PAYMENT_WALLET_SS58, PAYMENT_CACHE_PATH,
+)
+from autoppia_web_agents_subnet.validator.payment.helpers import (
+    get_alpha_sent_by_miner, get_all_consumed_evals, get_consumed_evals,
+    remaining_evaluations, set_all_consumed_evals,
+)
 
 
 def _commits_match(a: str | None, b: str | None) -> bool:
@@ -361,6 +368,81 @@ class ValidatorRoundStartMixin:
             f"{len(commitment_by_uid)} miner commitments matched to UIDs"
         )
 
+        # Crash recovery: restore consumed evals from on-chain commitment "e" field.
+        if bool(PAYMENT_WALLET_SS58) and float(ALPHA_PER_EVAL) > 0:
+            try:
+                my_commitment = all_commitments.get(self.wallet.hotkey.ss58_address)
+                if isinstance(my_commitment, dict) and "e" in my_commitment:
+                    sm_cr = getattr(self, "season_manager", None)
+                    s_start_cr = int(sm_cr.get_season_start_block(self.block)) if sm_cr else None
+                    s_dur_cr = int(getattr(sm_cr, "season_block_length", 0) or 0) if sm_cr else None
+                    if not s_dur_cr:
+                        from autoppia_web_agents_subnet.validator.config import SEASON_SIZE_EPOCHS
+                        bpe = getattr(getattr(self, "round_manager", None), "BLOCKS_PER_EPOCH", 360) or 360
+                        s_dur_cr = int(float(SEASON_SIZE_EPOCHS) * int(bpe))
+                    if s_start_cr is not None and s_dur_cr and s_dur_cr > 0:
+                        cache_kw = dict(payment_address=PAYMENT_WALLET_SS58, netuid=netuid,
+                                        season_start_block=s_start_cr, season_duration_blocks=s_dur_cr,
+                                        cache_path=PAYMENT_CACHE_PATH)
+                        local_consumed = get_all_consumed_evals(**cache_kw)
+                        onchain_consumed = my_commitment["e"]
+                        if isinstance(onchain_consumed, dict) and not local_consumed:
+                            set_all_consumed_evals(onchain_consumed, **cache_kw)
+                            bt.logging.info(f"[payment] Restored {len(onchain_consumed)} consumed eval entries from on-chain")
+                        elif isinstance(onchain_consumed, dict) and local_consumed:
+                            merged, updated = dict(local_consumed), False
+                            for ck, count in onchain_consumed.items():
+                                if not isinstance(ck, str):
+                                    continue
+                                try:
+                                    onchain_val = int(count or 0)
+                                except Exception:
+                                    continue
+                                if onchain_val > int(merged.get(ck, 0) or 0):
+                                    merged[ck] = onchain_val
+                                    updated = True
+                            if updated:
+                                set_all_consumed_evals(merged, **cache_kw)
+                                bt.logging.info("[payment] Merged consumed evals from on-chain (some on-chain values were higher)")
+            except Exception as exc:
+                bt.logging.warning(f"[payment] Consumed evals crash recovery failed: {exc}")
+
+        # Pre-compute per-coldkey remaining evaluations for payment gating.
+        payment_enabled = bool(PAYMENT_WALLET_SS58) and float(ALPHA_PER_EVAL) > 0
+        remaining_evals_by_coldkey: dict[str, int] = {}
+        if payment_enabled:
+            try:
+                sm = getattr(self, "season_manager", None)
+                s_start = int(sm.get_season_start_block(self.block)) if sm else None
+                s_duration = int(getattr(sm, "season_block_length", 0) or 0) if sm else None
+                if not s_duration:
+                    from autoppia_web_agents_subnet.validator.config import SEASON_SIZE_EPOCHS
+                    bpe = getattr(getattr(self, "round_manager", None), "BLOCKS_PER_EPOCH", 360) or 360
+                    s_duration = int(float(SEASON_SIZE_EPOCHS) * int(bpe))
+                if s_start is not None and s_duration and s_duration > 0:
+                    unique_coldkeys: set[str] = set()
+                    for uid in candidate_uids:
+                        if 0 <= uid < len(coldkeys):
+                            ck = str(coldkeys[uid] or "").strip()
+                            if ck:
+                                unique_coldkeys.add(ck)
+                    pay_kw = dict(payment_address=PAYMENT_WALLET_SS58, netuid=netuid,
+                                  season_start_block=s_start, season_duration_blocks=s_duration,
+                                  cache_path=PAYMENT_CACHE_PATH)
+                    for ck in unique_coldkeys:
+                        try:
+                            paid_rao = await get_alpha_sent_by_miner(ck, subtensor=self.subtensor, **pay_kw)
+                            consumed = get_consumed_evals(ck, **pay_kw)
+                            remaining_evals_by_coldkey[ck] = remaining_evaluations(paid_rao, consumed)
+                        except Exception as exc:
+                            bt.logging.warning(f"[collect_commitments] Payment check failed for {ck[:12]}...: {exc}")
+                            remaining_evals_by_coldkey[ck] = 999_999  # Fail-open
+                    paid_count = sum(1 for r in remaining_evals_by_coldkey.values() if r > 0)
+                    bt.logging.info(f"[collect_commitments] Payment balance: {len(unique_coldkeys)} coldkeys scanned, {paid_count} have remaining evals")
+            except Exception as exc:
+                bt.logging.warning(f"[collect_commitments] Payment balance setup failed: {exc}; proceeding without gating")
+                payment_enabled = False
+
         # ── Process each candidate ────────────────────────────────────────
         new_agents_count = 0
         current_round = int(getattr(self.round_manager, "round_number", 0) or 0)
@@ -378,6 +460,16 @@ class ValidatorRoundStartMixin:
         cooldown_skip_count = 0
         unchanged_commit_skip_count = 0
         queued_for_eval_count = 0
+        payment_skip_count = 0
+
+        def _check_payment_balance(uid: int) -> bool:
+            if not payment_enabled:
+                return True
+            ck = str(coldkeys[uid] or "").strip() if 0 <= uid < len(coldkeys) else ""
+            if not ck:
+                return True
+            remaining = remaining_evals_by_coldkey.get(ck)
+            return remaining is None or remaining > 0
 
         for uid in candidate_uids:
             commitment = commitment_by_uid.get(uid)
@@ -395,6 +487,10 @@ class ValidatorRoundStartMixin:
                         best_score_ever=getattr(self, "_best_score_ever", None),
                         handshake_responded=False,
                     ):
+                        if not _check_payment_balance(uid):
+                            bt.logging.info(f"[collect_commitments] Skipping uid={uid} (pending restore): no remaining paid evals")
+                            payment_skip_count += 1
+                            continue
                         pending_info = AgentInfo(
                             uid=uid,
                             agent_name=existing.pending_agent_name or existing.agent_name,
@@ -634,12 +730,24 @@ class ValidatorRoundStartMixin:
                     cooldown_skip_count += 1
                     continue
 
+                if not _check_payment_balance(uid):
+                    bt.logging.info(f"[collect_commitments] Skipping uid={uid} (changed commit): no remaining paid evals")
+                    payment_skip_count += 1
+                    continue
                 self.agents_queue.put(agent_info)
                 new_agents_count += 1
                 queued_for_eval_count += 1
                 continue
 
-            # New uid: track it immediately and enqueue for evaluation.
+            if not _check_payment_balance(uid):
+                bt.logging.info(f"[collect_commitments] Skipping uid={uid} (new miner): no remaining paid evals")
+                payment_skip_count += 1
+                agent_info.score = 0.0
+                agent_info.evaluated = True
+                self.agents_dict[uid] = agent_info
+                if self.round_manager.round_number == 1:
+                    self.agents_on_first_handshake.append(uid)
+                continue
             self.agents_dict[uid] = agent_info
             self.agents_queue.put(agent_info)
             if self.round_manager.round_number == 1:
@@ -659,6 +767,7 @@ class ValidatorRoundStartMixin:
             f"repo_cap_skip={repo_cap_skip_count} "
             f"cooldown_skip={cooldown_skip_count} "
             f"unchanged_commit={unchanged_commit_skip_count} "
+            f"payment_skip={payment_skip_count} "
             f"new_agents={new_agents_count}"
         )
 
