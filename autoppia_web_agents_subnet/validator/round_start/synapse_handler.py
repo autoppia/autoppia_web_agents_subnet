@@ -18,9 +18,7 @@ async def send_start_round_synapse_to_miners(
     """Broadcast StartRoundSynapse and collect responses."""
     start_synapse.version = validator.version
 
-    bt.logging.info(
-        f"Sending StartRoundSynapse to {len(miner_axons)} miners with {timeout}s timeout and 3 retries..."
-    )
+    bt.logging.info(f"Sending StartRoundSynapse to {len(miner_axons)} miners with {timeout}s timeout and 3 retries...")
     responses: List[Optional[StartRoundSynapse]] = await dendrite_with_retries(
         dendrite=validator.dendrite,
         axons=miner_axons,
@@ -30,15 +28,12 @@ async def send_start_round_synapse_to_miners(
         retries=3,
     )
 
-    successful = sum(
-        1 for r in responses if r is not None and getattr(r, "agent_name", None)
-    )
+    received = sum(1 for r in responses if r is not None)
+    successful = sum(1 for r in responses if r is not None and getattr(r, "agent_name", None))
     if successful:
-        bt.logging.success(
-            f"✅ Handshake complete: {successful}/{len(miner_axons)} miners responded"
-        )
+        bt.logging.success(f"✅ Handshake complete: {successful}/{len(miner_axons)} miners responded with valid agent_name")
     else:
         bt.logging.warning(
-            f"⚠️ Handshake complete: 0/{len(miner_axons)} miners responded"
+            f"⚠️ Handshake complete: 0/{len(miner_axons)} miners with valid agent_name (responses received: {received}/{len(miner_axons)} — check miner env AGENT_NAME/GITHUB_URL and serialization)"
         )
     return responses

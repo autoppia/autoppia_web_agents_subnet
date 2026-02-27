@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import time
+from collections import Counter
+from pathlib import Path
 import bittensor as bt
 
 from autoppia_web_agents_subnet.utils.log_colors import round_details_tag
@@ -367,12 +370,32 @@ class ValidatorRoundStartMixin:
         queued_for_eval_count = 0
         self.miners_reused_this_round = set()
         self.handshake_results: dict[int, str] = {}
+        # Diagnostics for handshake transport/payload quality.
+        transport_status_counts: Counter[str] = Counter()
+        transport_status_message_counts: Counter[str] = Counter()
+        missing_name_count = 0
+        missing_github_count = 0
+        missing_both_count = 0
+        missing_fields_due_transport_count = 0
+        missing_fields_on_200_count = 0
+        valid_handshake_payload_count = 0
+        handshake_issue_rows: list[dict[str, object]] = []
 
         for idx, uid in enumerate(candidate_uids):
             resp = responses[idx] if idx < len(responses) else None
             if resp is None:
                 response_missing_count += 1
                 self.handshake_results[int(uid)] = "no_response"
+                handshake_issue_rows.append(
+                    {
+                        "uid": int(uid),
+                        "status_code": None,
+                        "status_message": "no_response",
+                        "has_agent_name": False,
+                        "has_github_url": False,
+                        "reason": "no_response",
+                    }
+                )
                 # If we have a pending submission recorded during cooldown, we
                 # can evaluate it once the cooldown expires even if the miner
                 # fails to respond in this round.
@@ -400,11 +423,70 @@ class ValidatorRoundStartMixin:
                 continue
 
             responded_count += 1
+            _d = getattr(resp, "dendrite", None)
+            _status_code = getattr(_d, "status_code", None)
+            _status_message = getattr(_d, "status_message", None)
+            _status_code_key = str(_status_code) if _status_code is not None else "none"
+            transport_status_counts[_status_code_key] += 1
+            transport_status_message_counts[f"{_status_code_key}:{_status_message}"] += 1
+
             agent_name = getattr(resp, "agent_name", None)
             raw_github_url = getattr(resp, "github_url", None)
             agent_image = getattr(resp, "agent_image", None)
+            has_agent_name = bool(str(agent_name).strip()) if agent_name is not None else False
+            has_github_url = bool(str(raw_github_url).strip()) if raw_github_url is not None else False
+            if not has_agent_name:
+                missing_name_count += 1
+            if not has_github_url:
+                missing_github_count += 1
+            if not has_agent_name and not has_github_url:
+                missing_both_count += 1
+
+            if has_agent_name and has_github_url and _status_code == 200:
+                valid_handshake_payload_count += 1
 
             if not agent_name or not raw_github_url:
+                if _status_code == 200:
+                    missing_fields_on_200_count += 1
+                else:
+                    missing_fields_due_transport_count += 1
+
+                if _status_code == 408:
+                    _reason = "transport_timeout"
+                elif _status_code and _status_code != 200:
+                    _reason = f"transport_status_{_status_code}"
+                elif not has_agent_name and not has_github_url:
+                    _reason = "missing_agent_name_and_github_url"
+                elif not has_agent_name:
+                    _reason = "missing_agent_name"
+                else:
+                    _reason = "missing_github_url"
+
+                handshake_issue_rows.append(
+                    {
+                        "uid": int(uid),
+                        "status_code": _status_code,
+                        "status_message": _status_message,
+                        "has_agent_name": has_agent_name,
+                        "has_github_url": has_github_url,
+                        "reason": _reason,
+                    }
+                )
+
+                # Debug: log first occurrence so we can see what the validator actually received
+                if missing_handshake_field_count == 0:
+                    try:
+                        _dump = getattr(resp, "model_dump", None)
+                        _dump = _dump() if callable(_dump) else getattr(resp, "__dict__", {})
+                        _keys = list(_dump.keys()) if isinstance(_dump, dict) else []
+                        bt.logging.warning(
+                            f"[handshake] DEBUG first missing_fields: uid={uid} "
+                            f"agent_name={repr(agent_name)} github_url={repr(raw_github_url)} "
+                            f"resp_type={type(resp).__name__} status_code={_status_code} "
+                            f"status_message={_status_message!r} dump_keys={_keys}"
+                        )
+                    except Exception as _e:
+                        bt.logging.warning(f"[handshake] DEBUG first missing_fields uid={uid} error={_e}")
                 # Strict: an explicit submission is required. Treat missing fields
                 # as an invalid submission for this uid.
                 existing = self.agents_dict.get(uid)
@@ -434,7 +516,12 @@ class ValidatorRoundStartMixin:
                     if self.round_manager.round_number == 1:
                         self.agents_on_first_handshake.append(uid)
                 missing_handshake_field_count += 1
-                if not agent_name:
+                # Keep handshake_results aligned with transport diagnostics:
+                # when transport failed (non-200), persist transport reason;
+                # otherwise persist semantic missing-field reason.
+                if _reason.startswith("transport_"):
+                    self.handshake_results[int(uid)] = _reason
+                elif not agent_name:
                     self.handshake_results[int(uid)] = "missing_agent_name"
                 elif not raw_github_url:
                     self.handshake_results[int(uid)] = "missing_github_url"
@@ -454,9 +541,7 @@ class ValidatorRoundStartMixin:
                 response_coldkey = response_coldkey or f"__coldkey_unknown__:{uid}"
 
                 if coldkey_counts.get(response_coldkey, 0) >= max_by_coldkey:
-                    bt.logging.warning(
-                        f"[handshake] Skipping uid={uid} due MAX_MINERS_PER_COLDKEY={max_by_coldkey} (post-handshake)"
-                    )
+                    bt.logging.warning(f"[handshake] Skipping uid={uid} due MAX_MINERS_PER_COLDKEY={max_by_coldkey} (post-handshake)")
                     existing = self.agents_dict.get(uid)
                     if isinstance(existing, AgentInfo):
                         try:
@@ -678,9 +763,7 @@ class ValidatorRoundStartMixin:
                         self.reused_from_agent_run_id_by_uid[uid] = ref_run_id
                         self.reused_stats_by_uid[uid] = {k: v for k, v in stored.items() if k != "agent_run_id"}
                         self.miners_reused_this_round.add(uid)
-                        bt.logging.info(
-                            f"[reuse] Miner {uid}: same (repo, commit) as previous run {ref_run_id}; reusing results (no re-eval)."
-                        )
+                        bt.logging.info(f"[reuse] Miner {uid}: same (repo, commit) as previous run {ref_run_id}; reusing results (no re-eval).")
                         try:
                             existing.agent_name = agent_info.agent_name
                             existing.agent_image = agent_info.agent_image
@@ -737,9 +820,7 @@ class ValidatorRoundStartMixin:
                     self.reused_from_agent_run_id_by_uid[uid] = ref_run_id
                     self.reused_stats_by_uid[uid] = {k: v for k, v in stored.items() if k != "agent_run_id"}
                     self.miners_reused_this_round.add(uid)
-                    bt.logging.info(
-                        f"[reuse] Miner {uid}: same (repo, commit) as previous run {ref_run_id}; reusing results (no re-eval)."
-                    )
+                    bt.logging.info(f"[reuse] Miner {uid}: same (repo, commit) as previous run {ref_run_id}; reusing results (no re-eval).")
                     self.agents_dict[uid] = agent_info
                     unchanged_commit_skip_count += 1
                     continue
@@ -766,6 +847,62 @@ class ValidatorRoundStartMixin:
             f"unchanged_commit={unchanged_commit_skip_count} "
             f"new_agents={new_agents_count}"
         )
+        bt.logging.info(
+            "[handshake] transport/payload summary "
+            f"valid_payloads={valid_handshake_payload_count}/{len(candidate_uids)} "
+            f"status_408_timeout={transport_status_counts.get('408', 0)} "
+            f"status_503={transport_status_counts.get('503', 0)} "
+            f"status_504={transport_status_counts.get('504', 0)} "
+            f"missing_name={missing_name_count} "
+            f"missing_github={missing_github_count} "
+            f"missing_both={missing_both_count} "
+            f"missing_due_transport={missing_fields_due_transport_count} "
+            f"missing_on_200={missing_fields_on_200_count}"
+        )
+
+        # Persist detailed handshake diagnostics for post-mortem analysis.
+        try:
+            season_number = int(getattr(getattr(self, "season_manager", None), "season_number", 0) or 0)
+        except Exception:
+            season_number = 0
+        try:
+            round_number = int(getattr(getattr(self, "round_manager", None), "round_number", 0) or 0)
+        except Exception:
+            round_number = 0
+        round_id = str(getattr(self, "current_round_id", "") or f"round_{round_number}")
+        season_label = str(season_number if season_number > 0 else "unknown")
+        round_label = str(round_number if round_number > 0 else "unknown")
+        handshake_dir = Path("data") / f"season_{season_label}" / f"round_{round_label}" / "handshake"
+        handshake_dir.mkdir(parents=True, exist_ok=True)
+        handshake_report_path = handshake_dir / f"{round_id}_handshake_diagnostics.json"
+        handshake_payload = {
+            "round_id": round_id,
+            "season_number": season_number,
+            "round_number": round_number,
+            "generated_at_unix": time.time(),
+            "summary": {
+                "total_candidates": len(candidate_uids),
+                "responses_objects_received": responded_count,
+                "no_response": response_missing_count,
+                "valid_payloads": valid_handshake_payload_count,
+                "missing_name": missing_name_count,
+                "missing_github": missing_github_count,
+                "missing_both": missing_both_count,
+                "missing_due_transport": missing_fields_due_transport_count,
+                "missing_on_200": missing_fields_on_200_count,
+                "status_counts": dict(transport_status_counts),
+                "status_message_top10": transport_status_message_counts.most_common(10),
+            },
+            "issues": handshake_issue_rows,
+        }
+        try:
+            handshake_report_path.write_text(
+                json.dumps(handshake_payload, ensure_ascii=True, indent=2),
+                encoding="utf-8",
+            )
+            bt.logging.info(f"[handshake] diagnostics saved: {handshake_report_path}")
+        except Exception as exc:
+            bt.logging.warning(f"[handshake] failed to save diagnostics JSON: {exc}")
 
         # Only miners that responded this round should be treated as "active"
         # for IWAP registration and per-round reporting. Keeping this bounded

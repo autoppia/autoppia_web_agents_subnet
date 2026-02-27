@@ -15,7 +15,7 @@ from autoppia_web_agents_subnet.bittensor_config import config
 from autoppia_web_agents_subnet.validator.config import (
     ROUND_SIZE_EPOCHS,
 )
-from autoppia_web_agents_subnet.validator.round_manager import RoundManager
+from autoppia_web_agents_subnet.validator.round_manager import RoundManager, RoundPhase
 from autoppia_web_agents_subnet.validator.season_manager import SeasonManager
 from autoppia_web_agents_subnet.validator.round_start.mixin import ValidatorRoundStartMixin
 from autoppia_web_agents_subnet.validator.round_start.types import RoundStartResult
@@ -266,9 +266,7 @@ class Validator(
                     "saved_at_utc": now,
                     "round_summary": {
                         "winner": round_summary.get("winner", {}),
-                        "miner_scores": {str(k): float(v) for k, v in round_summary.get("miner_scores", {}).items()}
-                        if isinstance(round_summary.get("miner_scores", {}), dict)
-                        else {},
+                        "miner_scores": {str(k): float(v) for k, v in round_summary.get("miner_scores", {}).items()} if isinstance(round_summary.get("miner_scores", {}), dict) else {},
                         "decision": round_summary.get("decision", {}),
                     },
                     "season_summary": {
@@ -525,6 +523,40 @@ class Validator(
 
         # 1) Handshake & agent discovery
         await self._perform_handshake()
+
+        # Late-start guard: if handshake consumed too much time and the round is
+        # already at/near end, skip participation entirely for this round.
+        try:
+            current_block_after_handshake = self.block
+            target_block = int(getattr(self.round_manager, "target_block", 0) or 0)
+            remaining_blocks = max(target_block - current_block_after_handshake, 0)
+            min_blocks_to_participate = int(
+                getattr(
+                    self.round_manager,
+                    "SKIP_ROUND_MIN_BLOCKS_AFTER_HANDSHAKE",
+                    10,
+                )
+                or 10
+            )
+            if target_block > 0 and remaining_blocks < min_blocks_to_participate:
+                bt.logging.warning(
+                    "Skipping round participation after handshake: "
+                    f"remaining_blocks={remaining_blocks} < min_required={min_blocks_to_participate} "
+                    f"(current_block={current_block_after_handshake}, target_block={target_block})"
+                )
+                self.round_manager.enter_phase(
+                    RoundPhase.COMPLETE,
+                    block=current_block_after_handshake,
+                    note="Round skipped (late start after handshake)",
+                    force=True,
+                )
+                await self._wait_until_specific_block(
+                    target_block=target_block,
+                    target_description="round boundary block",
+                )
+                return
+        except Exception as exc:
+            bt.logging.warning(f"Late-start guard check failed (continuing): {exc}")
 
         # Initialize IWAP round after handshake (we now know how many miners participate)
         current_block = self.block

@@ -14,7 +14,6 @@ import bittensor as bt
 from autoppia_web_agents_subnet.validator import config as validator_config
 from autoppia_web_agents_subnet.platform import models as iwa_models
 from autoppia_web_agents_subnet.platform import client as iwa_main
-from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from .iwa_core import (
     log_iwap_phase,
     build_validator_identity,
@@ -66,6 +65,31 @@ def _parse_round_mismatch(exc: httpx.HTTPStatusError) -> tuple[int | None, int |
             got = None
         return expected, got
     return None
+
+
+def _extract_error_detail(exc: httpx.HTTPStatusError) -> str:
+    response = exc.response
+    if response is None:
+        return ""
+    try:
+        payload = response.json()
+    except Exception:
+        try:
+            return str(response.text or "")
+        except Exception:
+            return ""
+
+    if isinstance(payload, dict):
+        detail = payload.get("detail", payload)
+    else:
+        detail = payload
+
+    if isinstance(detail, str):
+        return detail
+    try:
+        return json.dumps(detail)
+    except Exception:
+        return str(detail)
 
 
 def _extract_round_numbers_from_round_id(round_id: Optional[str]) -> tuple[Optional[int], Optional[int]]:
@@ -263,9 +287,7 @@ def _persist_round_summary_file(
     except Exception:
         from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
-        ColoredLogger.warning(
-            f"IWAP | Could not persist summary_round file for season={season_number} round={round_number}"
-        )
+        ColoredLogger.warning(f"IWAP | Could not persist summary_round file for season={season_number} round={round_number}")
 
 
 async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
@@ -377,6 +399,7 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
         metadata=round_metadata,
     )
 
+    start_round_ok = False
     try:
         resp = await ctx.iwap_client.start_round(
             validator_identity=validator_identity,
@@ -386,14 +409,23 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
         vrid = _extract_validator_round_id(resp)
         if vrid != ctx.current_round_id:
             ctx.current_round_id = vrid
+        start_round_ok = True
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code if exc.response is not None else None
         if status in (409, 500):
-            log_iwap_phase(
-                "Phase 1",
-                f"start_round returned {status} (already exists); continuing idempotently",
-                level="warning",
-            )
+            detail = _extract_error_detail(exc).lower()
+            season_conflict = "cannot start season" in detail and "still active" in detail
+            if season_conflict:
+                log_iwap_phase(
+                    "Phase 1",
+                    "start_round rejected due to active previous season; disabling IWAP sync for this round",
+                    level="error",
+                    exc_info=False,
+                )
+                ctx._iwap_offline_mode = True
+                return
+            log_iwap_phase("Phase 1", f"start_round returned {status} (already exists); continuing idempotently", level="warning")
+            start_round_ok = True
         else:
             mismatch = _parse_round_mismatch(exc)
             if mismatch is not None:
@@ -403,6 +435,8 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                     (f"start_round rejected due to round_number mismatch (expected={expected}, got={got}); continuing without IWAP sync"),
                     level="error",
                 )
+                ctx._iwap_offline_mode = True
+                return
             else:
                 log_iwap_phase(
                     "Phase 1",
@@ -410,18 +444,26 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                     level="error",
                     exc_info=False,
                 )
+                ctx._iwap_offline_mode = True
+                return
     except Exception as exc:  # noqa: BLE001
         log_iwap_phase(
             "Phase 1",
             f"start_round failed for round_id={ctx.current_round_id}: {exc}; continuing without IWAP sync",
             level="error",
         )
+        ctx._iwap_offline_mode = True
+        return
     else:
         log_iwap_phase(
             "Phase 1",
             f"start_round completed for round_id={ctx.current_round_id}",
             level="success",
         )
+
+    if not start_round_ok:
+        ctx._iwap_offline_mode = True
+        return
 
     # Build IWAP tasks from season tasks
     # Get season tasks from the validator (they should be available after get_round_tasks was called)
@@ -610,9 +652,7 @@ async def register_participating_miners_in_iwap(ctx) -> None:
 
         try:
             if is_reused and reused_from_id:
-                start_agent_run_message = (
-                    f"Calling start_agent_run for miner_uid={miner_uid}, agent_run_id={agent_run_id} (reused from {reused_from_id})"
-                )
+                start_agent_run_message = f"Calling start_agent_run for miner_uid={miner_uid}, agent_run_id={agent_run_id} (reused from {reused_from_id})"
             else:
                 start_agent_run_message = f"Calling start_agent_run for miner_uid={miner_uid}, agent_run_id={agent_run_id}"
             log_iwap_phase("Phase 3", start_agent_run_message)
@@ -663,9 +703,7 @@ async def register_participating_miners_in_iwap(ctx) -> None:
             continue
         else:
             if is_reused and reused_from_id:
-                start_agent_run_success = (
-                    f"start_agent_run completed for miner_uid={miner_uid} (reused from {reused_from_id})"
-                )
+                start_agent_run_success = f"start_agent_run completed for miner_uid={miner_uid} (reused from {reused_from_id})"
             else:
                 start_agent_run_success = f"start_agent_run completed for miner_uid={miner_uid}, agent_run_id={agent_run_id}"
             log_iwap_phase("Phase 3", start_agent_run_success, level="success")
@@ -1115,14 +1153,16 @@ async def finish_round_flow(
         for p in _downloaded_payloads_raw:
             if not isinstance(p, dict):
                 continue
-            payloads.append({
-                "validator_uid": p.get("uid"),
-                "validator_hotkey": p.get("validator_hotkey") or p.get("hk"),
-                "cid": p.get("cid"),
-                "evaluation_pre_consensus": p.get("local_evaluation"),
-                "evaluation_post_consensus": post_consensus_evaluation,
-                "payload": p,
-            })
+            payloads.append(
+                {
+                    "validator_uid": p.get("uid"),
+                    "validator_hotkey": p.get("validator_hotkey") or p.get("hk"),
+                    "cid": p.get("cid"),
+                    "evaluation_pre_consensus": p.get("local_evaluation"),
+                    "evaluation_post_consensus": post_consensus_evaluation,
+                    "payload": p,
+                }
+            )
         ipfs_downloaded = {
             "timestamp": ended_at,
             "validators_participated": len(payloads),
@@ -1152,13 +1192,20 @@ async def finish_round_flow(
     handshake_results_raw = getattr(ctx, "handshake_results", None) or {}
     handshake_results = {str(uid): status for uid, status in handshake_results_raw.items()}
 
+    pre_consensus_summary = local_evaluation.get("summary") if isinstance(local_evaluation, dict) else None
+    post_consensus_summary = post_consensus_evaluation.get("summary") if isinstance(post_consensus_evaluation, dict) else None
+    # With a single validator (or when no post-consensus aggregation exists),
+    # post-consensus should be equivalent to pre-consensus for persistence/UI.
+    if post_consensus_summary is None and pre_consensus_summary is not None:
+        post_consensus_summary = pre_consensus_summary
+
     validator_summary = {
         "round": round_metadata.to_payload() if hasattr(round_metadata, "to_payload") else (round_metadata if isinstance(round_metadata, dict) else None),
         "s3_logs": s3_logs,
         "ipfs_uploaded": ipfs_uploaded,
         "ipfs_downloaded": ipfs_downloaded,
-        "evaluation_pre_consensus": local_evaluation.get("summary") if isinstance(local_evaluation, dict) else None,
-        "evaluation_post_consensus": post_consensus_evaluation.get("summary") if isinstance(post_consensus_evaluation, dict) else None,
+        "evaluation_pre_consensus": pre_consensus_summary,
+        "evaluation_post_consensus": post_consensus_summary,
         "handshake_results": handshake_results,
     }
 
@@ -1180,8 +1227,8 @@ async def finish_round_flow(
         ctx=ctx,
         season_number=int(season_number_for_summary or 0),
         round_number=int(round_number_for_summary or 0),
-        pre_consensus=local_evaluation.get("summary") if isinstance(local_evaluation, dict) else None,
-        post_consensus=post_consensus_evaluation.get("summary") if isinstance(post_consensus_evaluation, dict) else None,
+        pre_consensus=pre_consensus_summary,
+        post_consensus=post_consensus_summary,
         ipfs_uploaded=ipfs_uploaded,
         ipfs_downloaded=ipfs_downloaded,
         s3_logs=s3_logs,

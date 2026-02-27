@@ -3,7 +3,6 @@
 from __future__ import annotations
 import asyncio
 import inspect
-from typing import Optional
 
 from autoppia_web_agents_subnet.validator.evaluation.stateful_cua_eval import evaluate_with_stateful_cua
 from autoppia_web_agents_subnet.validator.evaluation.rewards import calculate_reward_for_task
@@ -569,11 +568,7 @@ class ValidatorEvaluationMixin:
                                 stop_for_cost_limit_streak = True
 
                         # zero_reason para IWAP cuando hay timeout (backend usa zero_reason, no metadata.timeout)
-                        zero_reason_task = (
-                            "task_timeout"
-                            if (score_f <= 0.0 and exec_time_s >= task_timeout_sec)
-                            else None
-                        )
+                        zero_reason_task = "task_timeout" if (score_f <= 0.0 and exec_time_s >= task_timeout_sec) else None
                         # Store evaluation data for batch submission
                         batch_eval_data.append(
                             {
@@ -593,14 +588,20 @@ class ValidatorEvaluationMixin:
                     # Submit batch evaluations to IWAP
                     if batch_eval_data:
                         try:
-                            await self._submit_batch_evaluations_to_iwap(
+                            submitted = await self._submit_batch_evaluations_to_iwap(
                                 agent_uid=agent.uid,
                                 batch_eval_data=batch_eval_data,
                             )
-                            ColoredLogger.info(
-                                f"✅ Submitted {len(batch_eval_data)} evaluations to IWAP for agent {agent.uid}",
-                                ColoredLogger.GREEN,
-                            )
+                            if submitted:
+                                ColoredLogger.info(
+                                    f"✅ Submitted {len(batch_eval_data)} evaluations to IWAP for agent {agent.uid}",
+                                    ColoredLogger.GREEN,
+                                )
+                            else:
+                                ColoredLogger.warning(
+                                    f"IWAP submission skipped for agent {agent.uid}; evaluations kept local only",
+                                    ColoredLogger.YELLOW,
+                                )
                         except Exception as e:
                             ColoredLogger.error(
                                 f"Failed to submit batch evaluations to IWAP for agent {agent.uid}: {e}",
@@ -630,10 +631,7 @@ class ValidatorEvaluationMixin:
                 avg_reward = (sum(rewards) / float(total_tasks)) if total_tasks > 0 else 0.0
                 if avg_reward <= 0.0:
                     # All evaluated tasks failed: distinguish timeout vs other failure
-                    if eval_details and all(
-                        score <= 0.0 and exec_time >= task_timeout_sec
-                        for score, exec_time in eval_details
-                    ):
+                    if eval_details and all(score <= 0.0 and exec_time >= task_timeout_sec for score, exec_time in eval_details):
                         zero_reason = "task_timeout"
                     else:
                         zero_reason = "all_tasks_failed"
@@ -650,7 +648,7 @@ class ValidatorEvaluationMixin:
         *,
         agent_uid: int,
         batch_eval_data: list,
-    ) -> None:
+    ) -> bool:
         """
         Submit a batch of evaluations to IWAP for a single agent.
 
@@ -669,11 +667,15 @@ class ValidatorEvaluationMixin:
         """
         if not hasattr(self, "current_round_id") or not self.current_round_id:
             ColoredLogger.warning("No current round ID, skipping IWAP submission", ColoredLogger.YELLOW)
-            return
+            return False
+
+        if getattr(self, "_iwap_offline_mode", False):
+            ColoredLogger.warning("IWAP offline mode enabled, skipping IWAP submission", ColoredLogger.YELLOW)
+            return False
 
         if not hasattr(self, "current_agent_runs") or agent_uid not in self.current_agent_runs:
             ColoredLogger.warning(f"No agent run found for agent {agent_uid}, skipping IWAP submission", ColoredLogger.YELLOW)
-            return
+            return False
 
         agent_run = self.current_agent_runs[agent_uid]
 
@@ -915,7 +917,7 @@ class ValidatorEvaluationMixin:
 
         if not evaluations_batch:
             ColoredLogger.warning("No evaluations to submit in batch", ColoredLogger.YELLOW)
-            return
+            return False
 
         # Submit batch to IWAP
         if hasattr(self, "iwap_client") and self.iwap_client:
@@ -963,6 +965,9 @@ class ValidatorEvaluationMixin:
                         f"GIF upload summary for agent {agent_uid}: uploaded={uploaded} skipped={skipped} total={len(pending_gif_uploads)}",
                         ColoredLogger.CYAN,
                     )
+                return created > 0
             except Exception as e:
                 ColoredLogger.error(f"Failed to submit batch: {e}", ColoredLogger.RED)
                 raise
+
+        return False
