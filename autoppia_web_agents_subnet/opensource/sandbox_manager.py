@@ -48,6 +48,7 @@ _PROVIDER_TO_API_KEY_ENV = {
     "chutes": "CHUTES_API_KEY",
     "anthropic": "ANTHROPIC_API_KEY",
 }
+_DEFAULT_ALLOWED_GATEWAY_PROVIDERS = {"openai", "chutes"}
 
 
 def _fingerprint_ctx(ctx_dir: str) -> str:
@@ -501,7 +502,7 @@ class SandboxManager:
         allowed = _csv_env("GATEWAY_ALLOWED_PROVIDERS")
         if allowed:
             return allowed
-        return set(_PROVIDER_TO_API_KEY_ENV.keys())
+        return set(_DEFAULT_ALLOWED_GATEWAY_PROVIDERS)
 
     def _validate_gateway_provider_keys(self) -> None:
         allowed_providers = self._get_allowed_gateway_providers()
