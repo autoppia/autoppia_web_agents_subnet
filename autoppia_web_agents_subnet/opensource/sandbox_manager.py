@@ -46,6 +46,7 @@ from autoppia_web_agents_subnet.validator.config import (
 _PROVIDER_TO_API_KEY_ENV = {
     "openai": "OPENAI_API_KEY",
     "chutes": "CHUTES_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
 }
 
 
@@ -325,14 +326,17 @@ class SandboxManager:
             "GATEWAY_ALLOWED_PROVIDERS",
             "OPENAI_ALLOWED_MODELS",
             "CHUTES_ALLOWED_MODELS",
+            "ANTHROPIC_ALLOWED_MODELS",
             "OPENAI_ALLOWED_PATHS",
             "CHUTES_ALLOWED_PATHS",
+            "ANTHROPIC_ALLOWED_PATHS",
             "GATEWAY_STRICT_PRICING",
             "CHUTES_PRICING_TTL_SECONDS",
             "CHUTES_PRICING_TIMEOUT_SECONDS",
             "GATEWAY_FORCE_JSON_RESPONSE_FORMAT",
             "GATEWAY_OPENAI_MAX_CONCURRENCY",
             "GATEWAY_CHUTES_MAX_CONCURRENCY",
+            "GATEWAY_ANTHROPIC_MAX_CONCURRENCY",
             "GATEWAY_UPSTREAM_MAX_RETRIES",
             "GATEWAY_UPSTREAM_RETRY_BASE_DELAY_S",
         ):
@@ -340,7 +344,7 @@ class SandboxManager:
             if val is not None and str(val).strip() != "":
                 env[key] = str(val)
         # Propagate API keys to the gateway
-        for key in ("OPENAI_API_KEY", "CHUTES_API_KEY"):
+        for key in ("OPENAI_API_KEY", "CHUTES_API_KEY", "ANTHROPIC_API_KEY"):
             val = os.getenv(key)
             if val:
                 env[key] = val
@@ -452,6 +456,9 @@ class SandboxManager:
         elif provider_s == "chutes":
             url = "https://llm.chutes.ai/v1/models"
             key_env = "CHUTES_API_KEY"
+        elif provider_s == "anthropic":
+            url = "https://api.anthropic.com/v1/models"
+            key_env = "ANTHROPIC_API_KEY"
         else:
             return False, "unknown provider"
 

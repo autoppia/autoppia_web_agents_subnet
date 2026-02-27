@@ -16,18 +16,22 @@ from config import (
     COST_LIMIT_PER_TASK,
     OPENAI_API_KEY,
     CHUTES_API_KEY,
+    ANTHROPIC_API_KEY,
     SANDBOX_GATEWAY_ADMIN_TOKEN,
     GATEWAY_ALLOWED_PROVIDERS,
     OPENAI_ALLOWED_MODELS,
     CHUTES_ALLOWED_MODELS,
+    ANTHROPIC_ALLOWED_MODELS,
     OPENAI_ALLOWED_PATHS,
     CHUTES_ALLOWED_PATHS,
+    ANTHROPIC_ALLOWED_PATHS,
     GATEWAY_STRICT_PRICING,
     CHUTES_PRICING_TTL_SECONDS,
     CHUTES_PRICING_TIMEOUT_SECONDS,
     GATEWAY_FORCE_JSON_RESPONSE_FORMAT,
     GATEWAY_OPENAI_MAX_CONCURRENCY,
     GATEWAY_CHUTES_MAX_CONCURRENCY,
+    GATEWAY_ANTHROPIC_MAX_CONCURRENCY,
     GATEWAY_UPSTREAM_MAX_RETRIES,
     GATEWAY_UPSTREAM_RETRY_BASE_DELAY_S,
 )
@@ -67,6 +71,7 @@ class LLMGateway:
         self._provider_semaphores = {
             "openai": asyncio.Semaphore(max(1, int(GATEWAY_OPENAI_MAX_CONCURRENCY))),
             "chutes": asyncio.Semaphore(max(1, int(GATEWAY_CHUTES_MAX_CONCURRENCY))),
+            "anthropic": asyncio.Semaphore(max(1, int(GATEWAY_ANTHROPIC_MAX_CONCURRENCY))),
         }
 
     def _maybe_force_json_response_format(self, provider: str, suffix: str, body: dict) -> tuple[dict, bool]:
@@ -78,7 +83,7 @@ class LLMGateway:
         """
         if not GATEWAY_FORCE_JSON_RESPONSE_FORMAT:
             return body, False
-        if provider not in {"openai", "chutes"}:
+        if provider not in {"openai", "chutes", "anthropic"}:
             return body, False
         # Only for chat completions. Responses API is left untouched.
         if suffix != "/v1/chat/completions":
@@ -116,7 +121,12 @@ class LLMGateway:
         return self.usage_per_task.get(task_id, LLMUsage())
 
     def _is_allowed_path(self, provider: str, suffix: str) -> bool:
-        allowed = OPENAI_ALLOWED_PATHS if provider == "openai" else CHUTES_ALLOWED_PATHS if provider == "chutes" else set()
+        allowed = (
+            OPENAI_ALLOWED_PATHS if provider == "openai"
+            else CHUTES_ALLOWED_PATHS if provider == "chutes"
+            else ANTHROPIC_ALLOWED_PATHS if provider == "anthropic"
+            else set()
+        )
         if not allowed:
             return True
         for p in allowed:
@@ -125,7 +135,12 @@ class LLMGateway:
         return False
 
     def _is_allowed_model(self, provider: str, model: str) -> bool:
-        allowed = OPENAI_ALLOWED_MODELS if provider == "openai" else CHUTES_ALLOWED_MODELS if provider == "chutes" else set()
+        allowed = (
+            OPENAI_ALLOWED_MODELS if provider == "openai"
+            else CHUTES_ALLOWED_MODELS if provider == "chutes"
+            else ANTHROPIC_ALLOWED_MODELS if provider == "anthropic"
+            else set()
+        )
         if not allowed:
             return True
         return model in allowed
@@ -317,7 +332,10 @@ class LLMGateway:
         self.usage_per_task = {task_id: LLMUsage() for task_id in task_ids}
 
     def is_cost_exceeded(self, task_id: str) -> bool:
-        return self.usage_per_task[task_id].total_cost >= COST_LIMIT_PER_TASK
+        usage = self.usage_per_task.get(task_id)
+        if usage is None:
+            return False
+        return usage.total_cost >= COST_LIMIT_PER_TASK
 
 
 def _looks_like_unsupported_response_format(resp: httpx.Response) -> bool:
@@ -480,6 +498,9 @@ async def proxy_request(request: Request, path: str):
 
         if provider == "chutes" and CHUTES_API_KEY:
             headers["Authorization"] = f"Bearer {CHUTES_API_KEY}"
+
+        if provider == "anthropic" and ANTHROPIC_API_KEY:
+            headers["Authorization"] = f"Bearer {ANTHROPIC_API_KEY}"
 
         body = await request.body()
         parsed_body = None
