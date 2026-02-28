@@ -22,7 +22,7 @@ from abc import ABC, abstractmethod
 
 # Sync calls set weights and also resyncs the metagraph.
 from autoppia_web_agents_subnet.base.utils.config import check_config, add_args, config
-from autoppia_web_agents_subnet.base.utils.misc import ttl_get_block
+from autoppia_web_agents_subnet.base.utils.misc import _get_current_block_serialized, ttl_get_block
 from autoppia_web_agents_subnet.utils.logging_filter import apply_subnet_module_logging_filters
 import time
 import traceback
@@ -58,6 +58,12 @@ class BaseNeuron(ABC):
 
     @property
     def block(self):
+        return self.get_current_block()
+
+    def get_current_block(self, *, fresh: bool = False) -> int:
+        """Thread-safe block read. `fresh=True` bypasses TTL cache."""
+        if fresh:
+            return _get_current_block_serialized(self)
         return ttl_get_block(self)
 
     def __init__(self, config=None):

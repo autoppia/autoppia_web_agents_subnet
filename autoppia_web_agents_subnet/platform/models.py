@@ -304,6 +304,8 @@ class FinishRoundIWAP:
     ipfs_uploaded: Optional[Dict[str, Any]] = None
     ipfs_downloaded: Optional[Dict[str, Any]] = None
     s3_logs: Optional[Dict[str, Any]] = None
+    validator_state: Optional[Dict[str, Any]] = None
+    validator_iwap_prev_round_json: Optional[Dict[str, Any]] = None
     # Deprecated fields (kept for backward compatibility but no longer populated)
     winners: List[RoundWinnerIWAP] = field(default_factory=list)
     winner_scores: List[float] = field(default_factory=list)
@@ -320,18 +322,22 @@ class FinishRoundIWAP:
         # Add new fields if present
         if self.round_metadata:
             payload["round"] = self.round_metadata.to_payload()
-        if self.local_evaluation:
+        if self.local_evaluation is not None:
             payload["local_evaluation"] = self.local_evaluation
-        if self.post_consensus_evaluation:
+        if self.post_consensus_evaluation is not None:
             payload["post_consensus_evaluation"] = self.post_consensus_evaluation
-        if self.validator_summary:
+        if self.validator_summary is not None:
             payload["validator_summary"] = self.validator_summary
-        if self.ipfs_uploaded:
+        if self.ipfs_uploaded is not None:
             payload["ipfs_uploaded"] = self.ipfs_uploaded
-        if self.ipfs_downloaded:
+        if self.ipfs_downloaded is not None:
             payload["ipfs_downloaded"] = self.ipfs_downloaded
-        if self.s3_logs:
+        if self.s3_logs is not None:
             payload["s3_logs"] = self.s3_logs
+        if self.validator_state is not None:
+            payload["validator_state"] = self.validator_state
+        if self.validator_iwap_prev_round_json is not None:
+            payload["validator_iwap_prev_round_json"] = self.validator_iwap_prev_round_json
 
         # Deprecated fields (only included if populated for backward compatibility)
         if self.winners:

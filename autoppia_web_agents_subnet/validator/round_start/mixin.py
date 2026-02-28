@@ -709,14 +709,21 @@ class ValidatorRoundStartMixin:
                     except Exception:
                         current_season = 0
                     last_season = getattr(existing, "last_evaluated_season", None)
+                    last_round = getattr(existing, "last_evaluated_round", None)
                     try:
                         last_season_i = int(last_season) if last_season is not None else None
                     except Exception:
                         last_season_i = None
+                    # IMPORTANT: do not reuse unless this miner has been actually evaluated before.
+                    # A previous round may have captured handshake metadata and then been skipped
+                    # (late start), leaving existing commit info without a real evaluation.
+                    has_prior_evaluation = bool(getattr(existing, "evaluated", False))
+                    if not has_prior_evaluation:
+                        has_prior_evaluation = (last_season_i is not None) or isinstance(last_round, int)
                     if current_season and last_season_i is not None and last_season_i != int(current_season):
                         # New season -> tasks changed, force re-evaluation even if commit unchanged.
                         pass
-                    else:
+                    elif has_prior_evaluation:
                         # Keep score/evaluated, but allow display metadata to update.
                         # Use _evaluated_commits_by_miner so reused_from points to the FIRST evaluated run, not the previous round (which may be reused).
                         evaluated_map = getattr(self, "_evaluated_commits_by_miner", None) or {}
@@ -748,6 +755,8 @@ class ValidatorRoundStartMixin:
                         unchanged_commit_skip_count += 1
                         self.miners_reused_this_round.add(uid)
                         continue
+                    else:
+                        bt.logging.debug(f"[reuse] Miner {uid}: unchanged commit but no prior evaluation metadata; enqueueing for evaluation.")
 
                 # Already evaluated this (repo, commit) in a past round: do not re-evaluate.
                 if normalized_repo and commit_sha:

@@ -83,14 +83,9 @@ class ValidatorPlatformMixin:
 
         # Calculate season and round within season
         season_number = iwa_main.compute_season_number(current_block)
-        round_number_in_season = iwa_main.compute_round_number_in_season(
-            current_block, round_length
-        )
+        round_number_in_season = iwa_main.compute_round_number_in_season(current_block, round_length)
 
-        return iwa_main.generate_validator_round_id(
-            season_number=season_number,
-            round_number_in_season=round_number_in_season
-        )
+        return iwa_main.generate_validator_round_id(season_number=season_number, round_number_in_season=round_number_in_season)
 
     def _build_iwap_auth_headers(self) -> Dict[str, str]:
         hotkey = getattr(self.wallet.hotkey, "ss58_address", None)
@@ -133,11 +128,11 @@ class ValidatorPlatformMixin:
 
     async def _iwap_start_round(self, *, current_block: int, n_tasks: int) -> None:
         await _utils_start_round_flow(self, current_block=current_block, n_tasks=n_tasks)
-    
+
     async def _iwap_register_miners(self) -> None:
         """
         Register all participating miners in IWAP dashboard after handshake.
-        
+
         Creates records for each miner that responded to handshake:
         - validator_round_miners (miner identity and snapshot)
         - miner_evaluation_runs (agent run for this round)
@@ -305,10 +300,26 @@ class ValidatorPlatformMixin:
             self._evaluated_commits_by_miner = {}
         existing = (self._evaluated_commits_by_miner.get(uid) or {}).get(key)
         incoming = {"agent_run_id": agent_run_id, **(stats or {})}
+        # Keep explicit first/last evaluated round metadata per commit key.
+        season_val = incoming.get("evaluated_season")
+        round_val = incoming.get("evaluated_round")
+        if season_val is not None and "last_evaluated_season" not in incoming:
+            incoming["last_evaluated_season"] = season_val
+        if round_val is not None and "last_evaluated_round" not in incoming:
+            incoming["last_evaluated_round"] = round_val
+        if season_val is not None and "first_evaluated_season" not in incoming:
+            incoming["first_evaluated_season"] = season_val
+        if round_val is not None and "first_evaluated_round" not in incoming:
+            incoming["first_evaluated_round"] = round_val
 
         # Do not downgrade a good reusable source with an empty/incomplete run.
         # Keep first meaningful evaluated run as anchor for reuse.
         if isinstance(existing, dict):
+            # Preserve first evaluation markers forever for this commit.
+            if existing.get("first_evaluated_season") is not None:
+                incoming["first_evaluated_season"] = existing.get("first_evaluated_season")
+            if existing.get("first_evaluated_round") is not None:
+                incoming["first_evaluated_round"] = existing.get("first_evaluated_round")
             try:
                 existing_total = int(existing.get("total_tasks", 0) or 0)
             except Exception:

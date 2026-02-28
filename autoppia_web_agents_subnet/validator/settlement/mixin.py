@@ -173,7 +173,7 @@ class ValidatorSettlementMixin:
             if time.monotonic() > deadline:
                 raise TimeoutError(f"Timed out waiting for {target_description} at block {target_block}; last observed block={current_block}")
             try:
-                current_block = self.subtensor.get_current_block()
+                current_block = self.get_current_block(fresh=True)
                 consecutive_errors = 0
                 if current_block >= target_block:
                     ColoredLogger.success(

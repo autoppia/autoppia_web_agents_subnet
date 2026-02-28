@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
+import re
 
 import bittensor as bt
 from bittensor import AsyncSubtensor  # type: ignore
@@ -31,6 +32,38 @@ def _safe_season_number(self, current_block: int) -> int:
         return int(compute_season_number(current_block))
     except Exception:
         return 0
+
+
+def _resolve_expected_season_round(self, current_block: int) -> tuple[int, int]:
+    """
+    Resolve the season/round that is being settled.
+
+    Priority:
+    1) `current_round_id` (authoritative for the active round lifecycle)
+    2) `_current_round_number` + season from block
+    3) block-derived season/round fallback
+    """
+    round_id = str(getattr(self, "current_round_id", "") or "")
+    if round_id:
+        m = re.match(r"^validator_round_(\d+)_(\d+)_", round_id)
+        if m:
+            try:
+                return int(m.group(1)), int(m.group(2))
+            except Exception:
+                pass
+
+    season_number = _safe_season_number(self, current_block)
+    try:
+        current_round = int(getattr(self, "_current_round_number", 0) or 0)
+    except Exception:
+        current_round = 0
+    if current_round > 0:
+        return int(season_number), int(current_round)
+
+    try:
+        return int(season_number), int(self.round_manager.calculate_round(current_block))
+    except Exception:
+        return int(season_number), 0
 
 
 def _stake_to_float(stake_val: Any) -> float:
@@ -90,17 +123,16 @@ async def publish_round_snapshot(
     self.round_manager.enter_phase(
         RoundPhase.CONSENSUS,
         block=self.block,
-        note=f"Publishing consensus snapshot",
+        note="Publishing consensus snapshot",
     )
 
     current_block = self.block
     consensus_version = CONSENSUS_VERSION
-    season_number = _safe_season_number(self, current_block)
-    round_number = self.round_manager.calculate_round(current_block)
+    season_number, round_number = _resolve_expected_season_round(self, current_block)
     boundaries = self.round_manager.get_current_boundaries()
     start_epoch = int(boundaries["round_start_epoch"])
-    target_epoch = int(boundaries["round_target_epoch"])    
-    
+    target_epoch = int(boundaries["round_target_epoch"])
+
     payload = {
         "v": int(consensus_version),
         "s": int(season_number),
@@ -157,9 +189,7 @@ async def publish_round_snapshot(
     }
 
     try:
-        bt.logging.info(
-            f"📮 CONSENSUS COMMIT START | v={commit_payload['v']} s={commit_payload['s']} r={commit_payload['r']} | cid={commit_payload['c']}"
-        )
+        bt.logging.info(f"📮 CONSENSUS COMMIT START | v={commit_payload['v']} s={commit_payload['s']} r={commit_payload['r']} | cid={commit_payload['c']}")
         ok = await write_plain_commitment_json(
             st,
             wallet=self.wallet,
@@ -168,7 +198,7 @@ async def publish_round_snapshot(
         )
         if ok:
             try:
-                commit_block = self.subtensor.get_current_block()
+                commit_block = self.get_current_block(fresh=True)
             except Exception:
                 commit_block = None
             else:
@@ -194,7 +224,7 @@ async def publish_round_snapshot(
 async def aggregate_scores_from_commitments(
     self,
     *,
-    st: AsyncSubtensor,  
+    st: AsyncSubtensor,
 ) -> tuple[Dict[int, float], Dict[str, Any]]:
     """
     Read all validators' commitments for this round window and compute stake-weighted
@@ -223,21 +253,16 @@ async def aggregate_scores_from_commitments(
 
     current_block = self.block
     consensus_version = CONSENSUS_VERSION
-    season_number = _safe_season_number(self, current_block)
-    round_number = self.round_manager.calculate_round(current_block)
+    season_number, round_number = _resolve_expected_season_round(self, current_block)
 
     # Fetch all plain commitments and select those for this round (v5 with CID)
     try:
         commits = await read_all_plain_commitments(st, netuid=self.config.netuid, block=None)
-        bt.logging.info(
-            consensus_tag(f"Aggregate | Expected round {round_number} | Commitments found: {len(commits or {})}")
-        )
+        bt.logging.info(consensus_tag(f"Aggregate | Expected round {round_number} | Commitments found: {len(commits or {})}"))
         if commits:
             bt.logging.info(consensus_tag(f"Found {len(commits)} validator commitments:"))
             for hk, entry in list(commits.items())[:5]:
-                bt.logging.info(
-                    consensus_tag(f"  - {hk[:12]}... | Round {entry.get('r')} | Phase {entry.get('p')} | CID {str(entry.get('c', 'N/A'))[:24]}...")
-                )
+                bt.logging.info(consensus_tag(f"  - {hk[:12]}... | Round {entry.get('r')} | Phase {entry.get('p')} | CID {str(entry.get('c', 'N/A'))[:24]}..."))
     except Exception as e:
         bt.logging.error(f"❌ Failed to read commitments from blockchain: {e}")
         commits = {}
@@ -288,9 +313,7 @@ async def aggregate_scores_from_commitments(
         if entry_consensus_version != int(consensus_version):
             skipped_legacy_consensus_version += 1
             skipped_legacy_consensus_version_list.append((hk, entry_consensus_version))
-            bt.logging.debug(
-                f"⏭️ Skip {hk[:10]}…: legacy consensus version (has v={entry_consensus_version}, need v={consensus_version})"
-            )
+            bt.logging.debug(f"⏭️ Skip {hk[:10]}…: legacy consensus version (has v={entry_consensus_version}, need v={consensus_version})")
             continue
 
         raw_s = entry.get("s", None)
@@ -304,18 +327,14 @@ async def aggregate_scores_from_commitments(
         if entry_season_number != int(season_number):
             skipped_wrong_season += 1
             skipped_wrong_season_list.append((hk, entry_season_number))
-            bt.logging.debug(
-                f"⏭️ Skip {hk[:10]}…: wrong season (has s={entry_season_number}, need s={season_number})"
-            )
+            bt.logging.debug(f"⏭️ Skip {hk[:10]}…: wrong season (has s={entry_season_number}, need s={season_number})")
             continue
 
         entry_round_number = int(entry.get("r", -1))
         if entry_round_number != round_number:
             skipped_wrong_round += 1
             skipped_wrong_round_list.append((hk, entry_round_number))
-            bt.logging.debug(
-                f"⏭️ Skip {hk[:10]}…: wrong round (has r={entry_round_number}, need r={round_number})"
-            )
+            bt.logging.debug(f"⏭️ Skip {hk[:10]}…: wrong round (has r={entry_round_number}, need r={round_number})")
             continue
 
         cid = entry.get("c")
@@ -331,9 +350,7 @@ async def aggregate_scores_from_commitments(
         if st_val < float(MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO):
             skipped_low_stake += 1
             skipped_low_stake_list.append((hk, st_val))
-            bt.logging.debug(
-                f"⏭️ Skip {hk[:10]}…: low stake ({st_val:.1f}τ < {float(MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO):.1f}τ)"
-            )
+            bt.logging.debug(f"⏭️ Skip {hk[:10]}…: low stake ({st_val:.1f}τ < {float(MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO):.1f}τ)")
             continue
 
         try:
@@ -365,9 +382,7 @@ async def aggregate_scores_from_commitments(
                 skipped_wrong_validator_version += 1
                 pv_str = str(payload_validator_version) if payload_validator_version is not None else "missing"
                 skipped_wrong_validator_version_list.append((hk, pv_str))
-                bt.logging.debug(
-                    f"⏭️ Skip {hk[:10]}…: wrong validator_version (payload has {pv_str}, need {expected_validator_version})"
-                )
+                bt.logging.debug(f"⏭️ Skip {hk[:10]}…: wrong validator_version (payload has {pv_str}, need {expected_validator_version})")
                 continue
 
         scores = payload.get("scores")
@@ -400,9 +415,7 @@ async def aggregate_scores_from_commitments(
         all_stakes_zero = all(stake == 0.0 for _, _, stake in fetched)
         consensus_mode = "simple average (all 0τ)" if all_stakes_zero else "stake-weighted"
 
-        bt.logging.success(
-            f"[CONSENSUS] ✅ Aggregation complete | Validators: {included} | Miners: {len(result)} | Mode: {consensus_mode}"
-        )
+        bt.logging.success(f"[CONSENSUS] ✅ Aggregation complete | Validators: {included} | Miners: {len(result)} | Mode: {consensus_mode}")
         bt.logging.info(
             f"[CONSENSUS] Skipped | "
             f"Legacy consensus version: {skipped_legacy_consensus_version} | "
@@ -445,9 +458,9 @@ async def aggregate_scores_from_commitments(
             top_str = ", ".join(f"UID {uid}={score:.4f}" for uid, score in top_sample)
             bt.logging.info(f"[CONSENSUS] Aggregated scores ({len(result)} miners) top10: {top_str}")
         else:
-            bt.logging.warning(f"[CONSENSUS] ⚠️ No miners aggregated (all scores were <= 0 or no common miners)")
+            bt.logging.warning("[CONSENSUS] ⚠️ No miners aggregated (all scores were <= 0 or no common miners)")
     else:
-        bt.logging.warning(f"[CONSENSUS] ⚠️ No validators included in aggregation")
+        bt.logging.warning("[CONSENSUS] ⚠️ No validators included in aggregation")
         bt.logging.info(
             f"[CONSENSUS] Reasons | "
             f"Legacy consensus version: {skipped_legacy_consensus_version} | "
@@ -461,10 +474,7 @@ async def aggregate_scores_from_commitments(
         )
 
     # Build details structure for reporting/visualization
-    validators_info = [
-        {"hotkey": hk, "uid": hk_to_uid.get(hk, "?"), "stake": stake, "cid": cid}
-        for hk, cid, stake in fetched
-    ]
+    validators_info = [{"hotkey": hk, "uid": hk_to_uid.get(hk, "?"), "stake": stake, "cid": cid} for hk, cid, stake in fetched]
     details = {
         "validators": validators_info,
         "scores_by_validator": scores_by_validator,
