@@ -109,6 +109,30 @@ async def publish_round_snapshot(
         "scores": scores,
     }
 
+    # Store verbose payment recovery data in IPFS payload, not in the on-chain commitment.
+    if bool(PAYMENT_WALLET_SS58) and float(ALPHA_PER_EVAL) > 0:
+        try:
+            sm = getattr(self, "season_manager", None)
+            s_start = int(sm.get_season_start_block(current_block)) if sm else None
+            s_dur = int(getattr(sm, "season_block_length", 0) or 0) if sm else None
+            if not s_dur:
+                from autoppia_web_agents_subnet.validator.config import SEASON_SIZE_EPOCHS
+                bpe = getattr(getattr(self, "round_manager", None), "BLOCKS_PER_EPOCH", 360) or 360
+                s_dur = int(float(SEASON_SIZE_EPOCHS) * int(bpe))
+            netuid = int(getattr(self.config, "netuid", 36) or 36)
+            if s_start is not None and s_dur and s_dur > 0:
+                consumed = get_all_consumed_evals(
+                    payment_address=PAYMENT_WALLET_SS58, netuid=netuid,
+                    season_start_block=s_start, season_duration_blocks=s_dur,
+                    cache_path=PAYMENT_CACHE_PATH,
+                )
+                compact = {k: v for k, v in consumed.items() if v > 0}
+                if compact:
+                    payload["consumed_evals_by_coldkey"] = compact
+                    bt.logging.info(f"[payment] Including {len(compact)} consumed eval entries in IPFS payload")
+        except Exception as exc:
+            bt.logging.warning(f"[payment] Failed to include consumed evals in IPFS payload: {exc}")
+
     try:
         import json
 
@@ -148,30 +172,6 @@ async def publish_round_snapshot(
         "c": str(cid),
         "p": 0,  # phase placeholder for future extensions
     }
-
-    # Include consumed evaluations in on-chain commitment for crash recovery.
-    if bool(PAYMENT_WALLET_SS58) and float(ALPHA_PER_EVAL) > 0:
-        try:
-            sm = getattr(self, "season_manager", None)
-            s_start = int(sm.get_season_start_block(current_block)) if sm else None
-            s_dur = int(getattr(sm, "season_block_length", 0) or 0) if sm else None
-            if not s_dur:
-                from autoppia_web_agents_subnet.validator.config import SEASON_SIZE_EPOCHS
-                bpe = getattr(getattr(self, "round_manager", None), "BLOCKS_PER_EPOCH", 360) or 360
-                s_dur = int(float(SEASON_SIZE_EPOCHS) * int(bpe))
-            netuid = int(getattr(self.config, "netuid", 36) or 36)
-            if s_start is not None and s_dur and s_dur > 0:
-                consumed = get_all_consumed_evals(
-                    payment_address=PAYMENT_WALLET_SS58, netuid=netuid,
-                    season_start_block=s_start, season_duration_blocks=s_dur,
-                    cache_path=PAYMENT_CACHE_PATH,
-                )
-                compact = {k: v for k, v in consumed.items() if v > 0}
-                if compact:
-                    commit_payload["e"] = compact
-                    bt.logging.info(f"[payment] Including {len(compact)} consumed eval entries in commitment")
-        except Exception as exc:
-            bt.logging.warning(f"[payment] Failed to include consumed evals in commitment: {exc}")
 
     try:
         bt.logging.info(
