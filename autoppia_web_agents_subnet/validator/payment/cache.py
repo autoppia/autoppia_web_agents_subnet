@@ -1,7 +1,4 @@
-"""
-Local JSON cache for payment scanning.
-Stores cumulative sent-amounts per coldkey and last processed block per season range.
-"""
+"""Local JSON cache for payment scanning."""
 
 from __future__ import annotations
 
@@ -9,9 +6,7 @@ import json
 import os
 import tempfile
 import time
-from typing import Any
-from typing import Dict
-from typing import Tuple
+from typing import Any, Dict, Tuple
 
 CACHE_SCHEMA_VERSION = 1
 
@@ -42,6 +37,7 @@ def _default_entry(
         "season_duration_blocks": int(season_duration_blocks),
         "last_processed_block": int(season_start_block) - 1,
         "totals_by_coldkey": {},
+        "consumed_evals_by_coldkey": {},
         "updated_at_unix": int(time.time()),
     }
 
@@ -115,6 +111,17 @@ class PaymentCacheStore:
                 except Exception:
                     continue
             entry["totals_by_coldkey"] = normalized
+        consumed = existing.get("consumed_evals_by_coldkey", {})
+        if isinstance(consumed, dict):
+            normalized_consumed: Dict[str, int] = {}
+            for ck, count in consumed.items():
+                if not isinstance(ck, str):
+                    continue
+                try:
+                    normalized_consumed[ck] = int(count or 0)
+                except Exception:
+                    continue
+            entry["consumed_evals_by_coldkey"] = normalized_consumed
         try:
             entry["updated_at_unix"] = int(existing.get("updated_at_unix", entry["updated_at_unix"]))
         except Exception:

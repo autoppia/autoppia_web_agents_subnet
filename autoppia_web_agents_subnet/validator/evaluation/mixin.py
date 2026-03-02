@@ -4,6 +4,8 @@ from __future__ import annotations
 import asyncio
 import inspect
 
+import bittensor as bt
+
 from autoppia_web_agents_subnet.validator.evaluation.stateful_cua_eval import evaluate_with_stateful_cua
 from autoppia_web_agents_subnet.validator.evaluation.rewards import calculate_reward_for_task
 from autoppia_web_agents_subnet.validator import config as validator_config
@@ -13,6 +15,12 @@ from autoppia_web_agents_subnet.opensource.utils_git import (
     normalize_and_validate_github_url,
     resolve_remote_ref_commit,
 )
+from autoppia_web_agents_subnet.validator.payment.config import (
+    ALPHA_PER_EVAL,
+    PAYMENT_WALLET_SS58,
+    PAYMENT_CACHE_PATH,
+)
+from autoppia_web_agents_subnet.validator.payment.helpers import increment_consumed_evals
 
 
 class ValidatorEvaluationMixin:
@@ -123,6 +131,31 @@ class ValidatorEvaluationMixin:
                 self.agents_dict[agent.uid] = agent  # type: ignore[attr-defined]
             except Exception:
                 pass
+
+            if bool(PAYMENT_WALLET_SS58) and float(ALPHA_PER_EVAL) > 0:
+                try:
+                    miner_coldkeys = list(getattr(getattr(self, "metagraph", None), "coldkeys", []))
+                    miner_uid = getattr(agent, "uid", None)
+                    if miner_uid is not None and 0 <= int(miner_uid) < len(miner_coldkeys):
+                        ck = str(miner_coldkeys[int(miner_uid)] or "").strip()
+                        if ck:
+                            sm = getattr(self, "season_manager", None)
+                            s_start = int(sm.get_season_start_block(getattr(self, "block", 0) or 0)) if sm else None
+                            s_dur = int(getattr(sm, "season_block_length", 0) or 0) if sm else None
+                            if not s_dur:
+                                from autoppia_web_agents_subnet.validator.config import SEASON_SIZE_EPOCHS
+                                bpe = getattr(getattr(self, "round_manager", None), "BLOCKS_PER_EPOCH", 360) or 360
+                                s_dur = int(float(SEASON_SIZE_EPOCHS) * int(bpe))
+                            netuid = int(getattr(getattr(self, "config", None), "netuid", 36) or 36)
+                            if s_start is not None and s_dur and s_dur > 0:
+                                new_total = increment_consumed_evals(
+                                    ck, payment_address=PAYMENT_WALLET_SS58, netuid=netuid,
+                                    season_start_block=s_start, season_duration_blocks=s_dur,
+                                    count=1, cache_path=PAYMENT_CACHE_PATH,
+                                )
+                                bt.logging.info(f"[payment] Consumed eval incremented uid={miner_uid} ck={ck[:12]}... total={new_total}")
+                except Exception as exc:
+                    bt.logging.warning(f"[payment] Failed to increment consumed evals: {exc}")
 
         agents_evaluated = 0
         while not self.agents_queue.empty():
