@@ -82,6 +82,35 @@ IPFS_API_URL = _env_str("IPFS_API_URL", "http://ipfs.metahash73.com:5001/api/v0"
 # Comma-separated gateways for fetch fallback
 IPFS_GATEWAYS = [gw.strip() for gw in (_env_str("IPFS_GATEWAYS", "https://ipfs.io/ipfs,https://cloudflare-ipfs.com/ipfs") or "").split(",") if gw.strip()]
 
+# ═══════════════════════════════════════════════════════════════════════════
+# STORAGE BACKEND CONFIGURATION (Hippius SN 75 integration)
+# ═══════════════════════════════════════════════════════════════════════════
+# IPFS backend: "standard" (default) or "hippius"
+STORAGE_IPFS_BACKEND = _env_str("STORAGE_IPFS_BACKEND", "standard")
+# S3 backend: "aws" (default) or "hippius"
+STORAGE_S3_BACKEND = _env_str("STORAGE_S3_BACKEND", "aws")
+
+# Hippius IPFS settings (used when STORAGE_IPFS_BACKEND=hippius)
+HIPPIUS_IPFS_API_URL = _env_str("HIPPIUS_IPFS_API_URL", "")
+HIPPIUS_KEY = _env_str("HIPPIUS_KEY", "")
+
+# AWS S3 settings (used when STORAGE_S3_BACKEND=aws)
+AWS_ACCESS_KEY_ID = _env_str("AWS_ACCESS_KEY_ID", "")
+AWS_SECRET_ACCESS_KEY = _env_str("AWS_SECRET_ACCESS_KEY", "")
+AWS_S3_REGION = _env_str("AWS_S3_REGION", "us-east-1")
+AWS_S3_ENDPOINT_URL = _env_str("AWS_S3_ENDPOINT_URL", "")
+
+# Hippius S3 settings (used when STORAGE_S3_BACKEND=hippius)
+HIPPIUS_S3_ACCESS_KEY = _env_str("HIPPIUS_S3_ACCESS_KEY", "")
+HIPPIUS_S3_SECRET_KEY = _env_str("HIPPIUS_S3_SECRET_KEY", "")
+HIPPIUS_S3_ENDPOINT = _env_str("HIPPIUS_S3_ENDPOINT", "s3.hippius.com")
+HIPPIUS_S3_REGION = _env_str("HIPPIUS_S3_REGION", "decentralized")
+
+# S3 bucket for evaluation metadata
+S3_METADATA_BUCKET = _env_str("S3_METADATA_BUCKET", "autoppia-evaluation-metadata")
+# Enable S3 metadata upload (disabled by default until S3 credentials are configured)
+S3_METADATA_UPLOAD_ENABLED = _env_bool("S3_METADATA_UPLOAD_ENABLED", False)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SETTLEMENT / WINNER PERSISTENCE CONFIGURATION

@@ -16,6 +16,7 @@ from autoppia_web_agents_subnet.utils.commitments import (
 )
 from autoppia_web_agents_subnet.utils.ipfs_client import add_json_async, get_json_async
 from autoppia_web_agents_subnet.utils.log_colors import ipfs_tag, consensus_tag
+from autoppia_web_agents_subnet.utils.storage.metadata_store import get_metadata_store
 from autoppia_web_agents_subnet.validator.round_manager import RoundPhase
 from autoppia_web_agents_subnet.platform.client import compute_season_number
 
@@ -167,6 +168,22 @@ async def publish_round_snapshot(
                 except Exception:
                     pass
             bt.logging.success(ipfs_tag("BLOCKCHAIN", f"✅ Commitment successful | CID: {cid}"))
+
+            # Best-effort: also upload consensus scores to S3 metadata store
+            try:
+                meta = get_metadata_store()
+                if meta is not None:
+                    meta.upload_consensus_scores(
+                        season=int(season_number),
+                        round_num=int(round_number),
+                        scores={int(k): float(v) for k, v in scores.items()},
+                        validator_uid=int(self.uid),
+                        extra={"cid": str(cid), "sha256": sha_hex},
+                    )
+                    bt.logging.info(ipfs_tag("S3", "Consensus scores uploaded to S3 metadata store"))
+            except Exception as s3_exc:
+                bt.logging.debug(f"S3 metadata upload skipped: {s3_exc}")
+
             return str(cid)
         bt.logging.warning(ipfs_tag("BLOCKCHAIN", "⚠️ Commitment failed - write returned false"))
         return None
