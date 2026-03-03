@@ -8,6 +8,9 @@ import importlib
 os.environ["TESTING"] = "True"
 # Tests should be deterministic regardless of a developer's shell env.
 os.environ["BURN_AMOUNT_PERCENTAGE"] = "0.0"
+# validate_config() in config.py calls sys.exit(1) without these.
+os.environ.setdefault("VALIDATOR_NAME", "test-validator")
+os.environ.setdefault("VALIDATOR_IMAGE", "test-image")
 
 # Ensure repo root is on sys.path so autoppia_web_agents_subnet imports work in tests
 ROOT = Path(__file__).resolve().parents[1]
