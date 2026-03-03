@@ -117,10 +117,16 @@ class ValidatorSettlementMixin:
             )
 
             try:
-                scores, _ = await aggregate_scores_from_commitments(self, st=st)
+                scores, details = await aggregate_scores_from_commitments(self, st=st)
+                # Persist consensus artifacts for finish_round payload building
+                # (ipfs_downloaded + post_consensus_evaluation reporting).
+                self._agg_scores_cache = scores
+                self._agg_meta_cache = details
             except Exception as e:
                 ColoredLogger.error(f"Error aggregating scores from commitments: {e}", ColoredLogger.RED)
                 scores = {}
+                self._agg_scores_cache = {}
+                self._agg_meta_cache = {}
             await self._calculate_final_weights(scores=scores)
             self.round_manager.enter_phase(
                 RoundPhase.COMPLETE,

@@ -49,6 +49,7 @@ class ValidatorPlatformMixin:
         self.current_round_tasks: Dict[str, iwa_models.TaskIWAP] = {}
         self.current_agent_runs: Dict[int, iwa_models.AgentRunIWAP] = {}
         self.current_miner_snapshots: Dict[int, iwa_models.MinerSnapshotIWAP] = {}
+        self._iwap_shadow_mode = False
         self.round_handshake_payloads: Dict[int, Any] = {}
         self.round_start_timestamp: float = 0.0
         self.agent_run_accumulators: Dict[int, Dict[str, float]] = {}
@@ -271,6 +272,7 @@ class ValidatorPlatformMixin:
         self.reused_from_agent_run_id_by_uid = {}
         self.reused_stats_by_uid = {}
         self._s3_task_log_urls = []
+        self._iwap_shadow_mode = False
         try:
             from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 

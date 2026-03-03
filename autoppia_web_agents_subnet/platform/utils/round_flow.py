@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 import math
 import time
@@ -95,19 +96,57 @@ def _extract_error_detail(exc: httpx.HTTPStatusError) -> str:
 def _is_duplicate_like_error(exc: httpx.HTTPStatusError) -> bool:
     """Return True only for explicit idempotent/duplicate conflicts."""
     status = exc.response.status_code if exc.response is not None else None
-    if status == 409:
-        return True
-    if status != 500:
-        return False
-
     detail = _extract_error_detail(exc).lower()
     duplicate_markers = (
         "already exists",
+        "already registered",
         "duplicate",
         "unique constraint",
         "duplicate key value",
     )
+    if status == 409:
+        return any(marker in detail for marker in duplicate_markers)
+    if status != 500:
+        return False
+
     return any(marker in detail for marker in duplicate_markers)
+
+
+def _is_main_authority_or_grace_error(exc: httpx.HTTPStatusError) -> bool:
+    """Return True for expected backend guardrails where non-main validator must not write."""
+    status = exc.response.status_code if exc.response is not None else None
+    if status not in (400, 409):
+        return False
+
+    detail = _extract_error_detail(exc).lower()
+    markers = (
+        "only main validator can open a new season/round",
+        "fallback finish denied",
+        "main validator still within finish grace",
+        "validator is not the highest-stake backup",
+    )
+    return any(marker in detail for marker in markers)
+
+
+def _get_finish_retry_policy() -> tuple[int, int]:
+    """
+    Return (max_retries, retry_interval_sec) for finish_round authority/grace retries.
+    Config keys:
+      - validator_config.FINISH_ROUND_MAX_RETRIES
+      - validator_config.FINISH_ROUND_RETRY_SECONDS
+    """
+    try:
+        max_retries = int(getattr(validator_config, "FINISH_ROUND_MAX_RETRIES", 3))
+    except Exception:
+        max_retries = 3
+    try:
+        retry_interval_sec = int(getattr(validator_config, "FINISH_ROUND_RETRY_SECONDS", 180))
+    except Exception:
+        retry_interval_sec = 180
+
+    max_retries = max(0, max_retries)
+    retry_interval_sec = max(10, retry_interval_sec)
+    return max_retries, retry_interval_sec
 
 
 def _extract_round_numbers_from_round_id(round_id: Optional[str]) -> tuple[Optional[int], Optional[int]]:
@@ -480,6 +519,7 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
     )
 
     start_round_ok = False
+    shadow_mode = False
     try:
         resp = await ctx.iwap_client.start_round(
             validator_identity=validator_identity,
@@ -489,9 +529,26 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
         vrid = _extract_validator_round_id(resp)
         if vrid != ctx.current_round_id:
             ctx.current_round_id = vrid
+        shadow_mode = bool(resp.get("shadow_mode")) if isinstance(resp, dict) else False
+        if shadow_mode:
+            setattr(ctx, "_iwap_shadow_mode", True)
+            log_iwap_phase(
+                "Phase 1",
+                (f"start_round accepted in SHADOW mode for round_id={ctx.current_round_id}; continuing idempotent IWAP writes with non-authoritative close semantics"),
+                level="warning",
+            )
         start_round_ok = True
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code if exc.response is not None else None
+        if _is_main_authority_or_grace_error(exc):
+            log_iwap_phase(
+                "Phase 1",
+                (f"start_round returned {status} due to main-validator authority/grace guard; enabling SHADOW mode and continuing on-chain"),
+                level="warning",
+                exc_info=False,
+            )
+            setattr(ctx, "_iwap_shadow_mode", True)
+            return
         if _is_duplicate_like_error(exc):
             detail = _extract_error_detail(exc).lower()
             season_conflict = "cannot start season" in detail and "still active" in detail
@@ -544,6 +601,13 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
     if not start_round_ok:
         ctx._iwap_offline_mode = True
         return
+
+    if shadow_mode:
+        log_iwap_phase(
+            "Phase 1",
+            (f"shadow_mode active for round_id={ctx.current_round_id}; continuing with set_tasks/start_agent_run/evaluations using idempotent writes"),
+            level="warning",
+        )
 
     # Build IWAP tasks from season tasks
     # Get season tasks from the validator (they should be available after get_round_tasks was called)
@@ -1312,10 +1376,6 @@ async def finish_round_flow(
 
     pre_consensus_summary = local_evaluation.get("summary") if isinstance(local_evaluation, dict) else None
     post_consensus_summary = post_consensus_evaluation.get("summary") if isinstance(post_consensus_evaluation, dict) else None
-    # With a single validator (or when no post-consensus aggregation exists),
-    # post-consensus should be equivalent to pre-consensus for persistence/UI.
-    if post_consensus_summary is None and pre_consensus_summary is not None:
-        post_consensus_summary = pre_consensus_summary
 
     validator_summary = {
         "round": round_metadata.to_payload() if hasattr(round_metadata, "to_payload") else (round_metadata if isinstance(round_metadata, dict) else None),
@@ -1367,6 +1427,64 @@ async def finish_round_flow(
             finish_request=finish_request,
         )
     except Exception as exc:  # noqa: BLE001
+        if isinstance(exc, httpx.HTTPStatusError) and _is_main_authority_or_grace_error(exc):
+            max_retries, retry_interval_sec = _get_finish_retry_policy()
+            log_iwap_phase(
+                "Phase 5",
+                (f"finish_round blocked by main-validator grace/authority for round_id={round_id}; retrying up to {max_retries} time(s) every {retry_interval_sec}s"),
+                level="warning",
+                exc_info=False,
+            )
+
+            retried_success = False
+            last_exc: Exception = exc
+            for attempt in range(1, max_retries + 1):
+                log_iwap_phase(
+                    "Phase 5",
+                    (f"finish_round retry {attempt}/{max_retries} for round_id={round_id} in {retry_interval_sec}s"),
+                    level="warning",
+                    exc_info=False,
+                )
+                await asyncio.sleep(retry_interval_sec)
+                try:
+                    await ctx.iwap_client.finish_round(
+                        validator_round_id=round_id,
+                        finish_request=finish_request,
+                    )
+                except Exception as retry_exc:  # noqa: BLE001
+                    last_exc = retry_exc
+                    if isinstance(retry_exc, httpx.HTTPStatusError) and _is_main_authority_or_grace_error(retry_exc):
+                        continue
+                    # Non-authority error: stop retrying and fall through to generic handling.
+                    break
+                else:
+                    retried_success = True
+                    log_iwap_phase(
+                        "Phase 5",
+                        f"finish_round succeeded on retry for round_id={round_id}",
+                        level="success",
+                    )
+                    break
+
+            if retried_success:
+                success = True
+                ctx._reset_iwap_round_state()
+                return success
+
+            # If retries exhausted and still authority/grace blocked, keep local completion and continue.
+            if isinstance(last_exc, httpx.HTTPStatusError) and _is_main_authority_or_grace_error(last_exc):
+                log_iwap_phase(
+                    "Phase 5",
+                    (f"finish_round still blocked after retries for round_id={round_id}; continuing without IWAP close for this validator round"),
+                    level="warning",
+                    exc_info=False,
+                )
+                success = False
+                ctx._reset_iwap_round_state()
+                return success
+
+            # Replace original exception so generic handler logs the real non-authority failure.
+            exc = last_exc
         error_msg = f"finish_round failed for round_id={round_id} ({type(exc).__name__}: {exc})"
         log_iwap_phase("Phase 5", error_msg, level="error", exc_info=False)
         bt.logging.error(f"IWAP finish_round failed for round_id={round_id}: {exc}")

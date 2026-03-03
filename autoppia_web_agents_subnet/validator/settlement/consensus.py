@@ -295,6 +295,7 @@ async def aggregate_scores_from_commitments(
 
     fetched: list[tuple[str, str, float]] = []
     scores_by_validator: Dict[str, Dict[int, float]] = {}
+    downloaded_payloads: list[Dict[str, Any]] = []
 
     for hk, entry in (commits or {}).items():
         if not isinstance(entry, dict):
@@ -404,6 +405,17 @@ async def aggregate_scores_from_commitments(
         included += 1
         fetched.append((hk, cid, st_val))
         scores_by_validator[hk] = per_val_map
+        # Keep normalized download metadata for later IWAP finish_round payloads.
+        downloaded_payloads.append(
+            {
+                "uid": (int(validator_uid) if isinstance(validator_uid, int) else validator_uid),
+                "validator_hotkey": hk,
+                "stake": float(st_val),
+                "cid": cid,
+                "local_evaluation": payload.get("local_evaluation") if isinstance(payload, dict) else None,
+                "payload": payload,
+            }
+        )
 
     result: Dict[int, float] = {}
     for uid, wsum in weighted_sum.items():
@@ -478,6 +490,7 @@ async def aggregate_scores_from_commitments(
     details = {
         "validators": validators_info,
         "scores_by_validator": scores_by_validator,
+        "downloaded_payloads": downloaded_payloads,
         "skips": {
             "legacy_consensus_version": skipped_legacy_consensus_version_list,
             "wrong_season": skipped_wrong_season_list,

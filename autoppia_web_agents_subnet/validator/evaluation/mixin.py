@@ -78,7 +78,13 @@ class ValidatorEvaluationMixin:
         except Exception:
             season_number = None
 
-        def _finalize_agent(agent: object, *, score: float, zero_reason: str | None = None) -> None:
+        def _finalize_agent(
+            agent: object,
+            *,
+            score: float,
+            zero_reason: str | None = None,
+            register_commit: bool = True,
+        ) -> None:
             """
             Mark an AgentInfo-like object as evaluated and persist it in agents_dict.
             When score is 0, zero_reason can be set for IWAP (e.g. over_cost_limit, task_timeout).
@@ -137,42 +143,43 @@ class ValidatorEvaluationMixin:
             except Exception:
                 pass
             # Register (repo, commit) so we don't re-evaluate this miner on same commit in future rounds
-            try:
-                run = getattr(self, "current_agent_runs", {}).get(getattr(agent, "uid", None))
-                normalized_repo = getattr(agent, "normalized_repo", None)
-                commit_sha = getattr(agent, "git_commit", None)
-                if run and normalized_repo and commit_sha:
-                    acc = getattr(self, "agent_run_accumulators", {}).get(agent.uid, {})  # type: ignore[attr-defined]
-                    tasks = int(acc.get("tasks", 0) or 0)
-                    reward_sum = float(acc.get("reward", 0.0) or 0.0)
-                    eval_sum = float(acc.get("eval_score", 0.0) or 0.0)
-                    time_sum = float(acc.get("execution_time", 0.0) or 0.0)
-                    avg_score = (eval_sum / tasks) if tasks else (getattr(run, "average_score", None) or 0.0)
-                    avg_reward = (reward_sum / tasks) if tasks else (getattr(run, "average_reward", None) or 0.0)
-                    avg_time = (time_sum / tasks) if tasks else (getattr(run, "average_execution_time", None) or 0.0)
-                    round_rewards = getattr(getattr(self, "round_manager", None), "round_rewards", {}) or {}
-                    miner_rewards = round_rewards.get(agent.uid, []) or []  # type: ignore[attr-defined]
-                    success_tasks = len([r for r in miner_rewards if float(r) >= 0.5])
-                    stats = {
-                        "average_score": avg_score,
-                        "average_reward": avg_reward,
-                        "average_execution_time": avg_time,
-                        "total_tasks": tasks or len(miner_rewards),
-                        "success_tasks": success_tasks,
-                        "failed_tasks": (tasks or len(miner_rewards)) - success_tasks,
-                        "zero_reason": getattr(agent, "zero_reason", None),
-                        "evaluated_season": int(getattr(getattr(self, "season_manager", None), "season_number", 0) or 0),
-                        "evaluated_round": int(getattr(getattr(self, "round_manager", None), "round_number", 0) or 0),
-                    }
-                    self._register_evaluated_commit(  # type: ignore[attr-defined]
-                        agent.uid,  # type: ignore[attr-defined]
-                        str(normalized_repo),
-                        str(commit_sha),
-                        run.agent_run_id,
-                        stats,
-                    )
-            except Exception:
-                pass
+            if register_commit:
+                try:
+                    run = getattr(self, "current_agent_runs", {}).get(getattr(agent, "uid", None))
+                    normalized_repo = getattr(agent, "normalized_repo", None)
+                    commit_sha = getattr(agent, "git_commit", None)
+                    if run and normalized_repo and commit_sha:
+                        acc = getattr(self, "agent_run_accumulators", {}).get(agent.uid, {})  # type: ignore[attr-defined]
+                        tasks = int(acc.get("tasks", 0) or 0)
+                        reward_sum = float(acc.get("reward", 0.0) or 0.0)
+                        eval_sum = float(acc.get("eval_score", 0.0) or 0.0)
+                        time_sum = float(acc.get("execution_time", 0.0) or 0.0)
+                        avg_score = (eval_sum / tasks) if tasks else (getattr(run, "average_score", None) or 0.0)
+                        avg_reward = (reward_sum / tasks) if tasks else (getattr(run, "average_reward", None) or 0.0)
+                        avg_time = (time_sum / tasks) if tasks else (getattr(run, "average_execution_time", None) or 0.0)
+                        round_rewards = getattr(getattr(self, "round_manager", None), "round_rewards", {}) or {}
+                        miner_rewards = round_rewards.get(agent.uid, []) or []  # type: ignore[attr-defined]
+                        success_tasks = len([r for r in miner_rewards if float(r) >= 0.5])
+                        stats = {
+                            "average_score": avg_score,
+                            "average_reward": avg_reward,
+                            "average_execution_time": avg_time,
+                            "total_tasks": tasks or len(miner_rewards),
+                            "success_tasks": success_tasks,
+                            "failed_tasks": (tasks or len(miner_rewards)) - success_tasks,
+                            "zero_reason": getattr(agent, "zero_reason", None),
+                            "evaluated_season": int(getattr(getattr(self, "season_manager", None), "season_number", 0) or 0),
+                            "evaluated_round": int(getattr(getattr(self, "round_manager", None), "round_number", 0) or 0),
+                        }
+                        self._register_evaluated_commit(  # type: ignore[attr-defined]
+                            agent.uid,  # type: ignore[attr-defined]
+                            str(normalized_repo),
+                            str(commit_sha),
+                            run.agent_run_id,
+                            stats,
+                        )
+                except Exception:
+                    pass
 
         agents_evaluated = 0
         while not self.agents_queue.empty():
@@ -193,6 +200,65 @@ class ValidatorEvaluationMixin:
                     f"Stopping evaluation at round fraction {fraction_elapsed:.4f} (limit={stop_fraction:.4f})",
                     ColoredLogger.YELLOW,
                 )
+                # Keep run accounting coherent for miners still pending in queue:
+                # they participated in handshake/start_agent_run but were skipped
+                # due round deadline. Persist deterministic 0-reward task stats
+                # so IWAP/DB never stores 0/0 placeholders for these runs.
+                task_timeout_sec = float(getattr(validator_config, "TASK_TIMEOUT_SECONDS", 180.0) or 180.0)
+                pending_agents = []
+                while not self.agents_queue.empty():
+                    try:
+                        pending_agents.append(self.agents_queue.get_nowait())
+                    except Exception:
+                        break
+                if pending_agents:
+                    round_rewards = getattr(getattr(self, "round_manager", None), "round_rewards", None)
+                    round_eval_scores = getattr(getattr(self, "round_manager", None), "round_eval_scores", None)
+                    round_times = getattr(getattr(self, "round_manager", None), "round_times", None)
+                    for pending_agent in pending_agents:
+                        try:
+                            pending_uid = int(getattr(pending_agent, "uid"))
+                        except Exception:
+                            continue
+                        try:
+                            acc = getattr(self, "agent_run_accumulators", {}).setdefault(
+                                pending_uid,
+                                {"reward": 0.0, "eval_score": 0.0, "execution_time": 0.0, "tasks": 0},
+                            )
+                            if int(acc.get("tasks", 0) or 0) <= 0 and total_tasks > 0:
+                                acc["tasks"] = int(total_tasks)
+                                acc["reward"] = 0.0
+                                acc["eval_score"] = 0.0
+                                acc["execution_time"] = float(task_timeout_sec) * float(total_tasks)
+                        except Exception:
+                            pass
+
+                        if isinstance(round_rewards, dict):
+                            round_rewards[pending_uid] = [0.0] * int(total_tasks)
+                        if isinstance(round_eval_scores, dict):
+                            round_eval_scores[pending_uid] = [0.0] * int(total_tasks)
+                        if isinstance(round_times, dict):
+                            round_times[pending_uid] = [float(task_timeout_sec)] * int(total_tasks)
+
+                        run = getattr(self, "current_agent_runs", {}).get(pending_uid)
+                        if run is not None:
+                            try:
+                                run.total_tasks = int(total_tasks)
+                                run.completed_tasks = 0
+                                run.failed_tasks = int(total_tasks)
+                                run.average_score = 0.0
+                                run.average_reward = 0.0
+                                run.average_execution_time = float(task_timeout_sec)
+                                run.zero_reason = "round_window_exceeded"
+                            except Exception:
+                                pass
+
+                        _finalize_agent(
+                            pending_agent,
+                            score=0.0,
+                            zero_reason="round_window_exceeded",
+                            register_commit=False,
+                        )
                 return agents_evaluated
 
             agent = self.agents_queue.get()
@@ -674,6 +740,8 @@ class ValidatorEvaluationMixin:
         if getattr(self, "_iwap_offline_mode", False):
             ColoredLogger.warning("IWAP offline mode enabled, skipping IWAP submission", ColoredLogger.YELLOW)
             return False
+        if getattr(self, "_iwap_shadow_mode", False):
+            ColoredLogger.warning("IWAP shadow mode enabled, continuing IWAP submission with idempotent writes", ColoredLogger.YELLOW)
 
         if not hasattr(self, "current_agent_runs") or agent_uid not in self.current_agent_runs:
             ColoredLogger.warning(f"No agent run found for agent {agent_uid}, skipping IWAP submission", ColoredLogger.YELLOW)

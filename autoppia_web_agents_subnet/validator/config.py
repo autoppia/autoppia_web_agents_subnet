@@ -83,6 +83,12 @@ MIN_MINER_STAKE_ALPHA = _env_float("MIN_MINER_STAKE_ALPHA", 100.0, test_default=
 IPFS_API_URL = _env_str("IPFS_API_URL", "http://ipfs.metahash73.com:5001/api/v0")
 # Comma-separated gateways for fetch fallback
 IPFS_GATEWAYS = [gw.strip() for gw in (_env_str("IPFS_GATEWAYS", "https://ipfs.io/ipfs,https://cloudflare-ipfs.com/ipfs") or "").split(",") if gw.strip()]
+# Retry policy for finish_round when backend blocks non-main validator writes.
+# Optional via env:
+# - FINISH_ROUND_MAX_RETRIES
+# - FINISH_ROUND_RETRY_SECONDS
+FINISH_ROUND_MAX_RETRIES = _env_int("FINISH_ROUND_MAX_RETRIES", 3, test_default=4)
+FINISH_ROUND_RETRY_SECONDS = _env_int("FINISH_ROUND_RETRY_SECONDS", 180, test_default=30)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
