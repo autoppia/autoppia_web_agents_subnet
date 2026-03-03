@@ -149,6 +149,21 @@ IWAP_API_BASE_URL = "https://dev-api-leaderboard.autoppia.com" if TESTING else "
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# HIPPIUS CONFIGURATION (SN75)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# IPFS backend: when True, uses Hippius SDK instead of legacy metahash73 node
+HIPPIUS_IPFS_ENABLED = _env_bool("HIPPIUS_IPFS_ENABLED", False)
+
+# S3 storage for evaluation datasets
+HIPPIUS_S3_ENABLED = _env_bool("HIPPIUS_S3_ENABLED", False)
+HIPPIUS_S3_ENDPOINT = _env_str("HIPPIUS_S3_ENDPOINT", "https://s3.hippius.com")
+HIPPIUS_S3_ACCESS_KEY = _env_str("HIPPIUS_S3_ACCESS_KEY", "")
+HIPPIUS_S3_SECRET_KEY = _env_str("HIPPIUS_S3_SECRET_KEY", "")
+HIPPIUS_S3_BUCKET = _env_str("HIPPIUS_S3_BUCKET", "autoppia-evaluations")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # CONFIG VALIDATION
 # ═══════════════════════════════════════════════════════════════════════════
 

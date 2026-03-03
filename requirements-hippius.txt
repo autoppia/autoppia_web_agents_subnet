@@ -1,0 +1,4 @@
+# Optional dependencies for Hippius (SN75) integration.
+# Install when enabling HIPPIUS_IPFS_ENABLED or HIPPIUS_S3_ENABLED.
+hippius>=0.2.60
+boto3
