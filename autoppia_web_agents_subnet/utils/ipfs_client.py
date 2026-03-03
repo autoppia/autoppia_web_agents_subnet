@@ -7,6 +7,7 @@ from typing import Any, Optional, Sequence, Tuple
 
 try:
     import requests  # type: ignore
+
     _HAVE_REQUESTS = True
 except Exception:  # pragma: no cover
     requests = None  # type: ignore
@@ -38,7 +39,7 @@ def ipfs_add_bytes(
     api_url: Optional[str] = None,
     pin: bool = True,
 ) -> str:
-    api = (api_url or _api_base())
+    api = api_url or _api_base()
     if not api:
         raise IPFSError("No IPFS API URL configured")
     if not _HAVE_REQUESTS:
@@ -84,7 +85,7 @@ def ipfs_cat(
     timeout: float = 20.0,
 ) -> bytes:
     last_err: Optional[Exception] = None
-    api = (api_url or _api_base())
+    api = api_url or _api_base()
 
     # Try HTTP API first
     if api and _HAVE_REQUESTS:
@@ -98,7 +99,8 @@ def ipfs_cat(
 
     # Fallback to public gateways
     import urllib.request
-    for gw in (gateways or IPFS_GATEWAYS or []):
+
+    for gw in gateways or IPFS_GATEWAYS or []:
         try:
             with urllib.request.urlopen(f"{gw.rstrip('/')}/{cid}", timeout=timeout) as r:
                 return r.read()
@@ -133,10 +135,15 @@ async def add_json_async(
     pin: bool = True,
     sort_keys: bool = True,
 ) -> Tuple[str, str, int]:
+    from autoppia_web_agents_subnet.validator.config import HIPPIUS_IPFS_ENABLED
+
+    if HIPPIUS_IPFS_ENABLED:
+        from autoppia_web_agents_subnet.utils.hippius_ipfs import hippius_add_json_async
+
+        return await hippius_add_json_async(obj, filename=filename, pin=pin, sort_keys=sort_keys)
+
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(
-        None, lambda: ipfs_add_json(obj, filename=filename, api_url=api_url, pin=pin, sort_keys=sort_keys)
-    )
+    return await loop.run_in_executor(None, lambda: ipfs_add_json(obj, filename=filename, api_url=api_url, pin=pin, sort_keys=sort_keys))
 
 
 async def get_json_async(
@@ -146,8 +153,12 @@ async def get_json_async(
     gateways: Optional[Sequence[str]] = None,
     expected_sha256_hex: Optional[str] = None,
 ) -> Tuple[Any, bytes, str]:
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(
-        None, lambda: ipfs_get_json(cid, api_url=api_url, gateways=gateways, expected_sha256_hex=expected_sha256_hex)
-    )
+    from autoppia_web_agents_subnet.validator.config import HIPPIUS_IPFS_ENABLED
 
+    if HIPPIUS_IPFS_ENABLED:
+        from autoppia_web_agents_subnet.utils.hippius_ipfs import hippius_get_json_async
+
+        return await hippius_get_json_async(cid, expected_sha256_hex=expected_sha256_hex)
+
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, lambda: ipfs_get_json(cid, api_url=api_url, gateways=gateways, expected_sha256_hex=expected_sha256_hex))

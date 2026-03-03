@@ -236,6 +236,7 @@ def _build_execution_steps(execution_history: Any) -> List[Dict[str, Any]]:
                 "html": snapshot_post.get("html"),
                 "backend_events": snapshot_post.get("backend_events"),
                 "timestamp": snapshot_post.get("timestamp") or snapshot_post.get("time"),
+                "screenshot": snapshot_post.get("screenshot_after") or snapshot_post.get("screenshot"),
             }
         agent_input = snapshot_pre if isinstance(snapshot_pre, dict) else {}
         if not isinstance(agent_input, dict):
@@ -891,6 +892,19 @@ async def submit_task_results(
                             level="error",
                             exc_info=True,
                         )
+                    # Upload GIF to Hippius S3 (independent, non-blocking)
+                    try:
+                        from autoppia_web_agents_subnet.utils.s3_client import upload_evaluation_gif_async
+
+                        await upload_evaluation_gif_async(
+                            round_id=ctx.current_round_id,
+                            validator_uid=int(ctx.uid),
+                            miner_uid=miner_uid,
+                            gif_data=gif_bytes,
+                            task_id=iwap_task_id,
+                        )
+                    except Exception:
+                        pass
                 else:
                     log_gif_event(
                         "Skipped upload: invalid payload (failed to extract bytes)",
@@ -917,6 +931,19 @@ async def submit_task_results(
                         f"Task log upload failed for task_id={iwap_task_id} miner_uid={miner_uid}: {log_exc}",
                         level="warning",
                     )
+                # Upload evaluation metadata to Hippius S3 (independent of IWAP success)
+                try:
+                    from autoppia_web_agents_subnet.utils.s3_client import upload_evaluation_metadata_async
+
+                    await upload_evaluation_metadata_async(
+                        round_id=ctx.current_round_id,
+                        validator_uid=int(ctx.uid),
+                        miner_uid=miner_uid,
+                        metadata=task_log_payload,
+                        task_id=task_log_payload.get("task_id") if isinstance(task_log_payload, dict) else None,
+                    )
+                except Exception:
+                    pass
 
         accumulators = ctx.agent_run_accumulators.setdefault(miner_uid, {"reward": 0.0, "eval_score": 0.0, "execution_time": 0.0, "tasks": 0})
         accumulators["reward"] += float(reward_value)
