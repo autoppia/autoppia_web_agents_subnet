@@ -7,7 +7,7 @@ from autoppia_web_agents_subnet.utils.env import _env_float, _env_int
 BLOCKS_PER_EPOCH = 360
 SEASON_SIZE_EPOCHS = _env_float("SEASON_SIZE_EPOCHS", 280.0, test_default=2)
 ROUND_SIZE_EPOCHS = _env_float("ROUND_SIZE_EPOCHS", 4.0, test_default=0.5)
-MINIMUM_START_BLOCK = _env_int("MINIMUM_START_BLOCK", 7_586_110, test_default=7_586_110)
+MINIMUM_START_BLOCK = _env_int("MINIMUM_START_BLOCK", 7_667_910, test_default=7_667_910)
 
 
 def season_block_length() -> int:
