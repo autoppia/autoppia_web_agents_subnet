@@ -14,6 +14,29 @@ AGENT_NAME = _env_str("AGENT_NAME")
 GITHUB_URL = _env_str("GITHUB_URL")
 AGENT_IMAGE = _env_str("AGENT_IMAGE")
 
+
+def _handshake_required_fields_status(agent_name: str, github_url: str) -> tuple[bool, list[str]]:
+    """
+    Validate required handshake fields and return readiness + human-readable reasons.
+    Required fields: AGENT_NAME and GITHUB_URL (with explicit ref/commit).
+    """
+    reasons: list[str] = []
+
+    if not agent_name:
+        reasons.append("AGENT_NAME is empty or missing")
+
+    if not github_url:
+        reasons.append("GITHUB_URL is empty or missing")
+    else:
+        normalized, ref = normalize_and_validate_github_url(github_url, require_ref=True)
+        if normalized is None:
+            reasons.append("GITHUB_URL is invalid; expected https://github.com/<owner>/<repo>/tree/<ref> or /commit/<sha>")
+        elif not ref:
+            reasons.append("GITHUB_URL has no explicit ref/commit")
+
+    return len(reasons) == 0, reasons
+
+
 def _validate_miner_env() -> None:
     """Validate AGENT_NAME and GITHUB_URL at startup, exit on failure."""
     errors: list[str] = []
@@ -31,7 +54,7 @@ def _validate_miner_env() -> None:
         for err in errors:
             ColoredLogger.error(f"STARTUP VALIDATION FAILED: {err}", ColoredLogger.RED)
         sys.exit(1)
-        
+
 
 class Miner(BaseMinerNeuron):
     def __init__(self, config=None):
@@ -61,6 +84,30 @@ class Miner(BaseMinerNeuron):
             agent_name = AGENT_NAME.strip() if isinstance(AGENT_NAME, str) else ""
             agent_image = AGENT_IMAGE.strip() if isinstance(AGENT_IMAGE, str) else ""
             github_url = GITHUB_URL.strip() if isinstance(GITHUB_URL, str) else ""
+
+            required_ready, required_reasons = _handshake_required_fields_status(
+                agent_name=agent_name,
+                github_url=github_url,
+            )
+            if required_ready:
+                ColoredLogger.success(
+                    f"[StartRound] ✅ All required fields are ready to be evaluated: name='{agent_name}', github_url='{github_url}'",
+                    ColoredLogger.GREEN,
+                )
+            else:
+                if not agent_name and not github_url:
+                    failure_scope = "name + github_url"
+                elif not agent_name:
+                    failure_scope = "name"
+                elif not github_url:
+                    failure_scope = "github_url"
+                else:
+                    # Covers format/ref issues in github_url.
+                    failure_scope = "github_url"
+                ColoredLogger.warning(
+                    f"[StartRound] ❌ Required fields are NOT ready to be evaluated. failed={failure_scope} | reason={'; '.join(required_reasons)}",
+                    ColoredLogger.YELLOW,
+                )
 
             # 🔍 DEBUG: Set each field individually with error handling
             try:

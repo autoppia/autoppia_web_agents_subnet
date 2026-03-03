@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 import bittensor as bt
 
@@ -47,9 +49,15 @@ class ValidatorPlatformMixin:
         self.current_round_tasks: Dict[str, iwa_models.TaskIWAP] = {}
         self.current_agent_runs: Dict[int, iwa_models.AgentRunIWAP] = {}
         self.current_miner_snapshots: Dict[int, iwa_models.MinerSnapshotIWAP] = {}
+        self._iwap_shadow_mode = False
         self.round_handshake_payloads: Dict[int, Any] = {}
         self.round_start_timestamp: float = 0.0
         self.agent_run_accumulators: Dict[int, Dict[str, float]] = {}
+        # (repo, commit) already evaluated per miner -> agent_run_id + stats (no re-eval on resubmit)
+        self._evaluated_commits_by_miner: Dict[int, Dict[str, Dict[str, Any]]] = {}  # uid -> "repo|commit" -> {agent_run_id, ...stats}
+        # Set during handshake when reusing a past run (same commit evaluated in a previous round)
+        self.reused_from_agent_run_id_by_uid: Dict[int, str] = {}
+        self.reused_stats_by_uid: Dict[int, Dict[str, Any]] = {}
         # Track completed (miner_uid, task_id) to avoid duplicates
         self._completed_pairs: Set[Tuple[int, str]] = set()
         # Phase flags for IWAP steps (p1=start_round, p2=set_tasks)
@@ -76,14 +84,9 @@ class ValidatorPlatformMixin:
 
         # Calculate season and round within season
         season_number = iwa_main.compute_season_number(current_block)
-        round_number_in_season = iwa_main.compute_round_number_in_season(
-            current_block, round_length
-        )
+        round_number_in_season = iwa_main.compute_round_number_in_season(current_block, round_length)
 
-        return iwa_main.generate_validator_round_id(
-            season_number=season_number,
-            round_number_in_season=round_number_in_season
-        )
+        return iwa_main.generate_validator_round_id(season_number=season_number, round_number_in_season=round_number_in_season)
 
     def _build_iwap_auth_headers(self) -> Dict[str, str]:
         hotkey = getattr(self.wallet.hotkey, "ss58_address", None)
@@ -126,11 +129,11 @@ class ValidatorPlatformMixin:
 
     async def _iwap_start_round(self, *, current_block: int, n_tasks: int) -> None:
         await _utils_start_round_flow(self, current_block=current_block, n_tasks=n_tasks)
-    
+
     async def _iwap_register_miners(self) -> None:
         """
         Register all participating miners in IWAP dashboard after handshake.
-        
+
         Creates records for each miner that responded to handshake:
         - validator_round_miners (miner identity and snapshot)
         - miner_evaluation_runs (agent run for this round)
@@ -177,7 +180,86 @@ class ValidatorPlatformMixin:
             tasks_completed=tasks_completed,
         )
 
+    def _iwap_prev_round_path(self) -> Path:
+        """Path to persist prev_round_agent_run_ids / prev_round_run_stats so is_reused survives validator restart."""
+        try:
+            full_path = Path(str(getattr(self, "config", None) and getattr(self.config, "neuron", None) and getattr(self.config.neuron, "full_path", None) or "."))
+        except Exception:
+            full_path = Path(".")
+        full_path.mkdir(parents=True, exist_ok=True)
+        return full_path / "iwap_prev_round.json"
+
+    def _save_iwap_prev_round_state(self) -> None:
+        """Persist prev_round_agent_run_ids, prev_round_run_stats and _evaluated_commits_by_miner to disk (best-effort)."""
+        try:
+            run_ids = getattr(self, "prev_round_agent_run_ids", None) or {}
+            stats = getattr(self, "prev_round_run_stats", None) or {}
+            evaluated = getattr(self, "_evaluated_commits_by_miner", None) or {}
+            if not run_ids and not stats and not evaluated:
+                return
+            path = self._iwap_prev_round_path()
+            # Serialize _evaluated_commits_by_miner: uid -> {"repo|commit": stats_dict}
+            evaluated_ser = {}
+            for uid, key_to_data in evaluated.items():
+                evaluated_ser[str(uid)] = dict(key_to_data)
+            data = {
+                "prev_round_agent_run_ids": {str(uid): run_id for uid, run_id in run_ids.items()},
+                "prev_round_run_stats": {str(uid): s for uid, s in stats.items()},
+                "evaluated_commits_by_miner": evaluated_ser,
+            }
+            path.write_text(json.dumps(data, indent=0), encoding="utf-8")
+        except Exception:
+            pass
+
+    def _load_iwap_prev_round_state(self) -> None:
+        """Load prev_round_agent_run_ids, prev_round_run_stats and _evaluated_commits_by_miner from disk so is_reused works after restart."""
+        try:
+            path = self._iwap_prev_round_path()
+            if not path.exists():
+                return
+            data = json.loads(path.read_text(encoding="utf-8"))
+            run_ids_raw = data.get("prev_round_agent_run_ids") or {}
+            stats_raw = data.get("prev_round_run_stats") or {}
+            self.prev_round_agent_run_ids = {int(uid): run_id for uid, run_id in run_ids_raw.items()}
+            self.prev_round_run_stats = {int(uid): s for uid, s in stats_raw.items()}
+            evaluated_raw = data.get("evaluated_commits_by_miner") or {}
+            self._evaluated_commits_by_miner = {int(uid): dict(key_to_data) for uid, key_to_data in evaluated_raw.items()}
+        except Exception:
+            self.prev_round_agent_run_ids = getattr(self, "prev_round_agent_run_ids", None) or {}
+            self.prev_round_run_stats = getattr(self, "prev_round_run_stats", None) or {}
+            self._evaluated_commits_by_miner = getattr(self, "_evaluated_commits_by_miner", None) or {}
+
     def _reset_iwap_round_state(self) -> None:
+        # Persist current runs/stats for next round (reused-run resolution).
+        # Only snapshot when we have runs (first caller, e.g. finish_round_flow); if called again
+        # from settlement after current_agent_runs was already cleared, do not overwrite prev_round_* with empty.
+        current_runs = getattr(self, "current_agent_runs", None) or {}
+        if current_runs:
+            self.prev_round_agent_run_ids = {uid: run.agent_run_id for uid, run in current_runs.items()}
+            self.prev_round_run_stats = {}
+            for uid, run in current_runs.items():
+                acc = getattr(self, "agent_run_accumulators", {}).get(uid, {})
+                tasks = int(acc.get("tasks", 0) or 0)
+                reward_sum = float(acc.get("reward", 0.0) or 0.0)
+                eval_sum = float(acc.get("eval_score", 0.0) or 0.0)
+                time_sum = float(acc.get("execution_time", 0.0) or 0.0)
+                avg_score = (eval_sum / tasks) if tasks else (getattr(run, "average_score", None) or 0.0)
+                avg_reward = (reward_sum / tasks) if tasks else (getattr(run, "average_reward", None) or 0.0)
+                avg_time = (time_sum / tasks) if tasks else (getattr(run, "average_execution_time", None) or 0.0)
+                round_rewards = getattr(getattr(self, "round_manager", None), "round_rewards", {}) or {}
+                miner_rewards = round_rewards.get(uid, []) or []
+                success_tasks = len([r for r in miner_rewards if float(r) >= 0.5])
+                agent_for_uid = getattr(self, "agents_dict", {}).get(uid)
+                self.prev_round_run_stats[uid] = {
+                    "agent_run_id": run.agent_run_id,
+                    "average_score": avg_score,
+                    "average_reward": avg_reward,
+                    "average_execution_time": avg_time,
+                    "total_tasks": tasks or len(miner_rewards),
+                    "success_tasks": success_tasks,
+                    "failed_tasks": (tasks or len(miner_rewards)) - success_tasks,
+                    "zero_reason": getattr(agent_for_uid, "zero_reason", None) if agent_for_uid else None,
+                }
         self.current_round_id = None
         self.current_round_tasks = {}
         self.current_agent_runs = {}
@@ -187,9 +269,85 @@ class ValidatorPlatformMixin:
         self.agent_run_accumulators = {}
         self._completed_pairs = set()
         self._phases = {"p1_done": False, "p2_done": False}
+        self.reused_from_agent_run_id_by_uid = {}
+        self.reused_stats_by_uid = {}
+        self._s3_task_log_urls = []
+        self._iwap_shadow_mode = False
+        try:
+            from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+
+            ColoredLogger.clear_round_log_file()
+        except Exception:
+            pass
         # Reset round number to force recalculation on next round start
         # This prevents reusing stale values when discarding old round state
         self._current_round_number = None
+
+        # Persist prev_round so after validator restart we still send is_reused/reused_from_agent_run_id
+        self._save_iwap_prev_round_state()
+
+    def _register_evaluated_commit(
+        self,
+        uid: int,
+        normalized_repo: str,
+        commit_sha: str,
+        agent_run_id: str,
+        stats: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Record that we evaluated (repo, commit) for this miner so we don't re-evaluate on resubmit."""
+        if not normalized_repo or not commit_sha or not agent_run_id:
+            return
+        key = f"{normalized_repo.strip()}|{commit_sha.strip()}"
+        if not isinstance(getattr(self, "_evaluated_commits_by_miner", None), dict):
+            self._evaluated_commits_by_miner = {}
+        existing = (self._evaluated_commits_by_miner.get(uid) or {}).get(key)
+        incoming = {"agent_run_id": agent_run_id, **(stats or {})}
+        # Keep explicit first/last evaluated round metadata per commit key.
+        season_val = incoming.get("evaluated_season")
+        round_val = incoming.get("evaluated_round")
+        if season_val is not None and "last_evaluated_season" not in incoming:
+            incoming["last_evaluated_season"] = season_val
+        if round_val is not None and "last_evaluated_round" not in incoming:
+            incoming["last_evaluated_round"] = round_val
+        if season_val is not None and "first_evaluated_season" not in incoming:
+            incoming["first_evaluated_season"] = season_val
+        if round_val is not None and "first_evaluated_round" not in incoming:
+            incoming["first_evaluated_round"] = round_val
+
+        # Do not downgrade a good reusable source with an empty/incomplete run.
+        # Keep first meaningful evaluated run as anchor for reuse.
+        if isinstance(existing, dict):
+            # Preserve first evaluation markers forever for this commit.
+            if existing.get("first_evaluated_season") is not None:
+                incoming["first_evaluated_season"] = existing.get("first_evaluated_season")
+            if existing.get("first_evaluated_round") is not None:
+                incoming["first_evaluated_round"] = existing.get("first_evaluated_round")
+            try:
+                existing_total = int(existing.get("total_tasks", 0) or 0)
+            except Exception:
+                existing_total = 0
+            try:
+                incoming_total = int(incoming.get("total_tasks", 0) or 0)
+            except Exception:
+                incoming_total = 0
+
+            if existing_total > 0 and incoming_total <= 0:
+                return
+            if existing_total > 0 and incoming_total > 0:
+                return
+            if existing_total <= 0 and incoming_total > 0:
+                self._evaluated_commits_by_miner.setdefault(uid, {})[key] = incoming
+                try:
+                    self._save_iwap_prev_round_state()
+                except Exception:
+                    pass
+                return
+
+        self._evaluated_commits_by_miner.setdefault(uid, {})[key] = incoming
+        try:
+            self._save_iwap_prev_round_state()
+        except Exception:
+            pass
 
     # ──────────────────────────────────────────────────────────────────────────
     # Async subtensor provider for consensus (single instance per validator)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 import time
 import queue
 import os
@@ -14,7 +15,7 @@ from autoppia_web_agents_subnet.bittensor_config import config
 from autoppia_web_agents_subnet.validator.config import (
     ROUND_SIZE_EPOCHS,
 )
-from autoppia_web_agents_subnet.validator.round_manager import RoundManager
+from autoppia_web_agents_subnet.validator.round_manager import RoundManager, RoundPhase
 from autoppia_web_agents_subnet.validator.season_manager import SeasonManager
 from autoppia_web_agents_subnet.validator.round_start.mixin import ValidatorRoundStartMixin
 from autoppia_web_agents_subnet.validator.round_start.types import RoundStartResult
@@ -72,6 +73,20 @@ class Validator(
             full_path = Path(".")
         full_path.mkdir(parents=True, exist_ok=True)
         return full_path / "season_competition_state.json"
+
+    def _state_summary_root(self) -> Path:
+        """Root path for per-round summary snapshots."""
+        root = os.getenv("IWAP_BACKUP_DIR")
+        if root:
+            base = Path(root)
+        else:
+            try:
+                base = Path(self.config.neuron.full_path).parent.parent
+            except Exception:
+                base = Path(".")
+            base = base / "data"
+        base.mkdir(parents=True, exist_ok=True)
+        return base
 
     def _save_competition_state(self) -> None:
         """Persist season winner/history state to JSON (best-effort)."""
@@ -201,6 +216,84 @@ class Validator(
         }
         with self._competition_state_path().open("w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2, sort_keys=True)
+
+        self._save_round_summary_snapshots(serialized)
+
+    def _save_round_summary_snapshots(self, serialized: dict[str, dict]) -> None:
+        """Persist per-round summary snapshots under data/season_<N>/round_<M>/summary_round.json."""
+        try:
+            base = self._state_summary_root()
+        except Exception:
+            return
+
+        now = datetime.utcnow().isoformat()
+
+        for season_key, season_payload in serialized.items():
+            try:
+                season_number = int(season_key)
+            except Exception:
+                continue
+            if not isinstance(season_payload, dict):
+                continue
+
+            season_summary = season_payload.get("summary", {})
+            if not isinstance(season_summary, dict):
+                season_summary = {}
+
+            rounds_payload = season_payload.get("rounds", {})
+            if not isinstance(rounds_payload, dict):
+                continue
+
+            season_dir = base / f"season_{season_number}"
+            for round_key, round_payload in rounds_payload.items():
+                try:
+                    round_number = int(round_key)
+                except Exception:
+                    continue
+                if not isinstance(round_payload, dict):
+                    continue
+                round_dir = season_dir / f"round_{round_number}"
+                logs_dir = round_dir / "logs"
+                if not logs_dir.exists():
+                    round_dir.mkdir(parents=True, exist_ok=True)
+                summary_path = round_dir / "summary_round.json"
+                round_summary = {**round_payload}
+
+                pre_consensus = {
+                    "schema_version": 1,
+                    "season_number": season_number,
+                    "round_number_in_season": round_number,
+                    "saved_at_utc": now,
+                    "round_summary": {
+                        "winner": round_summary.get("winner", {}),
+                        "miner_scores": {str(k): float(v) for k, v in round_summary.get("miner_scores", {}).items()} if isinstance(round_summary.get("miner_scores", {}), dict) else {},
+                        "decision": round_summary.get("decision", {}),
+                    },
+                    "season_summary": {
+                        "current_winner_uid": season_summary.get("current_winner_uid"),
+                        "current_winner_score": season_summary.get("current_winner_score", 0.0),
+                        "required_improvement_pct": season_summary.get("required_improvement_pct", 0.0),
+                    },
+                }
+
+                snapshot = {
+                    "schema_version": 1,
+                    "season_number": season_number,
+                    "round_number_in_season": round_number,
+                    "saved_at_utc": now,
+                    "pre_consensus": pre_consensus,
+                    "post_consensus": None,
+                    "ipfs_uploaded": None,
+                    "ipfs_downloaded": None,
+                    "round_summary": pre_consensus.get("round_summary", {}),
+                    "season_summary": {
+                        "current_winner_uid": season_summary.get("current_winner_uid"),
+                        "current_winner_score": season_summary.get("current_winner_score", 0.0),
+                        "required_improvement_pct": season_summary.get("required_improvement_pct", 0.0),
+                    },
+                }
+                with summary_path.open("w", encoding="utf-8") as f:
+                    json.dump(snapshot, f, indent=2, sort_keys=True)
 
     def _load_competition_state(self) -> None:
         """Load season winner/history state from JSON (best-effort)."""
@@ -395,7 +488,7 @@ class Validator(
             bt.logging.warning(f"Failed to save competition state: {exc}")
 
     def load_state(self):
-        """Load base validator state + season competition history."""
+        """Load base validator state + season competition history + IWAP prev-round (for is_reused)."""
         try:
             super().load_state()
         except Exception as exc:
@@ -404,6 +497,11 @@ class Validator(
             self._load_competition_state()
         except Exception as exc:
             bt.logging.warning(f"Could not load competition state JSON (starting fresh): {exc}")
+        try:
+            if hasattr(self, "_load_iwap_prev_round_state") and callable(self._load_iwap_prev_round_state):
+                self._load_iwap_prev_round_state()
+        except Exception as exc:
+            bt.logging.warning(f"Could not load IWAP prev-round state (starting fresh): {exc}")
 
     async def forward(self) -> None:
         """
@@ -425,6 +523,40 @@ class Validator(
 
         # 1) Handshake & agent discovery
         await self._perform_handshake()
+
+        # Late-start guard: if handshake consumed too much time and the round is
+        # already at/near end, skip participation entirely for this round.
+        try:
+            current_block_after_handshake = self.block
+            target_block = int(getattr(self.round_manager, "target_block", 0) or 0)
+            remaining_blocks = max(target_block - current_block_after_handshake, 0)
+            min_blocks_to_participate = int(
+                getattr(
+                    self.round_manager,
+                    "SKIP_ROUND_MIN_BLOCKS_AFTER_HANDSHAKE",
+                    10,
+                )
+                or 10
+            )
+            if target_block > 0 and remaining_blocks < min_blocks_to_participate:
+                bt.logging.warning(
+                    "Skipping round participation after handshake: "
+                    f"remaining_blocks={remaining_blocks} < min_required={min_blocks_to_participate} "
+                    f"(current_block={current_block_after_handshake}, target_block={target_block})"
+                )
+                self.round_manager.enter_phase(
+                    RoundPhase.COMPLETE,
+                    block=current_block_after_handshake,
+                    note="Round skipped (late start after handshake)",
+                    force=True,
+                )
+                await self._wait_until_specific_block(
+                    target_block=target_block,
+                    target_description="round boundary block",
+                )
+                return
+        except Exception as exc:
+            bt.logging.warning(f"Late-start guard check failed (continuing): {exc}")
 
         # Initialize IWAP round after handshake (we now know how many miners participate)
         current_block = self.block

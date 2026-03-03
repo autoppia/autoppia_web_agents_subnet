@@ -395,11 +395,11 @@ def extract_gif_bytes(payload: Optional[object]) -> Optional[bytes]:
     try:
         decoded = base64.b64decode(raw_source, validate=True)
     except (BinasciiError, ValueError) as exc:  # noqa: BLE001
-        bt.logging.warning("🛰️ IWAP GIF extraction failed: base64 decode error %s", exc)
+        bt.logging.warning(f"🛰️ IWAP GIF extraction failed: base64 decode error {exc}")
         return None
 
     if decoded.startswith((b"GIF87a", b"GIF89a")):
-        bt.logging.debug("🛰️ IWAP GIF extraction decoded GIF successfully (bytes=%s)", len(decoded))
+        bt.logging.debug(f"🛰️ IWAP GIF extraction decoded GIF successfully (bytes={len(decoded)})")
         return decoded
     bt.logging.warning("🛰️ IWAP GIF extraction failed: decoded payload missing GIF header")
     return None

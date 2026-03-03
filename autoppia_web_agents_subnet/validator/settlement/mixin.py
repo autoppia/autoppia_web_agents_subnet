@@ -27,10 +27,38 @@ class ValidatorSettlementMixin:
     async def _run_settlement_phase(self, *, agents_evaluated: int = 0) -> None:
         """
         Complete the round:
-        - Publish consensus snapshot if pending.
-        - Calculate and broadcast final weights (if not already done).
-        - Wait for the next round boundary before exiting to the scheduler loop.
+        - If we're past the round end: no IPFS/consensus/finish/set_weights; just cleanup and wait for next round.
+        - Otherwise: publish consensus snapshot, wait for 97%, aggregate, set weights, wait for round end.
         """
+        round_end_block = getattr(self, "_settlement_round_target_block", None) or self.round_manager.target_block
+        current_block = getattr(self, "block", None)
+        if round_end_block is not None and current_block is not None and current_block > round_end_block:
+            ColoredLogger.info(
+                f"Round ended before settlement (block {current_block} > {round_end_block}); skipping IPFS/consensus/finish/set_weights for this round.",
+                ColoredLogger.YELLOW,
+            )
+            self.round_manager.enter_phase(
+                RoundPhase.COMPLETE,
+                block=current_block,
+                note="Round skipped (ended before settlement)",
+                force=True,
+            )
+            await self._wait_until_specific_block(
+                target_block=round_end_block,
+                target_description="round end block",
+            )
+            for attr in ("_settlement_round_start_block", "_settlement_round_target_block", "_settlement_round_fetch_block"):
+                if hasattr(self, attr):
+                    delattr(self, attr)
+            self.round_manager.log_phase_history()
+            try:
+                reset = getattr(self, "_reset_iwap_round_state", None)
+                if callable(reset):
+                    reset()
+            except Exception:
+                pass
+            return
+
         agents_dict = getattr(self, "agents_dict", None)
         if not isinstance(agents_dict, dict):
             agents_dict = {}
@@ -68,23 +96,37 @@ class ValidatorSettlementMixin:
                 or 0.97
             )
             fetch_fraction = max(0.0, min(1.0, fetch_fraction))
-            if self.round_manager.start_block is None:
-                self.round_manager.sync_boundaries(self.block)
-            start_block = int(self.round_manager.start_block or self.block)
-            target_block = int(self.round_manager.target_block or self.round_manager.settlement_block or start_block)
-            fetch_block = int(start_block + int(self.round_manager.round_block_length * fetch_fraction))
-            fetch_block = max(start_block, min(fetch_block, target_block))
+            # Use boundaries saved at round start so we wait for *this* round's 97% and end,
+            # not the next round's (if block has advanced past round end, sync_boundaries would give next round).
+            fetch_block = getattr(self, "_settlement_round_fetch_block", None)
+            target_block = getattr(self, "_settlement_round_target_block", None)
+            if fetch_block is None or target_block is None:
+                if self.round_manager.start_block is None:
+                    self.round_manager.sync_boundaries(self.block)
+                start_block = int(self.round_manager.start_block or self.block)
+                target_block = int(self.round_manager.target_block or self.round_manager.settlement_block or start_block)
+                fetch_block = int(start_block + int(self.round_manager.round_block_length * fetch_fraction))
+                fetch_block = max(start_block, min(fetch_block, target_block))
+            else:
+                fetch_block = int(fetch_block)
+                target_block = int(target_block)
 
             await self._wait_until_specific_block(
                 target_block=fetch_block,
-                target_description=f"consensus fetch block ({fetch_fraction:.2%} of round)",
+                target_description=f"consensus fetch block ({fetch_fraction:.0%} of round)",
             )
 
             try:
-                scores, _ = await aggregate_scores_from_commitments(self, st=st)
+                scores, details = await aggregate_scores_from_commitments(self, st=st)
+                # Persist consensus artifacts for finish_round payload building
+                # (ipfs_downloaded + post_consensus_evaluation reporting).
+                self._agg_scores_cache = scores
+                self._agg_meta_cache = details
             except Exception as e:
                 ColoredLogger.error(f"Error aggregating scores from commitments: {e}", ColoredLogger.RED)
                 scores = {}
+                self._agg_scores_cache = {}
+                self._agg_meta_cache = {}
             await self._calculate_final_weights(scores=scores)
             self.round_manager.enter_phase(
                 RoundPhase.COMPLETE,
@@ -93,10 +135,16 @@ class ValidatorSettlementMixin:
                 force=True,
             )
 
+        round_end_block = getattr(self, "_settlement_round_target_block", None) or self.round_manager.target_block
         await self._wait_until_specific_block(
-            target_block=self.round_manager.target_block,
+            target_block=round_end_block,
             target_description="round end block",
         )
+
+        # Clear saved boundaries so next round gets fresh ones
+        for attr in ("_settlement_round_start_block", "_settlement_round_target_block", "_settlement_round_fetch_block"):
+            if hasattr(self, attr):
+                delattr(self, attr)
 
         self.round_manager.log_phase_history()
 
@@ -131,7 +179,7 @@ class ValidatorSettlementMixin:
             if time.monotonic() > deadline:
                 raise TimeoutError(f"Timed out waiting for {target_description} at block {target_block}; last observed block={current_block}")
             try:
-                current_block = self.subtensor.get_current_block()
+                current_block = self.get_current_block(fresh=True)
                 consecutive_errors = 0
                 if current_block >= target_block:
                     ColoredLogger.success(

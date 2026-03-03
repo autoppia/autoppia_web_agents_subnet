@@ -22,12 +22,14 @@ BURN_AMOUNT_PERCENTAGE = _env_float("BURN_AMOUNT_PERCENTAGE", 0.925)
 # SHARED CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
 
-SEASON_SIZE_EPOCHS = _env_float("SEASON_SIZE_EPOCHS", 280.0, test_default=2)
-ROUND_SIZE_EPOCHS = _env_float("ROUND_SIZE_EPOCHS", 4.0, test_default=0.5)
-MINIMUM_START_BLOCK = _env_int("MINIMUM_START_BLOCK", 7586110, test_default=7586110)
+SEASON_SIZE_EPOCHS = _env_float("SEASON_SIZE_EPOCHS", 280.0, test_default=1.6666667)
+ROUND_SIZE_EPOCHS = _env_float("ROUND_SIZE_EPOCHS", 4.0, test_default=0.2777778)
+# IMPORTANT: season/round math uses MINIMUM_START_BLOCK always.
+# In TESTING mode, this still gets the hardcoded env value if present.
+MINIMUM_START_BLOCK = _env_int("MINIMUM_START_BLOCK", 7586110)
 STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION = _env_float("STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION", 0.94, test_default=0.94)
 FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION = _env_float("FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION", 0.97, test_default=0.97)
-SKIP_ROUND_IF_STARTED_AFTER_FRACTION = _env_float("SKIP_ROUND_IF_STARTED_AFTER_FRACTION", 0.30, test_default=0.95)
+SKIP_ROUND_IF_STARTED_AFTER_FRACTION = _env_float("SKIP_ROUND_IF_STARTED_AFTER_FRACTION", 0.30, test_default=0.30)
 
 # TASKS_PER_SEASON: Number of tasks to generate for each season (generated only in round 1)
 # Tasks are distributed round-robin across all demo projects (1 task per project per cycle)
@@ -58,8 +60,8 @@ COST_WEIGHT = _env_float("COST_WEIGHT", 0.2)
 
 # Evaluation resource controls:
 # 1) Per-round stake window: only handshake/evaluate the top N miners by stake.
-#    Set to 0 to disable.
-MAX_MINERS_PER_ROUND_BY_STAKE = _env_int("MAX_MINERS_PER_ROUND_BY_STAKE", 30)
+#    Set to 0 to disable. In TESTING, default 0 so local/low-stake miners get handshake.
+MAX_MINERS_PER_ROUND_BY_STAKE = _env_int("MAX_MINERS_PER_ROUND_BY_STAKE", 0 if TESTING else 30)
 # 2) Anti-sybil controls during handshake: cap unique active miners sharing the same coldkey/repo.
 #    REPO caps are applied per season (resets when a new season starts).
 MAX_MINERS_PER_COLDKEY = _env_int("MAX_MINERS_PER_COLDKEY", 2)
@@ -81,6 +83,12 @@ MIN_MINER_STAKE_ALPHA = _env_float("MIN_MINER_STAKE_ALPHA", 100.0, test_default=
 IPFS_API_URL = _env_str("IPFS_API_URL", "http://ipfs.metahash73.com:5001/api/v0")
 # Comma-separated gateways for fetch fallback
 IPFS_GATEWAYS = [gw.strip() for gw in (_env_str("IPFS_GATEWAYS", "https://ipfs.io/ipfs,https://cloudflare-ipfs.com/ipfs") or "").split(",") if gw.strip()]
+# Retry policy for finish_round when backend blocks non-main validator writes.
+# Optional via env:
+# - FINISH_ROUND_MAX_RETRIES
+# - FINISH_ROUND_RETRY_SECONDS
+FINISH_ROUND_MAX_RETRIES = _env_int("FINISH_ROUND_MAX_RETRIES", 3, test_default=4)
+FINISH_ROUND_RETRY_SECONDS = _env_int("FINISH_ROUND_RETRY_SECONDS", 180, test_default=30)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -145,7 +153,10 @@ MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO = _env_float(
     10000.0,
     test_default=0.0,
 )
-IWAP_API_BASE_URL = "https://dev-api-leaderboard.autoppia.com" if TESTING else "https://api-leaderboard.autoppia.com"
+IWAP_API_BASE_URL = _env_str(
+    "IWAP_API_BASE_URL",
+    "http://127.0.0.1:8080" if TESTING else "https://api-leaderboard.autoppia.com",
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

@@ -17,8 +17,7 @@
 # DEALINGS IN THE SOFTWARE.
 
 import time
-import math
-import hashlib as rpccheckhealth
+import threading
 from math import floor
 from typing import Callable, Any
 from functools import lru_cache, update_wrapper
@@ -109,4 +108,16 @@ def ttl_get_block(self) -> int:
 
     Note: self here is the miner or validator instance
     """
-    return self.subtensor.get_current_block()
+    return _get_current_block_serialized(self)
+
+
+def _get_current_block_serialized(self) -> int:
+    """
+    Read current block under a per-instance lock to avoid concurrent websocket recv().
+    """
+    lock = getattr(self, "_subtensor_block_read_lock", None)
+    if lock is None:
+        lock = threading.RLock()
+        setattr(self, "_subtensor_block_read_lock", lock)
+    with lock:
+        return self.subtensor.get_current_block()

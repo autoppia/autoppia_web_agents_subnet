@@ -166,6 +166,11 @@ class AgentRunIWAP:
     rank: Optional[int] = None
     weight: Optional[float] = None
     metadata: Dict[str, Any] = field(default_factory=dict)
+    # Reused run: same code as previous round, no re-evaluation
+    is_reused: bool = False
+    reused_from_agent_run_id: Optional[str] = None
+    # Reason for score 0 when applicable (e.g. task_timeout, over_cost_limit); copied from source when reused
+    zero_reason: Optional[str] = None
 
     def to_payload(self) -> Dict[str, Any]:
         data = asdict(self)
@@ -214,9 +219,14 @@ class EvaluationResultIWAP:
     metadata: Dict[str, Any] = field(default_factory=dict)
     # LLM usage tracking (single source of truth)
     llm_usage: Optional[List[Dict[str, Any]]] = None  # Per-call usage [{provider, model?, tokens?, cost?}]
+    # Reason for score 0 at evaluation level (e.g. task_timeout, tests_failed)
+    zero_reason: Optional[str] = None
 
     def to_payload(self) -> Dict[str, Any]:
         data = asdict(self)
+        # Emit evaluation_score (canonical); drop eval_score from payload
+        if "eval_score" in data:
+            data["evaluation_score"] = data.pop("eval_score")
         # Only include metadata if it has useful information (not empty)
         if self.metadata:
             data["metadata"] = self.metadata
@@ -246,6 +256,11 @@ class FinishRoundAgentRunIWAP:
     tasks_attempted: Optional[int] = None
     tasks_completed: Optional[int] = None
     tasks_failed: Optional[int] = None
+    # Reason for score 0 when applicable (e.g. over_cost_limit, deploy_failed, all_tasks_failed)
+    zero_reason: Optional[str] = None
+    # Reuse: same (repo, commit) already evaluated in a previous round this season
+    is_reused: bool = False
+    reused_from_agent_run_id: Optional[str] = None
 
     def to_payload(self) -> Dict[str, Any]:
         return _drop_nones(asdict(self))
@@ -264,9 +279,11 @@ class RoundMetadataIWAP:
     end_epoch: float
     tasks_total: int
     tasks_completed: int
-    miners_responded_handshake: int
-    miners_active: int
+    miners_responded_handshake: int  # miners that answered the round handshake
+    miners_evaluated: int  # miners that had at least one task evaluated (appear in rewards)
     emission: Optional[Dict[str, Any]] = None
+    # Miners that were not re-evaluated this round (same git commit as last evaluated round)
+    miners_reused_same_commit: Optional[List[int]] = None
 
     def to_payload(self) -> Dict[str, Any]:
         return _drop_nones(asdict(self))
@@ -276,15 +293,19 @@ class RoundMetadataIWAP:
 class FinishRoundIWAP:
     status: str
     ended_at: float
-    summary: Optional[Dict[str, int]] = None
+    summary: Optional[Dict[str, Any]] = None
     agent_runs: List[FinishRoundAgentRunIWAP] = field(default_factory=list)
     # FASE 1: Nuevos campos opcionales
     round_metadata: Optional[RoundMetadataIWAP] = None
     local_evaluation: Optional[Dict[str, Any]] = None
     post_consensus_evaluation: Optional[Dict[str, Any]] = None
+    validator_summary: Optional[Dict[str, Any]] = None
     # FASE 2: IPFS data
     ipfs_uploaded: Optional[Dict[str, Any]] = None
     ipfs_downloaded: Optional[Dict[str, Any]] = None
+    s3_logs: Optional[Dict[str, Any]] = None
+    validator_state: Optional[Dict[str, Any]] = None
+    validator_iwap_prev_round_json: Optional[Dict[str, Any]] = None
     # Deprecated fields (kept for backward compatibility but no longer populated)
     winners: List[RoundWinnerIWAP] = field(default_factory=list)
     winner_scores: List[float] = field(default_factory=list)
@@ -301,14 +322,22 @@ class FinishRoundIWAP:
         # Add new fields if present
         if self.round_metadata:
             payload["round"] = self.round_metadata.to_payload()
-        if self.local_evaluation:
+        if self.local_evaluation is not None:
             payload["local_evaluation"] = self.local_evaluation
-        if self.post_consensus_evaluation:
+        if self.post_consensus_evaluation is not None:
             payload["post_consensus_evaluation"] = self.post_consensus_evaluation
-        if self.ipfs_uploaded:
+        if self.validator_summary is not None:
+            payload["validator_summary"] = self.validator_summary
+        if self.ipfs_uploaded is not None:
             payload["ipfs_uploaded"] = self.ipfs_uploaded
-        if self.ipfs_downloaded:
+        if self.ipfs_downloaded is not None:
             payload["ipfs_downloaded"] = self.ipfs_downloaded
+        if self.s3_logs is not None:
+            payload["s3_logs"] = self.s3_logs
+        if self.validator_state is not None:
+            payload["validator_state"] = self.validator_state
+        if self.validator_iwap_prev_round_json is not None:
+            payload["validator_iwap_prev_round_json"] = self.validator_iwap_prev_round_json
 
         # Deprecated fields (only included if populated for backward compatibility)
         if self.winners:

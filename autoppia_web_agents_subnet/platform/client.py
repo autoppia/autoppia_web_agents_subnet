@@ -10,6 +10,7 @@ from datetime import date, datetime, time as dtime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, TypeVar
+import re
 
 import bittensor as bt
 import httpx
@@ -137,9 +138,9 @@ class IWAPClient:
         self._client = client or httpx.AsyncClient(base_url=resolved_base_url, timeout=timeout)
         self._owns_client = client is None
         # Determine backup directory for IWAP payload snapshots
-        # Priority: explicit arg > env var IWAP_BACKUP_DIR > repo-local data/iwap_payloads
+        # Priority: explicit arg > env var IWAP_BACKUP_DIR > repo-local data
         env_dir = os.getenv("IWAP_BACKUP_DIR")
-        default_dir = Path.cwd() / "data" / "iwap_payloads"
+        default_dir = Path.cwd() / "data"
         resolved_backup = backup_dir or env_dir or default_dir
         self._backup_dir = Path(resolved_backup)
         self._auth_provider = auth_provider
@@ -203,7 +204,13 @@ class IWAPClient:
         if force:
             url += "?force=true"
 
-        return await self._post(url, payload, context="start_round")
+        return await self._post(
+            url,
+            payload,
+            context="start_round",
+            season_number=int(validator_round.season_number),
+            round_number_in_season=int(validator_round.round_number_in_season),
+        )
 
     async def set_tasks(
         self,
@@ -228,7 +235,14 @@ class IWAPClient:
         if force:
             url += "?force=true"
 
-        return await self._post(url, payload, context="set_tasks")
+        season_number, round_number_in_season = self._extract_round_info_from_validator_round_id(validator_round_id)
+        return await self._post(
+            url,
+            payload,
+            context="set_tasks",
+            season_number=season_number,
+            round_number_in_season=round_number_in_season,
+        )
 
     async def start_agent_run(
         self,
@@ -260,12 +274,74 @@ class IWAPClient:
         if force:
             url += "?force=true"
 
-        response = await self._post(url, payload, context="start_agent_run")
+        season_number, round_number_in_season = self._extract_round_info_from_validator_round_id(validator_round_id)
+        response = await self._post(
+            url,
+            payload,
+            context="start_agent_run",
+            season_number=season_number,
+            round_number_in_season=round_number_in_season,
+        )
         # Backend may return existing agent_run_id if duplicate was detected
         # Update agent_run.agent_run_id to match what backend returned
         if isinstance(response, dict) and "agent_run_id" in response:
             agent_run.agent_run_id = response["agent_run_id"]
         return response
+
+    async def upload_evaluation_gif(self, evaluation_id: str, gif_bytes: bytes) -> Optional[str]:
+        if not gif_bytes:
+            raise ValueError("GIF payload is empty")
+
+        from autoppia_web_agents_subnet.platform.utils.iwa_core import log_gif_event
+
+        auth_headers = self._resolve_auth_headers()
+        path = f"/api/v1/evaluations/{evaluation_id}/gif"
+        filename = f"{evaluation_id}.gif"
+        log_gif_event(f"Uploading to API - evaluation_id={evaluation_id} filename={filename} bytes={len(gif_bytes)}")
+
+        async def attempt(attempt_index: int) -> httpx.Response:
+            attempt_number = attempt_index + 1
+            attempt_suffix = f" (attempt {attempt_number})" if attempt_number > 1 else ""
+            log_gif_event(f"POST {path} started{attempt_suffix}")
+
+            try:
+                response = await self._client.post(
+                    path,
+                    headers=auth_headers,
+                    files={"gif": (filename, gif_bytes, "image/gif")},
+                )
+                response.raise_for_status()
+                log_gif_event(f"Upload request successful - status {response.status_code}", level="debug")
+                return response
+            except httpx.HTTPStatusError as exc:
+                body = exc.response.text
+                log_gif_event(f"Upload failed - POST {path}{attempt_suffix} returned {exc.response.status_code}: {body}", level="error")
+                raise
+            except Exception as exc:  # noqa: BLE001
+                log_gif_event(f"Upload failed unexpectedly - POST {path}{attempt_suffix}: {str(exc)}", level="error", exc_info=True)
+                raise
+
+        response = await self._with_retry(attempt, context="upload_evaluation_gif")
+
+        try:
+            payload = response.json()
+            log_gif_event(f"Response payload: {payload}", level="debug")
+        except Exception as e:
+            log_gif_event(f"Received non-JSON response for evaluation_id={evaluation_id}: {str(e)}", level="warning")
+            return None
+
+        gif_url = None
+        if isinstance(payload, dict):
+            data_section = payload.get("data")
+            if isinstance(data_section, dict):
+                gif_url = data_section.get("gifUrl")
+                log_gif_event(f"Extracted URL from response: {gif_url}", level="debug")
+
+        if gif_url:
+            log_gif_event(f"Upload completed successfully - URL: {gif_url}", level="success")
+        else:
+            log_gif_event(f"Upload completed but no URL returned for evaluation_id={evaluation_id}", level="warning")
+        return gif_url
 
     async def add_evaluation(
         self,
@@ -294,9 +370,7 @@ class IWAPClient:
                 "validator_hotkey": task_solution.validator_hotkey,
                 "miner_uid": evaluation_result.miner_uid,
                 "miner_hotkey": task_solution.miner_hotkey,
-                # Use eval_score as the canonical field; keep final_score as an alias for downstream consumers
-                "eval_score": evaluation_result.eval_score,
-                "final_score": evaluation_result.eval_score,
+                "evaluation_score": evaluation_result.eval_score,
                 "evaluation_time": evaluation_result.evaluation_time,
             },
             "evaluation_result": evaluation_result.to_payload(),
@@ -342,6 +416,8 @@ class IWAPClient:
 
         log_iwap_phase("add_evaluation", f"Preparing request for validator_round_id={validator_round_id} agent_run_id={agent_run_id} task_solution_id={task_solution.solution_id}", level="debug")
 
+        season_number, round_number_in_season = self._extract_round_info_from_validator_round_id(validator_round_id)
+
         # Use multipart if we have files, otherwise use regular JSON
         if files:
             await self._post_multipart(
@@ -349,12 +425,16 @@ class IWAPClient:
                 json_data,
                 files,
                 context="add_evaluation",
+                season_number=season_number,
+                round_number_in_season=round_number_in_season,
             )
         else:
             await self._post(
                 f"/api/v1/validator-rounds/{validator_round_id}/agent-runs/{agent_run_id}/evaluations",
                 json_data,
                 context="add_evaluation",
+                season_number=season_number,
+                round_number_in_season=round_number_in_season,
             )
 
     async def add_evaluations_batch(
@@ -387,11 +467,14 @@ class IWAPClient:
         from autoppia_web_agents_subnet.platform.utils.iwa_core import log_iwap_phase
 
         log_iwap_phase("add_evaluations_batch", f"Preparing batch request for validator_round_id={validator_round_id} agent_run_id={agent_run_id} count={len(evaluations)}", level="debug")
+        season_number, round_number_in_season = self._extract_round_info_from_validator_round_id(validator_round_id)
 
         return await self._post(
             f"/api/v1/validator-rounds/{validator_round_id}/agent-runs/{agent_run_id}/evaluations/batch",
             evaluations,
             context="add_evaluations_batch",
+            season_number=season_number,
+            round_number_in_season=round_number_in_season,
         )
 
     async def finish_round(
@@ -403,10 +486,14 @@ class IWAPClient:
         from autoppia_web_agents_subnet.platform.utils.iwa_core import log_iwap_phase
 
         log_iwap_phase("finish_round", f"Preparing request for validator_round_id={validator_round_id} summary={finish_request.summary}", level="debug")
+        payload = finish_request.to_payload()
+        season_number, round_number_in_season = self._extract_round_info_from_validator_round_id(validator_round_id)
         return await self._post(
             f"/api/v1/validator-rounds/{validator_round_id}/finish",
-            finish_request.to_payload(),
+            payload,
             context="finish_round",
+            season_number=season_number,
+            round_number_in_season=round_number_in_season,
         )
 
     async def auth_check(self) -> Dict[str, Any]:
@@ -415,67 +502,19 @@ class IWAPClient:
         ColoredLogger.info("IWAP | [Auth] Checking authentication", color=ColoredLogger.GOLD)
         return await self._post("/api/v1/validator-rounds/auth-check", {}, context="auth_check")
 
-    async def upload_evaluation_gif(self, evaluation_id: str, gif_bytes: bytes) -> Optional[str]:
-        if not gif_bytes:
-            raise ValueError("GIF payload is empty")
-
-        from autoppia_web_agents_subnet.platform.utils.iwa_core import log_gif_event
-
-        path = f"/api/v1/evaluations/{evaluation_id}/gif"
-        filename = f"{evaluation_id}.gif"
-        payload_bytes = len(gif_bytes)
-
-        log_gif_event(f"Uploading to API - evaluation_id={evaluation_id} filename={filename} bytes={payload_bytes}")
-
-        async def attempt(attempt_index: int) -> httpx.Response:
-            attempt_number = attempt_index + 1
-            attempt_suffix = f" (attempt {attempt_number})" if attempt_number > 1 else ""
-            log_gif_event(f"POST {path} started{attempt_suffix}")
-
-            try:
-                response = await self._client.post(
-                    path,
-                    files={"gif": (filename, gif_bytes, "image/gif")},
-                )
-                response.raise_for_status()
-                log_gif_event(f"Upload request successful - status {response.status_code}", level="debug")
-                return response
-            except httpx.HTTPStatusError as exc:
-                body = exc.response.text
-                log_gif_event(f"Upload failed - POST {path}{attempt_suffix} returned {exc.response.status_code}: {body}", level="error")
-                raise
-            except Exception as exc:  # noqa: BLE001
-                log_gif_event(f"Upload failed unexpectedly - POST {path}{attempt_suffix}: {str(exc)}", level="error", exc_info=True)
-                raise
-
-        response = await self._with_retry(attempt, context="upload_evaluation_gif")
-
-        try:
-            payload = response.json()
-            log_gif_event(f"Response payload: {payload}", level="debug")
-        except Exception as e:
-            log_gif_event(f"Received non-JSON response for evaluation_id={evaluation_id}: {str(e)}", level="warning")
-            return None
-
-        gif_url = None
-        if isinstance(payload, dict):
-            data_section = payload.get("data")
-            if isinstance(data_section, dict):
-                gif_url = data_section.get("gifUrl")
-                log_gif_event(f"Extracted URL from response: {gif_url}", level="debug")
-
-        if gif_url:
-            log_gif_event(f"Upload completed successfully - URL: {gif_url}", level="success")
-        else:
-            log_gif_event(f"Upload completed but no URL returned for evaluation_id={evaluation_id}", level="warning")
-        return gif_url
-
     async def upload_task_log(self, payload: Dict[str, Any]) -> Optional[str]:
         """
         Upload a per-task execution log to IWAP for S3 persistence.
         """
         auth_headers = self._resolve_auth_headers()
         path = "/api/v1/task-logs"
+        season_number, round_number_in_season = self._extract_round_info_from_payload(payload)
+        self._backup_payload(
+            "upload_task_log",
+            _sanitize_json(payload),
+            season_number=season_number,
+            round_number_in_season=round_number_in_season,
+        )
 
         try:
             payload_size = len(json.dumps(payload, ensure_ascii=False))
@@ -511,6 +550,56 @@ class IWAPClient:
             data = {}
         if isinstance(data, dict):
             return data.get("data", {}).get("url")
+        return None
+
+    async def upload_round_log(
+        self,
+        *,
+        validator_round_id: str,
+        content: str,
+        season_number: Optional[int] = None,
+        round_number_in_season: Optional[int] = None,
+        validator_uid: Optional[int] = None,
+        validator_hotkey: Optional[str] = None,
+    ) -> Optional[str]:
+        """
+        Upload the validator round raw log to IWAP for S3 persistence.
+        """
+        payload: Dict[str, Any] = {
+            "validator_round_id": validator_round_id,
+            "season": season_number,
+            "round_in_season": round_number_in_season,
+            "validator_uid": validator_uid,
+            "validator_hotkey": validator_hotkey,
+            "content": content,
+        }
+
+        parsed_season_number, parsed_round_number_in_season = self._extract_round_info_from_validator_round_id(validator_round_id)
+        if season_number is None:
+            season_number = parsed_season_number
+        if round_number_in_season is None:
+            round_number_in_season = parsed_round_number_in_season
+        try:
+            payload_size = len(content.encode("utf-8"))
+        except Exception:
+            payload_size = -1
+
+        response = await self._post(
+            f"/api/v1/validator-rounds/{validator_round_id}/round-log",
+            _sanitize_json(payload),
+            context="upload_round_log",
+            season_number=season_number,
+            round_number_in_season=round_number_in_season,
+        )
+
+        if payload_size >= 0:
+            bt.logging.debug(f"   Round log payload size: {payload_size} chars")
+
+        if isinstance(response, dict):
+            data = response.get("data", {})
+            if isinstance(data, dict):
+                return data.get("url") or data.get("objectKey")
+            return response.get("url")
         return None
 
     async def _with_retry(
@@ -557,9 +646,22 @@ class IWAPClient:
             raise last_exc
         raise RuntimeError("IWAP retry reached unexpected state")
 
-    async def _post(self, path: str, payload: Dict[str, object], *, context: str) -> Dict[str, Any]:
+    async def _post(
+        self,
+        path: str,
+        payload: Dict[str, object],
+        *,
+        context: str,
+        season_number: Optional[int] = None,
+        round_number_in_season: Optional[int] = None,
+    ) -> Dict[str, Any]:
         sanitized_payload = _sanitize_json(payload)
-        self._backup_payload(context, sanitized_payload)
+        self._backup_payload(
+            context,
+            sanitized_payload,
+            season_number=season_number,
+            round_number_in_season=round_number_in_season,
+        )
         auth_headers = self._resolve_auth_headers()
 
         if isinstance(sanitized_payload, dict):
@@ -629,12 +731,20 @@ class IWAPClient:
         files: Dict[str, bytes],
         *,
         context: str,
+        season_number: Optional[int] = None,
+        round_number_in_season: Optional[int] = None,
     ) -> None:
         """
         Send multipart/form-data request with JSON data and binary files.
         """
         boundary = "----formdata-autoppia-iwap"
         sanitized_data = _sanitize_json(data)
+        self._backup_payload(
+            f"{context}_multipart",
+            sanitized_data,
+            season_number=season_number,
+            round_number_in_season=round_number_in_season,
+        )
         body_parts: List[object] = []
 
         for key, value in sanitized_data.items():
@@ -707,12 +817,74 @@ class IWAPClient:
 
         await self._with_retry(attempt, context=context)
 
-    def _backup_payload(self, context: str, payload: Dict[str, object]) -> None:
+    def _extract_round_info_from_validator_round_id(self, validator_round_id: str) -> tuple[Optional[int], Optional[int]]:
+        if not validator_round_id:
+            return None, None
+        pattern = r"^validator_round_(\d+)_(\d+)_.*$"
+        match = re.match(pattern, validator_round_id)
+        if match:
+            try:
+                season = int(match.group(1))
+                round_number = int(match.group(2))
+                return season, round_number
+            except Exception:
+                return None, None
+        return None, None
+
+    def _to_int(self, value: Optional[object]) -> Optional[int]:
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except Exception:
+            return None
+
+    def _extract_round_info_from_payload(self, payload: Dict[str, Any]) -> tuple[Optional[int], Optional[int]]:
+        if not isinstance(payload, dict):
+            return None, None
+
+        season_number = None
+        round_number_in_season = None
+
+        validator_round_id = payload.get("validator_round_id")
+        if isinstance(validator_round_id, str):
+            season_number, round_number_in_season = self._extract_round_info_from_validator_round_id(validator_round_id)
+            if season_number is not None and round_number_in_season is not None:
+                return season_number, round_number_in_season
+
+        validator_round = payload.get("validator_round")
+        if isinstance(validator_round, dict):
+            season_number = self._to_int(validator_round.get("season_number"))
+            round_number_in_season = self._to_int(validator_round.get("round_number_in_season"))
+            if season_number is not None and round_number_in_season is not None:
+                return season_number, round_number_in_season
+
+        season_number = self._to_int(payload.get("season"))
+        if season_number is None:
+            season_number = self._to_int(payload.get("season_number"))
+
+        round_number_in_season = self._to_int(payload.get("round_number_in_season"))
+        return season_number, round_number_in_season
+
+    def _resolve_log_dir(self, season_number: Optional[int], round_number_in_season: Optional[int]) -> Path:
+        season_token = f"season_{season_number}" if season_number is not None else "season_unknown"
+        round_token = f"round_{round_number_in_season}" if round_number_in_season is not None else "round_unknown"
+        return self._backup_dir / season_token / round_token / "logs"
+
+    def _backup_payload(
+        self,
+        context: str,
+        payload: Dict[str, object],
+        season_number: Optional[int] = None,
+        round_number_in_season: Optional[int] = None,
+    ) -> None:
         if not self._backup_dir:
             return
+        target_dir = self._resolve_log_dir(season_number, round_number_in_season)
+        target_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.utcnow().isoformat().replace(":", "-")
         filename = f"{timestamp}_{context}.json"
-        target = self._backup_dir / filename
+        target = target_dir / filename
         try:
             with target.open("w", encoding="utf-8") as fh:
                 json.dump(_sanitize_json(payload), fh, ensure_ascii=False, indent=2)
@@ -818,7 +990,8 @@ def _sanitize_json(obj: Any, *, _key: str | None = None) -> Any:
         return f"<redacted:{_key}>"
 
     if obj is None or isinstance(obj, (str, int, float, bool)):
-        if isinstance(obj, str) and len(obj) > 1000:
+        # Do not truncate "content" (e.g. round log) so full log is uploaded to S3
+        if isinstance(obj, str) and len(obj) > 1000 and _key != "content":
             return obj[:1000] + f"... (truncated {len(obj)} chars)"
         return obj
 
