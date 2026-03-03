@@ -90,6 +90,20 @@ IPFS_GATEWAYS = [gw.strip() for gw in (_env_str("IPFS_GATEWAYS", "https://ipfs.i
 FINISH_ROUND_MAX_RETRIES = _env_int("FINISH_ROUND_MAX_RETRIES", 3, test_default=4)
 FINISH_ROUND_RETRY_SECONDS = _env_int("FINISH_ROUND_RETRY_SECONDS", 180, test_default=30)
 
+# ═══════════════════════════════════════════════════════════════════════════
+# HIPPIUS CONFIGURATION (SN75)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# IPFS backend: when True, uses Hippius SDK instead of legacy metahash73 node
+HIPPIUS_IPFS_ENABLED = _env_bool("HIPPIUS_IPFS_ENABLED", False)
+
+# S3 storage for evaluation datasets (independent of IPFS backend choice)
+HIPPIUS_S3_ENABLED = _env_bool("HIPPIUS_S3_ENABLED", False)
+HIPPIUS_S3_ENDPOINT = _env_str("HIPPIUS_S3_ENDPOINT", "https://s3.hippius.com")
+HIPPIUS_S3_ACCESS_KEY = _env_str("HIPPIUS_S3_ACCESS_KEY", "")
+HIPPIUS_S3_SECRET_KEY = _env_str("HIPPIUS_S3_SECRET_KEY", "")
+HIPPIUS_S3_BUCKET = _env_str("HIPPIUS_S3_BUCKET", "autoppia-evaluations")
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # SETTLEMENT / WINNER PERSISTENCE CONFIGURATION
