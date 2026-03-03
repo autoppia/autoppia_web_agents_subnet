@@ -236,6 +236,7 @@ def _build_execution_steps(execution_history: Any) -> List[Dict[str, Any]]:
                 "html": snapshot_post.get("html"),
                 "backend_events": snapshot_post.get("backend_events"),
                 "timestamp": snapshot_post.get("timestamp") or snapshot_post.get("time"),
+                "screenshot": snapshot_post.get("screenshot_after") or snapshot_post.get("screenshot"),
             }
         agent_input = snapshot_pre if isinstance(snapshot_pre, dict) else {}
         if not isinstance(agent_input, dict):

@@ -15,7 +15,7 @@ from rich import box  # type: ignore
 from bittensor import AsyncSubtensor  # type: ignore
 
 from autoppia_web_agents_subnet.utils.commitments import read_all_plain_commitments
-from autoppia_web_agents_subnet.utils.ipfs_client import IPFSError, aget_json
+from autoppia_web_agents_subnet.utils.ipfs_client import IPFSError, get_json_async
 from autoppia_web_agents_subnet.validator.config import (
     MINIMUM_START_BLOCK,
     IPFS_API_URL,
@@ -122,7 +122,7 @@ async def _fetch_payload(
     gateways: Optional[Sequence[str]],
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str], Optional[str]]:
     try:
-        payload, _, sha_hex = await aget_json(cid, api_url=api_url, gateways=gateways)
+        payload, _, sha_hex = await get_json_async(cid, api_url=api_url, gateways=gateways)
         if isinstance(payload, dict):
             return payload, sha_hex, None
         return None, None, "payload is not a dict"
@@ -281,11 +281,7 @@ def _render_validator_table(
 
         sha_text = "-"
         if item.payload_hash:
-            sha_text = (
-                item.payload_hash[:12] + "…"
-                if len(item.payload_hash) > 12
-                else item.payload_hash
-            )
+            sha_text = item.payload_hash[:12] + "…" if len(item.payload_hash) > 12 else item.payload_hash
 
         scores_count = 0
         mean = stddev = variance = None
@@ -295,16 +291,12 @@ def _render_validator_table(
         parsed_scores: List[Tuple[int, float]] = []
 
         if item.payload_error:
-            extra.append(
-                f"      {item.hotkey[:10]}… payload error: {item.payload_error}"
-            )
+            extra.append(f"      {item.hotkey[:10]}… payload error: {item.payload_error}")
         elif item.payload is None:
             extra.append(f"      {item.hotkey[:10]}… payload missing")
         else:
             payload = item.payload
-            scores_count, top_line, parsed_scores = _score_summary(
-                payload, limit=scores_limit
-            )
+            scores_count, top_line, parsed_scores = _score_summary(payload, limit=scores_limit)
             count_stats, mean, stddev, variance = _score_stats(payload.get("scores"))
             scores_count = count_stats
             tasks_val = payload.get("tasks_completed") or payload.get("n")
@@ -488,15 +480,10 @@ def _format_weight_lines(
         reverse=True,
     )
     shown = min(limit, len(sorted_weights))
-    header = (
-        f"  • weights uid {validator_uid} @block {block} "
-        f"(top {shown}/{len(sorted_weights)})"
-    )
+    header = f"  • weights uid {validator_uid} @block {block} (top {shown}/{len(sorted_weights)})"
     lines = [header]
     for dest_uid, value in sorted_weights[:shown]:
-        lines.append(
-            f"      - dest {dest_uid}: {value:.4f} ({value * 100:.2f}%)"
-        )
+        lines.append(f"      - dest {dest_uid}: {value:.4f} ({value * 100:.2f}%)")
     remaining = len(sorted_weights) - shown
     if remaining > 0:
         lines.append(f"      … {remaining} additional destinations")
@@ -530,19 +517,9 @@ async def inspect_rounds(
         cur_progress = ROUND_MANAGER.fraction_elapsed(current_block) * 100.0
 
         print("Current settlement window")
-        print(
-            f"  • current_block={current_block:,} "
-            f"(epoch={current_epoch:.2f})"
-        )
-        print(
-            "  • window_epochs="
-            f"{cur_start_epoch:.2f}→{cur_target_epoch:.2f}"
-        )
-        print(
-            "  • window_blocks="
-            f"{cur_start_block:,}→{cur_target_block:,} "
-            f"(len={ROUND_BLOCK_LENGTH:,})"
-        )
+        print(f"  • current_block={current_block:,} (epoch={current_epoch:.2f})")
+        print(f"  • window_epochs={cur_start_epoch:.2f}→{cur_target_epoch:.2f}")
+        print(f"  • window_blocks={cur_start_block:,}→{cur_target_block:,} (len={ROUND_BLOCK_LENGTH:,})")
         if cur_round is not None:
             print(f"  • round_index≈{cur_round}")
         print(f"  • progress≈{cur_progress:.1f}% of window")
@@ -641,35 +618,18 @@ async def inspect_rounds(
             label = _round_label(label_round, target_epoch)
 
             if current_block < target_block:
-                status = (
-                    "active: "
-                    + _format_minutes(target_block - current_block)
-                    + " remaining"
-                )
+                status = "active: " + _format_minutes(target_block - current_block) + " remaining"
             else:
-                status = (
-                    "settled: finished "
-                    + _format_minutes(current_block - target_block)
-                    + " ago"
-                )
+                status = "settled: finished " + _format_minutes(current_block - target_block) + " ago"
 
             print(f"\n[{idx}] {label}")
-            print(
-                "  • window_epochs="
-                f"{start_epoch:.2f}→{float(target_epoch):.2f}"
-            )
-            print(
-                "  • window_blocks="
-                f"{start_block:,}→{target_block:,} "
-                f"(len={ROUND_BLOCK_LENGTH:,})"
-            )
+            print(f"  • window_epochs={start_epoch:.2f}→{float(target_epoch):.2f}")
+            print(f"  • window_blocks={start_block:,}→{target_block:,} (len={ROUND_BLOCK_LENGTH:,})")
             print(f"  • status={status}")
             if base_epochs:
                 base_mode = max(set(base_epochs), key=base_epochs.count)
                 print(f"  • commitment_e≈{base_mode}")
-            if derived_round is not None and (
-                not reported_rounds or label_round != derived_round
-            ):
+            if derived_round is not None and (not reported_rounds or label_round != derived_round):
                 print(f"  • derived_round_index≈{derived_round}")
 
             combined_commitments = validators + below_min_validators
@@ -678,9 +638,7 @@ async def inspect_rounds(
             for item in combined_commitments:
                 if not item.cid:
                     continue
-                task = asyncio.create_task(
-                    _fetch_payload(item.cid, api_url=ipfs_api, gateways=gateways)
-                )
+                task = asyncio.create_task(_fetch_payload(item.cid, api_url=ipfs_api, gateways=gateways))
                 payload_tasks.append((item, task))
 
             for item, task in payload_tasks:
@@ -693,9 +651,7 @@ async def inspect_rounds(
             total_weight = sum(filter(None, (v.stake_tao for v in validators)))
 
             if not validators:
-                print(
-                    f"  • No validators meet stake ≥ {min_stake:.2f} τ for this window"
-                )
+                print(f"  • No validators meet stake ≥ {min_stake:.2f} τ for this window")
             else:
                 table_text, extra_lines, scores_tables = _render_validator_table(
                     validators,
@@ -703,10 +659,7 @@ async def inspect_rounds(
                     scores_limit=scores_limit,
                     scores_cols=scores_cols,
                 )
-                print(
-                    f"  • validators_considered={len(validators)} "
-                    f"(stake ≥ {min_stake:.2f} τ)"
-                )
+                print(f"  • validators_considered={len(validators)} (stake ≥ {min_stake:.2f} τ)")
                 if total_weight > 0:
                     print(f"  • total_stake={total_weight:,.2f} τ")
                 if table_text:
@@ -718,16 +671,9 @@ async def inspect_rounds(
                     _print_scores_rich(scores_tables, cols=scores_cols)
 
             if below_min_validators:
-                below_min_validators.sort(
-                    key=lambda v: v.stake_tao, reverse=True
-                )
-                below_total = sum(
-                    filter(None, (v.stake_tao for v in below_min_validators))
-                )
-                print(
-                    f"  • validators_below_min_stake={len(below_min_validators)} "
-                    f"(stake < {min_stake:.2f} τ)"
-                )
+                below_min_validators.sort(key=lambda v: v.stake_tao, reverse=True)
+                below_total = sum(filter(None, (v.stake_tao for v in below_min_validators)))
+                print(f"  • validators_below_min_stake={len(below_min_validators)} (stake < {min_stake:.2f} τ)")
                 if below_total > 0:
                     print(f"  • total_stake_below={below_total:,.2f} τ")
                 table_text, extra_lines, scores_tables = _render_validator_table(
@@ -772,9 +718,7 @@ async def inspect_rounds(
                 print(f"  • weights unavailable ({reason})")
                 continue
 
-            validator_uids = sorted(
-                {v.uid for v in validators if v.uid is not None}
-            )
+            validator_uids = sorted({v.uid for v in validators if v.uid is not None})
             if not validator_uids:
                 print(f"  • weights @block {weight_block}: no validator UIDs")
                 continue
@@ -795,9 +739,7 @@ async def inspect_rounds(
 
 def parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description=(
-            "Inspect recent validator settlement commitments and shared scores."
-        ),
+        description=("Inspect recent validator settlement commitments and shared scores."),
     )
     parser.add_argument(
         "-N",
@@ -822,11 +764,7 @@ def parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
         "--min-stake",
         type=float,
         default=MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO,
-        help=(
-            "Minimum validator stake (τ) required to include a commitment. "
-            "Defaults to configured threshold "
-            f"({MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO})."
-        ),
+        help=(f"Minimum validator stake (τ) required to include a commitment. Defaults to configured threshold ({MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO})."),
     )
     parser.add_argument(
         "--include-below",
@@ -849,29 +787,20 @@ def parse_args(argv: Optional[Sequence[str]]) -> argparse.Namespace:
         "--scores-limit",
         type=int,
         default=0,
-        help=(
-            "Number of top miner scores to show per validator (default: all). "
-            "Use 0 for all, or a positive N for top-N."
-        ),
+        help=("Number of top miner scores to show per validator (default: all). Use 0 for all, or a positive N for top-N."),
     )
     parser.add_argument(
         "--scores-cols",
         type=int,
         default=4,
-        help=(
-            "Number of columns to use when printing full miner scores (default: 4)."
-        ),
+        help=("Number of columns to use when printing full miner scores (default: 4)."),
     )
     return parser.parse_args(argv)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> None:
     args = parse_args(argv)
-    gateways = (
-        [gw.strip() for gw in args.ipfs_gateways.split(",") if gw.strip()]
-        if args.ipfs_gateways
-        else IPFS_GATEWAYS
-    )
+    gateways = [gw.strip() for gw in args.ipfs_gateways.split(",") if gw.strip()] if args.ipfs_gateways else IPFS_GATEWAYS
 
     try:
         asyncio.run(
