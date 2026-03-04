@@ -23,23 +23,26 @@ BURN_AMOUNT_PERCENTAGE = _env_float("BURN_AMOUNT_PERCENTAGE", 0.925)
 # ═══════════════════════════════════════════════════════════════════════════
 
 SEASON_SIZE_EPOCHS = _env_float("SEASON_SIZE_EPOCHS", 280.0, test_default=1.6666667)
-# 30 minutes with 360 blocks/epoch and ~12s/block => 150 blocks => 0.4166667 epochs
-ROUND_SIZE_EPOCHS = _env_float("ROUND_SIZE_EPOCHS", 0.4166667, test_default=0.4166667)
+# 1 hour with 360 blocks/epoch and ~12s/block => 300 blocks => 0.8333333 epochs
+ROUND_SIZE_EPOCHS = _env_float("ROUND_SIZE_EPOCHS", 0.8333333, test_default=0.8333333)
 # IMPORTANT: season/round math uses MINIMUM_START_BLOCK always.
 # In TESTING mode, this still gets the hardcoded env value if present.
-MINIMUM_START_BLOCK = _env_int("MINIMUM_START_BLOCK", 7_674_420)
+MINIMUM_START_BLOCK = _env_int("MINIMUM_START_BLOCK", 7_674_894)
 STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION = _env_float("STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION", 0.94, test_default=0.94)
 FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION = _env_float("FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION", 0.97, test_default=0.97)
 SKIP_ROUND_IF_STARTED_AFTER_FRACTION = _env_float("SKIP_ROUND_IF_STARTED_AFTER_FRACTION", 0.30, test_default=0.30)
 
 # TASKS_PER_SEASON: Number of tasks to generate for each season (generated only in round 1)
 # Tasks are distributed round-robin across all demo projects (1 task per project per cycle)
-TASKS_PER_SEASON = _env_int("TASKS_PER_SEASON", 100, test_default=3)
+TASKS_PER_SEASON = _env_int("TASKS_PER_SEASON", 10, test_default=3)
 CONCURRENT_EVALUATION_NUM = _env_int("CONCURRENT_EVALUATION_NUM", 5)
 AGENT_MAX_STEPS = _env_int("AGENT_MAX_STEPS", 12, test_default=12)
 AGENT_STEP_TIMEOUT_SECONDS = _env_int("AGENT_STEP_TIMEOUT_SECONDS", 25)
 TASK_TIMEOUT_SECONDS = _env_float("TASK_TIMEOUT_SECONDS", 180.0, test_default=180.0)
 SHOULD_RECORD_GIF = _env_bool("SHOULD_RECORD_GIF", True)
+# Upload the per-round validator log to IWAP/S3 periodically during evaluation.
+# This reduces observability gaps when round settlement is skipped/late.
+ROUND_LOG_UPLOAD_INTERVAL_SECONDS = _env_int("ROUND_LOG_UPLOAD_INTERVAL_SECONDS", 120)
 
 MAX_TASK_DOLLAR_COST_USD = _env_float("MAX_TASK_DOLLAR_COST_USD", 0.05)
 

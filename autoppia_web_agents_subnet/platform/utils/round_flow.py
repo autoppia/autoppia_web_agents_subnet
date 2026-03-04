@@ -892,33 +892,43 @@ async def finish_round_flow(
     round_log_url: Optional[str] = None
     round_log_error: Optional[str] = None
     try:
-        from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+        # Prefer shared periodic uploader when available (keeps single source of truth
+        # for throttling and retry behavior). Force upload at finish.
+        uploader = getattr(ctx, "_upload_round_log_snapshot", None)
+        if callable(uploader):
+            round_log_url = await uploader(
+                reason="finish_round",
+                force=True,
+                min_interval_seconds=0.0,
+            )
+        if round_log_url is None:
+            from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
-        round_log_file = ColoredLogger.get_round_log_file()
-        if round_log_file:
-            round_log_path = Path(round_log_file)
-            if round_log_path.exists():
-                round_log_contents = round_log_path.read_text(encoding="utf-8", errors="replace")
-                validator_uid = getattr(ctx, "uid", None)
-                validator_hotkey = None
-                try:
-                    validator_hotkey = getattr(ctx.wallet, "hotkey", None)
-                    if validator_hotkey is not None:
-                        validator_hotkey = getattr(validator_hotkey, "ss58_address", None)
-                except Exception:
-                    pass
-                round_log_url = await ctx.iwap_client.upload_round_log(
-                    validator_round_id=round_id,
-                    content=round_log_contents,
-                    season_number=season_for_round,
-                    round_number_in_season=round_for_round,
-                    validator_uid=validator_uid if isinstance(validator_uid, int) else None,
-                    validator_hotkey=validator_hotkey,
-                )
-                if round_log_url is None:
-                    round_log_error = "upload rejected: no url returned"
-            else:
-                round_log_error = f"round log file not found: {round_log_file}"
+            round_log_file = ColoredLogger.get_round_log_file()
+            if round_log_file:
+                round_log_path = Path(round_log_file)
+                if round_log_path.exists():
+                    round_log_contents = round_log_path.read_text(encoding="utf-8", errors="replace")
+                    validator_uid = getattr(ctx, "uid", None)
+                    validator_hotkey = None
+                    try:
+                        validator_hotkey = getattr(ctx.wallet, "hotkey", None)
+                        if validator_hotkey is not None:
+                            validator_hotkey = getattr(validator_hotkey, "ss58_address", None)
+                    except Exception:
+                        pass
+                    round_log_url = await ctx.iwap_client.upload_round_log(
+                        validator_round_id=round_id,
+                        content=round_log_contents,
+                        season_number=season_for_round,
+                        round_number_in_season=round_for_round,
+                        validator_uid=validator_uid if isinstance(validator_uid, int) else None,
+                        validator_hotkey=validator_hotkey,
+                    )
+                    if round_log_url is None:
+                        round_log_error = "upload rejected: no url returned"
+                else:
+                    round_log_error = f"round log file not found: {round_log_file}"
     except Exception as exc:
         round_log_error = f"upload failed: {type(exc).__name__}: {exc}"
         bt.logging.warning(f"Failed to upload round log for round_id={round_id}: {round_log_error}")
