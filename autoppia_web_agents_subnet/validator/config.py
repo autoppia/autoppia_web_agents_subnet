@@ -23,7 +23,8 @@ BURN_AMOUNT_PERCENTAGE = _env_float("BURN_AMOUNT_PERCENTAGE", 0.925)
 # ═══════════════════════════════════════════════════════════════════════════
 
 SEASON_SIZE_EPOCHS = _env_float("SEASON_SIZE_EPOCHS", 280.0, test_default=1.6666667)
-ROUND_SIZE_EPOCHS = _env_float("ROUND_SIZE_EPOCHS", 4.0, test_default=0.2777778)
+# 30 minutes with 360 blocks/epoch and ~12s/block => 150 blocks => 0.4166667 epochs
+ROUND_SIZE_EPOCHS = _env_float("ROUND_SIZE_EPOCHS", 0.4166667, test_default=0.4166667)
 # IMPORTANT: season/round math uses MINIMUM_START_BLOCK always.
 # In TESTING mode, this still gets the hardcoded env value if present.
 MINIMUM_START_BLOCK = _env_int("MINIMUM_START_BLOCK", 7667910)

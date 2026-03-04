@@ -881,7 +881,9 @@ class ValidatorRoundStartMixin:
         round_id = str(getattr(self, "current_round_id", "") or f"round_{round_number}")
         season_label = str(season_number if season_number > 0 else "unknown")
         round_label = str(round_number if round_number > 0 else "unknown")
-        handshake_dir = Path("data") / f"season_{season_label}" / f"round_{round_label}" / "handshake"
+        root_getter = getattr(self, "_state_summary_root", None)
+        base_dir = root_getter() if callable(root_getter) else Path("data")
+        handshake_dir = Path(base_dir) / f"season_{season_label}" / f"round_{round_label}" / "handshake"
         handshake_dir.mkdir(parents=True, exist_ok=True)
         handshake_report_path = handshake_dir / f"{round_id}_handshake_diagnostics.json"
         handshake_payload = {

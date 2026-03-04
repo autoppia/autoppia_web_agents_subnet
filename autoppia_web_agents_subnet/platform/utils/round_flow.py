@@ -369,7 +369,7 @@ def _persist_round_summary_file(
     post_consensus: Optional[Dict[str, Any]],
     ipfs_uploaded: Optional[Dict[str, Any]],
     ipfs_downloaded: Optional[Dict[str, Any]],
-    s3_logs: Optional[Dict[str, Any]],
+    s3_logs_url: Optional[str],
 ) -> None:
     if season_number <= 0 or round_number <= 0:
         return
@@ -386,7 +386,7 @@ def _persist_round_summary_file(
         "post_consensus": post_summary,
         "ipfs_uploaded": ipfs_uploaded if isinstance(ipfs_uploaded, dict) else None,
         "ipfs_downloaded": ipfs_downloaded if isinstance(ipfs_downloaded, dict) else None,
-        "s3_logs": s3_logs if isinstance(s3_logs, dict) else None,
+        "s3_logs_url": str(s3_logs_url) if isinstance(s3_logs_url, str) and s3_logs_url.strip() else None,
         "round_summary": pre_summary.get("round_summary", {}) if isinstance(pre_summary, dict) else {},
         "season_summary": pre_summary.get("season_summary", {}) if isinstance(pre_summary, dict) else {},
     }
@@ -890,7 +890,6 @@ async def finish_round_flow(
     # Upload full round log (append-only file: all logs from round start; never truncated on error)
     round_log_file: Optional[str] = None
     round_log_url: Optional[str] = None
-    round_log_size = 0
     round_log_error: Optional[str] = None
     try:
         from autoppia_web_agents_subnet.utils.logging import ColoredLogger
@@ -900,7 +899,6 @@ async def finish_round_flow(
             round_log_path = Path(round_log_file)
             if round_log_path.exists():
                 round_log_contents = round_log_path.read_text(encoding="utf-8", errors="replace")
-                round_log_size = len(round_log_contents.encode("utf-8"))
                 validator_uid = getattr(ctx, "uid", None)
                 validator_hotkey = None
                 try:
@@ -1124,6 +1122,15 @@ async def finish_round_flow(
 
     miners_reused = list(getattr(ctx, "miners_reused_this_round", None) or [])
 
+    # Include round/season config so backend can persist to round_config (main validator only)
+    round_manager = getattr(ctx, "round_manager", None)
+    round_size_epochs = float(round_manager.round_size_epochs) if round_manager else getattr(validator_config, "ROUND_SIZE_EPOCHS", None)
+    season_size_epochs = float(round_manager.season_size_epochs) if round_manager else getattr(validator_config, "SEASON_SIZE_EPOCHS", None)
+    minimum_start_block = (
+        int(round_manager.minimum_start_block) if round_manager and getattr(round_manager, "minimum_start_block", None) is not None else getattr(validator_config, "MINIMUM_START_BLOCK", None)
+    )
+    blocks_per_epoch = int(getattr(round_manager, "BLOCKS_PER_EPOCH", 360) if round_manager else 360)
+
     round_metadata = iwa_models.RoundMetadataIWAP(
         round_number=int(round_num or 0),
         started_at=float(getattr(ctx, "round_start_time", ended_at - 3600) or (ended_at - 3600)),
@@ -1138,6 +1145,10 @@ async def finish_round_flow(
         miners_evaluated=len(avg_rewards or {}),
         emission=emission_info,
         miners_reused_same_commit=miners_reused if miners_reused else None,
+        round_size_epochs=round_size_epochs,
+        season_size_epochs=season_size_epochs,
+        minimum_start_block=minimum_start_block,
+        blocks_per_epoch=blocks_per_epoch,
     )
 
     # Build local_evaluation (what THIS validator evaluated - pre-consensus)
@@ -1356,20 +1367,6 @@ async def finish_round_flow(
     season_for_round = int(season_number_for_summary or 0)
     round_for_round = int(round_number_for_summary or 0)
     # round_log_* were set at the start of this flow so we always upload even if something failed later
-    s3_logs: Dict[str, Any] = {
-        "schema_version": 1,
-        "season_number": season_for_round,
-        "round_number_in_season": round_for_round,
-        "saved_at_utc": datetime.utcnow().isoformat(timespec="microseconds") + "Z",
-        "round_log": {
-            "file": round_log_file,
-            "uploaded": round_log_url is not None,
-            "url": round_log_url,
-            "size_bytes": round_log_size,
-            "upload_error": round_log_error,
-        },
-    }
-
     # validator_summary: single object with round, s3_logs_url, ipfs_uploaded, ipfs_downloaded,
     # evaluation_pre_consensus, evaluation_post_consensus, handshake_results
     handshake_results_raw = getattr(ctx, "handshake_results", None) or {}
@@ -1381,8 +1378,6 @@ async def finish_round_flow(
     validator_summary = {
         "round": round_metadata.to_payload() if hasattr(round_metadata, "to_payload") else (round_metadata if isinstance(round_metadata, dict) else None),
         "s3_logs_url": round_log_url,
-        # Keep legacy object for old readers; backend prioritizes s3_logs_url.
-        "s3_logs": s3_logs,
         "ipfs_uploaded": ipfs_uploaded,
         "ipfs_downloaded": ipfs_downloaded,
         "evaluation_pre_consensus": pre_consensus_summary,
@@ -1416,7 +1411,7 @@ async def finish_round_flow(
         post_consensus=post_consensus_summary,
         ipfs_uploaded=ipfs_uploaded,
         ipfs_downloaded=ipfs_downloaded,
-        s3_logs=s3_logs,
+        s3_logs_url=round_log_url,
     )
 
     round_id = ctx.current_round_id

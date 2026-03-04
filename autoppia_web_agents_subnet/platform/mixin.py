@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 import bittensor as bt
@@ -39,10 +40,19 @@ class ValidatorPlatformMixin:
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Unify all validator local artifacts under the bittensor neuron path tree.
+        # This avoids splitting state between repo ./data and ~/.bittensor/...
+        try:
+            default_backup_dir = Path(str(self.config.neuron.full_path)).parent.parent / "data"
+        except Exception:
+            default_backup_dir = Path("data")
+        os.environ.setdefault("IWAP_BACKUP_DIR", str(default_backup_dir))
+        backup_dir = Path(os.environ.get("IWAP_BACKUP_DIR", str(default_backup_dir)))
         self._IWAP_VALIDATOR_AUTH_MESSAGE = IWAP_VALIDATOR_AUTH_MESSAGE or "I am a honest validator"
         self._auth_warning_emitted = False
         self.iwap_client = iwa_main.IWAPClient(
             base_url=IWAP_API_BASE_URL,
+            backup_dir=backup_dir,
             auth_provider=self._build_iwap_auth_headers,
         )
         self.current_round_id: Optional[str] = None

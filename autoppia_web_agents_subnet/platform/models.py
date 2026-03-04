@@ -268,7 +268,7 @@ class FinishRoundAgentRunIWAP:
 
 @dataclass
 class RoundMetadataIWAP:
-    """Round timing and metadata."""
+    """Round timing and metadata. Backend uses round_size_epochs/season_size_epochs/minimum_start_block to persist round_config (main validator only)."""
 
     round_number: int
     started_at: float
@@ -284,6 +284,11 @@ class RoundMetadataIWAP:
     emission: Optional[Dict[str, Any]] = None
     # Miners that were not re-evaluated this round (same git commit as last evaluated round)
     miners_reused_same_commit: Optional[List[int]] = None
+    # Round/season config: backend persists to round_config table (main validator only) so dashboard uses validator timing
+    round_size_epochs: Optional[float] = None
+    season_size_epochs: Optional[float] = None
+    minimum_start_block: Optional[int] = None
+    blocks_per_epoch: Optional[int] = None
 
     def to_payload(self) -> Dict[str, Any]:
         return _drop_nones(asdict(self))

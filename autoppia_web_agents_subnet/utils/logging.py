@@ -1,4 +1,5 @@
 import logging
+import os
 from pathlib import Path
 import re
 from typing import Optional
@@ -124,7 +125,9 @@ class ColoredLogger:
             season = match.group(1)
             round_number = match.group(2)
 
-        log_dir = Path("data") / f"season_{season}" / f"round_{round_number}" / "logs"
+        backup_root = os.getenv("IWAP_BACKUP_DIR")
+        base_dir = Path(backup_root) if backup_root else Path("data")
+        log_dir = base_dir / f"season_{season}" / f"round_{round_number}" / "logs"
         log_dir.mkdir(parents=True, exist_ok=True)
         log_path = log_dir / f"{round_id}.log"
 

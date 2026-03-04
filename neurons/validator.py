@@ -58,6 +58,11 @@ class Validator(
 
         # Season manager for task generation
         self.season_manager = SeasonManager()
+        try:
+            self.season_manager.TASKS_DIR = self._state_summary_root()
+            self.season_manager.TASKS_DIR.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
 
         # Round manager for round timing and boundaries
         self.round_manager = RoundManager()
