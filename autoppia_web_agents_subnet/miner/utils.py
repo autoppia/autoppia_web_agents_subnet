@@ -8,7 +8,7 @@ BLOCKS_PER_EPOCH = 360
 SEASON_SIZE_EPOCHS = _env_float("SEASON_SIZE_EPOCHS", 280.0, test_default=2)
 # 30 minutes with 360 blocks/epoch and ~12s/block => 150 blocks => 0.4166667 epochs
 ROUND_SIZE_EPOCHS = _env_float("ROUND_SIZE_EPOCHS", 0.4166667, test_default=0.4166667)
-MINIMUM_START_BLOCK = _env_int("MINIMUM_START_BLOCK", 7_667_910, test_default=7_667_910)
+MINIMUM_START_BLOCK = _env_int("MINIMUM_START_BLOCK", 7_674_420, test_default=7_674_420)
 
 
 def season_block_length() -> int:
