@@ -1370,7 +1370,8 @@ async def finish_round_flow(
         },
     }
 
-    # validator_summary: single object with round, s3_logs, ipfs_uploaded, ipfs_downloaded, evaluation_pre_consensus, evaluation_post_consensus, handshake_results (meta also has local_evaluation and post_consensus_evaluation for backend)
+    # validator_summary: single object with round, s3_logs_url, ipfs_uploaded, ipfs_downloaded,
+    # evaluation_pre_consensus, evaluation_post_consensus, handshake_results
     handshake_results_raw = getattr(ctx, "handshake_results", None) or {}
     handshake_results = {str(uid): status for uid, status in handshake_results_raw.items()}
 
@@ -1379,6 +1380,8 @@ async def finish_round_flow(
 
     validator_summary = {
         "round": round_metadata.to_payload() if hasattr(round_metadata, "to_payload") else (round_metadata if isinstance(round_metadata, dict) else None),
+        "s3_logs_url": round_log_url,
+        # Keep legacy object for old readers; backend prioritizes s3_logs_url.
         "s3_logs": s3_logs,
         "ipfs_uploaded": ipfs_uploaded,
         "ipfs_downloaded": ipfs_downloaded,
@@ -1400,7 +1403,7 @@ async def finish_round_flow(
         validator_summary=validator_summary,
         ipfs_uploaded=ipfs_uploaded,
         ipfs_downloaded=ipfs_downloaded,
-        s3_logs=s3_logs,
+        s3_logs_url=round_log_url,
         validator_state=validator_state_json,
         validator_iwap_prev_round_json=validator_iwap_prev_round_json,
     )

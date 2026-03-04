@@ -303,7 +303,7 @@ class FinishRoundIWAP:
     # FASE 2: IPFS data
     ipfs_uploaded: Optional[Dict[str, Any]] = None
     ipfs_downloaded: Optional[Dict[str, Any]] = None
-    s3_logs: Optional[Dict[str, Any]] = None
+    s3_logs_url: Optional[str] = None
     validator_state: Optional[Dict[str, Any]] = None
     validator_iwap_prev_round_json: Optional[Dict[str, Any]] = None
     # Deprecated fields (kept for backward compatibility but no longer populated)
@@ -332,8 +332,8 @@ class FinishRoundIWAP:
             payload["ipfs_uploaded"] = self.ipfs_uploaded
         if self.ipfs_downloaded is not None:
             payload["ipfs_downloaded"] = self.ipfs_downloaded
-        if self.s3_logs is not None:
-            payload["s3_logs"] = self.s3_logs
+        if self.s3_logs_url is not None:
+            payload["s3_logs_url"] = self.s3_logs_url
         if self.validator_state is not None:
             payload["validator_state"] = self.validator_state
         if self.validator_iwap_prev_round_json is not None:
