@@ -82,14 +82,166 @@ def _stake_to_float(stake_val: Any) -> float:
 
 
 def _payload_log_summary(payload: dict) -> dict:
-    """Return a copy of payload with 'scores' replaced by a one-line summary for compact logs."""
+    """Return a compact payload summary for logs."""
     out = dict(payload)
+    rewards = out.get("rewards")
     scores = out.get("scores")
-    if isinstance(scores, dict) and len(scores) > 10:
-        vals = [float(v) for v in scores.values() if v is not None]
-        nz = sum(1 for v in vals if float(v) > 0)
-        out["scores"] = f"<{len(scores)} miners, non_zero={nz}, sum={sum(vals):.4f}>"
+    metrics = out.get("miner_metrics")
+
+    def _summarize_rewards_map(raw: Any) -> str | None:
+        if not isinstance(raw, dict):
+            return None
+        vals = []
+        for v in raw.values():
+            try:
+                vals.append(float(v))
+            except Exception:
+                continue
+        if len(raw) <= 10:
+            return None
+        nz = sum(1 for v in vals if float(v) > 0.0)
+        return f"<{len(raw)} miners, non_zero={nz}, sum={sum(vals):.4f}>"
+
+    rewards_summary = _summarize_rewards_map(rewards)
+    if rewards_summary:
+        out["rewards"] = rewards_summary
+
+    scores_summary = _summarize_rewards_map(scores)
+    if scores_summary:
+        out["scores"] = scores_summary
+
+    if isinstance(metrics, dict) and len(metrics) > 10:
+        handshake_ok = 0
+        for entry in metrics.values():
+            if isinstance(entry, dict) and entry.get("handshake_ok") is True:
+                handshake_ok += 1
+        out["miner_metrics"] = f"<{len(metrics)} miners, handshake_ok={handshake_ok}>"
+
     return out
+
+
+def _normalize_rewards_map(raw_scores: Dict[Any, Any]) -> Dict[str, float]:
+    normalized: Dict[str, float] = {}
+    for uid_raw, score_raw in (raw_scores or {}).items():
+        try:
+            uid_i = int(uid_raw)
+            score_f = float(score_raw)
+        except Exception:
+            continue
+        normalized[str(uid_i)] = float(score_f)
+    return normalized
+
+
+def _extract_metric_value(entry: dict, *keys: str) -> Optional[float]:
+    for key in keys:
+        if key not in entry:
+            continue
+        try:
+            return float(entry.get(key))
+        except Exception:
+            continue
+    return None
+
+
+def _extract_int_metric_value(entry: dict, *keys: str) -> Optional[int]:
+    for key in keys:
+        if key not in entry:
+            continue
+        try:
+            return int(entry.get(key))
+        except Exception:
+            continue
+    return None
+
+
+def _build_snapshot_miner_metrics(self, rewards: Dict[str, float]) -> Dict[str, Dict[str, Any]]:
+    """Build per-miner metrics snapshot included in IPFS payload."""
+    metrics: Dict[str, Dict[str, Any]] = {}
+    run_map = getattr(self, "current_agent_runs", None) or {}
+    handshake_results = getattr(self, "handshake_results", None) or {}
+
+    candidate_uids: set[int] = set()
+    for uid_raw in rewards.keys():
+        try:
+            candidate_uids.add(int(uid_raw))
+        except Exception:
+            continue
+    for uid_raw in run_map.keys():
+        try:
+            candidate_uids.add(int(uid_raw))
+        except Exception:
+            continue
+    if isinstance(handshake_results, dict):
+        for uid_raw in handshake_results.keys():
+            try:
+                candidate_uids.add(int(uid_raw))
+            except Exception:
+                continue
+
+    for uid in sorted(candidate_uids):
+        run = run_map.get(uid)
+        run_meta = getattr(run, "metadata", {}) if run is not None else {}
+        if not isinstance(run_meta, dict):
+            run_meta = {}
+        handshake_status = None
+        if isinstance(handshake_results, dict):
+            handshake_status = handshake_results.get(uid)
+            if handshake_status is None:
+                handshake_status = handshake_results.get(str(uid))
+        if handshake_status is None:
+            handshake_status = "unknown"
+        reward_val = float(rewards.get(str(uid), 0.0))
+
+        avg_eval_score = None
+        avg_eval_time = None
+        avg_cost = None
+        tasks_sent = 0
+        tasks_success = 0
+        tasks_failed = 0
+        if run is not None:
+            try:
+                avg_eval_score = float(getattr(run, "average_score", None))
+            except Exception:
+                avg_eval_score = None
+            try:
+                avg_eval_time = float(getattr(run, "average_execution_time", None))
+            except Exception:
+                avg_eval_time = None
+            try:
+                avg_cost = float(run_meta.get("average_cost"))
+            except Exception:
+                avg_cost = None
+            try:
+                tasks_sent = int(getattr(run, "total_tasks", 0) or 0)
+            except Exception:
+                tasks_sent = 0
+            try:
+                tasks_success = int(getattr(run, "completed_tasks", 0) or 0)
+            except Exception:
+                tasks_success = 0
+            try:
+                tasks_failed = int(getattr(run, "failed_tasks", 0) or 0)
+            except Exception:
+                tasks_failed = max(tasks_sent - tasks_success, 0)
+            if tasks_failed <= 0:
+                tasks_failed = max(tasks_sent - tasks_success, 0)
+
+        metrics[str(uid)] = {
+            "miner_uid": int(uid),
+            "reward": float(reward_val),
+            "avg_reward": float(reward_val),
+            "avg_eval_score": float(avg_eval_score) if avg_eval_score is not None else None,
+            "avg_eval_time": float(avg_eval_time) if avg_eval_time is not None else None,
+            "avg_cost": float(avg_cost) if avg_cost is not None else None,
+            "tasks_sent": int(tasks_sent),
+            "tasks_success": int(tasks_success),
+            "tasks_failed": int(tasks_failed),
+            "handshake_status": str(handshake_status),
+            "handshake_ok": bool(handshake_status == "ok"),
+            "is_reused": bool(getattr(run, "is_reused", False)) if run is not None else False,
+        }
+
+    return metrics
 
 
 def _hotkey_to_uid_map(metagraph) -> Dict[str, int]:
@@ -132,6 +284,17 @@ async def publish_round_snapshot(
     boundaries = self.round_manager.get_current_boundaries()
     start_epoch = int(boundaries["round_start_epoch"])
     target_epoch = int(boundaries["round_target_epoch"])
+    rewards = _normalize_rewards_map(scores)
+    miner_metrics = _build_snapshot_miner_metrics(self, rewards)
+    handshake_results_raw = getattr(self, "handshake_results", None) or {}
+    handshake_results: Dict[str, str] = {}
+    if isinstance(handshake_results_raw, dict):
+        for uid_raw, status_raw in handshake_results_raw.items():
+            try:
+                uid_key = str(int(uid_raw))
+            except Exception:
+                uid_key = str(uid_raw)
+            handshake_results[uid_key] = str(status_raw)
 
     payload = {
         "v": int(consensus_version),
@@ -145,7 +308,11 @@ async def publish_round_snapshot(
         "validator_hotkey": self.wallet.hotkey.ss58_address,
         "validator_round_id": getattr(self, "current_round_id", None),
         "validator_version": getattr(self, "version", None),
-        "scores": scores,
+        # Canonical field: rewards. Keep scores as legacy alias for compatibility.
+        "rewards": rewards,
+        "scores": rewards,
+        "miner_metrics": miner_metrics,
+        "handshake_results": handshake_results,
     }
 
     try:
@@ -154,7 +321,7 @@ async def publish_round_snapshot(
         payload_json = json.dumps(_payload_log_summary(payload), separators=(",", ":"), sort_keys=True)
 
         bt.logging.info("=" * 80)
-        bt.logging.info(ipfs_tag("UPLOAD", f"Round {payload.get('r')} | {len(payload.get('scores', {}))} miners"))
+        bt.logging.info(ipfs_tag("UPLOAD", f"Round {payload.get('r')} | {len(payload.get('rewards', {}))} miners"))
         bt.logging.info(ipfs_tag("UPLOAD", f"Payload: {payload_json}"))
 
         cid, sha_hex, byte_len = await add_json_async(
@@ -274,6 +441,7 @@ async def aggregate_scores_from_commitments(
 
     weighted_sum: Dict[int, float] = {}
     weight_total: Dict[int, float] = {}
+    metric_acc: Dict[int, Dict[str, float]] = {}
 
     included = 0
     skipped_legacy_consensus_version = 0
@@ -364,7 +532,11 @@ async def aggregate_scores_from_commitments(
             bt.logging.info(f"[IPFS] [DOWNLOAD] Validator {hk[:12]}... (UID {validator_uid}) | CID: {cid}")
             bt.logging.info(f"[IPFS] [DOWNLOAD] URL: http://ipfs.metahash73.com:5001/api/v0/cat?arg={cid}")
             bt.logging.info(f"[IPFS] [DOWNLOAD] Payload: {payload_json}")
-            bt.logging.success(f"[IPFS] [DOWNLOAD] ✅ SUCCESS - Round {payload.get('r')} | {len(payload.get('scores', {}))} miners | Stake: {st_val:.2f}τ")
+            payload_rewards = payload.get("rewards")
+            if not isinstance(payload_rewards, dict):
+                payload_rewards = payload.get("scores")
+            miner_count = len(payload_rewards) if isinstance(payload_rewards, dict) else 0
+            bt.logging.success(f"[IPFS] [DOWNLOAD] ✅ SUCCESS - Round {payload.get('r')} | {miner_count} miners | Stake: {st_val:.2f}τ")
             bt.logging.info("=" * 80)
         except Exception as e:
             skipped_ipfs += 1
@@ -386,22 +558,99 @@ async def aggregate_scores_from_commitments(
                 bt.logging.debug(f"⏭️ Skip {hk[:10]}…: wrong validator_version (payload has {pv_str}, need {expected_validator_version})")
                 continue
 
-        scores = payload.get("scores")
-        if not isinstance(scores, dict):
+        rewards = payload.get("rewards")
+        if not isinstance(rewards, dict):
+            rewards = payload.get("scores")
+        if not isinstance(rewards, dict):
             continue
 
         # Record per-validator scores (converted to int uid)
         per_val_map: Dict[int, float] = {}
-        for uid_s, sc in scores.items():
+        effective_weight = st_val if st_val > 0.0 else 1.0
+        for uid_s, sc in rewards.items():
             try:
                 uid = int(uid_s)
                 val = float(sc)
             except Exception:
                 continue
-            effective_weight = st_val if st_val > 0.0 else 1.0
             weighted_sum[uid] = weighted_sum.get(uid, 0.0) + effective_weight * val
             weight_total[uid] = weight_total.get(uid, 0.0) + effective_weight
             per_val_map[uid] = val
+
+        miner_metrics = payload.get("miner_metrics")
+        if isinstance(miner_metrics, dict):
+            for uid_raw, entry_raw in miner_metrics.items():
+                if not isinstance(entry_raw, dict):
+                    continue
+                try:
+                    metric_uid = int(entry_raw.get("miner_uid", uid_raw))
+                except Exception:
+                    try:
+                        metric_uid = int(uid_raw)
+                    except Exception:
+                        continue
+                acc = metric_acc.setdefault(
+                    metric_uid,
+                    {
+                        "avg_reward_num": 0.0,
+                        "avg_reward_den": 0.0,
+                        "avg_eval_score_num": 0.0,
+                        "avg_eval_score_den": 0.0,
+                        "avg_eval_time_num": 0.0,
+                        "avg_eval_time_den": 0.0,
+                        "avg_cost_num": 0.0,
+                        "avg_cost_den": 0.0,
+                        "tasks_sent_num": 0.0,
+                        "tasks_sent_den": 0.0,
+                        "tasks_success_num": 0.0,
+                        "tasks_success_den": 0.0,
+                        "handshake_ok_num": 0.0,
+                        "handshake_ok_den": 0.0,
+                    },
+                )
+
+                avg_reward = _extract_metric_value(entry_raw, "avg_reward", "reward")
+                if avg_reward is None and metric_uid in per_val_map:
+                    avg_reward = float(per_val_map[metric_uid])
+                if avg_reward is not None:
+                    acc["avg_reward_num"] += effective_weight * float(avg_reward)
+                    acc["avg_reward_den"] += effective_weight
+
+                avg_eval_score = _extract_metric_value(entry_raw, "avg_eval_score")
+                if avg_eval_score is not None:
+                    acc["avg_eval_score_num"] += effective_weight * float(avg_eval_score)
+                    acc["avg_eval_score_den"] += effective_weight
+
+                avg_eval_time = _extract_metric_value(entry_raw, "avg_eval_time")
+                if avg_eval_time is None:
+                    avg_eval_time = _extract_metric_value(entry_raw, "avg_evaluation_time")
+                if avg_eval_time is not None:
+                    acc["avg_eval_time_num"] += effective_weight * float(avg_eval_time)
+                    acc["avg_eval_time_den"] += effective_weight
+
+                avg_cost = _extract_metric_value(entry_raw, "avg_cost")
+                if avg_cost is None:
+                    avg_cost = _extract_metric_value(entry_raw, "avg_cost_per_task")
+                if avg_cost is not None:
+                    acc["avg_cost_num"] += effective_weight * float(avg_cost)
+                    acc["avg_cost_den"] += effective_weight
+
+                tasks_sent = _extract_int_metric_value(entry_raw, "tasks_sent", "tasks_attempted")
+                if tasks_sent is not None:
+                    acc["tasks_sent_num"] += effective_weight * float(tasks_sent)
+                    acc["tasks_sent_den"] += effective_weight
+
+                tasks_success = _extract_int_metric_value(entry_raw, "tasks_success", "tasks_completed")
+                if tasks_success is not None:
+                    acc["tasks_success_num"] += effective_weight * float(tasks_success)
+                    acc["tasks_success_den"] += effective_weight
+
+                handshake_ok = entry_raw.get("handshake_ok")
+                if isinstance(handshake_ok, bool):
+                    acc["handshake_ok_den"] += effective_weight
+                    if handshake_ok:
+                        acc["handshake_ok_num"] += effective_weight
+
         included += 1
         fetched.append((hk, cid, st_val))
         scores_by_validator[hk] = per_val_map
@@ -422,6 +671,28 @@ async def aggregate_scores_from_commitments(
         denom = weight_total.get(uid, 0.0)
         if denom > 0:
             result[uid] = float(wsum / denom)
+
+    stats_by_miner: Dict[int, Dict[str, Any]] = {}
+    for uid, acc in metric_acc.items():
+        stats_entry: Dict[str, Any] = {}
+        if acc.get("avg_reward_den", 0.0) > 0.0:
+            stats_entry["avg_reward"] = float(acc["avg_reward_num"] / acc["avg_reward_den"])
+        if acc.get("avg_eval_score_den", 0.0) > 0.0:
+            stats_entry["avg_eval_score"] = float(acc["avg_eval_score_num"] / acc["avg_eval_score_den"])
+        if acc.get("avg_eval_time_den", 0.0) > 0.0:
+            stats_entry["avg_eval_time"] = float(acc["avg_eval_time_num"] / acc["avg_eval_time_den"])
+        if acc.get("avg_cost_den", 0.0) > 0.0:
+            stats_entry["avg_cost"] = float(acc["avg_cost_num"] / acc["avg_cost_den"])
+        if acc.get("tasks_sent_den", 0.0) > 0.0:
+            stats_entry["tasks_sent"] = int(round(acc["tasks_sent_num"] / acc["tasks_sent_den"]))
+        if acc.get("tasks_success_den", 0.0) > 0.0:
+            stats_entry["tasks_success"] = int(round(acc["tasks_success_num"] / acc["tasks_success_den"]))
+        if acc.get("handshake_ok_den", 0.0) > 0.0:
+            ratio = float(acc["handshake_ok_num"] / acc["handshake_ok_den"])
+            stats_entry["handshake_ok_ratio"] = ratio
+            stats_entry["handshake_ok"] = bool(ratio >= 0.5)
+        if stats_entry:
+            stats_by_miner[int(uid)] = stats_entry
 
     if included > 0:
         all_stakes_zero = all(stake == 0.0 for _, _, stake in fetched)
@@ -489,7 +760,9 @@ async def aggregate_scores_from_commitments(
     validators_info = [{"hotkey": hk, "uid": hk_to_uid.get(hk, "?"), "stake": stake, "cid": cid} for hk, cid, stake in fetched]
     details = {
         "validators": validators_info,
+        "rewards_by_validator": scores_by_validator,
         "scores_by_validator": scores_by_validator,
+        "stats_by_miner": stats_by_miner,
         "downloaded_payloads": downloaded_payloads,
         "skips": {
             "legacy_consensus_version": skipped_legacy_consensus_version_list,
