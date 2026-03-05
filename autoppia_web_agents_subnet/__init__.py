@@ -1,4 +1,4 @@
-SUBNET_IWA_VERSION = "12.3.9"
+SUBNET_IWA_VERSION = "12.3.10"
 WEBS_DEMO_VERSION = "12.3.0"
 __least_acceptable_version__ = "11.0.0"
 version_split = SUBNET_IWA_VERSION.split(".")

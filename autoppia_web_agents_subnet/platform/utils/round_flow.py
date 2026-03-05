@@ -499,6 +499,22 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
         bt.logging.info("✅ Validator will proceed with: handshake → tasks → evaluations → SET WEIGHTS on-chain")
         return
 
+    # Bootstrap DB round_config from validator runtime config.
+    # Backend applies it only for main validator; non-main calls are ignored safely.
+    try:
+        sync_resp = await ctx.iwap_client.sync_runtime_config(
+            validator_identity=validator_identity,
+            validator_snapshot=validator_snapshot,
+        )
+        updated = bool(sync_resp.get("updated")) if isinstance(sync_resp, dict) else False
+        if updated:
+            log_iwap_phase("Config", "runtime-config synced to IWAP (main validator update applied)", level="success")
+        else:
+            log_iwap_phase("Config", "runtime-config sync acknowledged (non-main/no-op)", level="info")
+    except Exception as exc:
+        # Non-fatal: round flow should still continue.
+        log_iwap_phase("Config", f"runtime-config sync failed (continuing): {type(exc).__name__}: {exc}", level="warning")
+
     validator_round = iwa_models.ValidatorRoundIWAP(
         validator_round_id=ctx.current_round_id,
         season_number=season_number,

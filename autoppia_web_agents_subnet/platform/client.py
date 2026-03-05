@@ -502,6 +502,43 @@ class IWAPClient:
         ColoredLogger.info("IWAP | [Auth] Checking authentication", color=ColoredLogger.GOLD)
         return await self._post("/api/v1/validator-rounds/auth-check", {}, context="auth_check")
 
+    async def sync_runtime_config(
+        self,
+        *,
+        validator_identity: models.ValidatorIdentityIWAP,
+        validator_snapshot: models.ValidatorSnapshotIWAP,
+    ) -> Dict[str, Any]:
+        """
+        Sync round_config to backend. Backend persists only if caller is main validator.
+        Safe to call every round start.
+        """
+        round_cfg = {}
+        if isinstance(validator_snapshot.validator_config, dict):
+            maybe_round_cfg = validator_snapshot.validator_config.get("round")
+            if isinstance(maybe_round_cfg, dict):
+                round_cfg = maybe_round_cfg
+
+        round_size_epochs = round_cfg.get("round_size_epochs")
+        minimum_start_block = round_cfg.get("minimum_start_block")
+        if round_size_epochs is None or minimum_start_block is None:
+            raise ValueError("validator_snapshot.validator_config.round must include round_size_epochs and minimum_start_block")
+
+        payload = {
+            "validator_identity": validator_identity.to_payload(),
+            "runtime_config": {
+                "round_size_epochs": float(round_size_epochs),
+                "season_size_epochs": float(SEASON_SIZE_EPOCHS),
+                "minimum_start_block": int(minimum_start_block),
+                "blocks_per_epoch": int(BLOCKS_PER_EPOCH),
+                "minimum_validator_version": (validator_snapshot.version or "").strip() or None,
+            },
+        }
+        return await self._post(
+            "/api/v1/validator-rounds/runtime-config",
+            payload,
+            context="sync_runtime_config",
+        )
+
     async def upload_task_log(self, payload: Dict[str, Any]) -> Optional[str]:
         """
         Upload a per-task execution log to IWAP for S3 persistence.
