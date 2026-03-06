@@ -1017,6 +1017,10 @@ class ValidatorRoundStartMixin:
         if rm.can_start_round(current_block):
             return False
 
+        # Best effort: while waiting for the launch gate, keep runtime config in IWAP
+        # synchronized (main validator updates DB; non-main calls are ignored server-side).
+        await self._sync_runtime_config_while_waiting(current_block=current_block)
+
         blocks_remaining = rm.blocks_until_allowed(current_block)
         seconds_remaining = blocks_remaining * rm.SECONDS_PER_BLOCK
         minutes_remaining = seconds_remaining / 60
@@ -1038,3 +1042,45 @@ class ValidatorRoundStartMixin:
 
         await asyncio.sleep(wait_seconds)
         return True
+
+    async def _sync_runtime_config_while_waiting(self, *, current_block: int) -> None:
+        """
+        Best-effort runtime-config sync while validator is in pre-start waiting phase.
+        This prevents IWAP from staying without round_config/minimum_validator_version
+        when the main validator has not started round execution yet.
+        """
+        iwap_client = getattr(self, "iwap_client", None)
+        if iwap_client is None:
+            return
+
+        sync_method = getattr(iwap_client, "sync_runtime_config", None)
+        if not callable(sync_method):
+            return
+
+        now = float(time.time())
+        interval_seconds = 300.0
+        last_attempt = float(getattr(self, "_runtime_config_wait_sync_last_attempt_ts", 0.0) or 0.0)
+        if (now - last_attempt) < interval_seconds:
+            return
+        self._runtime_config_wait_sync_last_attempt_ts = now
+
+        validator_identity_builder = getattr(self, "_build_validator_identity", None)
+        validator_snapshot_builder = getattr(self, "_build_validator_snapshot", None)
+        if not callable(validator_identity_builder) or not callable(validator_snapshot_builder):
+            return
+
+        try:
+            validator_identity = validator_identity_builder()
+            waiting_round_id = f"runtime_sync_waiting_{int(current_block)}"
+            validator_snapshot = validator_snapshot_builder(waiting_round_id)
+            response = await sync_method(
+                validator_identity=validator_identity,
+                validator_snapshot=validator_snapshot,
+            )
+            updated = bool(response.get("updated")) if isinstance(response, dict) else False
+            if updated:
+                bt.logging.info(f"🧩 IWAP runtime-config synced during wait (main update applied) | block={current_block:,}")
+            else:
+                bt.logging.info(f"🧩 IWAP runtime-config sync during wait acknowledged (non-main/no-op) | block={current_block:,}")
+        except Exception as exc:
+            bt.logging.warning(f"runtime-config sync during wait failed (continuing): {type(exc).__name__}: {exc}")
