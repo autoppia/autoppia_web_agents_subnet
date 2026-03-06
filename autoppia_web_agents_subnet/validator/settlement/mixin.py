@@ -37,6 +37,12 @@ class ValidatorSettlementMixin:
                 f"Round ended before settlement (block {current_block} > {round_end_block}); skipping IPFS/consensus/finish/set_weights for this round.",
                 ColoredLogger.YELLOW,
             )
+            try:
+                uploader = getattr(self, "_upload_round_log_snapshot", None)
+                if callable(uploader):
+                    await uploader(reason="settlement_late_skip", force=True, min_interval_seconds=0.0)
+            except Exception:
+                pass
             self.round_manager.enter_phase(
                 RoundPhase.COMPLETE,
                 block=current_block,

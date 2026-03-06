@@ -407,6 +407,10 @@ def _persist_round_summary_file(
 
 
 async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
+    # Gate for downstream IWAP writes (start_agent_run/registration). Only set true once
+    # round creation + set_tasks completed (or duplicate/idempotent equivalent).
+    setattr(ctx, "_iwap_round_ready", False)
+
     if not ctx.current_round_id:
         return
 
@@ -498,6 +502,22 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
         # Mark phases as done so validator doesn't get stuck
         bt.logging.info("✅ Validator will proceed with: handshake → tasks → evaluations → SET WEIGHTS on-chain")
         return
+
+    # Bootstrap DB round_config from validator runtime config.
+    # Backend applies it only for main validator; non-main calls are ignored safely.
+    try:
+        sync_resp = await ctx.iwap_client.sync_runtime_config(
+            validator_identity=validator_identity,
+            validator_snapshot=validator_snapshot,
+        )
+        updated = bool(sync_resp.get("updated")) if isinstance(sync_resp, dict) else False
+        if updated:
+            log_iwap_phase("Config", "runtime-config synced to IWAP (main validator update applied)", level="success")
+        else:
+            log_iwap_phase("Config", "runtime-config sync acknowledged (non-main/no-op)", level="info")
+    except Exception as exc:
+        # Non-fatal: round flow should still continue.
+        log_iwap_phase("Config", f"runtime-config sync failed (continuing): {type(exc).__name__}: {exc}", level="warning")
 
     validator_round = iwa_models.ValidatorRoundIWAP(
         validator_round_id=ctx.current_round_id,
@@ -659,6 +679,7 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
             f"set_tasks completed for round_id={ctx.current_round_id}",
             level="success",
         )
+    setattr(ctx, "_iwap_round_ready", True)
 
     # Note: register_participating_miners_in_iwap is called separately in validator.py
     # after handshake to avoid duplication
@@ -686,6 +707,14 @@ async def register_participating_miners_in_iwap(ctx) -> None:
         log_iwap_phase(
             "Register Miners",
             "⚠️ OFFLINE MODE: Skipping miner registration",
+            level="warning",
+        )
+        return
+
+    if not bool(getattr(ctx, "_iwap_round_ready", False)):
+        log_iwap_phase(
+            "Register Miners",
+            "Skipping miner registration: IWAP round is not ready (start_round/set_tasks not completed)",
             level="warning",
         )
         return
@@ -759,6 +788,15 @@ async def register_participating_miners_in_iwap(ctx) -> None:
         is_reused = miner_uid in miners_reused and reused_from_id
 
         if is_reused and reused_from_id and prev_s:
+            reused_meta = {"handshake_note": "reused", "reused_from_round": reused_from_id}
+            try:
+                avg_cost_prev = prev_s.get("average_cost")
+                if avg_cost_prev is None:
+                    avg_cost_prev = prev_s.get("avg_cost")
+                if avg_cost_prev is not None:
+                    reused_meta["average_cost"] = float(avg_cost_prev)
+            except Exception:
+                pass
             agent_run = iwa_models.AgentRunIWAP(
                 agent_run_id=agent_run_id,
                 validator_round_id=ctx.current_round_id,
@@ -769,7 +807,7 @@ async def register_participating_miners_in_iwap(ctx) -> None:
                 is_sota=False,
                 version=None,
                 started_at=now_ts,
-                metadata={"handshake_note": "reused", "reused_from_round": reused_from_id},
+                metadata=reused_meta,
                 is_reused=True,
                 reused_from_agent_run_id=reused_from_id,
                 average_score=prev_s.get("average_score"),
@@ -831,7 +869,10 @@ async def register_participating_miners_in_iwap(ctx) -> None:
                 )
                 ctx.current_agent_runs[miner_uid] = agent_run
                 ctx.current_miner_snapshots[miner_uid] = ctx.current_miner_snapshots.get(miner_uid) or miner_snapshot
-                ctx.agent_run_accumulators.setdefault(miner_uid, {"reward": 0.0, "eval_score": 0.0, "execution_time": 0.0, "tasks": 0})
+                ctx.agent_run_accumulators.setdefault(
+                    miner_uid,
+                    {"reward": 0.0, "eval_score": 0.0, "execution_time": 0.0, "cost": 0.0, "tasks": 0},
+                )
             else:
                 start_agent_run_error = f"start_agent_run failed for miner_uid={miner_uid}, agent_run_id={agent_run_id}"
                 log_iwap_phase(
@@ -854,7 +895,10 @@ async def register_participating_miners_in_iwap(ctx) -> None:
             # Update local state for bookkeeping
             ctx.current_agent_runs[miner_uid] = agent_run
             ctx.current_miner_snapshots[miner_uid] = miner_snapshot
-            ctx.agent_run_accumulators.setdefault(miner_uid, {"reward": 0.0, "eval_score": 0.0, "execution_time": 0.0, "tasks": 0})
+            ctx.agent_run_accumulators.setdefault(
+                miner_uid,
+                {"reward": 0.0, "eval_score": 0.0, "execution_time": 0.0, "cost": 0.0, "tasks": 0},
+            )
 
 
 async def finish_round_flow(
@@ -892,33 +936,43 @@ async def finish_round_flow(
     round_log_url: Optional[str] = None
     round_log_error: Optional[str] = None
     try:
-        from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+        # Prefer shared periodic uploader when available (keeps single source of truth
+        # for throttling and retry behavior). Force upload at finish.
+        uploader = getattr(ctx, "_upload_round_log_snapshot", None)
+        if callable(uploader):
+            round_log_url = await uploader(
+                reason="finish_round",
+                force=True,
+                min_interval_seconds=0.0,
+            )
+        if round_log_url is None:
+            from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
-        round_log_file = ColoredLogger.get_round_log_file()
-        if round_log_file:
-            round_log_path = Path(round_log_file)
-            if round_log_path.exists():
-                round_log_contents = round_log_path.read_text(encoding="utf-8", errors="replace")
-                validator_uid = getattr(ctx, "uid", None)
-                validator_hotkey = None
-                try:
-                    validator_hotkey = getattr(ctx.wallet, "hotkey", None)
-                    if validator_hotkey is not None:
-                        validator_hotkey = getattr(validator_hotkey, "ss58_address", None)
-                except Exception:
-                    pass
-                round_log_url = await ctx.iwap_client.upload_round_log(
-                    validator_round_id=round_id,
-                    content=round_log_contents,
-                    season_number=season_for_round,
-                    round_number_in_season=round_for_round,
-                    validator_uid=validator_uid if isinstance(validator_uid, int) else None,
-                    validator_hotkey=validator_hotkey,
-                )
-                if round_log_url is None:
-                    round_log_error = "upload rejected: no url returned"
-            else:
-                round_log_error = f"round log file not found: {round_log_file}"
+            round_log_file = ColoredLogger.get_round_log_file()
+            if round_log_file:
+                round_log_path = Path(round_log_file)
+                if round_log_path.exists():
+                    round_log_contents = round_log_path.read_text(encoding="utf-8", errors="replace")
+                    validator_uid = getattr(ctx, "uid", None)
+                    validator_hotkey = None
+                    try:
+                        validator_hotkey = getattr(ctx.wallet, "hotkey", None)
+                        if validator_hotkey is not None:
+                            validator_hotkey = getattr(validator_hotkey, "ss58_address", None)
+                    except Exception:
+                        pass
+                    round_log_url = await ctx.iwap_client.upload_round_log(
+                        validator_round_id=round_id,
+                        content=round_log_contents,
+                        season_number=season_for_round,
+                        round_number_in_season=round_for_round,
+                        validator_uid=validator_uid if isinstance(validator_uid, int) else None,
+                        validator_hotkey=validator_hotkey,
+                    )
+                    if round_log_url is None:
+                        round_log_error = "upload rejected: no url returned"
+                else:
+                    round_log_error = f"round log file not found: {round_log_file}"
     except Exception as exc:
         round_log_error = f"upload failed: {type(exc).__name__}: {exc}"
         bt.logging.warning(f"Failed to upload round log for round_id={round_id}: {round_log_error}")
@@ -957,6 +1011,20 @@ async def finish_round_flow(
         else:
             local_avg_eval_scores[uid] = 0.0
 
+    local_avg_costs: Dict[int, float] = {}
+    for uid, acc in (getattr(ctx, "agent_run_accumulators", {}) or {}).items():
+        if not isinstance(acc, dict):
+            continue
+        try:
+            total_tasks = int(acc.get("tasks", 0) or 0)
+        except Exception:
+            total_tasks = 0
+        try:
+            total_cost = float(acc.get("cost", 0.0) or 0.0)
+        except Exception:
+            total_cost = 0.0
+        local_avg_costs[int(uid)] = float(total_cost / total_tasks) if total_tasks > 0 else 0.0
+
     # Calculate ranks with LOCAL scores + time as tiebreaker
     # Build list of (uid, score, avg_time) for each miner
     miners_with_time = []
@@ -989,6 +1057,13 @@ async def finish_round_flow(
             miner_tasks_completed = getattr(agent_run, "completed_tasks", 0) or getattr(agent_run, "success_tasks", 0) or 0
             miner_tasks_failed = getattr(agent_run, "failed_tasks", 0) or max(0, miner_tasks_attempted - miner_tasks_completed)
             avg_time = getattr(agent_run, "average_execution_time", None) or 0.0
+            run_meta = getattr(agent_run, "metadata", {}) or {}
+            if not isinstance(run_meta, dict):
+                run_meta = {}
+            try:
+                avg_cost = float(run_meta.get("average_cost", 0.0) or 0.0)
+            except Exception:
+                avg_cost = 0.0
         else:
             # Use LOCAL avg_reward (pre-consensus) for local_evaluation
             avg_reward_value = local_avg_rewards.get(miner_uid, 0.0)
@@ -1002,6 +1077,7 @@ async def finish_round_flow(
             round_times = getattr(ctx.round_manager, "round_times", {}) or {}
             times = round_times.get(miner_uid, []) or []
             avg_time = sum(times) / len(times) if times else 0.0
+            avg_cost = float(local_avg_costs.get(miner_uid, 0.0) or 0.0)
 
         # Get miner name from agent_run
         miner_name = getattr(agent_run, "agent_name", None) or f"Miner {miner_uid}"
@@ -1024,9 +1100,11 @@ async def finish_round_flow(
             "tasks_attempted": miner_tasks_attempted,
             "tasks_completed": miner_tasks_completed,
             "avg_evaluation_time": float(avg_time),
+            "avg_cost": float(avg_cost),
         }
         local_stats_by_miner[miner_uid] = {
             "avg_eval_time": float(avg_time),
+            "avg_cost": float(avg_cost),
             "tasks_sent": int(miner_tasks_attempted),
             "tasks_success": int(miner_tasks_completed),
             "tasks_failed": int(miner_tasks_failed),
@@ -1044,6 +1122,7 @@ async def finish_round_flow(
                 "rank": rank_value,
                 "avg_reward": float(avg_reward_value),  # Average of all rewards for this miner (pre-consensus, local to this validator)
                 "avg_eval_score": float(local_avg_eval_score),  # Average of all eval_scores for this miner (pure evaluation score, 0-1)
+                "avg_cost": float(avg_cost),
                 "miner_uid": miner_uid,
                 "miner_hotkey": miner_hotkey,  # Miner hotkey for identification
                 "miner_name": miner_name,
@@ -1218,7 +1297,11 @@ async def finish_round_flow(
         published_scores: Dict[int, float] = {}
         try:
             published_payload = getattr(ctx, "_ipfs_uploaded_payload", None)
-            published_scores_raw = published_payload.get("scores") if isinstance(published_payload, dict) else None
+            published_scores_raw = None
+            if isinstance(published_payload, dict):
+                published_scores_raw = published_payload.get("rewards")
+                if not isinstance(published_scores_raw, dict):
+                    published_scores_raw = published_payload.get("scores")
             if isinstance(published_scores_raw, dict):
                 for uid_raw, score_raw in published_scores_raw.items():
                     try:
@@ -1278,6 +1361,7 @@ async def finish_round_flow(
             # Asegurar que siempre tengamos los campos requeridos por el backend
             # Usar consensus si está disponible, sino usar datos locales
             avg_eval_time = consensus_stats.get("avg_eval_time") or local_stats.get("avg_eval_time", 0.0)
+            avg_cost = consensus_stats.get("avg_cost") or local_stats.get("avg_cost", 0.0)
             tasks_sent = consensus_stats.get("tasks_sent") or local_stats.get("tasks_sent", 0)
             tasks_success = consensus_stats.get("tasks_success") or local_stats.get("tasks_success", 0)
 
@@ -1288,6 +1372,7 @@ async def finish_round_flow(
                     "consensus_reward": float(consensus_reward),  # Stake-weighted average of avg_rewards from all validators
                     "avg_eval_score": float(post_consensus_avg_eval_score),  # Average eval_score (from aggregated stats or local fallback)
                     "avg_eval_time": float(avg_eval_time),  # SIEMPRE presente - consensus o local
+                    "avg_cost": float(avg_cost),
                     "tasks_sent": int(tasks_sent),  # SIEMPRE presente - consensus o local
                     "tasks_success": int(tasks_success),  # SIEMPRE presente - consensus o local
                     "weight": float(weight),

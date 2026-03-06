@@ -152,9 +152,11 @@ while true; do
 
   WEBS_DEMO_GATES_VERSION=$(get_local_webs_demo_version)
   WEBS_DEMO_DEPLOYED_VERSION=$(read_state_value "LAST_DEPLOYED_WEBS_DEMO_VERSION")
-  WEBS_DEMO_LOCAL_VERSION="$WEBS_DEMO_GATES_VERSION"
-  if is_remote_newer "$WEBS_DEMO_LOCAL_VERSION" "$WEBS_DEMO_DEPLOYED_VERSION"; then
+  # Use deployed version as baseline so we update when remote > deployed; if never deployed, use 0.0.0 to force first deploy on all validators
+  if [ -n "${WEBS_DEMO_DEPLOYED_VERSION:-}" ]; then
     WEBS_DEMO_LOCAL_VERSION="$WEBS_DEMO_DEPLOYED_VERSION"
+  else
+    WEBS_DEMO_LOCAL_VERSION="0.0.0"
   fi
   WEBS_DEMO_REMOTE_VERSION=$(get_remote_webs_demo_version)
   if [ -n "${WEBS_DEMO_GATES_VERSION:-}" ] || [ -n "${WEBS_DEMO_REMOTE_VERSION:-}" ] || [ -n "${WEBS_DEMO_DEPLOYED_VERSION:-}" ]; then

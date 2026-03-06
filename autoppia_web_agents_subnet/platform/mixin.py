@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 import bittensor as bt
 
+from autoppia_web_agents_subnet.validator import config as validator_config
 from autoppia_web_agents_subnet.validator.config import (
     IWAP_API_BASE_URL,
     IWAP_VALIDATOR_AUTH_MESSAGE,
@@ -70,6 +73,11 @@ class ValidatorPlatformMixin:
         self.reused_stats_by_uid: Dict[int, Dict[str, Any]] = {}
         # Track completed (miner_uid, task_id) to avoid duplicates
         self._completed_pairs: Set[Tuple[int, str]] = set()
+        # Round-log periodic upload state (best effort, no hard dependency).
+        self._round_log_last_upload_ts: float = 0.0
+        self._round_log_last_uploaded_size: int = -1
+        self._round_log_last_uploaded_url: Optional[str] = None
+        self._round_log_last_upload_round_id: Optional[str] = None
         # Phase flags for IWAP steps (p1=start_round, p2=set_tasks)
         self._phases: Dict[str, Any] = {"p1_done": False, "p2_done": False}
 
@@ -139,6 +147,128 @@ class ValidatorPlatformMixin:
 
     async def _iwap_start_round(self, *, current_block: int, n_tasks: int) -> None:
         await _utils_start_round_flow(self, current_block=current_block, n_tasks=n_tasks)
+
+    @staticmethod
+    def _extract_round_numbers_from_round_id(round_id: Optional[str]) -> Tuple[Optional[int], Optional[int]]:
+        if not isinstance(round_id, str) or not round_id:
+            return None, None
+        pattern = re.match(r"^validator_round_(\d+)_(\d+)_.*$", round_id)
+        if not pattern:
+            return None, None
+        try:
+            return int(pattern.group(1)), int(pattern.group(2))
+        except Exception:
+            return None, None
+
+    async def _upload_round_log_snapshot(
+        self,
+        *,
+        reason: str,
+        force: bool = False,
+        min_interval_seconds: Optional[float] = None,
+    ) -> Optional[str]:
+        """
+        Best-effort upload of the current round log file to IWAP/S3.
+        Safe to call frequently; throttled by interval and no-change checks.
+        """
+        if getattr(self, "_iwap_offline_mode", False):
+            return None
+
+        round_id = getattr(self, "current_round_id", None)
+        if not round_id:
+            return None
+
+        if self._round_log_last_upload_round_id != round_id:
+            self._round_log_last_upload_round_id = round_id
+            self._round_log_last_upload_ts = 0.0
+            self._round_log_last_uploaded_size = -1
+            self._round_log_last_uploaded_url = None
+
+        try:
+            interval_cfg = float(getattr(validator_config, "ROUND_LOG_UPLOAD_INTERVAL_SECONDS", 120) or 120)
+        except Exception:
+            interval_cfg = 120.0
+        interval = float(min_interval_seconds) if min_interval_seconds is not None else interval_cfg
+        interval = max(0.0, interval)
+
+        now = time.time()
+        if not force and self._round_log_last_upload_ts > 0 and (now - self._round_log_last_upload_ts) < interval:
+            return self._round_log_last_uploaded_url
+
+        from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+
+        round_log_file = ColoredLogger.get_round_log_file()
+        if not round_log_file:
+            return self._round_log_last_uploaded_url
+
+        round_log_path = Path(round_log_file)
+        if not round_log_path.exists():
+            return self._round_log_last_uploaded_url
+
+        try:
+            content = round_log_path.read_text(encoding="utf-8", errors="replace")
+            content_size = len(content.encode("utf-8"))
+        except Exception as exc:
+            self._log_iwap_phase(
+                "Phase 5",
+                f"round-log upload skipped ({reason}): read failed ({type(exc).__name__}: {exc})",
+                level="warning",
+                exc_info=False,
+            )
+            return self._round_log_last_uploaded_url
+
+        if not force and content_size == self._round_log_last_uploaded_size:
+            return self._round_log_last_uploaded_url
+
+        season_number, round_number_in_season = self._extract_round_numbers_from_round_id(round_id)
+        if season_number is None:
+            try:
+                season_number = int(getattr(getattr(self, "season_manager", None), "season_number", 0) or 0)
+            except Exception:
+                season_number = 0
+        if round_number_in_season is None:
+            try:
+                round_number_in_season = int(getattr(getattr(self, "round_manager", None), "round_number", 0) or 0)
+            except Exception:
+                round_number_in_season = 0
+
+        validator_uid = getattr(self, "uid", None)
+        validator_hotkey = None
+        try:
+            validator_hotkey_obj = getattr(getattr(self, "wallet", None), "hotkey", None)
+            validator_hotkey = getattr(validator_hotkey_obj, "ss58_address", None)
+        except Exception:
+            validator_hotkey = None
+
+        try:
+            url = await self.iwap_client.upload_round_log(
+                validator_round_id=round_id,
+                content=content,
+                season_number=season_number if isinstance(season_number, int) else None,
+                round_number_in_season=round_number_in_season if isinstance(round_number_in_season, int) else None,
+                validator_uid=validator_uid if isinstance(validator_uid, int) else None,
+                validator_hotkey=validator_hotkey,
+            )
+        except Exception as exc:
+            self._log_iwap_phase(
+                "Phase 5",
+                f"round-log upload failed ({reason}) for {round_id}: {type(exc).__name__}: {exc}",
+                level="warning",
+                exc_info=False,
+            )
+            return self._round_log_last_uploaded_url
+
+        self._round_log_last_upload_ts = now
+        self._round_log_last_uploaded_size = content_size
+        if isinstance(url, str) and url.strip():
+            self._round_log_last_uploaded_url = url.strip()
+            self._log_iwap_phase(
+                "Phase 5",
+                f"round-log uploaded ({reason}) for {round_id}",
+                level="success",
+                exc_info=False,
+            )
+        return self._round_log_last_uploaded_url
 
     async def _iwap_register_miners(self) -> None:
         """
@@ -282,6 +412,10 @@ class ValidatorPlatformMixin:
         self.reused_from_agent_run_id_by_uid = {}
         self.reused_stats_by_uid = {}
         self._s3_task_log_urls = []
+        self._round_log_last_upload_ts = 0.0
+        self._round_log_last_uploaded_size = -1
+        self._round_log_last_uploaded_url = None
+        self._round_log_last_upload_round_id = None
         self._iwap_shadow_mode = False
         try:
             from autoppia_web_agents_subnet.utils.logging import ColoredLogger

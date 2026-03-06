@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import socket
 import time
 from collections import Counter
 from pathlib import Path
 import bittensor as bt
 
+from autoppia_web_agents_subnet.opensource.utils_docker import get_client
 from autoppia_web_agents_subnet.utils.log_colors import round_details_tag
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
@@ -29,6 +31,7 @@ from autoppia_web_agents_subnet.validator.config import (
     EVALUATION_COOLDOWN_MAX_ROUNDS,
     EVALUATION_COOLDOWN_NO_RESPONSE_BADNESS,
     EVALUATION_COOLDOWN_ZERO_SCORE_BADNESS,
+    SANDBOX_GATEWAY_PORT,
 )
 from autoppia_web_agents_subnet.validator.round_start.synapse_handler import send_start_round_synapse_to_miners
 
@@ -128,6 +131,85 @@ def _is_cooldown_active(
 class ValidatorRoundStartMixin:
     """Round preparation: pre-generate tasks, and perform handshake."""
 
+    @staticmethod
+    def _is_local_tcp_port_open(port: int, timeout_seconds: float = 0.75) -> bool:
+        try:
+            with socket.create_connection(("127.0.0.1", int(port)), timeout=float(timeout_seconds)):
+                return True
+        except Exception:
+            return False
+
+    def _log_round_start_runtime_healthcheck(self) -> None:
+        """
+        Print a compact runtime health snapshot at round start:
+        - Docker daemon availability
+        - Relevant container status/health/ports
+        - Local TCP checks for critical ports (demo backend and sandbox gateway)
+        """
+        bt.logging.info(round_details_tag("🔎 Runtime Healthcheck"))
+
+        try:
+            docker_client = get_client()
+            docker_ok = bool(docker_client.ping())
+            bt.logging.info(round_details_tag(f"Docker daemon: {'OK' if docker_ok else 'UNHEALTHY'}"))
+
+            containers = docker_client.containers.list(all=True)
+            relevant_rows: list[tuple[str, str, str, str, str]] = []
+
+            for container in containers:
+                try:
+                    container.reload()
+                    attrs = container.attrs or {}
+                except Exception:
+                    attrs = {}
+
+                name = str(getattr(container, "name", "unknown") or "unknown")
+                state = str((attrs.get("State") or {}).get("Status") or getattr(container, "status", "unknown"))
+                health = str(((attrs.get("State") or {}).get("Health") or {}).get("Status") or "-")
+                image = str((attrs.get("Config") or {}).get("Image") or "?")
+                ports_map = (attrs.get("NetworkSettings") or {}).get("Ports") or {}
+
+                host_ports: set[int] = set()
+                compact_ports: list[str] = []
+                try:
+                    for container_port, host_bindings in ports_map.items():
+                        if not host_bindings:
+                            continue
+                        for binding in host_bindings:
+                            host_port_raw = binding.get("HostPort")
+                            if not host_port_raw:
+                                continue
+                            try:
+                                host_port = int(host_port_raw)
+                            except Exception:
+                                continue
+                            host_ports.add(host_port)
+                            compact_ports.append(f"{container_port}->{host_port}")
+                except Exception:
+                    pass
+
+                name_l = name.lower()
+                relevant = name_l.startswith("sandbox-") or "demo" in name_l or "iwap" in name_l or "autoppia" in name_l or 8090 in host_ports or int(SANDBOX_GATEWAY_PORT) in host_ports
+                if not relevant:
+                    continue
+
+                ports_str = ",".join(sorted(set(compact_ports))) if compact_ports else "-"
+                relevant_rows.append((name, state, health, ports_str, image))
+
+            if not relevant_rows:
+                bt.logging.warning(round_details_tag("Docker containers (relevant): none found (sandbox/demo/iwap/8090/gateway)"))
+            else:
+                bt.logging.info(round_details_tag(f"Docker containers (relevant): {len(relevant_rows)}"))
+                for name, state, health, ports_str, image in sorted(relevant_rows, key=lambda row: row[0]):
+                    bt.logging.info(round_details_tag(f"[docker] {name} | state={state} | health={health} | ports={ports_str} | image={image}"))
+        except Exception as exc:
+            bt.logging.warning(round_details_tag(f"Docker healthcheck error: {exc}"))
+
+        critical_ports = [8090, int(SANDBOX_GATEWAY_PORT)]
+        for port in critical_ports:
+            is_open = self._is_local_tcp_port_open(port)
+            bt.logging.info(round_details_tag(f"[tcp] 127.0.0.1:{port} => {'OPEN' if is_open else 'CLOSED'}"))
+
     async def _start_round(self) -> RoundStartResult:
         current_block = self.block
 
@@ -209,6 +291,7 @@ class ValidatorRoundStartMixin:
         bt.logging.info(round_details_tag(f"Total Blocks: {self.round_manager.target_block - current_block}"))
         bt.logging.info(round_details_tag(f"Consensus fetch: {self.round_manager.settlement_fraction:.0%} — block {settlement_block:,} (epoch {settlement_epoch:.2f}) — ~{minutes_to_settlement:.1f}m"))
         bt.logging.info("=" * 100)
+        self._log_round_start_runtime_healthcheck()
 
         # Save round boundaries for settlement so we wait for *this* round's 97% and end,
         # not the next round's (sync_boundaries(current_block) later would advance to next round).
@@ -934,6 +1017,10 @@ class ValidatorRoundStartMixin:
         if rm.can_start_round(current_block):
             return False
 
+        # Best effort: while waiting for the launch gate, keep runtime config in IWAP
+        # synchronized (main validator updates DB; non-main calls are ignored server-side).
+        await self._sync_runtime_config_while_waiting(current_block=current_block)
+
         blocks_remaining = rm.blocks_until_allowed(current_block)
         seconds_remaining = blocks_remaining * rm.SECONDS_PER_BLOCK
         minutes_remaining = seconds_remaining / 60
@@ -955,3 +1042,45 @@ class ValidatorRoundStartMixin:
 
         await asyncio.sleep(wait_seconds)
         return True
+
+    async def _sync_runtime_config_while_waiting(self, *, current_block: int) -> None:
+        """
+        Best-effort runtime-config sync while validator is in pre-start waiting phase.
+        This prevents IWAP from staying without round_config/minimum_validator_version
+        when the main validator has not started round execution yet.
+        """
+        iwap_client = getattr(self, "iwap_client", None)
+        if iwap_client is None:
+            return
+
+        sync_method = getattr(iwap_client, "sync_runtime_config", None)
+        if not callable(sync_method):
+            return
+
+        now = float(time.time())
+        interval_seconds = 300.0
+        last_attempt = float(getattr(self, "_runtime_config_wait_sync_last_attempt_ts", 0.0) or 0.0)
+        if (now - last_attempt) < interval_seconds:
+            return
+        self._runtime_config_wait_sync_last_attempt_ts = now
+
+        validator_identity_builder = getattr(self, "_build_validator_identity", None)
+        validator_snapshot_builder = getattr(self, "_build_validator_snapshot", None)
+        if not callable(validator_identity_builder) or not callable(validator_snapshot_builder):
+            return
+
+        try:
+            validator_identity = validator_identity_builder()
+            waiting_round_id = f"runtime_sync_waiting_{int(current_block)}"
+            validator_snapshot = validator_snapshot_builder(waiting_round_id)
+            response = await sync_method(
+                validator_identity=validator_identity,
+                validator_snapshot=validator_snapshot,
+            )
+            updated = bool(response.get("updated")) if isinstance(response, dict) else False
+            if updated:
+                bt.logging.info(f"🧩 IWAP runtime-config synced during wait (main update applied) | block={current_block:,}")
+            else:
+                bt.logging.info(f"🧩 IWAP runtime-config sync during wait acknowledged (non-main/no-op) | block={current_block:,}")
+        except Exception as exc:
+            bt.logging.warning(f"runtime-config sync during wait failed (continuing): {type(exc).__name__}: {exc}")

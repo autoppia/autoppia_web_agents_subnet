@@ -780,6 +780,14 @@ async def submit_task_results(
 
         # Build llm_usage for backend (same as prepare_evaluation_payload)
         llm_usage_inner: Optional[List[Dict[str, Any]]] = _normalize_llm_usage(evaluation_meta.get("llm_usage"))
+        zero_reason_inner = evaluation_meta.get("zero_reason") if isinstance(evaluation_meta, dict) else None
+        llm_usage_summary = _summarize_llm_usage(llm_usage_inner)
+        task_total_cost = 0.0
+        if isinstance(llm_usage_summary, dict):
+            try:
+                task_total_cost = float(llm_usage_summary.get("total_cost", 0.0) or 0.0)
+            except Exception:
+                task_total_cost = 0.0
 
         evaluation_result_payload = iwa_models.EvaluationResultIWAP(
             evaluation_id=evaluation_id,
@@ -938,10 +946,14 @@ async def submit_task_results(
                             level="warning",
                         )
 
-        accumulators = ctx.agent_run_accumulators.setdefault(miner_uid, {"reward": 0.0, "eval_score": 0.0, "execution_time": 0.0, "tasks": 0})
+        accumulators = ctx.agent_run_accumulators.setdefault(
+            miner_uid,
+            {"reward": 0.0, "eval_score": 0.0, "execution_time": 0.0, "cost": 0.0, "tasks": 0},
+        )
         accumulators["reward"] += float(reward_value)
         accumulators["eval_score"] += float(eval_score)
         accumulators["execution_time"] += exec_time
+        accumulators["cost"] += float(task_total_cost)
         accumulators["tasks"] += 1
 
         agent_run.total_tasks = accumulators["tasks"]
@@ -950,3 +962,10 @@ async def submit_task_results(
         agent_run.average_reward = accumulators["reward"] / accumulators["tasks"] if accumulators["tasks"] else None
         agent_run.average_score = accumulators["eval_score"] / accumulators["tasks"] if accumulators["tasks"] else None
         agent_run.average_execution_time = accumulators["execution_time"] / accumulators["tasks"] if accumulators["tasks"] else None
+        try:
+            meta = dict(getattr(agent_run, "metadata", {}) or {})
+            meta["total_cost"] = float(accumulators["cost"])
+            meta["average_cost"] = float(accumulators["cost"] / accumulators["tasks"]) if accumulators["tasks"] else 0.0
+            agent_run.metadata = meta
+        except Exception:
+            pass

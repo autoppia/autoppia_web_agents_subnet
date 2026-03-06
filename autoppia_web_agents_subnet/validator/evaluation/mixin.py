@@ -259,6 +259,12 @@ class ValidatorEvaluationMixin:
                             zero_reason="round_window_exceeded",
                             register_commit=False,
                         )
+                try:
+                    uploader = getattr(self, "_upload_round_log_snapshot", None)
+                    if callable(uploader):
+                        await uploader(reason="evaluation_stop_fraction", force=True, min_interval_seconds=0.0)
+                except Exception:
+                    pass
                 return agents_evaluated
 
             agent = self.agents_queue.get()
@@ -675,6 +681,12 @@ class ValidatorEvaluationMixin:
                                 f"Failed to submit batch evaluations to IWAP for agent {agent.uid}: {e}",
                                 ColoredLogger.RED,
                             )
+                        try:
+                            uploader = getattr(self, "_upload_round_log_snapshot", None)
+                            if callable(uploader):
+                                await uploader(reason=f"evaluation_batch_uid_{agent.uid}")
+                        except Exception:
+                            pass
 
                     if stop_for_cost_limit_streak:
                         break
