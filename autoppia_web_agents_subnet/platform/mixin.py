@@ -12,6 +12,7 @@ from autoppia_web_agents_subnet.validator import config as validator_config
 from autoppia_web_agents_subnet.validator.config import (
     IWAP_API_BASE_URL,
     IWAP_VALIDATOR_AUTH_MESSAGE,
+    S3_BACKEND,
 )
 from autoppia_web_agents_subnet.validator.models import TaskWithProject
 from autoppia_web_agents_subnet.platform import models as iwa_models
@@ -58,6 +59,15 @@ class ValidatorPlatformMixin:
             backup_dir=backup_dir,
             auth_provider=self._build_iwap_auth_headers,
         )
+        # Initialise optional Hippius S3 backend for log uploads
+        self._s3_storage_backend = None
+        if S3_BACKEND == "hippius":
+            try:
+                from autoppia_web_agents_subnet.utils.storage import get_s3_backend
+
+                self._s3_storage_backend = get_s3_backend(override="hippius")
+            except Exception:
+                pass
         self.current_round_id: Optional[str] = None
         self.current_round_tasks: Dict[str, iwa_models.TaskIWAP] = {}
         self.current_agent_runs: Dict[int, iwa_models.AgentRunIWAP] = {}
@@ -240,6 +250,33 @@ class ValidatorPlatformMixin:
             validator_hotkey = getattr(validator_hotkey_obj, "ss58_address", None)
         except Exception:
             validator_hotkey = None
+
+        # If Hippius S3 backend is configured, upload via Hippius first
+        if self._s3_storage_backend is not None:
+            try:
+                hippius_url = await self._s3_storage_backend.upload_log(
+                    key=round_id,
+                    content=content,
+                    metadata={
+                        "validator_round_id": round_id,
+                        "season_number": str(season_number) if season_number is not None else "",
+                        "round_number_in_season": str(round_number_in_season) if round_number_in_season is not None else "",
+                        "validator_uid": str(validator_uid) if validator_uid is not None else "",
+                        "validator_hotkey": validator_hotkey or "",
+                    },
+                )
+                if hippius_url:
+                    self._log_iwap_phase(
+                        "Phase 5",
+                        f"round-log uploaded via Hippius S3 ({reason}) for {round_id}",
+                        level="success",
+                    )
+            except Exception as exc:
+                self._log_iwap_phase(
+                    "Phase 5",
+                    f"Hippius S3 upload failed ({reason}): {type(exc).__name__}: {exc}",
+                    level="warning",
+                )
 
         try:
             url = await self.iwap_client.upload_round_log(

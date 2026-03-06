@@ -17,6 +17,7 @@ from autoppia_web_agents_subnet.utils.commitments import (
 )
 from autoppia_web_agents_subnet.utils.ipfs_client import add_json_async, get_json_async
 from autoppia_web_agents_subnet.utils.log_colors import ipfs_tag, consensus_tag
+from autoppia_web_agents_subnet.utils.storage import get_storage_backend
 from autoppia_web_agents_subnet.validator.round_manager import RoundPhase
 from autoppia_web_agents_subnet.platform.client import compute_season_number
 
@@ -348,10 +349,11 @@ async def publish_round_snapshot(
         bt.logging.info(ipfs_tag("UPLOAD", f"Round {payload.get('r')} | {len(payload.get('rewards', {}))} miners"))
         bt.logging.info(ipfs_tag("UPLOAD", f"Payload: {payload_json}"))
 
-        cid, sha_hex, byte_len = await add_json_async(
+        # Use pluggable storage backend (supports legacy IPFS and Hippius)
+        storage = get_storage_backend()
+        cid, sha_hex, byte_len = await storage.upload_json_async(
             payload,
             filename=f"autoppia_commit_r{payload['r'] or 'X'}.json",
-            api_url=IPFS_API_URL,
             pin=True,
             sort_keys=True,
         )
@@ -552,7 +554,9 @@ async def aggregate_scores_from_commitments(
             continue
 
         try:
-            payload, _norm, _h = await get_json_async(cid, api_url=IPFS_API_URL)
+            # Use pluggable storage backend (supports legacy IPFS and Hippius)
+            storage = get_storage_backend()
+            payload, _norm, _h = await storage.download_json_async(cid)
             import json
 
             payload_json = json.dumps(_payload_log_summary(payload), separators=(",", ":"), sort_keys=True)

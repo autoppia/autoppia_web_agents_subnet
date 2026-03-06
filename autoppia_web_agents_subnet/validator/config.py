@@ -87,6 +87,18 @@ MIN_MINER_STAKE_ALPHA = _env_float("MIN_MINER_STAKE_ALPHA", 100.0, test_default=
 IPFS_API_URL = _env_str("IPFS_API_URL", "http://ipfs.metahash73.com:5001/api/v0")
 # Comma-separated gateways for fetch fallback
 IPFS_GATEWAYS = [gw.strip() for gw in (_env_str("IPFS_GATEWAYS", "https://ipfs.io/ipfs,https://cloudflare-ipfs.com/ipfs") or "").split(",") if gw.strip()]
+
+# ═══════════════════════════════════════════════════════════════════════════
+# STORAGE BACKEND CONFIGURATION (Hippius / SN75 integration)
+# ═══════════════════════════════════════════════════════════════════════════
+# STORAGE_BACKEND: "ipfs" (default) or "hippius" -- controls IPFS operations
+# S3_BACKEND: "iwap" (default) or "hippius" -- controls log/S3 uploads
+STORAGE_BACKEND = _env_str("STORAGE_BACKEND", "ipfs")
+S3_BACKEND = _env_str("S3_BACKEND", "iwap")
+# Hippius-specific settings (only used when STORAGE_BACKEND or S3_BACKEND is "hippius")
+HIPPIUS_IPFS_API_URL = _env_str("HIPPIUS_IPFS_API_URL", "")
+HIPPIUS_API_KEY = _env_str("HIPPIUS_API_KEY", "")
+HIPPIUS_S3_BUCKET = _env_str("HIPPIUS_S3_BUCKET", "autoppia-logs")
 # Retry policy for finish_round when backend blocks non-main validator writes.
 # Optional via env:
 # - FINISH_ROUND_MAX_RETRIES
