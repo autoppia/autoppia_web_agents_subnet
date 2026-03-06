@@ -32,7 +32,7 @@ class TestCompleteRound:
         validator.sandbox_manager.cleanup_agent = Mock()
         validator._get_async_subtensor = AsyncMock(return_value=Mock())
         
-        with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua') as mock_eval:
+        with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua', new_callable=AsyncMock) as mock_eval:
             with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize:
                 with patch('autoppia_web_agents_subnet.validator.settlement.mixin.publish_round_snapshot'):
                     with patch('autoppia_web_agents_subnet.validator.settlement.mixin.aggregate_scores_from_commitments') as mock_aggregate:
@@ -76,7 +76,7 @@ class TestCompleteRound:
         validator.sandbox_manager.cleanup_agent = Mock()
         validator._get_async_subtensor = AsyncMock(return_value=Mock())
         
-        with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua') as mock_eval:
+        with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua', new_callable=AsyncMock) as mock_eval:
             with patch('autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url') as mock_normalize:
                 with patch('autoppia_web_agents_subnet.validator.settlement.mixin.publish_round_snapshot'):
                     with patch('autoppia_web_agents_subnet.validator.settlement.mixin.aggregate_scores_from_commitments') as mock_aggregate:

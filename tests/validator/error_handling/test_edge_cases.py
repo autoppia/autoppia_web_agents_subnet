@@ -85,7 +85,7 @@ class TestStakeEdgeCases:
             validator_with_agents.round_manager.enter_phase = MagicMock()
 
             # Should not crash - pass empty scores dict
-            await validator_with_agents._calculate_final_weights(scores={})
+            await validator_with_agents._calculate_final_weights(consensus_rewards={})
 
             # Should still set weights (using burn logic since no scores)
             validator_with_agents.set_weights.assert_called()
@@ -159,7 +159,7 @@ class TestEmptyDataEdgeCases:
         validator_with_agents.round_manager.enter_phase = MagicMock()
 
         # Should trigger burn logic - pass empty scores dict
-        await validator_with_agents._calculate_final_weights(scores={})
+        await validator_with_agents._calculate_final_weights(consensus_rewards={})
 
         # Should still call set_weights (with burn)
         validator_with_agents.set_weights.assert_called()
@@ -368,17 +368,19 @@ class TestConcurrencyEdgeCases:
         validator_with_agents.sandbox_manager.deploy_agent = Mock(return_value=mock_instance)
         validator_with_agents.sandbox_manager.cleanup_agent = Mock()
 
-        # Mock evaluation
+        # Mock evaluation - use eval_score=1.0 for non-zero reward (binary reward function)
         async def mock_evaluate(*args, **kwargs):
-            return (0.8, None, None)  # Return tuple as expected
+            return (1.0, None, None)  # Return tuple as expected
 
-        with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua", new=mock_evaluate):
-            with patch(
-                "autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit",
-                return_value="deadbeef",
-            ):
-                # Should handle gracefully
-                await validator_with_agents._run_evaluation_phase()
+        with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url",
+                   return_value=("https://github.com/test/agent", "main")):
+            with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua", new=mock_evaluate):
+                with patch(
+                    "autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit",
+                    return_value="deadbeef",
+                ):
+                    # Should handle gracefully
+                    await validator_with_agents._run_evaluation_phase()
 
         # Should have evaluated agents
         evaluated = sum(1 for a in validator_with_agents.agents_dict.values() if a.score > 0)

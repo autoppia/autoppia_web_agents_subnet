@@ -280,7 +280,7 @@ class TestAsyncSubtensorErrors:
         
         # Should raise exception but not crash the validator
         try:
-            await validator_with_agents._calculate_final_weights(scores={1: 0.8, 2: 0.6})
+            await validator_with_agents._calculate_final_weights(consensus_rewards={1: 0.8, 2: 0.6})
         except Exception as e:
             # Exception is expected
             assert "Failed to set weights" in str(e)

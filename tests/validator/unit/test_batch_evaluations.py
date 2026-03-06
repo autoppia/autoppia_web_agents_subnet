@@ -158,7 +158,7 @@ async def test_prepare_evaluation_payload_basic(mock_ctx):
     evaluation = evaluation_payload["evaluation"]
     assert evaluation["task_id"] == task_id_full
     assert evaluation["agent_run_id"] == "agent_run_153_abc123def456"
-    assert evaluation["eval_score"] == 0.85
+    assert evaluation["evaluation_score"] == 0.85
     assert evaluation["reward"] == 0.80
 
 
