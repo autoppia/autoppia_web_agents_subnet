@@ -19,28 +19,26 @@ from autoppia_web_agents_subnet.utils.ipfs_client import IPFSError, minidumps, s
 logger = logging.getLogger(__name__)
 
 # Singleton — lazily initialised on first use, reused across calls.
-_hippius_client: Any = None
+_state: dict[str, Any] = {"client": None}
 
 
 def _get_client() -> Any:
     """Return a cached HippiusClient instance (created on first call)."""
-    global _hippius_client
-    if _hippius_client is None:
+    if _state["client"] is None:
         try:
             from hippius import HippiusClient  # type: ignore[import-untyped]
         except ImportError as exc:
             raise IPFSError(
                 "hippius package not installed — run: pip install hippius>=0.2.60"
             ) from exc
-        _hippius_client = HippiusClient()
+        _state["client"] = HippiusClient()
         logger.info("Hippius IPFS client initialised")
-    return _hippius_client
+    return _state["client"]
 
 
 def reset_client() -> None:
     """Clear the cached client (useful for tests)."""
-    global _hippius_client
-    _hippius_client = None
+    _state["client"] = None
 
 
 async def hippius_add_json_async(

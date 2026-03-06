@@ -19,14 +19,13 @@ class S3Error(Exception):
 
 
 # Singleton — lazily initialised on first use.
-_s3_client: Any = None
+_state: dict[str, Any] = {"client": None}
 
 
 def _get_s3_client():
     """Return a cached boto3 S3 client configured for Hippius endpoint."""
-    global _s3_client
-    if _s3_client is not None:
-        return _s3_client
+    if _state["client"] is not None:
+        return _state["client"]
 
     try:
         import boto3  # type: ignore[import-untyped]
@@ -42,20 +41,19 @@ def _get_s3_client():
     if not HIPPIUS_S3_ACCESS_KEY or not HIPPIUS_S3_SECRET_KEY:
         raise S3Error("HIPPIUS_S3_ACCESS_KEY and HIPPIUS_S3_SECRET_KEY must be set")
 
-    _s3_client = boto3.client(
+    _state["client"] = boto3.client(
         "s3",
         endpoint_url=HIPPIUS_S3_ENDPOINT,
         aws_access_key_id=HIPPIUS_S3_ACCESS_KEY,
         aws_secret_access_key=HIPPIUS_S3_SECRET_KEY,
     )
     logger.info("Hippius S3 client initialised: endpoint=%s", HIPPIUS_S3_ENDPOINT)
-    return _s3_client
+    return _state["client"]
 
 
 def reset_client() -> None:
     """Clear the cached client (useful for tests)."""
-    global _s3_client
-    _s3_client = None
+    _state["client"] = None
 
 
 def is_configured() -> bool:
@@ -93,7 +91,7 @@ async def s3_upload_json_async(
     data = json.dumps(
         obj, separators=(",", ":"), ensure_ascii=False, sort_keys=True, default=str
     ).encode("utf-8")
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     await loop.run_in_executor(
         None,
         lambda: _get_s3_client().put_object(
@@ -115,7 +113,7 @@ async def s3_upload_bytes_async(
     from autoppia_web_agents_subnet.validator.config import HIPPIUS_S3_BUCKET
 
     bucket = bucket or HIPPIUS_S3_BUCKET
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     await loop.run_in_executor(
         None,
         lambda: _get_s3_client().put_object(

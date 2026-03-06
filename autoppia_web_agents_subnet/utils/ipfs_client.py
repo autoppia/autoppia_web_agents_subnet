@@ -140,7 +140,7 @@ async def add_json_async(
 
         return await hippius_add_json_async(obj, filename=filename, pin=pin, sort_keys=sort_keys)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
         None, lambda: ipfs_add_json(obj, filename=filename, api_url=api_url, pin=pin, sort_keys=sort_keys)
     )
@@ -160,7 +160,7 @@ async def get_json_async(
 
         return await hippius_get_json_async(cid, expected_sha256_hex=expected_sha256_hex)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
         None, lambda: ipfs_get_json(cid, api_url=api_url, gateways=gateways, expected_sha256_hex=expected_sha256_hex)
     )

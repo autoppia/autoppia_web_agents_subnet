@@ -906,8 +906,8 @@ async def submit_task_results(
                             gif_data=gif_bytes,
                             task_id=iwap_task_id,
                         )
-                    except Exception:
-                        pass
+                    except Exception as s3_exc:  # noqa: BLE001
+                        logger.debug("Hippius S3 GIF upload failed (non-critical): %s", s3_exc)
                 else:
                     log_gif_event(
                         "Skipped upload: invalid payload (failed to extract bytes)",
@@ -945,8 +945,8 @@ async def submit_task_results(
                         metadata=task_log_payload,
                         task_id=task_log_payload.get("task_id") if isinstance(task_log_payload, dict) else None,
                     )
-                except Exception:
-                    pass
+                except Exception as s3_exc:  # noqa: BLE001
+                    logger.debug("Hippius S3 metadata upload failed (non-critical): %s", s3_exc)
 
         accumulators = ctx.agent_run_accumulators.setdefault(miner_uid, {"reward": 0.0, "eval_score": 0.0, "execution_time": 0.0, "tasks": 0})
         accumulators["reward"] += float(reward_value)

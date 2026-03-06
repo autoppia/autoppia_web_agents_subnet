@@ -990,8 +990,8 @@ class ValidatorEvaluationMixin:
                         metadata=task_log_payload,
                         task_id=task_log_payload.get("task_id") if isinstance(task_log_payload, dict) else None,
                     )
-                except Exception:
-                    pass
+                except Exception as s3_exc:  # noqa: BLE001
+                    ColoredLogger.debug(f"Hippius S3 metadata upload failed (non-critical): {s3_exc}")
             gif_payload = evaluation_meta_dict.get("gif_recording")
             evaluation_result = evaluation_payload.get("evaluation_result", {})
             evaluation_id = evaluation_result.get("evaluation_id") if isinstance(evaluation_result, dict) else None
@@ -1062,8 +1062,8 @@ class ValidatorEvaluationMixin:
                                     gif_data=gif_bytes,
                                     task_id=gif_task_id,
                                 )
-                    except Exception:
-                        pass
+                    except Exception as s3_exc:  # noqa: BLE001
+                        ColoredLogger.debug(f"Hippius S3 GIF upload failed (non-critical): {s3_exc}")
                 return created > 0
             except Exception as e:
                 ColoredLogger.error(f"Failed to submit batch: {e}", ColoredLogger.RED)

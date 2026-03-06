@@ -10,6 +10,7 @@ Tests:
 import hashlib
 import json
 import os
+import asyncio
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -33,12 +34,10 @@ class TestIPFSRouting:
 
                 from autoppia_web_agents_subnet.utils.ipfs_client import add_json_async
 
-                cid, h, size = await add_json_async({"test": 1})
+                result = await add_json_async({"test": 1})
 
                 mock_legacy.assert_called_once()
-                assert cid == "QmLegacy"
-                assert h == "abc123"
-                assert size == 42
+                assert result == ("QmLegacy", "abc123", 42)
 
     async def test_add_json_async_uses_hippius_when_enabled(self):
         with patch("autoppia_web_agents_subnet.validator.config.HIPPIUS_IPFS_ENABLED", True):
@@ -47,10 +46,10 @@ class TestIPFSRouting:
 
                 from autoppia_web_agents_subnet.utils.ipfs_client import add_json_async
 
-                cid, h, size = await add_json_async({"test": 1}, filename="test.json")
+                result = await add_json_async({"test": 1}, filename="test.json")
 
                 mock_hippius.assert_called_once()
-                assert cid == "QmHippius"
+                assert result[0] == "QmHippius"
 
     async def test_get_json_async_uses_legacy_when_disabled(self):
         with patch("autoppia_web_agents_subnet.validator.config.HIPPIUS_IPFS_ENABLED", False):
@@ -59,7 +58,7 @@ class TestIPFSRouting:
 
                 from autoppia_web_agents_subnet.utils.ipfs_client import get_json_async
 
-                obj, norm, h = await get_json_async("QmTest")
+                obj, _, _ = await get_json_async("QmTest")
 
                 assert obj == {"scores": {}}
 
@@ -70,7 +69,7 @@ class TestIPFSRouting:
 
                 from autoppia_web_agents_subnet.utils.ipfs_client import get_json_async
 
-                obj, norm, h = await get_json_async("QmTest", expected_sha256_hex="hash")
+                obj, _, _ = await get_json_async("QmTest", expected_sha256_hex="hash")
 
                 mock_hippius.assert_called_once_with("QmTest", expected_sha256_hex="hash")
 
@@ -83,14 +82,6 @@ class TestIPFSRouting:
 @pytest.mark.unit
 @pytest.mark.asyncio
 class TestHippiusAddJson:
-
-    def setup_method(self):
-        import autoppia_web_agents_subnet.utils.hippius_ipfs as hip_mod
-        hip_mod.reset_client()
-
-    def teardown_method(self):
-        import autoppia_web_agents_subnet.utils.hippius_ipfs as hip_mod
-        hip_mod.reset_client()
 
     async def test_returns_correct_tuple_format(self):
         mock_client = MagicMock()
@@ -161,14 +152,6 @@ class TestHippiusAddJson:
 @pytest.mark.asyncio
 class TestHippiusGetJson:
 
-    def setup_method(self):
-        import autoppia_web_agents_subnet.utils.hippius_ipfs as hip_mod
-        hip_mod.reset_client()
-
-    def teardown_method(self):
-        import autoppia_web_agents_subnet.utils.hippius_ipfs as hip_mod
-        hip_mod.reset_client()
-
     async def test_hash_validation_passes(self):
         payload = {"scores": {"1": 0.5}}
         norm_bytes = json.dumps(payload, separators=(",", ":"), ensure_ascii=False, sort_keys=True).encode("utf-8")
@@ -185,7 +168,7 @@ class TestHippiusGetJson:
             import autoppia_web_agents_subnet.utils.hippius_ipfs as hip_mod
             hip_mod.reset_client()
             importlib.reload(hip_mod)
-            obj, norm, h = await hip_mod.hippius_get_json_async("QmTest", expected_sha256_hex=expected_hash)
+            obj, _, h = await hip_mod.hippius_get_json_async("QmTest", expected_sha256_hex=expected_hash)
 
             assert obj == payload
             assert h == expected_hash
@@ -440,11 +423,13 @@ class _FakeHippiusClient:
         self._store: dict[str, bytes] = {}
 
     async def ipfs_upload_bytes(self, data: bytes, *, filename: str = "", pin: bool = True) -> str:
+        await asyncio.sleep(0)
         cid = "bafk" + hashlib.sha256(data).hexdigest()[:48]
         self._store[cid] = data
         return cid
 
     async def ipfs_download_bytes(self, cid: str) -> bytes:
+        await asyncio.sleep(0)
         if cid not in self._store:
             raise RuntimeError(f"CID not found: {cid}")
         return self._store[cid]
@@ -457,21 +442,13 @@ class TestHippiusRoundTrip:
     serialization, hashing, and validation code -- only the network transport
     is replaced with an in-memory store."""
 
-    def setup_method(self):
-        import autoppia_web_agents_subnet.utils.hippius_ipfs as hip_mod
-        hip_mod.reset_client()
-
-    def teardown_method(self):
-        import autoppia_web_agents_subnet.utils.hippius_ipfs as hip_mod
-        hip_mod.reset_client()
-
     async def test_full_round_trip_through_public_api(self):
         """add_json_async -> get_json_async exercises the exact consensus.py production path."""
         import autoppia_web_agents_subnet.utils.hippius_ipfs as hip_mod
         from autoppia_web_agents_subnet.utils.ipfs_client import add_json_async, get_json_async, minidumps, sha256_hex
 
         fake = _FakeHippiusClient()
-        hip_mod._hippius_client = fake
+        hip_mod._state["client"] = fake
 
         payload = {
             "v": 1,
@@ -491,7 +468,7 @@ class TestHippiusRoundTrip:
             assert sha_hex == sha256_hex(canonical)
             assert byte_len == len(canonical)
 
-            obj, norm, h = await get_json_async(cid, expected_sha256_hex=sha_hex)
+            obj, _, h = await get_json_async(cid, expected_sha256_hex=sha_hex)
             assert obj == payload
             assert h == sha_hex
 
@@ -500,7 +477,7 @@ class TestHippiusRoundTrip:
         from autoppia_web_agents_subnet.utils.ipfs_client import IPFSError, add_json_async, get_json_async
 
         fake = _FakeHippiusClient()
-        hip_mod._hippius_client = fake
+        hip_mod._state["client"] = fake
 
         with patch("autoppia_web_agents_subnet.validator.config.HIPPIUS_IPFS_ENABLED", True):
             cid, _, _ = await add_json_async({"data": "real"})
@@ -514,7 +491,7 @@ class TestHippiusRoundTrip:
         from autoppia_web_agents_subnet.utils.ipfs_client import add_json_async, get_json_async
 
         fake = _FakeHippiusClient()
-        hip_mod._hippius_client = fake
+        hip_mod._state["client"] = fake
 
         payload = {
             "v": 1,
@@ -528,8 +505,8 @@ class TestHippiusRoundTrip:
             cid, sha_hex, byte_len = await add_json_async(payload)
             assert byte_len > 1000
 
-            obj, _, h = await get_json_async(cid, expected_sha256_hex=sha_hex)
-            assert obj["scores"]["255"] == 2.55
+            obj, _, _ = await get_json_async(cid, expected_sha256_hex=sha_hex)
+            assert obj["scores"]["255"] == pytest.approx(2.55)
             assert len(obj["scores"]) == 256
 
     async def test_content_addressing_same_content_same_cid(self):
@@ -537,7 +514,7 @@ class TestHippiusRoundTrip:
         from autoppia_web_agents_subnet.utils.ipfs_client import add_json_async
 
         fake = _FakeHippiusClient()
-        hip_mod._hippius_client = fake
+        hip_mod._state["client"] = fake
 
         with patch("autoppia_web_agents_subnet.validator.config.HIPPIUS_IPFS_ENABLED", True):
             cid1, _, _ = await add_json_async({"x": 1})
@@ -549,7 +526,7 @@ class TestHippiusRoundTrip:
         from autoppia_web_agents_subnet.utils.ipfs_client import add_json_async
 
         fake = _FakeHippiusClient()
-        hip_mod._hippius_client = fake
+        hip_mod._state["client"] = fake
 
         with patch("autoppia_web_agents_subnet.validator.config.HIPPIUS_IPFS_ENABLED", True):
             cid1, _, _ = await add_json_async({"x": 1})
@@ -561,7 +538,7 @@ class TestHippiusRoundTrip:
         from autoppia_web_agents_subnet.utils.ipfs_client import IPFSError, get_json_async
 
         fake = _FakeHippiusClient()
-        hip_mod._hippius_client = fake
+        hip_mod._state["client"] = fake
 
         with patch("autoppia_web_agents_subnet.validator.config.HIPPIUS_IPFS_ENABLED", True):
             with pytest.raises(IPFSError, match="download failed"):
