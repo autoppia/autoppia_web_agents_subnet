@@ -252,6 +252,49 @@ class TestWeightCalculation:
                 assert float(rewards[2]) == pytest.approx(1.0)
                 assert float(rewards[1]) == pytest.approx(0.0)
 
+    async def test_weight_calculation_requires_eligibility_for_active_leader(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin
+
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        dummy_validator.season_manager.season_number = 9
+        dummy_validator.round_manager.round_number = 1
+
+        with patch("autoppia_web_agents_subnet.validator.settlement.mixin.render_round_summary_table"):
+            dummy_validator.eligibility_status_by_uid = {1: "evaluated", 2: "evaluated"}
+            await dummy_validator._calculate_final_weights(scores={1: 0.9, 2: 0.8})
+            assert dummy_validator._last_round_winner_uid == 1
+
+            dummy_validator.round_manager.round_number = 2
+            dummy_validator.eligibility_status_by_uid = {2: "evaluated"}
+            await dummy_validator._calculate_final_weights(scores={1: 0.0, 2: 0.7})
+            assert dummy_validator._last_round_winner_uid == 2
+
+            rewards = dummy_validator.update_scores.call_args[1]["rewards"]
+            assert float(rewards[2]) == pytest.approx(1.0)
+            assert float(rewards[1]) == pytest.approx(0.0)
+
+    async def test_weight_calculation_restores_best_score_when_miner_becomes_eligible_again(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin
+
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        dummy_validator.season_manager.season_number = 10
+        dummy_validator.round_manager.round_number = 1
+
+        with patch("autoppia_web_agents_subnet.validator.settlement.mixin.render_round_summary_table"):
+            dummy_validator.eligibility_status_by_uid = {1: "evaluated", 2: "evaluated"}
+            await dummy_validator._calculate_final_weights(scores={1: 0.9, 2: 0.8})
+            assert dummy_validator._last_round_winner_uid == 1
+
+            dummy_validator.round_manager.round_number = 2
+            dummy_validator.eligibility_status_by_uid = {2: "evaluated"}
+            await dummy_validator._calculate_final_weights(scores={1: 0.0, 2: 0.7})
+            assert dummy_validator._last_round_winner_uid == 2
+
+            dummy_validator.round_manager.round_number = 3
+            dummy_validator.eligibility_status_by_uid = {1: "evaluated", 2: "evaluated"}
+            await dummy_validator._calculate_final_weights(scores={1: 0.6, 2: 0.5})
+            assert dummy_validator._last_round_winner_uid == 1
+
     async def test_weight_calculation_records_season_history_and_round_winners(self, dummy_validator):
         from tests.conftest import _bind_settlement_mixin
 

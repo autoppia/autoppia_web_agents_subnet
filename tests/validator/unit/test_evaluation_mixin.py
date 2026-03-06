@@ -212,6 +212,30 @@ class TestAgentDeployment:
             # Should handle failure and continue
             assert agents_evaluated == 0
 
+    async def test_evaluation_marks_deploy_failures_as_ineligible(self, validator_with_agents, season_tasks):
+        """Deploy failures should invalidate eligibility for this round."""
+        from tests.conftest import _bind_evaluation_mixin
+
+        validator_with_agents = _bind_evaluation_mixin(validator_with_agents)
+
+        validator_with_agents.season_manager.get_season_tasks = AsyncMock(return_value=season_tasks)
+        validator_with_agents.sandbox_manager = Mock()
+        validator_with_agents.sandbox_manager.deploy_agent = Mock(return_value=None)
+        validator_with_agents.eligibility_status_by_uid = {1: "handshake_valid", 2: "handshake_valid", 3: "handshake_valid"}
+
+        with (
+            patch("autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url") as mock_normalize,
+            patch("autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit") as mock_ls_remote,
+        ):
+            mock_normalize.return_value = ("https://github.com/test/agent", "main")
+            mock_ls_remote.return_value = "deadbeef"
+
+            await validator_with_agents._run_evaluation_phase()
+
+            assert validator_with_agents.eligibility_status_by_uid[1] == "deploy_failed"
+            assert validator_with_agents.eligibility_status_by_uid[2] == "deploy_failed"
+            assert validator_with_agents.eligibility_status_by_uid[3] == "deploy_failed"
+
     async def test_evaluation_cleans_up_containers_after_evaluation(self, validator_with_agents, season_tasks):
         """Test that evaluation cleans up agent containers after evaluation."""
         from tests.conftest import _bind_evaluation_mixin

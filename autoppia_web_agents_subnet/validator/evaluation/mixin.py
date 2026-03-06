@@ -89,6 +89,13 @@ class ValidatorEvaluationMixin:
             Mark an AgentInfo-like object as evaluated and persist it in agents_dict.
             When score is 0, zero_reason can be set for IWAP (e.g. over_cost_limit, task_timeout).
             """
+            invalid_eligibility_reasons = {
+                "invalid_github_url",
+                "repo_unreachable",
+                "missing_ref",
+                "ref_not_found",
+                "deploy_failed",
+            }
             finalized_score: float = 0.0
             try:
                 finalized_score = float(score)
@@ -103,6 +110,20 @@ class ValidatorEvaluationMixin:
                     agent.zero_reason = zero_reason  # type: ignore[attr-defined]
                 except Exception:
                     pass
+            try:
+                status_map = getattr(self, "eligibility_status_by_uid", None)
+                if not isinstance(status_map, dict):
+                    status_map = {}
+                    self.eligibility_status_by_uid = status_map
+                agent_uid = int(getattr(agent, "uid"))
+                if zero_reason in invalid_eligibility_reasons:
+                    status_map[agent_uid] = str(zero_reason)
+                else:
+                    current_status = str(status_map.get(agent_uid, "") or "")
+                    if current_status not in invalid_eligibility_reasons:
+                        status_map[agent_uid] = "evaluated"
+            except Exception:
+                pass
             try:
                 current_best = float(getattr(self, "_best_score_ever", 0.0) or 0.0)
             except Exception:
@@ -326,18 +347,18 @@ class ValidatorEvaluationMixin:
                     f"Skipping agent {getattr(agent, 'uid', '?')}: github_url pre-validation failed: {exc}",
                     ColoredLogger.YELLOW,
                 )
-                _finalize_agent(agent, score=0.0)
+                _finalize_agent(agent, score=0.0, zero_reason="invalid_github_url")
                 continue
             try:
                 agent_instance = self.sandbox_manager.deploy_agent(agent.uid, agent.github_url)
             except Exception as e:
                 ColoredLogger.error(f"Error deploying agent {agent.uid}: {e}", ColoredLogger.RED)
-                _finalize_agent(agent, score=0.0)
+                _finalize_agent(agent, score=0.0, zero_reason="deploy_failed")
                 continue
 
             if agent_instance is None:
                 ColoredLogger.error(f"Agent not deployed correctly for uid {agent.uid}", ColoredLogger.RED)
-                _finalize_agent(agent, score=0.0)
+                _finalize_agent(agent, score=0.0, zero_reason="deploy_failed")
                 continue
 
             # Persist the exact evaluated code identity for future "skip re-eval"

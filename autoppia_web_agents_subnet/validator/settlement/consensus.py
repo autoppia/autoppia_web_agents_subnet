@@ -154,11 +154,16 @@ def _extract_int_metric_value(entry: dict, *keys: str) -> Optional[int]:
     return None
 
 
+def _eligibility_status_is_valid(status: Any) -> bool:
+    return str(status or "").strip().lower() in {"handshake_valid", "reused", "evaluated"}
+
+
 def _build_snapshot_miner_metrics(self, rewards: Dict[str, float]) -> Dict[str, Dict[str, Any]]:
     """Build per-miner metrics snapshot included in IPFS payload."""
     metrics: Dict[str, Dict[str, Any]] = {}
     run_map = getattr(self, "current_agent_runs", None) or {}
     handshake_results = getattr(self, "handshake_results", None) or {}
+    eligibility_statuses = getattr(self, "eligibility_status_by_uid", None) or {}
 
     candidate_uids: set[int] = set()
     for uid_raw in rewards.keys():
@@ -190,6 +195,13 @@ def _build_snapshot_miner_metrics(self, rewards: Dict[str, float]) -> Dict[str, 
                 handshake_status = handshake_results.get(str(uid))
         if handshake_status is None:
             handshake_status = "unknown"
+        eligibility_status = None
+        if isinstance(eligibility_statuses, dict):
+            eligibility_status = eligibility_statuses.get(uid)
+            if eligibility_status is None:
+                eligibility_status = eligibility_statuses.get(str(uid))
+        if eligibility_status is None:
+            eligibility_status = handshake_status
         reward_val = float(rewards.get(str(uid), 0.0))
 
         avg_eval_score = None
@@ -238,6 +250,8 @@ def _build_snapshot_miner_metrics(self, rewards: Dict[str, float]) -> Dict[str, 
             "tasks_failed": int(tasks_failed),
             "handshake_status": str(handshake_status),
             "handshake_ok": bool(handshake_status == "ok"),
+            "eligibility_status": str(eligibility_status),
+            "eligible_this_round": bool(_eligibility_status_is_valid(eligibility_status)),
             "is_reused": bool(getattr(run, "is_reused", False)) if run is not None else False,
         }
 
@@ -288,6 +302,8 @@ async def publish_round_snapshot(
     miner_metrics = _build_snapshot_miner_metrics(self, rewards)
     handshake_results_raw = getattr(self, "handshake_results", None) or {}
     handshake_results: Dict[str, str] = {}
+    eligibility_statuses_raw = getattr(self, "eligibility_status_by_uid", None) or {}
+    eligibility_statuses: Dict[str, str] = {}
     if isinstance(handshake_results_raw, dict):
         for uid_raw, status_raw in handshake_results_raw.items():
             try:
@@ -295,6 +311,13 @@ async def publish_round_snapshot(
             except Exception:
                 uid_key = str(uid_raw)
             handshake_results[uid_key] = str(status_raw)
+    if isinstance(eligibility_statuses_raw, dict):
+        for uid_raw, status_raw in eligibility_statuses_raw.items():
+            try:
+                uid_key = str(int(uid_raw))
+            except Exception:
+                uid_key = str(uid_raw)
+            eligibility_statuses[uid_key] = str(status_raw)
 
     payload = {
         "v": int(consensus_version),
@@ -308,11 +331,12 @@ async def publish_round_snapshot(
         "validator_hotkey": self.wallet.hotkey.ss58_address,
         "validator_round_id": getattr(self, "current_round_id", None),
         "validator_version": getattr(self, "version", None),
-        # Canonical field: rewards. Keep scores as legacy alias for compatibility.
+        # Canonical field: rewards. Keep scores as a compatibility alias for older readers.
         "rewards": rewards,
         "scores": rewards,
         "miner_metrics": miner_metrics,
         "handshake_results": handshake_results,
+        "eligibility_statuses": eligibility_statuses,
     }
 
     try:
@@ -394,15 +418,20 @@ async def aggregate_scores_from_commitments(
     st: AsyncSubtensor,
 ) -> tuple[Dict[int, float], Dict[str, Any]]:
     """
-    Read all validators' commitments for this round window and compute stake-weighted
-    average scores per miner UID.
+    Read validators' commitments for the current round and compute consensus metrics.
 
-    Returns a tuple: (final_scores, details)
-      - final_scores: Dict[uid -> aggregated score]
+    The consensus winner signal is the stake-weighted average of each validator's
+    published per-miner reward. In parallel we also aggregate the observability
+    metrics carried in `miner_metrics` using the same stake weights:
+    `avg_reward`, `avg_eval_score`, `avg_eval_time`, `avg_cost`, `tasks_sent`,
+    and `tasks_success`.
+
+    Returns a tuple: (consensus_rewards, details)
+      - consensus_rewards: Dict[uid -> stake-weighted consensus reward]
       - details:
           {
             "validators": [ {"hotkey": str, "uid": int|"?", "stake": float, "cid": str} ],
-            "scores_by_validator": { hotkey: { uid: score } }
+            "scores_by_validator": { hotkey: { uid: reward } }
           }
     """
     # Build hotkey->uid and stake map
@@ -564,7 +593,7 @@ async def aggregate_scores_from_commitments(
         if not isinstance(rewards, dict):
             continue
 
-        # Record per-validator scores (converted to int uid)
+        # Record each validator's published per-miner reward map (converted to int uid).
         per_val_map: Dict[int, float] = {}
         effective_weight = st_val if st_val > 0.0 else 1.0
         for uid_s, sc in rewards.items():

@@ -208,8 +208,8 @@ class EvaluationResultIWAP:
     validator_uid: int
     validator_hotkey: str  # Required field for Evaluation model
     miner_uid: Optional[int]
-    eval_score: float  # Evaluation score (tests/actions only, 0-1)
-    reward: float  # Reward value (eval_score + time_score, used for consensus)
+    eval_score: float  # Pure evaluation quality score (tests/actions only, 0-1)
+    reward: float  # Final task reward used by consensus (eval_score + time/cost shaping + penalties)
     test_results: List[Dict[str, Any]] = field(default_factory=list)  # Simplified from matrix to list
     execution_history: List[Dict[str, Any]] = field(default_factory=list)
     feedback: Optional[Dict[str, Any]] = None
@@ -238,7 +238,7 @@ class RoundWinnerIWAP:
     miner_uid: Optional[int]
     miner_hotkey: Optional[str]
     rank: int
-    score: float
+    score: float  # Winner reward for the round/season decision; this is not raw eval_score
 
     def to_payload(self) -> Dict[str, Any]:
         return _drop_nones(asdict(self))
@@ -251,7 +251,7 @@ class FinishRoundAgentRunIWAP:
     # weight removed - now only in post_consensus_evaluation
     # FASE 1: Nuevos campos
     miner_name: Optional[str] = None
-    avg_reward: Optional[float] = None  # Average reward (eval_score + time_score)
+    avg_reward: Optional[float] = None  # Local per-validator average reward used as consensus input
     avg_evaluation_time: Optional[float] = None
     tasks_attempted: Optional[int] = None
     tasks_completed: Optional[int] = None
@@ -303,7 +303,7 @@ class FinishRoundIWAP:
     # FASE 1: Nuevos campos opcionales
     round_metadata: Optional[RoundMetadataIWAP] = None
     local_evaluation: Optional[Dict[str, Any]] = None
-    post_consensus_evaluation: Optional[Dict[str, Any]] = None
+    post_consensus_evaluation: Optional[Dict[str, Any]] = None  # Stake-weighted consensus metrics across included validators
     validator_summary: Optional[Dict[str, Any]] = None
     # FASE 2: IPFS data
     ipfs_uploaded: Optional[Dict[str, Any]] = None
@@ -311,7 +311,7 @@ class FinishRoundIWAP:
     s3_logs_url: Optional[str] = None
     validator_state: Optional[Dict[str, Any]] = None
     validator_iwap_prev_round_json: Optional[Dict[str, Any]] = None
-    # Deprecated fields (kept for backward compatibility but no longer populated)
+    # Compatibility fields kept in the payload shape even though current consumers use the richer summaries
     winners: List[RoundWinnerIWAP] = field(default_factory=list)
     winner_scores: List[float] = field(default_factory=list)
     weights: Dict[str, float] = field(default_factory=dict)
@@ -344,7 +344,7 @@ class FinishRoundIWAP:
         if self.validator_iwap_prev_round_json is not None:
             payload["validator_iwap_prev_round_json"] = self.validator_iwap_prev_round_json
 
-        # Deprecated fields (only included if populated for backward compatibility)
+        # Compatibility fields included only when populated
         if self.winners:
             payload["winners"] = [winner.to_payload() for winner in self.winners]
         if self.winner_scores:

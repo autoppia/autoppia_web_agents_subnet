@@ -196,6 +196,31 @@ class TestHandshake:
             valid_agents = [a for a in dummy_validator.agents_dict.values() if a.agent_name and a.github_url]
             assert len(valid_agents) >= 1
 
+    async def test_handshake_rejects_short_commit_urls(self, dummy_validator):
+        from tests.conftest import _bind_round_start_mixin
+
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+        dummy_validator.uid = 0
+        dummy_validator.metagraph.n = 2
+        dummy_validator.metagraph.stake = [15000.0, 15000.0]
+        dummy_validator.metagraph.S = [15000.0, 15000.0]
+        dummy_validator.metagraph.axons = [Mock(ip="127.0.0.1", port=8000), Mock(ip="127.0.0.1", port=8001)]
+
+        with patch("autoppia_web_agents_subnet.validator.round_start.mixin.send_start_round_synapse_to_miners") as mock_send:
+            mock_send.return_value = [
+                Mock(
+                    agent_name="agent1",
+                    github_url="https://github.com/test/agent1/commit/abc1234",
+                    agent_image=None,
+                )
+            ]
+
+            await dummy_validator._perform_handshake()
+
+            assert dummy_validator.handshake_results[1] == "invalid_github_url"
+            assert dummy_validator.eligibility_status_by_uid[1] == "invalid_github_url"
+            assert dummy_validator.active_miner_uids == []
+
     async def test_handshake_does_not_reenqueue_when_submission_unchanged(self, dummy_validator):
         from tests.conftest import _bind_round_start_mixin
 

@@ -453,6 +453,7 @@ class ValidatorRoundStartMixin:
         queued_for_eval_count = 0
         self.miners_reused_this_round = set()
         self.handshake_results: dict[int, str] = {}
+        self.eligibility_status_by_uid: dict[int, str] = {}
         # Diagnostics for handshake transport/payload quality.
         transport_status_counts: Counter[str] = Counter()
         transport_status_message_counts: Counter[str] = Counter()
@@ -469,6 +470,7 @@ class ValidatorRoundStartMixin:
             if resp is None:
                 response_missing_count += 1
                 self.handshake_results[int(uid)] = "no_response"
+                self.eligibility_status_by_uid[int(uid)] = "no_response"
                 handshake_issue_rows.append(
                     {
                         "uid": int(uid),
@@ -610,10 +612,8 @@ class ValidatorRoundStartMixin:
                     self.handshake_results[int(uid)] = "missing_github_url"
                 else:
                     self.handshake_results[int(uid)] = "missing_fields"
+                self.eligibility_status_by_uid[int(uid)] = self.handshake_results[int(uid)]
                 continue
-
-            # Miner provided the required handshake fields; treat as active for IWAP.
-            active_handshake_uids.append(int(uid))
 
             if max_by_coldkey > 0:
                 response_coldkey = ""
@@ -648,6 +648,7 @@ class ValidatorRoundStartMixin:
                         self.agents_on_first_handshake.append(uid)
                     coldkey_cap_skip_count += 1
                     self.handshake_results[int(uid)] = "coldkey_cap"
+                    self.eligibility_status_by_uid[int(uid)] = "coldkey_cap"
                     continue
 
                 coldkey_counts[response_coldkey] = coldkey_counts.get(response_coldkey, 0) + 1
@@ -694,6 +695,7 @@ class ValidatorRoundStartMixin:
                         self.agents_on_first_handshake.append(uid)
                 invalid_repo_count += 1
                 self.handshake_results[int(uid)] = "invalid_github_url"
+                self.eligibility_status_by_uid[int(uid)] = "invalid_github_url"
                 continue
 
             if max_by_repo > 0 and normalized_repo:
@@ -734,6 +736,7 @@ class ValidatorRoundStartMixin:
                         self.agents_on_first_handshake.append(uid)
                     repo_cap_skip_count += 1
                     self.handshake_results[int(uid)] = "repo_cap"
+                    self.eligibility_status_by_uid[int(uid)] = "repo_cap"
                     continue
 
                 if owner_key not in repo_owner_history:
@@ -743,6 +746,8 @@ class ValidatorRoundStartMixin:
                 repo_to_count[normalized_repo_key] = repo_count + 1
 
             self.handshake_results[int(uid)] = "ok"
+            self.eligibility_status_by_uid[int(uid)] = "handshake_valid"
+            active_handshake_uids.append(int(uid))
 
             # Resolve commit for all (needed for unchanged check, already-evaluated check, and display).
             commit_sha: str | None = None
@@ -837,6 +842,7 @@ class ValidatorRoundStartMixin:
                         self.agents_dict[uid] = existing
                         unchanged_commit_skip_count += 1
                         self.miners_reused_this_round.add(uid)
+                        self.eligibility_status_by_uid[int(uid)] = "reused"
                         continue
                     else:
                         bt.logging.debug(f"[reuse] Miner {uid}: unchanged commit but no prior evaluation metadata; enqueueing for evaluation.")
@@ -855,6 +861,7 @@ class ValidatorRoundStartMixin:
                         self.reused_from_agent_run_id_by_uid[uid] = ref_run_id
                         self.reused_stats_by_uid[uid] = {k: v for k, v in stored.items() if k != "agent_run_id"}
                         self.miners_reused_this_round.add(uid)
+                        self.eligibility_status_by_uid[int(uid)] = "reused"
                         bt.logging.info(f"[reuse] Miner {uid}: same (repo, commit) as previous run {ref_run_id}; reusing results (no re-eval).")
                         try:
                             existing.agent_name = agent_info.agent_name
@@ -890,11 +897,13 @@ class ValidatorRoundStartMixin:
                         pass
                     self.agents_dict[uid] = existing
                     cooldown_skip_count += 1
+                    self.eligibility_status_by_uid[int(uid)] = "handshake_valid"
                     continue
 
                 self.agents_queue.put(agent_info)
                 new_agents_count += 1
                 queued_for_eval_count += 1
+                self.eligibility_status_by_uid[int(uid)] = "handshake_valid"
                 continue
 
             # New uid (e.g. after validator restart): still check if this
@@ -912,6 +921,7 @@ class ValidatorRoundStartMixin:
                     self.reused_from_agent_run_id_by_uid[uid] = ref_run_id
                     self.reused_stats_by_uid[uid] = {k: v for k, v in stored.items() if k != "agent_run_id"}
                     self.miners_reused_this_round.add(uid)
+                    self.eligibility_status_by_uid[int(uid)] = "reused"
                     bt.logging.info(f"[reuse] Miner {uid}: same (repo, commit) as previous run {ref_run_id}; reusing results (no re-eval).")
                     self.agents_dict[uid] = agent_info
                     unchanged_commit_skip_count += 1
@@ -924,6 +934,7 @@ class ValidatorRoundStartMixin:
                 self.agents_on_first_handshake.append(uid)
             new_agents_count += 1
             queued_for_eval_count += 1
+            self.eligibility_status_by_uid[int(uid)] = "handshake_valid"
         bt.logging.info(
             "[handshake] complete "
             f"min_stake={min_stake:.4f} "

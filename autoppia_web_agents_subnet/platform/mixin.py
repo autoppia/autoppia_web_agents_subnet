@@ -64,6 +64,7 @@ class ValidatorPlatformMixin:
         self.current_miner_snapshots: Dict[int, iwa_models.MinerSnapshotIWAP] = {}
         self._iwap_shadow_mode = False
         self.round_handshake_payloads: Dict[int, Any] = {}
+        self.eligibility_status_by_uid: Dict[int, str] = {}
         self.round_start_timestamp: float = 0.0
         self.agent_run_accumulators: Dict[int, Dict[str, float]] = {}
         # (repo, commit) already evaluated per miner -> agent_run_id + stats (no re-eval on resubmit)
@@ -405,6 +406,7 @@ class ValidatorPlatformMixin:
         self.current_agent_runs = {}
         self.current_miner_snapshots = {}
         self.round_handshake_payloads = {}
+        self.eligibility_status_by_uid = {}
         self.round_start_timestamp = 0.0
         self.agent_run_accumulators = {}
         self._completed_pairs = set()
@@ -476,16 +478,31 @@ class ValidatorPlatformMixin:
                 incoming_total = 0
 
             if existing_total > 0 and incoming_total <= 0:
+                # Never overwrite a good evaluation with a failed one (deploy error, 0 tasks).
                 return
             if existing_total > 0 and incoming_total > 0:
+                # Keep the first successful evaluation as the canonical reuse anchor.
                 return
             if existing_total <= 0 and incoming_total > 0:
+                # Upgrade: replace a previously failed evaluation with a good one.
                 self._evaluated_commits_by_miner.setdefault(uid, {})[key] = incoming
                 try:
                     self._save_iwap_prev_round_state()
                 except Exception:
                     pass
                 return
+            # Both existing and incoming have total_tasks=0: nothing useful to store.
+            return
+
+        # No existing entry. Only register evaluations that actually produced tasks;
+        # skip failed evaluations (deploy error, short SHA, etc.) so that the same
+        # commit is re-evaluated next round instead of being frozen with 0 tasks.
+        try:
+            incoming_total = int(incoming.get("total_tasks", 0) or 0)
+        except Exception:
+            incoming_total = 0
+        if incoming_total <= 0:
+            return
 
         self._evaluated_commits_by_miner.setdefault(uid, {})[key] = incoming
         try:

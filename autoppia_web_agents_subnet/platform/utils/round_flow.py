@@ -22,6 +22,49 @@ from .iwa_core import (
 )
 
 
+def _eligibility_status_is_valid(status: object) -> bool:
+    return str(status or "").strip().lower() in {"handshake_valid", "reused", "evaluated"}
+
+
+def _eligible_uids_from_status_map(raw_statuses: object) -> set[int]:
+    eligible: set[int] = set()
+    if not isinstance(raw_statuses, dict):
+        return eligible
+    for uid_raw, status_raw in raw_statuses.items():
+        if not _eligibility_status_is_valid(status_raw):
+            continue
+        try:
+            eligible.add(int(uid_raw))
+        except Exception:
+            continue
+    return eligible
+
+
+def _eligible_uids_from_downloaded_payloads(raw_payloads: object) -> set[int]:
+    eligible: set[int] = set()
+    if not isinstance(raw_payloads, list):
+        return eligible
+    for payload_entry in raw_payloads:
+        if not isinstance(payload_entry, dict):
+            continue
+        payload = payload_entry.get("payload")
+        if not isinstance(payload, dict):
+            continue
+        eligible.update(_eligible_uids_from_status_map(payload.get("eligibility_statuses")))
+        miner_metrics = payload.get("miner_metrics")
+        if not isinstance(miner_metrics, dict):
+            continue
+        for uid_raw, metric_raw in miner_metrics.items():
+            if not isinstance(metric_raw, dict):
+                continue
+            if metric_raw.get("eligible_this_round") is True or _eligibility_status_is_valid(metric_raw.get("eligibility_status")):
+                try:
+                    eligible.add(int(metric_raw.get("miner_uid", uid_raw)))
+                except Exception:
+                    continue
+    return eligible
+
+
 def _extract_validator_round_id(resp: Any) -> str:
     if not isinstance(resp, dict):
         raise RuntimeError("IWAP start_round response must be a dictionary")
@@ -230,6 +273,7 @@ def _build_consensus_summary_payload(
     round_number_in_season: Optional[int],
     miner_scores: Dict[int, float],
     season_history: Dict[Any, Any],
+    eligible_uids: Optional[set[int]] = None,
 ) -> Dict[str, Any]:
     season_i = int(season_number) if season_number is not None else 0
     round_i = int(round_number_in_season) if round_number_in_season is not None else 0
@@ -283,6 +327,10 @@ def _build_consensus_summary_payload(
         if prev_best is None or score > prev_best:
             round_scores_for_summary[uid] = score
 
+    eligible_uid_set = {int(uid) for uid in (eligible_uids or set())}
+    if not eligible_uid_set:
+        eligible_uid_set = set(round_scores_for_summary.keys()) or set(normalized_scores.keys())
+
     best_uid: Optional[int] = None
     best_score = float("-inf")
     for uid, score in round_scores_for_summary.items():
@@ -290,6 +338,8 @@ def _build_consensus_summary_payload(
             uid_i = int(uid)
             score_f = float(score)
         except Exception:
+            continue
+        if eligible_uid_set and uid_i not in eligible_uid_set:
             continue
         if score_f > best_score or (score_f == best_score and best_uid is not None and uid_i < best_uid):
             best_score = score_f
@@ -311,6 +361,7 @@ def _build_consensus_summary_payload(
             reigning_score = 0.0
         if reigning_score <= 0.0:
             reigning_score = float(round_scores_for_summary.get(reigning_uid, 0.0) or 0.0)
+    reigning_eligible = bool(reigning_uid is not None and reigning_uid in eligible_uid_set)
 
     winner_uid: Optional[int] = None
     winner_score = 0.0
@@ -318,7 +369,7 @@ def _build_consensus_summary_payload(
     required_score_to_dethrone: Optional[float] = None
 
     # Keep winner UID explicit when possible, even if score is 0.0.
-    if reigning_uid is not None:
+    if reigning_uid is not None and reigning_eligible:
         winner_uid = reigning_uid
         winner_score = reigning_score
         if best_uid is not None and best_uid != reigning_uid:
@@ -347,15 +398,18 @@ def _build_consensus_summary_payload(
                 "top_candidate_score": float(best_score),
                 "reigning_uid_before_round": int(reigning_uid) if reigning_uid is not None else None,
                 "reigning_score_before_round": float(reigning_score),
+                "reigning_eligible_before_round": bool(reigning_eligible),
                 "required_improvement_pct": float(required_improvement_pct),
                 "required_score_to_dethrone": float(required_score_to_dethrone) if required_score_to_dethrone is not None else None,
                 "dethroned": bool(dethroned),
+                "eligible_uids": sorted(int(uid) for uid in eligible_uid_set),
             },
         },
         "season_summary": {
             "current_winner_uid": int(winner_uid) if winner_uid is not None else None,
             "current_winner_score": float(winner_score),
             "required_improvement_pct": float(required_improvement_pct),
+            "last_eligible_uids": sorted(int(uid) for uid in eligible_uid_set),
         },
     }
 
@@ -1230,6 +1284,10 @@ async def finish_round_flow(
         blocks_per_epoch=blocks_per_epoch,
     )
 
+    local_eligibility_statuses_raw = getattr(ctx, "eligibility_status_by_uid", None) or {}
+    local_eligibility_statuses = {str(uid): str(status) for uid, status in local_eligibility_statuses_raw.items()}
+    local_eligible_uids = _eligible_uids_from_status_map(local_eligibility_statuses_raw)
+
     # Build local_evaluation (what THIS validator evaluated - pre-consensus)
     local_evaluation = {
         "timestamp": ended_at,
@@ -1239,6 +1297,7 @@ async def finish_round_flow(
             round_number_in_season=round_number_for_summary,
             miner_scores=local_avg_rewards,
             season_history=getattr(ctx, "_season_competition_history", {}),
+            eligible_uids=local_eligible_uids,
         ),
     }
 
@@ -1288,50 +1347,53 @@ async def finish_round_flow(
     # NOTE: emission is now in round_metadata, not here
     post_consensus_evaluation = None
 
-    # Get consensus scores (from agg cache if available, otherwise use avg_rewards as fallback)
-    # consensus_scores: Dict[uid -> consensus_reward] where consensus_reward = stake-weighted average of avg_rewards from all validators
-    consensus_scores = getattr(ctx, "_agg_scores_cache", None)
-    if not consensus_scores:
+    # Get consensus rewards (from agg cache if available, otherwise use avg_rewards as fallback).
+    # consensus_rewards: Dict[uid -> consensus_reward], where consensus_reward is the stake-weighted
+    # average of each validator's published avg_reward for that miner. The companion metrics
+    # avg_eval_score, avg_eval_time and avg_cost are also aggregated with the same stake weights.
+    consensus_rewards = getattr(ctx, "_agg_scores_cache", None)
+    if not consensus_rewards:
         # Fallback 1: if aggregation returned nothing, keep observability by reusing
-        # the exact score map this validator published to IPFS.
-        published_scores: Dict[int, float] = {}
+        # the exact reward map this validator published to IPFS.
+        published_rewards: Dict[int, float] = {}
         try:
             published_payload = getattr(ctx, "_ipfs_uploaded_payload", None)
-            published_scores_raw = None
+            published_rewards_raw = None
             if isinstance(published_payload, dict):
-                published_scores_raw = published_payload.get("rewards")
-                if not isinstance(published_scores_raw, dict):
-                    published_scores_raw = published_payload.get("scores")
-            if isinstance(published_scores_raw, dict):
-                for uid_raw, score_raw in published_scores_raw.items():
+                published_rewards_raw = published_payload.get("rewards")
+                if not isinstance(published_rewards_raw, dict):
+                    published_rewards_raw = published_payload.get("scores")
+            if isinstance(published_rewards_raw, dict):
+                for uid_raw, reward_raw in published_rewards_raw.items():
                     try:
-                        published_scores[int(uid_raw)] = float(score_raw)
+                        published_rewards[int(uid_raw)] = float(reward_raw)
                     except Exception:
                         continue
         except Exception:
-            published_scores = {}
+            published_rewards = {}
 
-        if published_scores:
-            consensus_scores = published_scores
+        if published_rewards:
+            consensus_rewards = published_rewards
         else:
             # Fallback 2: use local evaluated rewards (may be empty if no valid miners).
-            consensus_scores = avg_rewards
+            consensus_rewards = avg_rewards
 
     stats_by_miner = {}
     if agg_meta and isinstance(agg_meta, dict):
         stats_by_miner = agg_meta.get("stats_by_miner", {}) or {}
 
-    if consensus_scores and isinstance(consensus_scores, dict):
-        # Calculate ranks from consensus scores
-        sorted_consensus = sorted(consensus_scores.items(), key=lambda item: item[1], reverse=True)
+    if consensus_rewards and isinstance(consensus_rewards, dict):
+        post_consensus_eligible_uids = _eligible_uids_from_downloaded_payloads(_downloaded_payloads_raw) or set(local_eligible_uids)
+        # Calculate ranks from consensus rewards.
+        sorted_consensus = sorted(consensus_rewards.items(), key=lambda item: item[1], reverse=True)
         rank_map_consensus = {uid: rank for rank, (uid, _consensus_reward) in enumerate(sorted_consensus, start=1)}
 
         # Build post_consensus miners list - include all miners with weight > 0 (including burn_uid)
         # BURN_AMOUNT_PERCENTAGE and BURN_UID are already imported above
 
         post_consensus_miners = []
-        # First, add all miners from consensus_scores
-        for miner_uid, consensus_reward in consensus_scores.items():
+        # First, add all miners from consensus_rewards
+        for miner_uid, consensus_reward in consensus_rewards.items():
             weight = final_weights.get(miner_uid, 0.0)
             rank = rank_map_consensus.get(miner_uid)
 
@@ -1352,14 +1414,13 @@ async def finish_round_flow(
             except Exception:
                 pass
 
-            # Get avg_eval_score: consensus primero, luego local
+            # avg_eval_score remains the pure quality metric. Consensus reward is what drives rank/weight.
             post_consensus_avg_eval_score = consensus_stats.get("avg_eval_score")
             if post_consensus_avg_eval_score is None:
                 # Fallback to local avg_eval_score if not in aggregated stats
                 post_consensus_avg_eval_score = local_avg_eval_scores.get(miner_uid, 0.0)
 
-            # Asegurar que siempre tengamos los campos requeridos por el backend
-            # Usar consensus si está disponible, sino usar datos locales
+            # These metrics are stake-weighted in consensus when available; otherwise local fallback.
             avg_eval_time = consensus_stats.get("avg_eval_time") or local_stats.get("avg_eval_time", 0.0)
             avg_cost = consensus_stats.get("avg_cost") or local_stats.get("avg_cost", 0.0)
             tasks_sent = consensus_stats.get("tasks_sent") or local_stats.get("tasks_sent", 0)
@@ -1369,10 +1430,10 @@ async def finish_round_flow(
                 {
                     "miner_uid": miner_uid,
                     "miner_hotkey": miner_hotkey,  # Miner hotkey for identification
-                    "consensus_reward": float(consensus_reward),  # Stake-weighted average of avg_rewards from all validators
-                    "avg_eval_score": float(post_consensus_avg_eval_score),  # Average eval_score (from aggregated stats or local fallback)
-                    "avg_eval_time": float(avg_eval_time),  # SIEMPRE presente - consensus o local
-                    "avg_cost": float(avg_cost),
+                    "consensus_reward": float(consensus_reward),  # Stake-weighted average of per-validator avg_reward values
+                    "avg_eval_score": float(post_consensus_avg_eval_score),  # Stake-weighted pure evaluation score when available
+                    "avg_eval_time": float(avg_eval_time),  # Stake-weighted average evaluation time when available
+                    "avg_cost": float(avg_cost),  # Stake-weighted average cost when available
                     "tasks_sent": int(tasks_sent),  # SIEMPRE presente - consensus o local
                     "tasks_success": int(tasks_success),  # SIEMPRE presente - consensus o local
                     "weight": float(weight),
@@ -1380,10 +1441,10 @@ async def finish_round_flow(
                 }
             )
 
-        # Add burn_uid if it has weight > 0 but is not in consensus_scores
+        # Add burn_uid if it has weight > 0 but is not in consensus_rewards
         burn_uid = int(BURN_UID)
         burn_weight = final_weights.get(burn_uid, 0.0)
-        if burn_weight > 0.0 and burn_uid not in consensus_scores:
+        if burn_weight > 0.0 and burn_uid not in consensus_rewards:
             # Burn UID gets a rank after all consensus miners
             max_rank = max(rank_map_consensus.values()) if rank_map_consensus else 0
             # Obtener miner_hotkey para burn_uid
@@ -1409,8 +1470,9 @@ async def finish_round_flow(
             "summary": _build_consensus_summary_payload(
                 season_number=season_number_for_summary,
                 round_number_in_season=round_number_for_summary,
-                miner_scores=consensus_scores,
+                miner_scores=consensus_rewards,
                 season_history=getattr(ctx, "_season_competition_history", {}),
+                eligible_uids=post_consensus_eligible_uids,
             ),
         }
 
@@ -1468,6 +1530,7 @@ async def finish_round_flow(
         "evaluation_pre_consensus": pre_consensus_summary,
         "evaluation_post_consensus": post_consensus_summary,
         "handshake_results": handshake_results,
+        "eligibility_statuses": local_eligibility_statuses,
     }
     validator_state_json = _load_validator_state_json(ctx)
     validator_iwap_prev_round_json = _load_validator_iwap_prev_round_json(ctx)

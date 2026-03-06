@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -12,6 +13,7 @@ from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+
 
 def resolve_remote_ref_commit(
     normalized_url: str,
@@ -82,11 +84,11 @@ def _normalize_github_ssh(url: str) -> str:
 
 
 def normalize_and_validate_github_url(
-        raw_url: Optional[str], 
-        *, 
-        miner_uid: Optional[int] = None,
-        require_ref: bool = False,
-    ) -> Tuple[Optional[str], Optional[str]]:
+    raw_url: Optional[str],
+    *,
+    miner_uid: Optional[int] = None,
+    require_ref: bool = False,
+) -> Tuple[Optional[str], Optional[str]]:
     """
     Normalize and validate a GitHub URL, extracting an optional ref (branch/commit).
     Returns (normalized_url, ref) or (None, None) if invalid.
@@ -183,6 +185,12 @@ def normalize_and_validate_github_url(
             ref = (segments[3] or "").strip()
             if not ref:
                 return None, None
+            if re.fullmatch(r"[0-9a-fA-F]{40}", ref) is None:
+                ColoredLogger.warning(
+                    f"Rejecting miner github_url with non-pinned commit SHA{miner_tag}: {raw_url}",
+                    ColoredLogger.YELLOW,
+                )
+                return None, None
             return normalized, ref
 
         ColoredLogger.warning(
@@ -271,8 +279,8 @@ def clone_repo(
             raise RuntimeError(
                 f"Sandbox repo too large per GitHub API preflight (bytes={preflight_bytes}, limit={max_bytes})",
             )
-    
-    os.makedirs(dst_dir, exist_ok=True)    
+
+    os.makedirs(dst_dir, exist_ok=True)
     cmd_clone = [
         "git",
         "clone",
@@ -314,9 +322,7 @@ def clone_repo(
                 out = subprocess.check_output(["du", "-sb", dst_dir], stderr=subprocess.DEVNULL, text=True).strip()
                 size_bytes = int(out.split()[0]) if out else 0
                 if size_bytes > max_bytes:
-                    raise RuntimeError(
-                        f"Sandbox repo exceeded size limit during clone (bytes={size_bytes}, limit={max_bytes})."
-                    )
+                    raise RuntimeError(f"Sandbox repo exceeded size limit during clone (bytes={size_bytes}, limit={max_bytes}).")
             except FileNotFoundError:
                 # du not available; fall back to post-clone walk only.
                 pass
@@ -372,8 +378,7 @@ def clone_repo(
                 continue
             if total_files > max_files or total_bytes > max_bytes:
                 raise RuntimeError(
-                    f"Sandbox repo too large (files={total_files}, bytes={total_bytes}); "
-                    "rejecting miner repository",
+                    f"Sandbox repo too large (files={total_files}, bytes={total_bytes}); rejecting miner repository",
                 )
 
 

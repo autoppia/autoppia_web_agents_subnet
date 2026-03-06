@@ -152,9 +152,11 @@ class Validator(
                             "top_candidate_score",
                             "reigning_uid_before_round",
                             "reigning_score_before_round",
+                            "reigning_eligible_before_round",
                             "required_improvement_pct",
                             "required_score_to_dethrone",
                             "dethroned",
+                            "eligible_uids",
                         ):
                             if key in decision_in:
                                 decision_out[key] = decision_in[key]
@@ -208,6 +210,7 @@ class Validator(
                 "required_improvement_pct": float(summary_in.get("required_improvement_pct", 0.0) or 0.0),
                 "best_by_miner": best_by_miner_out,
                 "best_round_by_miner": best_round_by_miner_out,
+                "last_eligible_uids": [int(uid) for uid in (summary_in.get("last_eligible_uids", []) or []) if uid is not None],
             }
 
             serialized[str(season_i)] = {
@@ -278,6 +281,7 @@ class Validator(
                         "current_winner_uid": season_summary.get("current_winner_uid"),
                         "current_winner_score": season_summary.get("current_winner_score", 0.0),
                         "required_improvement_pct": season_summary.get("required_improvement_pct", 0.0),
+                        "last_eligible_uids": season_summary.get("last_eligible_uids", []) or [],
                     },
                 }
 
@@ -295,6 +299,7 @@ class Validator(
                         "current_winner_uid": season_summary.get("current_winner_uid"),
                         "current_winner_score": season_summary.get("current_winner_score", 0.0),
                         "required_improvement_pct": season_summary.get("required_improvement_pct", 0.0),
+                        "last_eligible_uids": season_summary.get("last_eligible_uids", []) or [],
                     },
                 }
                 with summary_path.open("w", encoding="utf-8") as f:
@@ -332,6 +337,7 @@ class Validator(
                 "required_improvement_pct": 0.0,
                 "best_by_miner": {},
                 "best_round_by_miner": {},
+                "last_eligible_uids": [],
             }
 
             if "rounds" in season_data or "summary" in season_data:
@@ -411,6 +417,7 @@ class Validator(
                         "required_improvement_pct": float(summary_in.get("required_improvement_pct", 0.0) or 0.0),
                         "best_by_miner": best_by_miner_loaded,
                         "best_round_by_miner": best_round_by_miner_loaded,
+                        "last_eligible_uids": [int(uid) for uid in (summary_in.get("last_eligible_uids", []) or []) if uid is not None],
                     }
             else:
                 # Backward compatibility for old shape:
