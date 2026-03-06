@@ -79,17 +79,17 @@ class TestMultiRound:
         with patch("autoppia_web_agents_subnet.validator.settlement.mixin.render_round_summary_table"):
             with patch("autoppia_web_agents_subnet.validator.config.LAST_WINNER_BONUS_PCT", 0.05):
                 validator.round_manager.round_number = 1
-                await validator._calculate_final_weights(scores={1: 0.9, 2: 0.8})
+                await validator._calculate_final_weights(consensus_rewards={1: 0.9, 2: 0.8})
                 assert validator._last_round_winner_uid == 1
 
                 # 0.93 does not beat 0.9 by >5% (needs >0.945)
                 validator.round_manager.round_number = 2
-                await validator._calculate_final_weights(scores={1: 0.6, 2: 0.93})
+                await validator._calculate_final_weights(consensus_rewards={1: 0.6, 2: 0.93})
                 assert validator._last_round_winner_uid == 1
 
                 # 0.96 beats 0.9 by >5%
                 validator.round_manager.round_number = 3
-                await validator._calculate_final_weights(scores={1: 0.7, 2: 0.96})
+                await validator._calculate_final_weights(consensus_rewards={1: 0.7, 2: 0.96})
                 assert validator._last_round_winner_uid == 2
 
     async def test_state_resets_between_rounds(self, dummy_validator):

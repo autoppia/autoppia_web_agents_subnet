@@ -38,6 +38,7 @@ class MockContext:
         self.agent_run_accumulators = {}
         self.round_start_timestamp = 1234567890.0
         self._iwap_offline_mode = False
+        self._iwap_round_ready = True
         self._completed_pairs = set()
         self.uid = 1
         self.wallet = MagicMock()

@@ -385,6 +385,15 @@ def dummy_validator(mock_validator_config):
     validator.update_scores = Mock()
     validator._get_async_subtensor = AsyncMock()
     validator._log_round_completion = Mock()
+    validator._finish_iwap_round = AsyncMock(return_value=True)
+    validator._reset_iwap_round_state = Mock()
+    validator._upload_round_log_snapshot = AsyncMock()
+    validator._sync_runtime_config_while_waiting = AsyncMock()
+    validator._state_summary_root = Mock(return_value="/tmp/test_state")
+    validator.handshake_results = {}
+    validator.current_agent_runs = {}
+    validator._submit_batch_evaluations_to_iwap = AsyncMock(return_value=True)
+    validator.iwap_client = None  # Prevent auto-Mock from being used as async
 
     # Mixin methods (mocked instead of inherited)
     validator._start_round = AsyncMock()
@@ -399,6 +408,26 @@ def dummy_validator(mock_validator_config):
     validator._current_round_number = 1
     validator._last_round_winner_uid = None
     validator._finalized_this_round = False
+
+    # Settlement-related attributes that must be explicitly None
+    # (Mock auto-creates attributes, so getattr(..., None) won't return None)
+    validator._settlement_round_target_block = None
+    validator._settlement_round_start_block = None
+    validator._settlement_round_fetch_block = None
+    validator._season_competition_history = {}
+    validator._agg_scores_cache = {}
+    validator._agg_meta_cache = {}
+    validator.agents_on_first_handshake = []
+    validator.active_miner_uids = set()
+    validator.reused_stats_by_uid = {}
+    validator.miners_reused_this_round = set()
+    validator.eligibility_status_by_uid = {}
+
+    # Wire get_current_block to delegate to subtensor.get_current_block
+    # (mirrors BaseNeuron.get_current_block with fresh=True)
+    def _get_current_block(fresh=False):
+        return validator.subtensor.get_current_block()
+    validator.get_current_block = Mock(side_effect=_get_current_block)
 
     return validator
 
@@ -499,6 +528,7 @@ def mock_metagraph():
     metagraph.S = [15000.0] * 10
     metagraph.stake = [15000.0] * 10
     metagraph.hotkeys = [f"hotkey{i}" for i in range(10)]
+    metagraph.coldkeys = [f"coldkey{i}" for i in range(10)]
     metagraph.axons = [Mock(ip="127.0.0.1", port=8000 + i) for i in range(10)]
 
     return metagraph
