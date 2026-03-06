@@ -275,6 +275,64 @@ def _hotkey_to_uid_map(metagraph) -> Dict[str, int]:
     return mapping
 
 
+def _aggregate_scores_for_validators(
+    entries: Any,
+) -> tuple[Dict[int, float], bool]:
+    """
+    Aggregate per-validator scores into final miner scores.
+
+    Args:
+        entries: Iterable of (stake, scores_dict) where:
+            - stake: numeric stake value for the validator (TAO or 0.0)
+            - scores_dict: mapping uid -> score in [0, 1]
+
+    Returns:
+        (result, all_stakes_zero)
+          - result: dict[uid -> aggregated score]
+          - all_stakes_zero: True if all original stakes were exactly 0.0
+    """
+    weighted_sum: Dict[int, float] = {}
+    weight_total: Dict[int, float] = {}
+    original_stakes: list[float] = []
+
+    try:
+        iterator = list(entries)
+    except TypeError:
+        iterator = []
+
+    for stake_val, scores in iterator:
+        try:
+            st_val = float(stake_val)
+        except Exception:
+            st_val = 0.0
+        original_stakes.append(st_val)
+
+        # If stake is zero or invalid, treat validator as having unit weight.
+        effective_weight = st_val if st_val > 0.0 else 1.0
+
+        if not isinstance(scores, dict):
+            continue
+
+        for uid_raw, sc_raw in scores.items():
+            try:
+                uid = int(uid_raw)
+                val = float(sc_raw)
+            except Exception:
+                continue
+
+            weighted_sum[uid] = weighted_sum.get(uid, 0.0) + effective_weight * val
+            weight_total[uid] = weight_total.get(uid, 0.0) + effective_weight
+
+    result: Dict[int, float] = {}
+    for uid, wsum in weighted_sum.items():
+        denom = weight_total.get(uid, 0.0)
+        if denom > 0:
+            result[uid] = float(wsum / denom)
+
+    all_stakes_zero = bool(original_stakes) and all(st == 0.0 for st in original_stakes)
+    return result, all_stakes_zero
+
+
 async def publish_round_snapshot(
     self,
     *,
@@ -695,11 +753,9 @@ async def aggregate_scores_from_commitments(
             }
         )
 
-    result: Dict[int, float] = {}
-    for uid, wsum in weighted_sum.items():
-        denom = weight_total.get(uid, 0.0)
-        if denom > 0:
-            result[uid] = float(wsum / denom)
+    # Aggregate scores across all included validators using stake weighting.
+    aggregation_entries = [(stake, scores_by_validator.get(hk, {})) for hk, _cid, stake in fetched]
+    result, all_stakes_zero = _aggregate_scores_for_validators(aggregation_entries)
 
     stats_by_miner: Dict[int, Dict[str, Any]] = {}
     for uid, acc in metric_acc.items():
@@ -724,9 +780,7 @@ async def aggregate_scores_from_commitments(
             stats_by_miner[int(uid)] = stats_entry
 
     if included > 0:
-        all_stakes_zero = all(stake == 0.0 for _, _, stake in fetched)
         consensus_mode = "simple average (all 0τ)" if all_stakes_zero else "stake-weighted"
-
         bt.logging.success(f"[CONSENSUS] ✅ Aggregation complete | Validators: {included} | Miners: {len(result)} | Mode: {consensus_mode}")
         bt.logging.info(
             f"[CONSENSUS] Skipped | "
