@@ -11,3 +11,7 @@ setuptools
 loguru
 xmldiff
 filelock
+# Storage backends (Hippius SN 75 integration)
+hippius
+minio
+boto3
