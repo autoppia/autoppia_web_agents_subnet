@@ -37,9 +37,9 @@ class TestCalculateRewardForTask:
 
     def test_unsolved_task_returns_zero_reward(self):
         """eval_score < 1.0 must yield 0.0 reward regardless of time/cost."""
-        assert _r(0.0, 0.0, 0.0) == 0.0
-        assert _r(0.99, 0.0, 0.0) == 0.0
-        assert _r(0.5, 10.0, 0.01) == 0.0
+        assert _r(0.0, 0.0, 0.0) == pytest.approx(0.0)
+        assert _r(0.99, 0.0, 0.0) == pytest.approx(0.0)
+        assert _r(0.5, 10.0, 0.01) == pytest.approx(0.0)
 
     def test_solved_task_zero_time_zero_cost_gives_max_reward(self):
         """eval_score >= 1.0 with zero time and cost gives max weighted sum."""
