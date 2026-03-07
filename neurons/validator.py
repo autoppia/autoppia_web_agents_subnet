@@ -521,10 +521,6 @@ class Validator(
         """
         Forward pass for the validator.
         """
-        hydrator = getattr(self, "_hydrate_runtime_config_from_iwap", None)
-        if callable(hydrator):
-            await hydrator()
-
         if await self._wait_for_minimum_start_block():
             return
 

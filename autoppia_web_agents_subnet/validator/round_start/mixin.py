@@ -1053,54 +1053,6 @@ class ValidatorRoundStartMixin:
         await asyncio.sleep(wait_seconds)
         return True
 
-    def _apply_runtime_config(self, payload: dict) -> bool:
-        round_cfg = payload.get("config_season_round") if isinstance(payload, dict) else None
-        if not isinstance(round_cfg, dict):
-            return False
-
-        rm = getattr(self, "round_manager", None)
-        sm = getattr(self, "season_manager", None)
-        if rm is None or sm is None:
-            return False
-
-        try:
-            minimum_start_block = int(round_cfg["minimum_start_block"])
-            round_size_epochs = float(round_cfg["round_size_epochs"])
-            season_size_epochs = float(round_cfg["season_size_epochs"])
-        except (KeyError, TypeError, ValueError):
-            return False
-
-        rm.minimum_start_block = minimum_start_block
-        rm.round_size_epochs = round_size_epochs
-        rm.round_block_length = int(rm.BLOCKS_PER_EPOCH * rm.round_size_epochs)
-
-        sm.minimum_start_block = minimum_start_block
-        sm.season_size_epochs = season_size_epochs
-        sm.season_block_length = int(sm.BLOCKS_PER_EPOCH * sm.season_size_epochs)
-        return True
-
-    async def _hydrate_runtime_config_from_iwap(self) -> None:
-        iwap_client = getattr(self, "iwap_client", None)
-        if iwap_client is None:
-            return
-
-        fetch_method = getattr(iwap_client, "fetch_runtime_config", None)
-        if not callable(fetch_method):
-            return
-
-        try:
-            payload = await fetch_method()
-            if self._apply_runtime_config(payload):
-                round_cfg = payload.get("config_season_round") or {}
-                bt.logging.info(
-                    "🧩 IWAP runtime-config loaded | "
-                    f"minimum_start_block={round_cfg.get('minimum_start_block')} "
-                    f"round_size_epochs={round_cfg.get('round_size_epochs')} "
-                    f"season_size_epochs={round_cfg.get('season_size_epochs')}"
-                )
-        except Exception as exc:
-            bt.logging.warning(f"runtime-config fetch at startup failed (continuing): {type(exc).__name__}: {exc}")
-
     async def _sync_runtime_config_while_waiting(self, *, current_block: int) -> None:
         """
         Best-effort runtime-config sync while validator is in pre-start waiting phase.
