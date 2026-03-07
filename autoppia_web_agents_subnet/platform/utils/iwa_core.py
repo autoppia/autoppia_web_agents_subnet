@@ -271,11 +271,30 @@ def build_validator_snapshot(validator, validator_round_id: str) -> iwa_models.V
     if vtrust is None:
         bt.logging.warning(f"Validator snapshot vtrust is unavailable for uid={validator.uid}; snapshot will omit vtrust")
 
+    round_manager = getattr(validator, "round_manager", None)
+    season_manager = getattr(validator, "season_manager", None)
+    runtime_round_size_epochs = (
+        float(getattr(round_manager, "round_size_epochs")) if round_manager is not None and getattr(round_manager, "round_size_epochs", None) is not None else float(ROUND_SIZE_EPOCHS)
+    )
+    runtime_minimum_start_block = (
+        int(getattr(round_manager, "minimum_start_block")) if round_manager is not None and getattr(round_manager, "minimum_start_block", None) is not None else int(MINIMUM_START_BLOCK)
+    )
+    runtime_season_size_epochs = (
+        float(getattr(season_manager, "season_size_epochs"))
+        if season_manager is not None and getattr(season_manager, "season_size_epochs", None) is not None
+        else float(getattr(round_manager, "season_size_epochs"))
+        if round_manager is not None and getattr(round_manager, "season_size_epochs", None) is not None
+        else None
+    )
+    runtime_blocks_per_epoch = int(getattr(round_manager, "BLOCKS_PER_EPOCH")) if round_manager is not None and getattr(round_manager, "BLOCKS_PER_EPOCH", None) is not None else 360
+
     # Build validator configuration dictionary
     validator_config: Dict[str, Any] = {
         "round": {
-            "round_size_epochs": ROUND_SIZE_EPOCHS,
-            "minimum_start_block": MINIMUM_START_BLOCK,
+            "round_size_epochs": runtime_round_size_epochs,
+            "season_size_epochs": runtime_season_size_epochs,
+            "minimum_start_block": runtime_minimum_start_block,
+            "blocks_per_epoch": runtime_blocks_per_epoch,
             "tasks_per_season": TASKS_PER_SEASON,
         },
         "timing": {

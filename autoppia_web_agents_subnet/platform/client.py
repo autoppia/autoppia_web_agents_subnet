@@ -519,7 +519,9 @@ class IWAPClient:
                 round_cfg = maybe_round_cfg
 
         round_size_epochs = round_cfg.get("round_size_epochs")
+        season_size_epochs = round_cfg.get("season_size_epochs")
         minimum_start_block = round_cfg.get("minimum_start_block")
+        blocks_per_epoch = round_cfg.get("blocks_per_epoch")
         if round_size_epochs is None or minimum_start_block is None:
             raise ValueError("validator_snapshot.validator_config.round must include round_size_epochs and minimum_start_block")
 
@@ -527,9 +529,9 @@ class IWAPClient:
             "validator_identity": validator_identity.to_payload(),
             "runtime_config": {
                 "round_size_epochs": float(round_size_epochs),
-                "season_size_epochs": float(SEASON_SIZE_EPOCHS),
+                "season_size_epochs": float(season_size_epochs if season_size_epochs is not None else SEASON_SIZE_EPOCHS),
                 "minimum_start_block": int(minimum_start_block),
-                "blocks_per_epoch": int(BLOCKS_PER_EPOCH),
+                "blocks_per_epoch": int(blocks_per_epoch if blocks_per_epoch is not None else BLOCKS_PER_EPOCH),
                 "minimum_validator_version": (validator_snapshot.version or "").strip() or None,
             },
         }
