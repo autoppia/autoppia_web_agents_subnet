@@ -775,6 +775,53 @@ class IWAPClient:
             )
             raise ValueError(f"IWAP response for '{context}' is not valid JSON") from exc
 
+    async def _get(
+        self,
+        path: str,
+        *,
+        context: str,
+    ) -> Dict[str, Any]:
+        auth_headers = self._resolve_auth_headers()
+
+        async def attempt(attempt_index: int) -> httpx.Response:
+            request = self._client.build_request("GET", path)
+            if auth_headers:
+                request.headers.update(auth_headers)
+            target_url = str(request.url)
+            attempt_number = attempt_index + 1
+            attempt_suffix = f" (attempt {attempt_number})" if attempt_number > 1 else ""
+
+            from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+
+            ColoredLogger.info(f"IWAP | [{context}] GET {target_url} started{attempt_suffix}", color=ColoredLogger.GOLD)
+            try:
+                response = await self._client.send(request)
+                response.raise_for_status()
+                ColoredLogger.info(f"IWAP | [{context}] GET {target_url} succeeded with status {response.status_code}", color=ColoredLogger.GOLD)
+                return response
+            except httpx.HTTPStatusError as exc:
+                bt.logging.error(f"IWAP | [{context}] GET {target_url} failed ({exc.response.status_code}): {exc.response.text}")
+                raise
+            except Exception:
+                bt.logging.error(
+                    f"IWAP | [{context}] GET {target_url} failed unexpectedly",
+                    exc_info=True,
+                )
+                raise
+
+        response = await self._with_retry(attempt, context=context)
+        try:
+            payload = response.json()
+        except Exception as exc:
+            bt.logging.error(
+                f"IWAP | [{context}] Response body is not valid JSON",
+                exc_info=True,
+            )
+            raise ValueError(f"IWAP response for '{context}' is not valid JSON") from exc
+        if not isinstance(payload, dict):
+            raise ValueError(f"IWAP response for '{context}' must be a JSON object")
+        return payload
+
     async def _post_multipart(
         self,
         path: str,
