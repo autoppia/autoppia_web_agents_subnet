@@ -652,7 +652,10 @@ async def submit_task_results(
     # active_miner_uids should match current_agent_runs, but iterate over agent_runs to be safe
     # Each miner with agent_run MUST have a TaskSolution and Evaluation for each task
 
-    for idx, miner_uid in enumerate(ctx.active_miner_uids):
+    miners_reused = set(getattr(ctx, "miners_reused_this_round", None) or set())
+    evaluated_miner_uids = [uid for uid in ctx.active_miner_uids if uid not in miners_reused]
+
+    for idx, miner_uid in enumerate(evaluated_miner_uids):
         # Get agent_run - if it doesn't exist, skip (shouldn't happen, but handle gracefully)
         agent_run = ctx.current_agent_runs.get(miner_uid)
         if agent_run is None:

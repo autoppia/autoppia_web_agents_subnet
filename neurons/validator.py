@@ -121,7 +121,7 @@ class Validator(
 
                     winner_in = round_data.get("winner", {})
                     winner_uid = None
-                    winner_score = 0.0
+                    winner_reward = 0.0
                     if isinstance(winner_in, dict):
                         raw_uid = winner_in.get("miner_uid")
                         try:
@@ -129,32 +129,32 @@ class Validator(
                         except Exception:
                             winner_uid = None
                         try:
-                            winner_score = float(winner_in.get("score", 0.0) or 0.0)
+                            winner_reward = float(winner_in.get("reward", winner_in.get("score", 0.0)) or 0.0)
                         except Exception:
-                            winner_score = 0.0
+                            winner_reward = 0.0
 
-                    miner_scores_out: dict[str, float] = {}
-                    miner_scores_in = round_data.get("miner_scores", {})
-                    if isinstance(miner_scores_in, dict):
-                        for uid, score in miner_scores_in.items():
+                    miner_rewards_out: dict[str, float] = {}
+                    miner_rewards_in = round_data.get("miner_rewards", round_data.get("miner_scores", {}))
+                    if isinstance(miner_rewards_in, dict):
+                        for uid, reward in miner_rewards_in.items():
                             try:
                                 uid_i = int(uid)
-                                score_f = float(score)
+                                reward_f = float(reward)
                             except Exception:
                                 continue
-                            miner_scores_out[str(uid_i)] = score_f
+                            miner_rewards_out[str(uid_i)] = reward_f
 
                     decision_out = {}
                     decision_in = round_data.get("decision", {})
                     if isinstance(decision_in, dict):
                         for key in (
                             "top_candidate_uid",
-                            "top_candidate_score",
+                            "top_candidate_reward",
                             "reigning_uid_before_round",
-                            "reigning_score_before_round",
+                            "reigning_reward_before_round",
                             "reigning_eligible_before_round",
                             "required_improvement_pct",
-                            "required_score_to_dethrone",
+                            "required_reward_to_dethrone",
                             "dethroned",
                             "eligible_uids",
                         ):
@@ -164,9 +164,9 @@ class Validator(
                     round_out = {
                         "winner": {
                             "miner_uid": winner_uid,
-                            "score": winner_score,
+                            "reward": winner_reward,
                         },
-                        "miner_scores": miner_scores_out,
+                        "miner_rewards": miner_rewards_out,
                     }
                     if decision_out:
                         round_out["decision"] = decision_out
@@ -179,13 +179,13 @@ class Validator(
             best_by_miner_out: dict[str, float] = {}
             best_by_miner_in = summary_in.get("best_by_miner", {})
             if isinstance(best_by_miner_in, dict):
-                for uid, score in best_by_miner_in.items():
+                for uid, reward in best_by_miner_in.items():
                     try:
                         uid_i = int(uid)
-                        score_f = float(score)
+                        reward_f = float(reward)
                     except Exception:
                         continue
-                    best_by_miner_out[str(uid_i)] = score_f
+                    best_by_miner_out[str(uid_i)] = reward_f
 
             best_round_by_miner_out: dict[str, int] = {}
             best_round_by_miner_in = summary_in.get("best_round_by_miner", {})
@@ -206,7 +206,7 @@ class Validator(
 
             summary_out = {
                 "current_winner_uid": current_winner_uid,
-                "current_winner_score": float(summary_in.get("current_winner_score", 0.0) or 0.0),
+                "current_winner_reward": float(summary_in.get("current_winner_reward", summary_in.get("current_winner_score", 0.0)) or 0.0),
                 "required_improvement_pct": float(summary_in.get("required_improvement_pct", 0.0) or 0.0),
                 "best_by_miner": best_by_miner_out,
                 "best_round_by_miner": best_round_by_miner_out,
@@ -274,12 +274,14 @@ class Validator(
                     "saved_at_utc": now,
                     "round_summary": {
                         "winner": round_summary.get("winner", {}),
-                        "miner_scores": {str(k): float(v) for k, v in round_summary.get("miner_scores", {}).items()} if isinstance(round_summary.get("miner_scores", {}), dict) else {},
+                        "miner_rewards": {str(k): float(v) for k, v in round_summary.get("miner_rewards", round_summary.get("miner_scores", {})).items()}
+                        if isinstance(round_summary.get("miner_rewards", round_summary.get("miner_scores", {})), dict)
+                        else {},
                         "decision": round_summary.get("decision", {}),
                     },
                     "season_summary": {
                         "current_winner_uid": season_summary.get("current_winner_uid"),
-                        "current_winner_score": season_summary.get("current_winner_score", 0.0),
+                        "current_winner_reward": season_summary.get("current_winner_reward", season_summary.get("current_winner_score", 0.0)),
                         "required_improvement_pct": season_summary.get("required_improvement_pct", 0.0),
                         "last_eligible_uids": season_summary.get("last_eligible_uids", []) or [],
                     },
@@ -297,7 +299,7 @@ class Validator(
                     "round_summary": pre_consensus.get("round_summary", {}),
                     "season_summary": {
                         "current_winner_uid": season_summary.get("current_winner_uid"),
-                        "current_winner_score": season_summary.get("current_winner_score", 0.0),
+                        "current_winner_reward": season_summary.get("current_winner_reward", season_summary.get("current_winner_score", 0.0)),
                         "required_improvement_pct": season_summary.get("required_improvement_pct", 0.0),
                         "last_eligible_uids": season_summary.get("last_eligible_uids", []) or [],
                     },
@@ -328,12 +330,12 @@ class Validator(
                 continue
 
             # New shape:
-            # seasons.<s>.rounds.<r>.{winner, miner_scores}
-            # seasons.<s>.summary.{current_winner_uid, best_by_miner, ...}
+            # seasons.<s>.rounds.<r>.{winner, miner_rewards}
+            # seasons.<s>.summary.{current_winner_uid, current_winner_reward, best_by_miner, ...}
             rounds_loaded: dict[int, dict] = {}
             summary_loaded: dict = {
                 "current_winner_uid": None,
-                "current_winner_score": 0.0,
+                "current_winner_reward": 0.0,
                 "required_improvement_pct": 0.0,
                 "best_by_miner": {},
                 "best_round_by_miner": {},
@@ -353,7 +355,7 @@ class Validator(
 
                         winner_in = round_data.get("winner", {})
                         winner_uid = None
-                        winner_score = 0.0
+                        winner_reward = 0.0
                         if isinstance(winner_in, dict):
                             raw_uid = winner_in.get("miner_uid")
                             try:
@@ -361,24 +363,24 @@ class Validator(
                             except Exception:
                                 winner_uid = None
                             try:
-                                winner_score = float(winner_in.get("score", 0.0) or 0.0)
+                                winner_reward = float(winner_in.get("reward", winner_in.get("score", 0.0)) or 0.0)
                             except Exception:
-                                winner_score = 0.0
+                                winner_reward = 0.0
 
-                        miner_scores_loaded: dict[int, float] = {}
-                        miner_scores_in = round_data.get("miner_scores", {})
-                        if isinstance(miner_scores_in, dict):
-                            for uid_key, score in miner_scores_in.items():
+                        miner_rewards_loaded: dict[int, float] = {}
+                        miner_rewards_in = round_data.get("miner_rewards", round_data.get("miner_scores", {}))
+                        if isinstance(miner_rewards_in, dict):
+                            for uid_key, reward in miner_rewards_in.items():
                                 try:
                                     uid_i = int(uid_key)
-                                    score_f = float(score)
+                                    reward_f = float(reward)
                                 except Exception:
                                     continue
-                                miner_scores_loaded[uid_i] = score_f
+                                miner_rewards_loaded[uid_i] = reward_f
 
                         round_out = {
-                            "winner": {"miner_uid": winner_uid, "score": winner_score},
-                            "miner_scores": miner_scores_loaded,
+                            "winner": {"miner_uid": winner_uid, "reward": winner_reward},
+                            "miner_rewards": miner_rewards_loaded,
                         }
                         decision_in = round_data.get("decision", {})
                         if isinstance(decision_in, dict):
@@ -394,13 +396,13 @@ class Validator(
                         current_winner_uid = None
 
                     best_by_miner_loaded: dict[int, float] = {}
-                    for uid_key, score in (summary_in.get("best_by_miner", {}) or {}).items():
+                    for uid_key, reward in (summary_in.get("best_by_miner", {}) or {}).items():
                         try:
                             uid_i = int(uid_key)
-                            score_f = float(score)
+                            reward_f = float(reward)
                         except Exception:
                             continue
-                        best_by_miner_loaded[uid_i] = score_f
+                        best_by_miner_loaded[uid_i] = reward_f
 
                     best_round_by_miner_loaded: dict[int, int] = {}
                     for uid_key, rnd in (summary_in.get("best_round_by_miner", {}) or {}).items():
@@ -413,7 +415,7 @@ class Validator(
 
                     summary_loaded = {
                         "current_winner_uid": current_winner_uid,
-                        "current_winner_score": float(summary_in.get("current_winner_score", 0.0) or 0.0),
+                        "current_winner_reward": float(summary_in.get("current_winner_reward", summary_in.get("current_winner_score", 0.0)) or 0.0),
                         "required_improvement_pct": float(summary_in.get("required_improvement_pct", 0.0) or 0.0),
                         "best_by_miner": best_by_miner_loaded,
                         "best_round_by_miner": best_round_by_miner_loaded,
@@ -438,16 +440,16 @@ class Validator(
                             summary_loaded["best_round_by_miner"][uid_i] = best_round
                         round_scores = miner_data.get("round_scores", {})
                         if isinstance(round_scores, dict):
-                            for rnd_key, score in round_scores.items():
+                            for rnd_key, reward in round_scores.items():
                                 try:
                                     rnd_i = int(rnd_key)
-                                    score_f = float(score)
+                                    reward_f = float(reward)
                                 except Exception:
                                     continue
                                 entry = rounds_loaded.get(rnd_i)
                                 if not isinstance(entry, dict):
-                                    entry = {"winner": {"miner_uid": None, "score": 0.0}, "miner_scores": {}}
-                                entry["miner_scores"][uid_i] = score_f
+                                    entry = {"winner": {"miner_uid": None, "reward": 0.0}, "miner_rewards": {}}
+                                entry["miner_rewards"][uid_i] = reward_f
                                 rounds_loaded[rnd_i] = entry
 
                 winners_in = season_data.get("round_winners", [])
@@ -463,7 +465,7 @@ class Validator(
                             continue
                         entry = rounds_loaded.get(rnd_i)
                         if not isinstance(entry, dict):
-                            entry = {"winner": {"miner_uid": None, "score": 0.0}, "miner_scores": {}}
+                            entry = {"winner": {"miner_uid": None, "reward": 0.0}, "miner_rewards": {}}
                         raw_uid = winner.get("winner_uid")
                         try:
                             winner_uid = int(raw_uid) if raw_uid is not None else None
@@ -471,7 +473,7 @@ class Validator(
                             winner_uid = None
                         entry["winner"] = {
                             "miner_uid": winner_uid,
-                            "score": float(winner.get("winner_score", 0.0) or 0.0),
+                            "reward": float(winner.get("winner_reward", winner.get("winner_score", 0.0)) or 0.0),
                         }
                         rounds_loaded[rnd_i] = entry
 
@@ -481,7 +483,7 @@ class Validator(
                 except Exception:
                     current_winner_uid = None
                 summary_loaded["current_winner_uid"] = current_winner_uid
-                summary_loaded["current_winner_score"] = float(season_data.get("current_winner_score", 0.0) or 0.0)
+                summary_loaded["current_winner_reward"] = float(season_data.get("current_winner_reward", season_data.get("current_winner_score", 0.0)) or 0.0)
                 summary_loaded["required_improvement_pct"] = float(season_data.get("required_improvement_pct", 0.0) or 0.0)
 
             loaded[season_i] = {

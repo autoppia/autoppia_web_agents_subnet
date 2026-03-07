@@ -509,7 +509,7 @@ class IWAPClient:
         validator_snapshot: models.ValidatorSnapshotIWAP,
     ) -> Dict[str, Any]:
         """
-        Sync round_config to backend. Backend persists only if caller is main validator.
+        Sync config_season_round to backend. Backend persists only if caller is main validator.
         Safe to call every round start.
         """
         round_cfg = {}

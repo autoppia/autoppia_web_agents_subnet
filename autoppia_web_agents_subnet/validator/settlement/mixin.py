@@ -504,9 +504,9 @@ class ValidatorSettlementMixin:
                 elif uid_i not in best_round_by_miner:
                     best_round_by_miner[uid_i] = int(round_key)
 
-        # Resolve current contender by best season score.
+        # Resolve current contender by best season reward.
         best_uid: Optional[int] = None
-        best_score = 0.0
+        best_reward = 0.0
         for uid, best in best_by_miner.items():
             try:
                 uid_i = int(uid)
@@ -515,8 +515,8 @@ class ValidatorSettlementMixin:
                 continue
             if eligible_uids and uid_i not in eligible_uids:
                 continue
-            if best_f > best_score:
-                best_score = best_f
+            if best_f > best_reward:
+                best_reward = best_f
                 best_uid = uid_i
 
         reigning_uid_raw = summary_state.get("current_winner_uid")
@@ -526,44 +526,44 @@ class ValidatorSettlementMixin:
         except Exception:
             reigning_uid = None
 
-        reigning_score = 0.0
+        reigning_reward = 0.0
         if reigning_uid is not None:
             try:
-                reigning_score = float(summary_state.get("current_winner_score", 0.0) or 0.0)
+                reigning_reward = float(summary_state.get("current_winner_reward", summary_state.get("current_winner_score", 0.0)) or 0.0)
             except Exception:
-                reigning_score = 0.0
-            if reigning_score <= 0.0:
+                reigning_reward = 0.0
+            if reigning_reward <= 0.0:
                 try:
-                    reigning_score = float(best_by_miner.get(reigning_uid, 0.0) or 0.0)
+                    reigning_reward = float(best_by_miner.get(reigning_uid, 0.0) or 0.0)
                 except Exception:
-                    reigning_score = 0.0
-            if reigning_score <= 0.0:
+                    reigning_reward = 0.0
+            if reigning_reward <= 0.0:
                 reigning_uid = None
         reigning_is_eligible = bool(reigning_uid is not None and reigning_uid in eligible_uids)
 
         winner_uid: Optional[int] = None
-        winner_score = 0.0
+        winner_reward = 0.0
         dethroned = False
-        required_score_to_dethrone: Optional[float] = None
+        required_reward_to_dethrone: Optional[float] = None
 
-        if eligible_uids and best_uid is not None and best_score > 0.0:
+        if eligible_uids and best_uid is not None and best_reward > 0.0:
             winner_uid = best_uid
-            winner_score = best_score
+            winner_reward = best_reward
 
-            if reigning_is_eligible and reigning_uid is not None and reigning_score > 0.0:
+            if reigning_is_eligible and reigning_uid is not None and reigning_reward > 0.0:
                 if best_uid != reigning_uid:
-                    required_score_to_dethrone = float(reigning_score * (1.0 + required_improvement_pct))
-                    if best_score > required_score_to_dethrone:
+                    required_reward_to_dethrone = float(reigning_reward * (1.0 + required_improvement_pct))
+                    if best_reward > required_reward_to_dethrone:
                         dethroned = True
                     else:
                         winner_uid = reigning_uid
-                        winner_score = reigning_score
+                        winner_reward = reigning_reward
                 else:
                     winner_uid = reigning_uid
-                    winner_score = reigning_score
+                    winner_reward = reigning_reward
         elif not eligible_uids:
             winner_uid = None
-            winner_score = 0.0
+            winner_reward = 0.0
 
         # Keep backward-compatible field used in tests and logs.
         self._last_round_winner_uid = winner_uid
@@ -571,17 +571,17 @@ class ValidatorSettlementMixin:
         round_entry = {
             "winner": {
                 "miner_uid": int(winner_uid) if winner_uid is not None else None,
-                "score": float(winner_score),
+                "reward": float(winner_reward),
             },
-            "miner_scores": {int(uid): float(reward) for uid, reward in miner_rewards_for_round.items()},
+            "miner_rewards": {int(uid): float(reward) for uid, reward in miner_rewards_for_round.items()},
             "decision": {
                 "top_candidate_uid": int(best_uid) if best_uid is not None else None,
-                "top_candidate_score": float(best_score),
+                "top_candidate_reward": float(best_reward),
                 "reigning_uid_before_round": int(reigning_uid) if reigning_uid is not None else None,
-                "reigning_score_before_round": float(reigning_score),
+                "reigning_reward_before_round": float(reigning_reward),
                 "reigning_eligible_before_round": bool(reigning_is_eligible),
                 "required_improvement_pct": float(required_improvement_pct),
-                "required_score_to_dethrone": float(required_score_to_dethrone) if required_score_to_dethrone is not None else None,
+                "required_reward_to_dethrone": float(required_reward_to_dethrone) if required_reward_to_dethrone is not None else None,
                 "dethroned": bool(dethroned),
                 "eligible_uids": sorted(int(uid) for uid in eligible_uids),
             },
@@ -589,7 +589,7 @@ class ValidatorSettlementMixin:
         rounds_state[int(round_key)] = round_entry
 
         summary_state["current_winner_uid"] = int(winner_uid) if winner_uid is not None else None
-        summary_state["current_winner_score"] = float(winner_score)
+        summary_state["current_winner_reward"] = float(winner_reward)
         summary_state["required_improvement_pct"] = float(required_improvement_pct)
         summary_state["best_by_miner"] = {int(uid): float(score) for uid, score in best_by_miner.items()}
         summary_state["best_round_by_miner"] = {int(uid): int(rnd) for uid, rnd in best_round_by_miner.items()}
@@ -618,7 +618,7 @@ class ValidatorSettlementMixin:
             if 0 <= int(uid) < self.metagraph.n:
                 avg_rewards_array[int(uid)] = float(reward)
 
-        # Build season-best score array and call WTA for observability/tests.
+        # Build season-best reward array and call WTA for observability/tests.
         season_best_array = np.zeros(self.metagraph.n, dtype=np.float32)
         for uid, best in best_by_miner.items():
             try:
@@ -639,12 +639,12 @@ class ValidatorSettlementMixin:
 
         if reigning_uid is not None and int(winner_uid) == int(reigning_uid):
             ColoredLogger.info(
-                f"🏆 Keeping season winner UID {winner_uid} | best={winner_score:.4f} | required_overtake={required_improvement_pct:.2%}",
+                f"🏆 Keeping season leader UID {winner_uid} | best_reward={winner_reward:.4f} | required_overtake={required_improvement_pct:.2%}",
                 ColoredLogger.GOLD,
             )
         elif dethroned:
             ColoredLogger.info(
-                f"🥇 New season leader UID {winner_uid} | score={winner_score:.4f} | beat previous by > {required_improvement_pct:.2%}",
+                f"🥇 New season leader UID {winner_uid} | reward={winner_reward:.4f} | beat previous by > {required_improvement_pct:.2%}",
                 ColoredLogger.GOLD,
             )
         # Antes de set_weights: SIEMPRE repartimos entre 2 destinos:

@@ -1057,7 +1057,7 @@ class ValidatorRoundStartMixin:
     async def _sync_runtime_config_while_waiting(self, *, current_block: int) -> None:
         """
         Best-effort runtime-config sync while validator is in pre-start waiting phase.
-        This prevents IWAP from staying without round_config/minimum_validator_version
+        This prevents IWAP from staying without config_season_round/minimum_validator_version
         when the main validator has not started round execution yet.
         """
         iwap_client = getattr(self, "iwap_client", None)

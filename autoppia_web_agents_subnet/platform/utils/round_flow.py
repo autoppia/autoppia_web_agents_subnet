@@ -271,7 +271,7 @@ def _build_consensus_summary_payload(
     *,
     season_number: Optional[int],
     round_number_in_season: Optional[int],
-    miner_scores: Dict[int, float],
+    miner_rewards: Dict[int, float],
     season_history: Dict[Any, Any],
     eligible_uids: Optional[set[int]] = None,
 ) -> Dict[str, Any]:
@@ -287,14 +287,14 @@ def _build_consensus_summary_payload(
     except Exception:
         required_improvement_pct = 0.0
 
-    normalized_scores: Dict[int, float] = {}
-    for uid_raw, score_raw in (miner_scores or {}).items():
+    normalized_rewards: Dict[int, float] = {}
+    for uid_raw, reward_raw in (miner_rewards or {}).items():
         try:
             uid_i = int(uid_raw)
-            score_f = float(score_raw)
+            reward_f = float(reward_raw)
         except Exception:
             continue
-        normalized_scores[uid_i] = float(score_f)
+        normalized_rewards[uid_i] = float(reward_f)
 
     season_state = season_history.get(season_i, {})
     if not isinstance(season_state, dict):
@@ -319,33 +319,33 @@ def _build_consensus_summary_payload(
     else:
         best_by_miner = {}
 
-    round_scores_for_summary: Dict[int, float] = dict(best_by_miner)
+    round_rewards_for_summary: Dict[int, float] = dict(best_by_miner)
     # Always carry current-round scores into the summary map, even if they are 0.0.
     # This guarantees post-consensus observability for rounds where all miners score zero.
-    for uid, score in normalized_scores.items():
-        prev_best = round_scores_for_summary.get(uid)
-        if prev_best is None or score > prev_best:
-            round_scores_for_summary[uid] = score
+    for uid, reward in normalized_rewards.items():
+        prev_best = round_rewards_for_summary.get(uid)
+        if prev_best is None or reward > prev_best:
+            round_rewards_for_summary[uid] = reward
 
     eligible_uid_set = {int(uid) for uid in (eligible_uids or set())}
     if not eligible_uid_set:
-        eligible_uid_set = set(round_scores_for_summary.keys()) or set(normalized_scores.keys())
+        eligible_uid_set = set(round_rewards_for_summary.keys()) or set(normalized_rewards.keys())
 
     best_uid: Optional[int] = None
-    best_score = float("-inf")
-    for uid, score in round_scores_for_summary.items():
+    best_reward = float("-inf")
+    for uid, reward in round_rewards_for_summary.items():
         try:
             uid_i = int(uid)
-            score_f = float(score)
+            reward_f = float(reward)
         except Exception:
             continue
         if eligible_uid_set and uid_i not in eligible_uid_set:
             continue
-        if score_f > best_score or (score_f == best_score and best_uid is not None and uid_i < best_uid):
-            best_score = score_f
+        if reward_f > best_reward or (reward_f == best_reward and best_uid is not None and uid_i < best_uid):
+            best_reward = reward_f
             best_uid = uid_i
-    if best_score == float("-inf"):
-        best_score = 0.0
+    if best_reward == float("-inf"):
+        best_reward = 0.0
 
     reigning_uid_raw = summary_state.get("current_winner_uid")
     try:
@@ -353,34 +353,34 @@ def _build_consensus_summary_payload(
     except Exception:
         reigning_uid = None
 
-    reigning_score = 0.0
+    reigning_reward = 0.0
     if reigning_uid is not None:
         try:
-            reigning_score = float(summary_state.get("current_winner_score", 0.0) or 0.0)
+            reigning_reward = float(summary_state.get("current_winner_reward", summary_state.get("current_winner_score", 0.0)) or 0.0)
         except Exception:
-            reigning_score = 0.0
-        if reigning_score <= 0.0:
-            reigning_score = float(round_scores_for_summary.get(reigning_uid, 0.0) or 0.0)
+            reigning_reward = 0.0
+        if reigning_reward <= 0.0:
+            reigning_reward = float(round_rewards_for_summary.get(reigning_uid, 0.0) or 0.0)
     reigning_eligible = bool(reigning_uid is not None and reigning_uid in eligible_uid_set)
 
     winner_uid: Optional[int] = None
-    winner_score = 0.0
+    winner_reward = 0.0
     dethroned = False
-    required_score_to_dethrone: Optional[float] = None
+    required_reward_to_dethrone: Optional[float] = None
 
     # Keep winner UID explicit when possible, even if score is 0.0.
     if reigning_uid is not None and reigning_eligible:
         winner_uid = reigning_uid
-        winner_score = reigning_score
+        winner_reward = reigning_reward
         if best_uid is not None and best_uid != reigning_uid:
-            required_score_to_dethrone = float(reigning_score * (1.0 + required_improvement_pct))
-            if best_score > required_score_to_dethrone:
+            required_reward_to_dethrone = float(reigning_reward * (1.0 + required_improvement_pct))
+            if best_reward > required_reward_to_dethrone:
                 dethroned = True
                 winner_uid = best_uid
-                winner_score = best_score
+                winner_reward = best_reward
     elif best_uid is not None:
         winner_uid = best_uid
-        winner_score = best_score
+        winner_reward = best_reward
 
     return {
         "schema_version": 1,
@@ -390,24 +390,24 @@ def _build_consensus_summary_payload(
         "round_summary": {
             "winner": {
                 "miner_uid": int(winner_uid) if winner_uid is not None else None,
-                "score": float(winner_score),
+                "reward": float(winner_reward),
             },
-            "miner_scores": {int(uid): float(score) for uid, score in normalized_scores.items()},
+            "miner_rewards": {int(uid): float(reward) for uid, reward in normalized_rewards.items()},
             "decision": {
                 "top_candidate_uid": int(best_uid) if best_uid is not None else None,
-                "top_candidate_score": float(best_score),
+                "top_candidate_reward": float(best_reward),
                 "reigning_uid_before_round": int(reigning_uid) if reigning_uid is not None else None,
-                "reigning_score_before_round": float(reigning_score),
+                "reigning_reward_before_round": float(reigning_reward),
                 "reigning_eligible_before_round": bool(reigning_eligible),
                 "required_improvement_pct": float(required_improvement_pct),
-                "required_score_to_dethrone": float(required_score_to_dethrone) if required_score_to_dethrone is not None else None,
+                "required_reward_to_dethrone": float(required_reward_to_dethrone) if required_reward_to_dethrone is not None else None,
                 "dethroned": bool(dethroned),
                 "eligible_uids": sorted(int(uid) for uid in eligible_uid_set),
             },
         },
         "season_summary": {
             "current_winner_uid": int(winner_uid) if winner_uid is not None else None,
-            "current_winner_score": float(winner_score),
+            "current_winner_reward": float(winner_reward),
             "required_improvement_pct": float(required_improvement_pct),
             "last_eligible_uids": sorted(int(uid) for uid in eligible_uid_set),
         },
@@ -557,7 +557,7 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
         bt.logging.info("✅ Validator will proceed with: handshake → tasks → evaluations → SET WEIGHTS on-chain")
         return
 
-    # Bootstrap DB round_config from validator runtime config.
+    # Bootstrap DB config_season_round from validator runtime config.
     # Backend applies it only for main validator; non-main calls are ignored safely.
     try:
         sync_resp = await ctx.iwap_client.sync_runtime_config(
@@ -1255,7 +1255,7 @@ async def finish_round_flow(
 
     miners_reused = list(getattr(ctx, "miners_reused_this_round", None) or [])
 
-    # Include round/season config so backend can persist to round_config (main validator only)
+    # Include round/season config so backend can persist to config_season_round (main validator only)
     round_manager = getattr(ctx, "round_manager", None)
     round_size_epochs = float(round_manager.round_size_epochs) if round_manager else getattr(validator_config, "ROUND_SIZE_EPOCHS", None)
     season_size_epochs = float(round_manager.season_size_epochs) if round_manager else getattr(validator_config, "SEASON_SIZE_EPOCHS", None)
@@ -1295,7 +1295,7 @@ async def finish_round_flow(
         "summary": _build_consensus_summary_payload(
             season_number=season_number_for_summary,
             round_number_in_season=round_number_for_summary,
-            miner_scores=local_avg_rewards,
+            miner_rewards=local_avg_rewards,
             season_history=getattr(ctx, "_season_competition_history", {}),
             eligible_uids=local_eligible_uids,
         ),
@@ -1470,7 +1470,7 @@ async def finish_round_flow(
             "summary": _build_consensus_summary_payload(
                 season_number=season_number_for_summary,
                 round_number_in_season=round_number_for_summary,
-                miner_scores=consensus_rewards,
+                miner_rewards=consensus_rewards,
                 season_history=getattr(ctx, "_season_competition_history", {}),
                 eligible_uids=post_consensus_eligible_uids,
             ),

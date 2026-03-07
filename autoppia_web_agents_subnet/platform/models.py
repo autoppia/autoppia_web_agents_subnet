@@ -238,7 +238,7 @@ class RoundWinnerIWAP:
     miner_uid: Optional[int]
     miner_hotkey: Optional[str]
     rank: int
-    score: float  # Winner reward for the round/season decision; this is not raw eval_score
+    reward: float  # Winner reward for the round/season decision; this is not raw eval_score
 
     def to_payload(self) -> Dict[str, Any]:
         return _drop_nones(asdict(self))
@@ -268,7 +268,7 @@ class FinishRoundAgentRunIWAP:
 
 @dataclass
 class RoundMetadataIWAP:
-    """Round timing and metadata. Backend uses round_size_epochs/season_size_epochs/minimum_start_block to persist round_config (main validator only)."""
+    """Round timing and metadata. Backend uses round_size_epochs/season_size_epochs/minimum_start_block to persist config_season_round (main validator only)."""
 
     round_number: int
     started_at: float
@@ -284,7 +284,7 @@ class RoundMetadataIWAP:
     emission: Optional[Dict[str, Any]] = None
     # Miners that were not re-evaluated this round (same git commit as last evaluated round)
     miners_reused_same_commit: Optional[List[int]] = None
-    # Round/season config: backend persists to round_config table (main validator only) so dashboard uses validator timing
+    # Round/season config: backend persists to config_season_round table (main validator only) so dashboard uses validator timing
     round_size_epochs: Optional[float] = None
     season_size_epochs: Optional[float] = None
     minimum_start_block: Optional[int] = None
@@ -313,7 +313,7 @@ class FinishRoundIWAP:
     validator_iwap_prev_round_json: Optional[Dict[str, Any]] = None
     # Compatibility fields kept in the payload shape even though current consumers use the richer summaries
     winners: List[RoundWinnerIWAP] = field(default_factory=list)
-    winner_scores: List[float] = field(default_factory=list)
+    winner_rewards: List[float] = field(default_factory=list)
     weights: Dict[str, float] = field(default_factory=dict)
 
     def to_payload(self) -> Dict[str, Any]:
@@ -347,8 +347,8 @@ class FinishRoundIWAP:
         # Compatibility fields included only when populated
         if self.winners:
             payload["winners"] = [winner.to_payload() for winner in self.winners]
-        if self.winner_scores:
-            payload["winner_scores"] = self.winner_scores
+        if self.winner_rewards:
+            payload["winner_rewards"] = self.winner_rewards
         if self.weights:
             payload["weights"] = self.weights
 

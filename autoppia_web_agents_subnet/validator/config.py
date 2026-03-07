@@ -98,8 +98,8 @@ FINISH_ROUND_RETRY_SECONDS = _env_int("FINISH_ROUND_RETRY_SECONDS", 180, test_de
 # ═══════════════════════════════════════════════════════════════════════════
 # SETTLEMENT / WINNER PERSISTENCE CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
-# Required % over the current season winner's best score to dethrone it.
-# Example: 0.05 => challenger must score > winner_best * 1.05
+# Required % over the current season leader's best reward to dethrone it.
+# Example: 0.05 => challenger must beat leader_best_reward * 1.05
 LAST_WINNER_BONUS_PCT = _env_float("LAST_WINNER_BONUS_PCT", 0.05)
 
 
