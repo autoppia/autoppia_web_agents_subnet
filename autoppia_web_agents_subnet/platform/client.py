@@ -539,6 +539,18 @@ class IWAPClient:
             context="sync_runtime_config",
         )
 
+    async def fetch_runtime_config(self) -> Dict[str, Any]:
+        """
+        Fetch canonical runtime config from backend.
+
+        Validators use this to hydrate round/season timing from IWAP instead of
+        depending on local .env timing values.
+        """
+        return await self._get(
+            "/api/v1/validator-rounds/runtime-config",
+            context="fetch_runtime_config",
+        )
+
     async def upload_task_log(self, payload: Dict[str, Any]) -> Optional[str]:
         """
         Upload a per-task execution log to IWAP for S3 persistence.

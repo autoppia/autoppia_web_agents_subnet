@@ -521,10 +521,15 @@ class Validator(
         """
         Forward pass for the validator.
         """
+        hydrator = getattr(self, "_hydrate_runtime_config_from_iwap", None)
+        if callable(hydrator):
+            await hydrator()
+
         if await self._wait_for_minimum_start_block():
             return
 
-        bt.logging.info(f"🚀 Starting round-based forward (epochs per round: {ROUND_SIZE_EPOCHS:.1f})")
+        round_size_epochs = float(getattr(self.round_manager, "round_size_epochs", ROUND_SIZE_EPOCHS) or ROUND_SIZE_EPOCHS)
+        bt.logging.info(f"🚀 Starting round-based forward (epochs per round: {round_size_epochs:.1f})")
         start_result: RoundStartResult = await self._start_round()
 
         if not start_result.continue_forward:

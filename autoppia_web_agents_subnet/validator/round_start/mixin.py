@@ -21,7 +21,6 @@ from autoppia_web_agents_subnet.opensource.utils_git import (
     resolve_remote_ref_commit,
 )
 from autoppia_web_agents_subnet.validator.config import (
-    MINIMUM_START_BLOCK,
     SKIP_ROUND_IF_STARTED_AFTER_FRACTION,
     MIN_MINER_STAKE_ALPHA,
     MAX_MINERS_PER_ROUND_BY_STAKE,
@@ -1038,21 +1037,69 @@ class ValidatorRoundStartMixin:
         hours_remaining = minutes_remaining / 60
 
         current_epoch = rm.block_to_epoch(current_block)
-        target_epoch = rm.block_to_epoch(MINIMUM_START_BLOCK)
+        target_epoch = rm.block_to_epoch(int(rm.minimum_start_block))
 
         eta = f"~{hours_remaining:.1f}h" if hours_remaining >= 1 else f"~{minutes_remaining:.0f}m"
-        bt.logging.warning(f"🔒 Locked until block {MINIMUM_START_BLOCK:,} (epoch {target_epoch:.2f}) | now {current_block:,} (epoch {current_epoch:.2f}) | ETA {eta}")
+        bt.logging.warning(f"🔒 Locked until block {int(rm.minimum_start_block):,} (epoch {target_epoch:.2f}) | now {current_block:,} (epoch {current_epoch:.2f}) | ETA {eta}")
 
         wait_seconds = min(max(seconds_remaining, 30), 600)
         rm.enter_phase(
             RoundPhase.WAITING,
             block=current_block,
-            note=f"Waiting for minimum start block {MINIMUM_START_BLOCK}",
+            note=f"Waiting for minimum start block {int(rm.minimum_start_block)}",
         )
         bt.logging.warning(f"💤 Rechecking in {wait_seconds:.0f}s...")
 
         await asyncio.sleep(wait_seconds)
         return True
+
+    def _apply_runtime_config(self, payload: dict) -> bool:
+        round_cfg = payload.get("config_season_round") if isinstance(payload, dict) else None
+        if not isinstance(round_cfg, dict):
+            return False
+
+        rm = getattr(self, "round_manager", None)
+        sm = getattr(self, "season_manager", None)
+        if rm is None or sm is None:
+            return False
+
+        try:
+            minimum_start_block = int(round_cfg["minimum_start_block"])
+            round_size_epochs = float(round_cfg["round_size_epochs"])
+            season_size_epochs = float(round_cfg["season_size_epochs"])
+        except (KeyError, TypeError, ValueError):
+            return False
+
+        rm.minimum_start_block = minimum_start_block
+        rm.round_size_epochs = round_size_epochs
+        rm.round_block_length = int(rm.BLOCKS_PER_EPOCH * rm.round_size_epochs)
+
+        sm.minimum_start_block = minimum_start_block
+        sm.season_size_epochs = season_size_epochs
+        sm.season_block_length = int(sm.BLOCKS_PER_EPOCH * sm.season_size_epochs)
+        return True
+
+    async def _hydrate_runtime_config_from_iwap(self) -> None:
+        iwap_client = getattr(self, "iwap_client", None)
+        if iwap_client is None:
+            return
+
+        fetch_method = getattr(iwap_client, "fetch_runtime_config", None)
+        if not callable(fetch_method):
+            return
+
+        try:
+            payload = await fetch_method()
+            if self._apply_runtime_config(payload):
+                round_cfg = payload.get("config_season_round") or {}
+                bt.logging.info(
+                    "🧩 IWAP runtime-config loaded | "
+                    f"minimum_start_block={round_cfg.get('minimum_start_block')} "
+                    f"round_size_epochs={round_cfg.get('round_size_epochs')} "
+                    f"season_size_epochs={round_cfg.get('season_size_epochs')}"
+                )
+        except Exception as exc:
+            bt.logging.warning(f"runtime-config fetch at startup failed (continuing): {type(exc).__name__}: {exc}")
 
     async def _sync_runtime_config_while_waiting(self, *, current_block: int) -> None:
         """
