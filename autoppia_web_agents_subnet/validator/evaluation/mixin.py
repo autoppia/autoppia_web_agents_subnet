@@ -1012,11 +1012,24 @@ class ValidatorEvaluationMixin:
                         f"Task log upload failed for task_id={getattr(task_payload, 'task_id', None)} miner_uid={task_log_miner_uid}: {log_exc}",
                         ColoredLogger.YELLOW,
                     )
+                # Upload evaluation metadata to Hippius S3 (independent of IWAP success)
+                try:
+                    from autoppia_web_agents_subnet.utils.s3_client import upload_evaluation_metadata_async
+
+                    await upload_evaluation_metadata_async(
+                        round_id=self.current_round_id,
+                        validator_uid=int(self.uid),
+                        miner_uid=agent_uid,
+                        metadata=task_log_payload,
+                        task_id=task_log_payload.get("task_id") if isinstance(task_log_payload, dict) else None,
+                    )
+                except Exception as s3_exc:  # noqa: BLE001
+                    ColoredLogger.debug(f"Hippius S3 metadata upload failed (non-critical): {s3_exc}")
             gif_payload = evaluation_meta_dict.get("gif_recording")
             evaluation_result = evaluation_payload.get("evaluation_result", {})
             evaluation_id = evaluation_result.get("evaluation_id") if isinstance(evaluation_result, dict) else None
             if evaluation_id and gif_payload:
-                pending_gif_uploads.append((str(evaluation_id), gif_payload))
+                pending_gif_uploads.append((str(evaluation_id), gif_payload, full_task_id))
 
         if not evaluations_batch:
             ColoredLogger.warning("No evaluations to submit in batch", ColoredLogger.YELLOW)
@@ -1047,7 +1060,7 @@ class ValidatorEvaluationMixin:
                 if pending_gif_uploads:
                     uploaded = 0
                     skipped = 0
-                    for evaluation_id, gif_payload in pending_gif_uploads:
+                    for evaluation_id, gif_payload, _task_id in pending_gif_uploads:
                         gif_bytes = extract_gif_bytes(gif_payload)
                         if not gif_bytes:
                             skipped += 1
@@ -1068,6 +1081,22 @@ class ValidatorEvaluationMixin:
                         f"GIF upload summary for agent {agent_uid}: uploaded={uploaded} skipped={skipped} total={len(pending_gif_uploads)}",
                         ColoredLogger.CYAN,
                     )
+                    # Upload GIFs to Hippius S3 (independent, non-blocking)
+                    try:
+                        from autoppia_web_agents_subnet.utils.s3_client import upload_evaluation_gif_async
+
+                        for evaluation_id, gif_payload, gif_task_id in pending_gif_uploads:
+                            gif_bytes = extract_gif_bytes(gif_payload)
+                            if gif_bytes:
+                                await upload_evaluation_gif_async(
+                                    round_id=self.current_round_id,
+                                    validator_uid=int(self.uid),
+                                    miner_uid=agent_uid,
+                                    gif_data=gif_bytes,
+                                    task_id=gif_task_id,
+                                )
+                    except Exception as s3_exc:  # noqa: BLE001
+                        ColoredLogger.debug(f"Hippius S3 GIF upload failed (non-critical): {s3_exc}")
                 return created > 0
             except Exception as e:
                 ColoredLogger.error(f"Failed to submit batch: {e}", ColoredLogger.RED)

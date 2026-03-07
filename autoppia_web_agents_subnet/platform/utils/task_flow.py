@@ -236,6 +236,7 @@ def _build_execution_steps(execution_history: Any) -> List[Dict[str, Any]]:
                 "html": snapshot_post.get("html"),
                 "backend_events": snapshot_post.get("backend_events"),
                 "timestamp": snapshot_post.get("timestamp") or snapshot_post.get("time"),
+                "screenshot": snapshot_post.get("screenshot_after") or snapshot_post.get("screenshot"),
             }
         agent_input = snapshot_pre if isinstance(snapshot_pre, dict) else {}
         if not isinstance(agent_input, dict):
@@ -905,49 +906,58 @@ async def submit_task_results(
                             level="error",
                             exc_info=True,
                         )
+                    # Upload GIF to Hippius S3 (independent, non-blocking)
+                    try:
+                        from autoppia_web_agents_subnet.utils.s3_client import upload_evaluation_gif_async
+
+                        await upload_evaluation_gif_async(
+                            round_id=ctx.current_round_id,
+                            validator_uid=int(ctx.uid),
+                            miner_uid=miner_uid,
+                            gif_data=gif_bytes,
+                            task_id=iwap_task_id,
+                        )
+                    except Exception as s3_exc:  # noqa: BLE001
+                        logger.debug("Hippius S3 GIF upload failed (non-critical): %s", s3_exc)
                 else:
                     log_gif_event(
                         "Skipped upload: invalid payload (failed to extract bytes)",
                         level="warning",
                     )
 
-                if getattr(ctx, "iwap_client", None):
-                    try:
-                        task_log_payload = _build_task_log_payload(
-                            task_payload=task_payload,
-                            agent_run=agent_run,
-                            miner_uid=miner_uid,
-                            eval_score=eval_score,
-                            reward=reward_value,
-                            exec_time=exec_time,
-                            evaluation_meta=evaluation_meta,
-                            validator_round_id=ctx.current_round_id,
-                            validator_uid=int(ctx.uid),
-                        )
-                        task_log_url = await ctx.iwap_client.upload_task_log(task_log_payload)
-                        if task_log_url:
-                            task_logs_payload = getattr(ctx, "_s3_task_log_urls", None)
-                            if not isinstance(task_logs_payload, list):
-                                task_logs_payload = []
-                            task_logs_payload.append(
-                                {
-                                    "task_id": getattr(task_payload, "task_id", None),
-                                    "agent_run_id": getattr(agent_run, "agent_run_id", None),
-                                    "miner_uid": miner_uid,
-                                    "url": task_log_url,
-                                    "payload": {
-                                        "season": task_log_payload.get("season"),
-                                        "round_in_season": task_log_payload.get("round_in_season"),
-                                    },
-                                }
-                            )
-                            ctx._s3_task_log_urls = task_logs_payload
-                    except Exception as log_exc:  # noqa: BLE001
-                        log_iwap_phase(
-                            "Phase 4",
-                            f"Task log upload failed for task_id={iwap_task_id} miner_uid={miner_uid}: {log_exc}",
-                            level="warning",
-                        )
+            if getattr(ctx, "iwap_client", None):
+                try:
+                    task_log_payload = _build_task_log_payload(
+                        task_payload=task_payload,
+                        agent_run=agent_run,
+                        miner_uid=miner_uid,
+                        eval_score=eval_score,
+                        reward=reward_value,
+                        exec_time=exec_time,
+                        evaluation_meta=evaluation_meta,
+                        validator_round_id=ctx.current_round_id,
+                        validator_uid=int(ctx.uid),
+                    )
+                    await ctx.iwap_client.upload_task_log(task_log_payload)
+                except Exception as log_exc:  # noqa: BLE001
+                    log_iwap_phase(
+                        "Phase 4",
+                        f"Task log upload failed for task_id={iwap_task_id} miner_uid={miner_uid}: {log_exc}",
+                        level="warning",
+                    )
+                # Upload evaluation metadata to Hippius S3 (independent of IWAP success)
+                try:
+                    from autoppia_web_agents_subnet.utils.s3_client import upload_evaluation_metadata_async
+
+                    await upload_evaluation_metadata_async(
+                        round_id=ctx.current_round_id,
+                        validator_uid=int(ctx.uid),
+                        miner_uid=miner_uid,
+                        metadata=task_log_payload,
+                        task_id=task_log_payload.get("task_id") if isinstance(task_log_payload, dict) else None,
+                    )
+                except Exception as s3_exc:  # noqa: BLE001
+                    logger.debug("Hippius S3 metadata upload failed (non-critical): %s", s3_exc)
 
         accumulators = ctx.agent_run_accumulators.setdefault(
             miner_uid,
