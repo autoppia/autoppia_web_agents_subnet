@@ -5,8 +5,9 @@ Uses Hypothesis to test score aggregation properties.
 """
 
 import pytest
-import numpy as np
 from hypothesis import given, strategies as st, assume
+
+from autoppia_web_agents_subnet.validator.settlement.consensus import _aggregate_scores_for_validators
 
 
 @pytest.mark.property
@@ -17,13 +18,13 @@ class TestConsensusAggregationProperties:
         scores=st.lists(
             st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False),
             min_size=1,
-            max_size=10
+            max_size=10,
         ),
         stakes=st.lists(
             st.floats(min_value=0.1, max_value=1000.0, allow_nan=False, allow_infinity=False),
             min_size=1,
-            max_size=10
-        )
+            max_size=10,
+        ),
     )
     def test_aggregated_scores_are_normalized(self, scores, stakes):
         """
@@ -35,27 +36,26 @@ class TestConsensusAggregationProperties:
         **Validates: Requirements 6.3, 6.6**
         """
         assume(len(scores) == len(stakes))
-        
-        # Calculate stake-weighted average
-        weighted_sum = sum(score * stake for score, stake in zip(scores, stakes))
-        total_stake = sum(stakes)
-        
-        aggregated = weighted_sum / total_stake
-        
-        # Should be normalized
+
+        # Build entries for a single miner (uid=0) across validators.
+        entries = [(stake, {0: score}) for score, stake in zip(scores, stakes)]
+        result, _ = _aggregate_scores_for_validators(entries)
+        aggregated = result.get(0, 0.0) if result else 0.0
+
+        # Aggregated score should remain within normalized bounds.
         assert 0.0 <= aggregated <= 1.0
 
     @given(
         scores=st.lists(
             st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False),
             min_size=2,
-            max_size=5
+            max_size=5,
         ),
         stakes=st.lists(
             st.floats(min_value=1.0, max_value=100.0, allow_nan=False, allow_infinity=False),
             min_size=2,
-            max_size=5
-        )
+            max_size=5,
+        ),
     )
     def test_aggregation_is_commutative(self, scores, stakes):
         """
@@ -68,22 +68,19 @@ class TestConsensusAggregationProperties:
         """
         assume(len(scores) == len(stakes))
         assume(sum(stakes) > 0)
-        
-        # Calculate in original order
-        weighted_sum_1 = sum(score * stake for score, stake in zip(scores, stakes))
-        total_stake_1 = sum(stakes)
-        result_1 = weighted_sum_1 / total_stake_1
-        
-        # Reverse order
-        scores_rev = list(reversed(scores))
-        stakes_rev = list(reversed(stakes))
-        
-        weighted_sum_2 = sum(score * stake for score, stake in zip(scores_rev, stakes_rev))
-        total_stake_2 = sum(stakes_rev)
-        result_2 = weighted_sum_2 / total_stake_2
-        
-        # Should be equal (within floating point tolerance)
-        assert abs(result_1 - result_2) < 1e-6
+
+        # Original order
+        entries1 = [(stake, {0: score}) for score, stake in zip(scores, stakes)]
+        result1, _ = _aggregate_scores_for_validators(entries1)
+        agg1 = result1.get(0, 0.0) if result1 else 0.0
+
+        # Reversed order
+        entries2 = list(reversed(entries1))
+        result2, _ = _aggregate_scores_for_validators(entries2)
+        agg2 = result2.get(0, 0.0) if result2 else 0.0
+
+        # Aggregation should be commutative (within floating point tolerance).
+        assert abs(agg1 - agg2) < 1e-6
 
     @given(
         score=st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False),
@@ -114,7 +111,12 @@ class TestConsensusAggregationProperties:
         stakes=st.floats(min_value=1.0, max_value=66.0, allow_nan=False, allow_infinity=False).flatmap(
             lambda stake_low: st.tuples(
                 st.just(stake_low),
-                st.floats(min_value=(stake_low * 1.5) + 1e-6, max_value=100.0, allow_nan=False, allow_infinity=False),
+                st.floats(
+                    min_value=(stake_low * 1.5) + 1e-6,
+                    max_value=100.0,
+                    allow_nan=False,
+                    allow_infinity=False,
+                ),
             )
         ),
     )
@@ -130,12 +132,11 @@ class TestConsensusAggregationProperties:
         stake_low, stake_high = stakes
 
         scores = [score_high, score_low]
-        stakes = [stake_high, stake_low]
+        stakes_list = [stake_high, stake_low]
 
-        # Calculate weighted average
-        weighted_sum = sum(score * stake for score, stake in zip(scores, stakes))
-        total_stake = sum(stakes)
-        aggregated = weighted_sum / total_stake
+        entries = [(stake, {0: score}) for score, stake in zip(scores, stakes_list)]
+        result, _ = _aggregate_scores_for_validators(entries)
+        aggregated = result.get(0, 0.0) if result else 0.0
 
         # With higher stake and higher score, the aggregate should be closer to the
         # higher-stake validator's score than to the lower-stake validator's score.
@@ -145,7 +146,7 @@ class TestConsensusAggregationProperties:
         scores=st.lists(
             st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False),
             min_size=1,
-            max_size=10
+            max_size=10,
         )
     )
     def test_equal_stakes_gives_simple_average(self, scores):
@@ -158,31 +159,29 @@ class TestConsensusAggregationProperties:
         **Validates: Requirements 6.6**
         """
         assume(len(scores) > 0)
-        
+
         # All equal stakes
         stakes = [1.0] * len(scores)
-        
-        # Calculate weighted average
-        weighted_sum = sum(score * stake for score, stake in zip(scores, stakes))
-        total_stake = sum(stakes)
-        aggregated = weighted_sum / total_stake
-        
+        entries = [(stake, {0: score}) for score, stake in zip(scores, stakes)]
+        result, _ = _aggregate_scores_for_validators(entries)
+        aggregated = result.get(0, 0.0) if result else 0.0
+
         # Should equal simple average
         simple_avg = sum(scores) / len(scores)
-        
+
         assert abs(aggregated - simple_avg) < 1e-6
 
     @given(
         scores=st.lists(
             st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_infinity=False),
             min_size=1,
-            max_size=10
+            max_size=10,
         ),
         stakes=st.lists(
             st.floats(min_value=0.0, max_value=100.0, allow_nan=False, allow_infinity=False),
             min_size=1,
-            max_size=10
-        )
+            max_size=10,
+        ),
     )
     def test_zero_stakes_handled_gracefully(self, scores, stakes):
         """
@@ -194,13 +193,16 @@ class TestConsensusAggregationProperties:
         **Validates: Requirements 6.6**
         """
         assume(len(scores) == len(stakes))
-        
+
         # Force all stakes to zero
-        stakes = [0.0] * len(stakes)
-        
-        total_stake = sum(stakes)
-        
-        if total_stake == 0:
-            # Should use simple average as fallback
-            simple_avg = sum(scores) / len(scores) if scores else 0.0
-            assert 0.0 <= simple_avg <= 1.0
+        zero_stakes = [0.0] * len(stakes)
+        entries = [(stake, {0: score}) for score, stake in zip(scores, zero_stakes)]
+
+        result, all_zero = _aggregate_scores_for_validators(entries)
+        aggregated = result.get(0, 0.0) if result else 0.0
+
+        simple_avg = sum(scores) / len(scores) if scores else 0.0
+
+        # When all stakes are zero, aggregation should fall back to simple average.
+        assert all_zero is True
+        assert abs(aggregated - simple_avg) < 1e-6
