@@ -482,11 +482,18 @@ class ValidatorRoundStartMixin:
             agent_name = str(commitment.get("n") or "").strip() or None
             agent_image = str(commitment.get("i") or "").strip() or None
 
-            # "g" = GitHub path: either full URL (legacy), or path only (strip https://github.com and .git).
-            # New format: single "g" only (e.g. owner/repo/tree/main or owner/repo/commit/sha); type inferred from path.
-            # Legacy: "g" + "h" (owner/repo + ref) or "g" = full URL.
+            # "g" may arrive in three formats:
+            #   1. Legacy full URL.
+            #   2. Legacy compact pair: owner/repo in "g" plus ref in "h".
+            #   3. Current compact path form: owner/repo/tree/<ref> or owner/repo/commit/<sha>.
             raw_g = str(commitment.get("g") or "").strip()
-            raw_github_url = f"https://github.com/{raw_g}"
+            raw_h = str(commitment.get("h") or "").strip()
+            if raw_g.startswith(("http://", "https://")):
+                raw_github_url = raw_g
+            elif raw_h and "/tree/" not in raw_g and "/commit/" not in raw_g:
+                raw_github_url = f"https://github.com/{raw_g}/tree/{raw_h}"
+            else:
+                raw_github_url = f"https://github.com/{raw_g}" if raw_g else None
 
             if not agent_name or not raw_github_url:
                 # Strict: an explicit submission is required.
