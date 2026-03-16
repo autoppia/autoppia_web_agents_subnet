@@ -6,6 +6,7 @@ import random
 import time
 from typing import Optional
 from logging.handlers import RotatingFileHandler
+from urllib.parse import urlparse
 
 import httpx
 from fastapi import FastAPI, Request, HTTPException, Response
@@ -484,9 +485,17 @@ async def proxy_request(request: Request, path: str):
         # Ensure pricing is loaded (Chutes) before we validate model/price.
         await gateway.ensure_provider_pricing(provider)
 
-        # Build upstream URL ensuring the scheme/host always come from the trusted provider config.
-        # This prevents authority-section injection like "https://api.openai.com@evil.com/..." .
-        base = httpx.URL(provider_config.base_url)
+        # Build upstream URL from trusted provider config (prevents SSRF).
+        # Chutes: agents may override via X-Chutes-Base-URL (must be https://*.chutes.ai).
+        effective_base_url = provider_config.base_url
+        if provider == "chutes":
+            custom = (request.headers.get("x-chutes-base-url") or "").strip().rstrip("/")
+            if custom:
+                if not _is_valid_chutes_base_url(custom):
+                    raise HTTPException(status_code=400, detail="X-Chutes-Base-URL must be https://*.chutes.ai")
+                effective_base_url = custom
+                logger.info(f"Chutes request using custom base URL: {effective_base_url}")
+        base = httpx.URL(effective_base_url)
         url = str(base.copy_with(raw_path=suffix.encode("utf-8") if suffix else b""))
 
         # Forward the request
