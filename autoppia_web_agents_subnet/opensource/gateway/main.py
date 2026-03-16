@@ -6,13 +6,18 @@ import random
 import time
 from typing import Optional
 from logging.handlers import RotatingFileHandler
-from urllib.parse import urlparse
-
 import httpx
 from fastapi import FastAPI, Request, HTTPException, Response
 import secrets
 
 from models import LLMUsage, DEFAULT_PROVIDER_CONFIGS
+from util import (
+    is_valid_chutes_base_url,
+    fetch_chutes_models,
+    get_model_root,
+    extract_model_pricing,
+    check_hf_model_public,
+)
 from config import (
     COST_LIMIT_PER_TASK,
     OPENAI_API_KEY,
@@ -68,6 +73,8 @@ class LLMGateway:
         self.usage_per_task: dict[str, LLMUsage] = {}
         self._chutes_pricing_lock = asyncio.Lock()
         self._chutes_pricing_last_refresh = 0.0
+        # Cache: (base_url, model) -> {input: float, output: float, ...}
+        self._validated_chutes_models: dict[tuple[str, str], dict[str, float]] = {}
         # Best-effort upstream concurrency limits to reduce 429s.
         self._provider_semaphores = {
             "openai": asyncio.Semaphore(max(1, int(GATEWAY_OPENAI_MAX_CONCURRENCY))),
@@ -166,18 +173,7 @@ class LLMGateway:
         return best_key or model
 
     async def refresh_chutes_pricing(self) -> bool:
-        """
-        Fetch Chutes model pricing from the public OpenAI-compatible models endpoint.
-
-        Expected schema (subset):
-          GET https://llm.chutes.ai/v1/models
-          {
-            "data": [
-              {"id": "...", "price": {"input": {"usd": 0.1}, "output": {"usd": 0.3}, "input_cache_read": {"usd": 0.05}}},
-              {"id": "...", "pricing": {"prompt": 0.1, "completion": 0.3, "input_cache_read": 0.05}}
-            ]
-          }
-        """
+        """Fetch Chutes model pricing from the public /v1/models endpoint."""
         provider_config = self.providers.get("chutes")
         if not provider_config:
             return False
@@ -203,43 +199,7 @@ class LLMGateway:
             mid = str(m.get("id") or "")
             if not mid:
                 continue
-
-            entry: dict[str, float] = {}
-
-            # Preferred: structured "price" with USD.
-            price = m.get("price")
-            if isinstance(price, dict):
-                try:
-                    in_usd = (price.get("input") or {}).get("usd")
-                    out_usd = (price.get("output") or {}).get("usd")
-                    cache_usd = (price.get("input_cache_read") or {}).get("usd")
-                    if in_usd is not None:
-                        entry["input"] = float(in_usd)
-                    if out_usd is not None:
-                        entry["output"] = float(out_usd)
-                    if cache_usd is not None:
-                        entry["input_cache_read"] = float(cache_usd)
-                except Exception:
-                    entry = {}
-
-            # Fallback: flat "pricing" (prompt/completion) in USD per 1M tokens.
-            if not entry:
-                pricing = m.get("pricing")
-                if isinstance(pricing, dict):
-                    try:
-                        if pricing.get("input") is not None:
-                            entry["input"] = float(pricing["input"])
-                        if pricing.get("output") is not None:
-                            entry["output"] = float(pricing["output"])
-                        if pricing.get("prompt") is not None:
-                            entry["input"] = float(pricing["prompt"])
-                        if pricing.get("completion") is not None:
-                            entry["output"] = float(pricing["completion"])
-                        if pricing.get("input_cache_read") is not None:
-                            entry["input_cache_read"] = float(pricing["input_cache_read"])
-                    except Exception:
-                        entry = {}
-
+            entry = extract_model_pricing(m)
             if "input" in entry and "output" in entry:
                 pricing_map[mid] = entry
 
@@ -488,15 +448,13 @@ async def proxy_request(request: Request, path: str):
         # Build upstream URL from trusted provider config (prevents SSRF).
         # Chutes: agents may override via X-Chutes-Base-URL (must be https://*.chutes.ai).
         effective_base_url = provider_config.base_url
+        custom_chutes_url = None
         if provider == "chutes":
             custom = (request.headers.get("x-chutes-base-url") or "").strip().rstrip("/")
             if custom:
-                if not _is_valid_chutes_base_url(custom):
+                if not is_valid_chutes_base_url(custom):
                     raise HTTPException(status_code=400, detail="X-Chutes-Base-URL must be https://*.chutes.ai")
-                effective_base_url = custom
-                logger.info(f"Chutes request using custom base URL: {effective_base_url}")
-        base = httpx.URL(effective_base_url)
-        url = str(base.copy_with(raw_path=suffix.encode("utf-8") if suffix else b""))
+                custom_chutes_url = custom
 
         # Forward the request
         headers = {}
@@ -532,19 +490,48 @@ async def proxy_request(request: Request, path: str):
             if parsed_body.get("stream") is True:
                 raise HTTPException(status_code=400, detail="Streaming is not supported")
 
-        # Enforce per-provider model allowlist and (optionally) strict pricing.
+        # Extract and validate model from request body (non-GET only).
+        model = None
         if request.method in ("POST", "PUT", "PATCH"):
             model = str(parsed_body.get("model") or "")
             if not model:
                 raise HTTPException(status_code=400, detail="Missing model")
             if not gateway._is_allowed_model(provider, model):
                 raise HTTPException(status_code=400, detail="Model not allowed")
-            if GATEWAY_STRICT_PRICING:
-                pricing_model = gateway._resolve_pricing_model(provider, model)
-                # If Chutes pricing fetch fails (e.g. transient outage), fall back to
-                # conservative defaults rather than hard-fail the task.
-                if (provider != "chutes" or provider_config.pricing) and pricing_model not in provider_config.pricing:
-                    raise HTTPException(status_code=400, detail="Missing pricing for model")
+
+        # Validate custom chute: fetch models, check HF public, inject pricing.
+        # Must run before strict pricing check so custom chute pricing is available.
+        if custom_chutes_url:
+            if not model:
+                raise HTTPException(status_code=400, detail="Custom chute requires a model in request body")
+            cache_key = (custom_chutes_url, model)
+            cached_pricing = gateway._validated_chutes_models.get(cache_key)
+            if cached_pricing is not None:
+                provider_config.pricing[model] = cached_pricing
+            else:
+                entries = await fetch_chutes_models(gateway.http_client, custom_chutes_url, CHUTES_API_KEY)
+                if not entries:
+                    raise HTTPException(status_code=400, detail="Custom chute returned no accessible models")
+                matched = next((m for m in entries if str(m.get("id") or "") == model), None)
+                if matched is None:
+                    raise HTTPException(status_code=400, detail=f"Custom chute does not serve model '{model}'")
+                root = get_model_root(matched)
+                if not await check_hf_model_public(gateway.http_client, root):
+                    raise HTTPException(status_code=400, detail=f"Model '{root}' is not a public model on HuggingFace")
+                pricing = extract_model_pricing(matched)
+                if "input" in pricing and "output" in pricing:
+                    provider_config.pricing[model] = pricing
+                    gateway._validated_chutes_models[cache_key] = pricing
+                logger.info(f"Validated custom chute {custom_chutes_url}: model={model}, root={root}")
+            effective_base_url = custom_chutes_url
+
+        # Strict pricing check (after custom chute pricing injection).
+        if model and GATEWAY_STRICT_PRICING:
+            pricing_model = gateway._resolve_pricing_model(provider, model)
+            if (provider != "chutes" or provider_config.pricing) and pricing_model not in provider_config.pricing:
+                raise HTTPException(status_code=400, detail="Missing pricing for model")
+        base = httpx.URL(effective_base_url)
+        url = str(base.copy_with(raw_path=suffix.encode("utf-8") if suffix else b""))
 
         upstream_body = body
         forced_response_format = False
