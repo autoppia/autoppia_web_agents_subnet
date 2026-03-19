@@ -32,7 +32,6 @@ from config import (
     CHUTES_ALLOWED_PATHS,
     ANTHROPIC_ALLOWED_PATHS,
     GATEWAY_STRICT_PRICING,
-    CHUTES_PRICING_TTL_SECONDS,
     CHUTES_PRICING_TIMEOUT_SECONDS,
     GATEWAY_FORCE_JSON_RESPONSE_FORMAT,
     GATEWAY_OPENAI_MAX_CONCURRENCY,
@@ -71,10 +70,8 @@ class LLMGateway:
         self.http_client = httpx.AsyncClient(timeout=60.0)
         self.allowed_task_ids = set()
         self.usage_per_task: dict[str, LLMUsage] = {}
-        self._chutes_pricing_lock = asyncio.Lock()
-        self._chutes_pricing_last_refresh = 0.0
-        # Cache: (base_url, model) -> {input: float, output: float, ...}
-        self._validated_chutes_models: dict[tuple[str, str], dict[str, float]] = {}
+        # Custom chute cache: (base_url, model) -> {root: str, pricing: {input, output, ...}}
+        self._custom_chutes_pricing: dict[tuple[str, str], dict] = {}
         # Best-effort upstream concurrency limits to reduce 429s.
         self._provider_semaphores = {
             "openai": asyncio.Semaphore(max(1, int(GATEWAY_OPENAI_MAX_CONCURRENCY))),
@@ -205,30 +202,18 @@ class LLMGateway:
 
         if pricing_map:
             provider_config.pricing = pricing_map
-            self._chutes_pricing_last_refresh = time.time()
             logger.info(f"Loaded Chutes pricing for {len(pricing_map)} models")
             return True
 
         logger.warning("Chutes /v1/models returned no models with usable pricing")
         return False
 
-    async def ensure_provider_pricing(self, provider: str) -> None:
-        if provider != "chutes":
-            return
+    def update_usage_for_task(self, provider: str, task_id: str, response_data: dict,
+                             custom_chutes_key: tuple[str, str] | None = None) -> tuple[int, float, str]:
+        """Update token usage for a specific task and return (tokens, cost, model).
 
-        now = time.time()
-        if self._chutes_pricing_last_refresh and (now - self._chutes_pricing_last_refresh) < CHUTES_PRICING_TTL_SECONDS:
-            return
-
-        async with self._chutes_pricing_lock:
-            now = time.time()
-            if self._chutes_pricing_last_refresh and (now - self._chutes_pricing_last_refresh) < CHUTES_PRICING_TTL_SECONDS:
-                return
-            # Refresh best-effort.
-            await self.refresh_chutes_pricing()
-
-    def update_usage_for_task(self, provider: str, task_id: str, response_data: dict) -> tuple[int, float, str]:
-        """Update token usage for a specific task and return (tokens, cost, model)"""
+        custom_chutes_key: (base_url, request_model) cache key for custom chute pricing.
+        """
         usage = response_data.get("usage") or {}
 
         # Support both OpenAI-style {prompt_tokens, completion_tokens} and
@@ -264,8 +249,16 @@ class LLMGateway:
 
         model = str(response_data.get("model", "") or "")
         provider_config = self.providers[provider]
-        pricing_model = self._resolve_pricing_model(provider, model)
-        pricing = provider_config.pricing.get(pricing_model, {})
+
+        # Custom chutes use their own cached pricing (keyed by request model),
+        # not provider_config.pricing.
+        pricing_model = model
+        if custom_chutes_key:
+            cached = self._custom_chutes_pricing.get(custom_chutes_key)
+            pricing = cached["pricing"] if cached else {}
+        else:
+            pricing_model = self._resolve_pricing_model(provider, model)
+            pricing = provider_config.pricing.get(pricing_model, {})
 
         input_price = float(pricing.get("input", provider_config.default_input_price))
         cached_input_price = float(pricing.get("input_cache_read", input_price))
@@ -285,12 +278,16 @@ class LLMGateway:
             logger.info(f"Provider: {provider} | Model: {model} | Tokens: {total_tokens} | Cost: {total_cost}")
         return total_tokens, total_cost, model
 
-    def set_allowed_task_ids(self, task_ids: Optional[list[str]] = None):
-        """Set allowed task IDs for limiting other requests and tracking usage."""
+    async def set_allowed_task_ids(self, task_ids: Optional[list[str]] = None):
+        """Set allowed task IDs for limiting other requests and tracking usage.
+        Refreshes trusted Chutes pricing and clears custom chute cache.
+        """
         if task_ids is None:
             task_ids = []
         self.allowed_task_ids = set(task_ids)
         self.usage_per_task = {task_id: LLMUsage() for task_id in task_ids}
+        self._custom_chutes_pricing.clear()
+        await self.refresh_chutes_pricing()
 
     def is_cost_exceeded(self, task_id: str) -> bool:
         usage = self.usage_per_task.get(task_id)
@@ -407,7 +404,7 @@ async def set_allowed_task_ids(request: Request):
     try:
         body = await request.json()
         task_ids = body.get("task_ids", [])
-        gateway.set_allowed_task_ids(task_ids=task_ids)
+        await gateway.set_allowed_task_ids(task_ids=task_ids)
     except Exception as e:
         logger.error(f"Error setting allowed task IDs: {e}")
         raise HTTPException(status_code=400, detail=f"Error setting allowed task IDs: {e}")
@@ -442,9 +439,6 @@ async def proxy_request(request: Request, path: str):
         if not gateway._is_allowed_path(provider, suffix):
             raise HTTPException(status_code=400, detail="Unsupported endpoint")
 
-        # Ensure pricing is loaded (Chutes) before we validate model/price.
-        await gateway.ensure_provider_pricing(provider)
-
         # Build upstream URL from trusted provider config (prevents SSRF).
         # Chutes: agents may override via X-Chutes-Base-URL (must be https://*.chutes.ai).
         effective_base_url = provider_config.base_url
@@ -458,7 +452,8 @@ async def proxy_request(request: Request, path: str):
 
         # Forward the request
         headers = {}
-        headers["Content-Type"] = "application/json"
+        if request.method in ("POST", "PUT", "PATCH"):
+            headers["Content-Type"] = "application/json"
 
         if provider == "openai" and OPENAI_API_KEY:
             headers["Authorization"] = f"Bearer {OPENAI_API_KEY}"
@@ -496,19 +491,16 @@ async def proxy_request(request: Request, path: str):
             model = str(parsed_body.get("model") or "")
             if not model:
                 raise HTTPException(status_code=400, detail="Missing model")
-            if not gateway._is_allowed_model(provider, model):
+            if not custom_chutes_url and not gateway._is_allowed_model(provider, model):
                 raise HTTPException(status_code=400, detail="Model not allowed")
 
-        # Validate custom chute: fetch models, check HF public, inject pricing.
+        # Validate custom chute: fetch models, check HF public, extract pricing.
         # Must run before strict pricing check so custom chute pricing is available.
         if custom_chutes_url:
             if not model:
                 raise HTTPException(status_code=400, detail="Custom chute requires a model in request body")
             cache_key = (custom_chutes_url, model)
-            cached_pricing = gateway._validated_chutes_models.get(cache_key)
-            if cached_pricing is not None:
-                provider_config.pricing[model] = cached_pricing
-            else:
+            if cache_key not in gateway._custom_chutes_pricing:
                 entries = await fetch_chutes_models(gateway.http_client, custom_chutes_url, CHUTES_API_KEY)
                 if not entries:
                     raise HTTPException(status_code=400, detail="Custom chute returned no accessible models")
@@ -519,14 +511,12 @@ async def proxy_request(request: Request, path: str):
                 if not await check_hf_model_public(gateway.http_client, root):
                     raise HTTPException(status_code=400, detail=f"Model '{root}' is not a public model on HuggingFace")
                 pricing = extract_model_pricing(matched)
-                if "input" in pricing and "output" in pricing:
-                    provider_config.pricing[model] = pricing
-                    gateway._validated_chutes_models[cache_key] = pricing
+                gateway._custom_chutes_pricing[cache_key] = {"root": root, "pricing": pricing}
                 logger.info(f"Validated custom chute {custom_chutes_url}: model={model}, root={root}")
             effective_base_url = custom_chutes_url
 
-        # Strict pricing check (after custom chute pricing injection).
-        if model and GATEWAY_STRICT_PRICING:
+        # Strict pricing check (skip custom chutes — they use _custom_chutes_pricing).
+        if model and GATEWAY_STRICT_PRICING and not custom_chutes_url:
             pricing_model = gateway._resolve_pricing_model(provider, model)
             if (provider != "chutes" or provider_config.pricing) and pricing_model not in provider_config.pricing:
                 raise HTTPException(status_code=400, detail="Missing pricing for model")
@@ -610,7 +600,8 @@ async def proxy_request(request: Request, path: str):
         if response.status_code == 200:
             try:
                 response_data = response.json()
-                tokens_used, cost_used, model_used = gateway.update_usage_for_task(provider, task_id, response_data)
+                custom_key = (custom_chutes_url, model) if custom_chutes_url else None
+                tokens_used, cost_used, model_used = gateway.update_usage_for_task(provider, task_id, response_data, custom_key)
                 # Record call details for downstream logs (best-effort)
                 call = {
                     "provider": provider,

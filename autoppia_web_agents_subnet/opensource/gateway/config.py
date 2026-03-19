@@ -48,9 +48,7 @@ ANTHROPIC_ALLOWED_PATHS = _csv_env("ANTHROPIC_ALLOWED_PATHS") or {
 # fallback price), to prevent under-priced spend.
 GATEWAY_STRICT_PRICING = os.getenv("GATEWAY_STRICT_PRICING", "true").lower() == "true"
 
-# Chutes pricing refresh (seconds). Used to populate per-model pricing from the
-# public OpenAI-compatible /v1/models endpoint.
-CHUTES_PRICING_TTL_SECONDS = float(os.getenv("CHUTES_PRICING_TTL_SECONDS", "3600"))
+# Timeout for Chutes /v1/models pricing fetch.
 CHUTES_PRICING_TIMEOUT_SECONDS = float(os.getenv("CHUTES_PRICING_TIMEOUT_SECONDS", "10"))
 
 # Gateway behavior knobs (safe defaults for this subnet use-case).
