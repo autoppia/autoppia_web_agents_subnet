@@ -2,20 +2,11 @@ name: Quality checks
 
 on:
   push:
-    # Ejecutar en cualquier rama (incluida fix/sonar) para evitar problemas de coincidencia de patrones
     branches:
-      - main
-      - master
-      - "fix/**"
-      - "fix/*"
+      - '**'
   pull_request:
     branches:
-      - main
-      - master
-      - "fix/**"
-      - "fix/*"
-  # Permite lanzar el workflow manualmente desde la pestaña "Actions"
-  workflow_dispatch:
+      - '**'
 
 jobs:
   lint-and-audit:

@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
+from autoppia_web_agents_subnet.validator.config import TASKS_PER_SEASON
 from autoppia_web_agents_subnet.validator.models import TaskWithProject
 from autoppia_web_agents_subnet.validator.season_manager import SeasonManager
 
@@ -72,12 +73,18 @@ class TestTaskGeneration:
 
         with patch("autoppia_web_agents_subnet.validator.season_manager.generate_tasks") as mock_gen:
             # Mock generate_tasks to return a list of TaskWithProject
-            mock_tasks = [TaskWithProject(project=project, task=Task(url=f"https://example.com/{i}", prompt=f"prompt-{i}", tests=[])) for i in range(5)]
+            mock_tasks = [
+                TaskWithProject(
+                    project=project,
+                    task=Task(url=f"https://example.com/{i}", prompt=f"prompt-{i}", tests=[]),
+                )
+                for i in range(TASKS_PER_SEASON)
+            ]
             mock_gen.return_value = mock_tasks
 
             tasks = await manager.generate_season_tasks(manager.minimum_start_block)
 
-            assert len(tasks) == 5
+            assert len(tasks) == TASKS_PER_SEASON
             assert manager.task_generated_season == 1
 
     async def test_get_season_tasks_returns_cached_tasks_within_season(self, tmp_path, monkeypatch):
@@ -91,7 +98,13 @@ class TestTaskGeneration:
         project = demo_web_projects[0]
 
         with patch("autoppia_web_agents_subnet.validator.season_manager.generate_tasks") as mock_gen:
-            mock_tasks = [TaskWithProject(project=project, task=Task(url=f"https://example.com/{i}", prompt=f"prompt-{i}", tests=[])) for i in range(3)]
+            mock_tasks = [
+                TaskWithProject(
+                    project=project,
+                    task=Task(url=f"https://example.com/{i}", prompt=f"prompt-{i}", tests=[]),
+                )
+                for i in range(TASKS_PER_SEASON)
+            ]
             mock_gen.return_value = mock_tasks
 
             # First call generates tasks
