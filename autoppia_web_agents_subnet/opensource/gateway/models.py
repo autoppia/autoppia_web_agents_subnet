@@ -88,7 +88,7 @@ DEFAULT_PROVIDER_CONFIGS = {
         default_output_price=14.0,
     ),
     # Chutes provides an OpenAI-compatible LLM endpoint at https://llm.chutes.ai/v1
-    # We set base_url to the host and expect incoming gateway paths to include /v1/...
+    # This is the default; agents may override per-request via X-Chutes-Base-URL header.
     "chutes": ProviderConfig(
         name="chutes",
         base_url="https://llm.chutes.ai",
