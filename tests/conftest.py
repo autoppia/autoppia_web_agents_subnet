@@ -431,6 +431,7 @@ def _bind_evaluation_mixin(validator):
     from autoppia_web_agents_subnet.validator.evaluation.mixin import ValidatorEvaluationMixin
 
     validator._run_evaluation_phase = ValidatorEvaluationMixin._run_evaluation_phase.__get__(validator, type(validator))
+    validator._submit_batch_evaluations_to_iwap = ValidatorEvaluationMixin._submit_batch_evaluations_to_iwap.__get__(validator, type(validator))
     return validator
 
 

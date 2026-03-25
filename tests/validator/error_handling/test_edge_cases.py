@@ -368,9 +368,9 @@ class TestConcurrencyEdgeCases:
         validator_with_agents.sandbox_manager.deploy_agent = Mock(return_value=mock_instance)
         validator_with_agents.sandbox_manager.cleanup_agent = Mock()
 
-        # Mock evaluation
+        # Mock evaluation (binary reward: score>=1.0 means solved)
         async def mock_evaluate(*args, **kwargs):
-            return (0.8, None, None)  # Return tuple as expected
+            return (1.0, None, None)  # Return tuple as expected
 
         with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua", new=mock_evaluate):
             with patch(
