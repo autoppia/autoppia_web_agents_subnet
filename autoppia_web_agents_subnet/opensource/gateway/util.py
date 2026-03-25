@@ -30,7 +30,12 @@ async def fetch_chutes_models(http_client: httpx.AsyncClient, base_url: str, api
         raise HTTPException(status_code=400, detail=f"Custom chute /v1/models failed with status {resp.status_code}")
     try:
         data = resp.json()
-        entries = data.get("data") or (data if isinstance(data, list) else [])
+        if isinstance(data, list):
+            entries = data
+        elif isinstance(data, dict):
+            entries = data.get("data") or []
+        else:
+            entries = []
         return [m for m in entries if isinstance(m, dict) and m.get("id")]
     except Exception:
         return []

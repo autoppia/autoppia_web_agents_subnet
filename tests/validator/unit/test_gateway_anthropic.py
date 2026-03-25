@@ -5,6 +5,7 @@ Tests provider detection, path/model allowlists, pricing resolution,
 and usage/cost tracking for the Anthropic provider without starting the full app.
 """
 
+import asyncio
 import logging
 import os
 import sys
@@ -38,6 +39,16 @@ def _load_gateway(gateway_dir: str):
             return gateway_main.gateway
         finally:
             sys.path.remove(gateway_dir)
+
+
+def _run(coro):
+    """Run an async coroutine synchronously."""
+    loop = asyncio.get_event_loop()
+    if loop.is_running():
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            return pool.submit(asyncio.run, coro).result()
+    return loop.run_until_complete(coro)
 
 
 @pytest.mark.unit
@@ -96,7 +107,7 @@ class TestGatewayAnthropicProvider:
         }
         with patch.dict(os.environ, env, clear=False):
             gw = _load_gateway(gateway_dir)
-        gw.set_allowed_task_ids(["task-anthropic-1"])
+        _run(gw.set_allowed_task_ids(["task-anthropic-1"]))
         response_data = {
             "model": "claude-sonnet-4.5",
             "usage": {
@@ -121,7 +132,7 @@ class TestGatewayAnthropicProvider:
         }
         with patch.dict(os.environ, env, clear=False):
             gw = _load_gateway(gateway_dir)
-        gw.set_allowed_task_ids(["task-cached"])
+        _run(gw.set_allowed_task_ids(["task-cached"]))
         response_data = {
             "model": "claude-sonnet-4.6",
             "usage": {
@@ -143,7 +154,7 @@ class TestGatewayAnthropicProvider:
         }
         with patch.dict(os.environ, env, clear=False):
             gw = _load_gateway(gateway_dir)
-        gw.set_allowed_task_ids(["task-1"])
+        _run(gw.set_allowed_task_ids(["task-1"]))
         assert gw.is_cost_exceeded("task-1") is False
         assert gw.is_cost_exceeded("task-nonexistent") is False
 

@@ -4,7 +4,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from rich.console import Console
 
-import autoppia_web_agents_subnet.miner.cli as cli
+from autoppia_web_agents_subnet.miner.cli import payment as payment_mod
+from autoppia_web_agents_subnet.miner.cli import _common as common_mod
 
 
 class _DummyWallet:
@@ -23,7 +24,7 @@ class _DummySubtensor:
         return False
 
     async def get_current_block(self):
-        return cli._DEFAULT_MINIMUM_START_BLOCK + cli._round_block_length() * 2
+        return common_mod._DEFAULT_MINIMUM_START_BLOCK + common_mod._round_block_length() * 2
 
 
 @pytest.mark.unit
@@ -35,7 +36,7 @@ async def test_payment_cli_shows_all_matching_validators():
         subtensor_network="finney",
         subtensor_chain_endpoint=None,
         netuid=36,
-        validator=None,
+        validator="",
         payment_round=None,
         payment_season=1,
     )
@@ -75,13 +76,20 @@ async def test_payment_cli_shows_all_matching_validators():
 
     record_console = Console(record=True, width=120)
 
-    with patch.object(cli.bt, "Wallet", _DummyWallet):
-        with patch.object(cli.bt, "AsyncSubtensor", return_value=_DummySubtensor()):
-            with patch.object(cli, "read_all_plain_commitments", AsyncMock(return_value=all_commits)):
-                with patch("autoppia_web_agents_subnet.utils.ipfs_client.get_json_async", side_effect=fake_get_json_async):
-                    with patch.object(cli, "console", record_console):
-                        with patch.object(cli, "err_console", record_console):
-                            await cli._payment(args)
+    with patch("builtins.input", return_value=""):
+        with patch("bittensor.Wallet", _DummyWallet):
+            with patch("bittensor.AsyncSubtensor", return_value=_DummySubtensor()):
+                with patch(
+                    "autoppia_web_agents_subnet.utils.commitments.read_all_plain_commitments",
+                    AsyncMock(return_value=all_commits),
+                ):
+                    with patch(
+                        "autoppia_web_agents_subnet.utils.ipfs_client.get_json_async",
+                        side_effect=fake_get_json_async,
+                    ):
+                        with patch.object(common_mod, "_get_console", return_value=record_console):
+                            with patch.object(common_mod, "_get_err_console", return_value=record_console):
+                                await payment_mod.run(args)
 
     rendered = record_console.export_text()
     assert "Payment Status for miner_coldkey_ss" in rendered

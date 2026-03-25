@@ -268,33 +268,34 @@ class TestScoreCalculation:
                 mock_normalize.return_value = ("https://github.com/test/agent", "main")
                 mock_ls_remote.return_value = "deadbeef"
                 # Return different scores for each task (3 agents * 5 tasks = 15 evaluations)
-                # Agent 1: 0.8, 0.6, 1.0, 0.4, 0.7 (avg = 0.7)
-                # Agent 2: 0.5, 0.5, 0.5, 0.5, 0.5 (avg = 0.5)
-                # Agent 3: 0.9, 0.9, 0.9, 0.9, 0.9 (avg = 0.9)
+                # Reward uses binary success: eval_score >= 1.0 -> solved (reward=1.0 with 0 time/cost), else 0.
+                # Agent 1: 1.0, 0.6, 1.0, 0.4, 1.0  -> 3 solved -> avg reward = 3/5 = 0.6
+                # Agent 2: 0.5, 0.5, 0.5, 0.5, 0.5   -> 0 solved -> avg reward = 0.0
+                # Agent 3: 1.0, 1.0, 1.0, 1.0, 1.0   -> 5 solved -> avg reward = 1.0
                 mock_eval.side_effect = [
-                    (0.8, None, None),
+                    (1.0, None, None),
                     (0.6, None, None),
                     (1.0, None, None),
                     (0.4, None, None),
-                    (0.7, None, None),
+                    (1.0, None, None),
                     (0.5, None, None),
                     (0.5, None, None),
                     (0.5, None, None),
                     (0.5, None, None),
                     (0.5, None, None),
-                    (0.9, None, None),
-                    (0.9, None, None),
-                    (0.9, None, None),
-                    (0.9, None, None),
-                    (0.9, None, None),
+                    (1.0, None, None),
+                    (1.0, None, None),
+                    (1.0, None, None),
+                    (1.0, None, None),
+                    (1.0, None, None),
                 ]
 
                 await validator_with_agents._run_evaluation_phase()
 
-                # Check that agent scores were calculated (average of task scores)
-                # First agent should have average score
+                # Check that agent scores were calculated (average reward across tasks)
+                # With binary reward and 0 time/cost, solved tasks get reward=1.0
                 agent = validator_with_agents.agents_dict[1]
-                expected_avg = (0.8 + 0.6 + 1.0 + 0.4 + 0.7) / 5
+                expected_avg = 3.0 / 5  # 3 solved out of 5
                 assert abs(agent.score - expected_avg) < 0.01
 
     async def test_evaluation_updates_agent_score_in_agents_dict(self, validator_with_agents, season_tasks):
@@ -318,14 +319,14 @@ class TestScoreCalculation:
             ):
                 mock_normalize.return_value = ("https://github.com/test/agent", "main")
                 mock_ls_remote.return_value = "deadbeef"
-                mock_eval.return_value = (0.75, None, None)
+                mock_eval.return_value = (1.0, None, None)
 
                 # Initial scores should be 0.0
                 assert validator_with_agents.agents_dict[1].score == 0.0
 
                 await validator_with_agents._run_evaluation_phase()
 
-                # Scores should be updated
+                # Scores should be updated (binary: score>=1.0 means solved)
                 assert validator_with_agents.agents_dict[1].score > 0.0
 
     async def test_evaluation_handles_empty_scores_list(self, validator_with_agents):

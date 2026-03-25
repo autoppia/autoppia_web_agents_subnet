@@ -55,10 +55,10 @@ class TestEvaluationScaling:
             validator_with_agents.agents_dict[i] = agent_info
             validator_with_agents.agents_queue.put(agent_info)
         
-        # Mock fast evaluation (simulate 0.001s per agent)
+        # Mock fast evaluation (simulate 0.001s per agent, binary reward: score>=1.0 means solved)
         async def fast_evaluate(*args, **kwargs):
             await asyncio.sleep(0.001)  # Simulate work
-            return (0.8, None, None)  # Return tuple as expected
+            return (1.0, None, None)  # Return tuple as expected
         
         # Mock deploy_agent to return proper instance - make it a callable
         def mock_deploy(*args, **kwargs):

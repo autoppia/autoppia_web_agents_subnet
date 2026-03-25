@@ -438,11 +438,11 @@ class TestStressTests:
         validator_with_agents.sandbox_manager.deploy_agent = Mock(return_value=mock_instance)
         validator_with_agents.sandbox_manager.cleanup_agent = Mock()
         
-        # Mock evaluation
+        # Mock evaluation (binary reward: score>=1.0 means solved)
         async def mock_evaluate(*args, **kwargs):
             await asyncio.sleep(0.001)
-            return (0.8, None, None)
-        
+            return (1.0, None, None)
+
         with patch(
             'autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua',
             new=mock_evaluate
@@ -454,10 +454,10 @@ class TestStressTests:
                 start_time = time.time()
                 await validator_with_agents._run_evaluation_phase()
                 elapsed = time.time() - start_time
-        
+
         # Should complete in reasonable time
         assert elapsed < 5.0, f"Evaluation took {elapsed:.2f}s, expected < 5s"
-        
+
         # All agents should be evaluated
         evaluated_count = sum(
             1 for agent in validator_with_agents.agents_dict.values()
