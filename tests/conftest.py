@@ -4,10 +4,18 @@ import sys
 import types
 from pathlib import Path
 
+try:
+    from pydantic import BaseModel, ConfigDict
+except Exception:  # pragma: no cover - only used in test bootstrap
+    BaseModel = None
+    ConfigDict = None
+
 # Set TESTING environment variable before any imports
 os.environ["TESTING"] = "True"
 # Tests should be deterministic regardless of a developer's shell env.
 os.environ["BURN_AMOUNT_PERCENTAGE"] = "0.0"
+os.environ.setdefault("VALIDATOR_NAME", "Test Validator")
+os.environ.setdefault("VALIDATOR_IMAGE", "https://example.com/validator.png")
 
 # Ensure repo root is on sys.path so autoppia_web_agents_subnet imports work in tests
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,6 +46,225 @@ def _ensure_module(name: str) -> types.ModuleType:
         module.__path__ = []  # type: ignore[attr-defined]
         sys.modules[name] = module
     return module
+
+
+def _install_bittensor_stub() -> None:
+    module = sys.modules.get("bittensor")
+    if module is not None and all(hasattr(module, attr) for attr in ("AsyncSubtensor", "Synapse", "logging")):
+        return
+
+    bt_module = module or types.ModuleType("bittensor")
+
+    def _noop(*args, **kwargs):
+        return None
+
+    class _LoggingStub:
+        logging_dir = "/tmp"
+
+        @staticmethod
+        def add_args(parser):
+            return parser
+
+        @staticmethod
+        def check_config(config):
+            return config
+
+        @staticmethod
+        def register_primary_logger(*args, **kwargs):
+            return None
+
+        @staticmethod
+        def set_config(*args, **kwargs):
+            return None
+
+        @staticmethod
+        def info(*args, **kwargs):
+            return None
+
+        @staticmethod
+        def warning(*args, **kwargs):
+            return None
+
+        @staticmethod
+        def error(*args, **kwargs):
+            return None
+
+        @staticmethod
+        def debug(*args, **kwargs):
+            return None
+
+        @staticmethod
+        def critical(*args, **kwargs):
+            return None
+
+        @staticmethod
+        def success(*args, **kwargs):
+            return None
+
+        @staticmethod
+        def trace(*args, **kwargs):
+            return None
+
+    class _WalletStub:
+        def __init__(self, *args, **kwargs):
+            self.hotkey = types.SimpleNamespace(ss58_address="test_hotkey")
+            self.coldkeypub = types.SimpleNamespace(ss58_address="test_coldkey")
+
+        @staticmethod
+        def add_args(parser):
+            return parser
+
+    class _SubtensorStub:
+        chain_endpoint = "ws://127.0.0.1:9944"
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        @staticmethod
+        def add_args(parser):
+            return parser
+
+        def metagraph(self, netuid):
+            return types.SimpleNamespace(
+                hotkeys=[],
+                coldkeys=[],
+                axons=[],
+                S=[],
+                stake=[],
+                validator_trust=[],
+                n=0,
+                netuid=netuid,
+            )
+
+        def is_hotkey_registered(self, *args, **kwargs):
+            return True
+
+    class _AsyncSubtensorStub:
+        def __init__(self, *args, **kwargs):
+            self.substrate = types.SimpleNamespace(
+                websocket=None,
+                close=_noop,
+            )
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def close(self):
+            return None
+
+        async def disconnect(self):
+            return None
+
+    class _AxonInstanceStub:
+        external_ip = "127.0.0.1"
+        external_port = 8091
+
+        def attach(self, *args, **kwargs):
+            return self
+
+        def serve(self, *args, **kwargs):
+            return self
+
+        def start(self):
+            return None
+
+        def stop(self):
+            return None
+
+    class _AxonFactory:
+        @staticmethod
+        def add_args(parser):
+            return parser
+
+        def __call__(self, *args, **kwargs):
+            return _AxonInstanceStub()
+
+    class _AxonInfoStub(types.SimpleNamespace):
+        ip = "127.0.0.1"
+        port = 8091
+        hotkey = "test_hotkey"
+        coldkey = "test_coldkey"
+
+    class _DendriteStub:
+        def __init__(self, *args, **kwargs):
+            pass
+
+    class _ConfigStub(types.SimpleNamespace):
+        def merge(self, other):
+            if other is None:
+                return self
+            source = vars(other) if hasattr(other, "__dict__") else dict(other)
+            for key, value in source.items():
+                setattr(self, key, value)
+            return self
+
+    def _config_factory(parser=None):
+        return _ConfigStub(
+            netuid=99,
+            logging=types.SimpleNamespace(logging_dir="/tmp", suppress_dendrite_noise=True),
+            wallet=types.SimpleNamespace(name="test_wallet", hotkey="test_hotkey"),
+            subtensor=types.SimpleNamespace(chain_endpoint="ws://127.0.0.1:9944", network="test"),
+            neuron=types.SimpleNamespace(
+                name="test_neuron",
+                device="cpu",
+                dont_save_events=True,
+                events_retention_size=0,
+                full_path="/tmp/test_neuron",
+                epoch_length=100,
+                axon_off=True,
+            ),
+            mock=True,
+        )
+
+    if BaseModel is not None:
+
+        class _SynapseStub(BaseModel):
+            model_config = ConfigDict(extra="allow", arbitrary_types_allowed=True)
+    else:
+
+        class _SynapseStub:
+            def __init__(self, **kwargs):
+                for key, value in kwargs.items():
+                    setattr(self, key, value)
+
+    bt_module.logging = getattr(bt_module, "logging", _LoggingStub())
+    bt_module.wallet = getattr(bt_module, "wallet", _WalletStub)
+    bt_module.Wallet = getattr(bt_module, "Wallet", _WalletStub)
+    bt_module.subtensor = getattr(bt_module, "subtensor", _SubtensorStub)
+    bt_module.axon = getattr(bt_module, "axon", _AxonFactory())
+    bt_module.AxonInfo = getattr(bt_module, "AxonInfo", _AxonInfoStub)
+    bt_module.dendrite = getattr(bt_module, "dendrite", _DendriteStub)
+    bt_module.config = getattr(bt_module, "config", _config_factory)
+    bt_module.Config = getattr(bt_module, "Config", _ConfigStub)
+    bt_module.AsyncSubtensor = getattr(bt_module, "AsyncSubtensor", _AsyncSubtensorStub)
+    bt_module.Synapse = getattr(bt_module, "Synapse", _SynapseStub)
+
+    utils_module = sys.modules.get("bittensor.utils")
+    if utils_module is None:
+        utils_module = types.ModuleType("bittensor.utils")
+        sys.modules["bittensor.utils"] = utils_module
+    if not hasattr(utils_module, "RAO_PER_TAO"):
+        utils_module.RAO_PER_TAO = 1_000_000_000
+    bt_module.utils = utils_module
+
+    balance_module = sys.modules.get("bittensor.utils.balance")
+    if balance_module is None:
+        balance_module = types.ModuleType("bittensor.utils.balance")
+        sys.modules["bittensor.utils.balance"] = balance_module
+
+    class _BalanceStub:
+        def __init__(self, tao=0.0):
+            self.tao = tao
+
+    balance_module.Balance = getattr(balance_module, "Balance", _BalanceStub)
+
+    sys.modules["bittensor"] = bt_module
+
+
+_install_bittensor_stub()
 
 
 def pytest_configure(config):
@@ -390,6 +617,7 @@ def dummy_validator(mock_validator_config):
     validator._finish_iwap_round = AsyncMock(return_value=True)
     validator._reset_iwap_round_state = Mock()
     validator._upload_round_log_snapshot = AsyncMock()
+    validator._try_upload_round_log_checkpoint = AsyncMock()
     validator._sync_runtime_config_while_waiting = AsyncMock()
     validator._state_summary_root = Mock(return_value="/tmp/test_state")
     validator.handshake_results = {}

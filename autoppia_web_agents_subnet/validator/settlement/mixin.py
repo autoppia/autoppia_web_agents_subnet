@@ -91,12 +91,11 @@ class ValidatorSettlementMixin:
                 f"Round ended before settlement (block {current_block} > {round_end_block}); skipping IPFS/consensus/finish/set_weights for this round.",
                 ColoredLogger.YELLOW,
             )
-            try:
-                uploader = getattr(self, "_upload_round_log_snapshot", None)
-                if callable(uploader):
-                    await uploader(reason="settlement_late_skip", force=True, min_interval_seconds=0.0)
-            except Exception:
-                pass
+            await self._try_upload_round_log_checkpoint(
+                reason="settlement_late_skip",
+                force=True,
+                min_interval_seconds=0.0,
+            )
             self.round_manager.enter_phase(
                 RoundPhase.COMPLETE,
                 block=current_block,
@@ -144,6 +143,11 @@ class ValidatorSettlementMixin:
             st = await self._get_async_subtensor()
             # Snapshot payloads are built from current/best run data inside publish_round_snapshot().
             await publish_round_snapshot(self, st=st, scores={})
+            await self._try_upload_round_log_checkpoint(
+                reason="settlement_snapshot_published",
+                force=True,
+                min_interval_seconds=0.0,
+            )
 
             fetch_fraction = float(
                 getattr(
@@ -173,6 +177,11 @@ class ValidatorSettlementMixin:
                 target_block=fetch_block,
                 target_description=f"consensus fetch block ({fetch_fraction:.0%} of round)",
             )
+            await self._try_upload_round_log_checkpoint(
+                reason="settlement_fetch_block_reached",
+                force=True,
+                min_interval_seconds=0.0,
+            )
 
             try:
                 scores, details = await aggregate_scores_from_commitments(self, st=st)
@@ -180,12 +189,33 @@ class ValidatorSettlementMixin:
                 # (ipfs_downloaded + post_consensus_evaluation reporting).
                 self._agg_scores_cache = scores
                 self._agg_meta_cache = details
+                try:
+                    apply_reuse_policy = getattr(self, "_apply_post_consensus_reuse_policy", None)
+                    if callable(apply_reuse_policy):
+                        apply_reuse_policy(details)
+                except Exception:
+                    bt.logging.warning("Failed to apply post-consensus reuse policy", exc_info=True)
+                await self._try_upload_round_log_checkpoint(
+                    reason="settlement_consensus_aggregated",
+                    force=True,
+                    min_interval_seconds=0.0,
+                )
             except Exception as e:
                 ColoredLogger.error(f"Error aggregating scores from commitments: {e}", ColoredLogger.RED)
                 scores = {}
                 self._agg_scores_cache = {}
                 self._agg_meta_cache = {}
+                await self._try_upload_round_log_checkpoint(
+                    reason="settlement_consensus_failed",
+                    force=True,
+                    min_interval_seconds=0.0,
+                )
             await self._calculate_final_weights(consensus_rewards=scores)
+            await self._try_upload_round_log_checkpoint(
+                reason="settlement_weights_finalized",
+                force=True,
+                min_interval_seconds=0.0,
+            )
             self.round_manager.enter_phase(
                 RoundPhase.COMPLETE,
                 block=self.block,
@@ -235,6 +265,11 @@ class ValidatorSettlementMixin:
         consecutive_errors = 0
         while True:
             if time.monotonic() > deadline:
+                await self._try_upload_round_log_checkpoint(
+                    reason=f"wait_timeout:{target_description}",
+                    force=True,
+                    min_interval_seconds=0.0,
+                )
                 raise TimeoutError(f"Timed out waiting for {target_description} at block {target_block}; last observed block={current_block}")
             try:
                 current_block = self.get_current_block(fresh=True)
@@ -255,11 +290,21 @@ class ValidatorSettlementMixin:
                         (f"Waiting — {target_description} — ~{minutes_remaining:.1f}m left — holding until block {target_block}"),
                         ColoredLogger.BLUE,
                     )
+                    await self._try_upload_round_log_checkpoint(
+                        reason=f"wait_progress:{target_description}",
+                        force=False,
+                        min_interval_seconds=None,
+                    )
                     last_log_time = now
             except Exception as exc:
                 consecutive_errors += 1
                 bt.logging.warning(f"Failed to read current block during finalize wait: {exc}")
                 if consecutive_errors >= 5:
+                    await self._try_upload_round_log_checkpoint(
+                        reason=f"wait_block_read_failure:{target_description}",
+                        force=True,
+                        min_interval_seconds=0.0,
+                    )
                     raise RuntimeError(f"Failed to read current block 5 times while waiting for {target_description}") from exc
 
             await asyncio.sleep(12)
@@ -484,6 +529,22 @@ class ValidatorSettlementMixin:
                 snapshot["weight"] = float(weight)
             return snapshot
 
+        def _previous_round_leader_after_snapshot() -> dict | None:
+            previous_round = int(round_key) - 1
+            if previous_round <= 0:
+                return None
+            previous_entry = rounds_state.get(previous_round) or rounds_state.get(str(previous_round))
+            if not isinstance(previous_entry, dict):
+                return None
+            previous_post = previous_entry.get("post_consensus_json")
+            if not isinstance(previous_post, dict):
+                return None
+            previous_summary = previous_post.get("summary")
+            if not isinstance(previous_summary, dict):
+                return None
+            leader_after = previous_summary.get("leader_after_round")
+            return dict(leader_after) if isinstance(leader_after, dict) else None
+
         if round_number_in_season > 0:
             round_key = int(round_number_in_season)
         else:
@@ -534,39 +595,62 @@ class ValidatorSettlementMixin:
                 best_reward = best_f
                 best_uid = uid_i
 
-        reigning_uid_raw = summary_state.get("current_winner_uid")
-        reigning_uid: int | None
-        try:
-            reigning_uid = int(reigning_uid_raw) if reigning_uid_raw is not None else None
-        except Exception:
-            reigning_uid = None
-
+        leader_before_snapshot = None
+        reigning_uid: int | None = None
         reigning_reward = 0.0
-        if reigning_uid is not None:
+
+        previous_leader_after = _previous_round_leader_after_snapshot()
+        if isinstance(previous_leader_after, dict):
             try:
-                reigning_reward = float(summary_state.get("current_winner_reward", summary_state.get("current_winner_score", 0.0)) or 0.0)
+                reigning_uid = int(previous_leader_after.get("uid")) if previous_leader_after.get("uid") is not None else None
             except Exception:
-                reigning_reward = 0.0
-            if reigning_reward <= 0.0:
+                reigning_uid = None
+            if reigning_uid is not None:
                 try:
-                    reigning_reward = float(best_by_miner.get(reigning_uid, 0.0) or 0.0)
+                    reigning_reward = float(previous_leader_after.get("reward", 0.0) or 0.0)
                 except Exception:
                     reigning_reward = 0.0
-            if reigning_reward <= 0.0:
+                if reigning_reward > 0.0:
+                    leader_before_snapshot = dict(previous_leader_after)
+                else:
+                    reigning_uid = None
+
+        if reigning_uid is None:
+            reigning_uid_raw = summary_state.get("current_winner_uid")
+            try:
+                reigning_uid = int(reigning_uid_raw) if reigning_uid_raw is not None else None
+            except Exception:
                 reigning_uid = None
+
+            if reigning_uid is not None:
+                try:
+                    reigning_reward = float(summary_state.get("current_winner_reward", summary_state.get("current_winner_score", 0.0)) or 0.0)
+                except Exception:
+                    reigning_reward = 0.0
+                if reigning_reward <= 0.0:
+                    try:
+                        reigning_reward = float(best_by_miner.get(reigning_uid, 0.0) or 0.0)
+                    except Exception:
+                        reigning_reward = 0.0
+                if reigning_reward <= 0.0:
+                    reigning_uid = None
+                else:
+                    current_winner_snapshot = summary_state.get("current_winner_snapshot")
+                    if isinstance(current_winner_snapshot, dict) and current_winner_snapshot.get("uid") == reigning_uid:
+                        leader_before_snapshot = dict(current_winner_snapshot)
+                    else:
+                        existing_snapshot = best_snapshot_by_miner.get(reigning_uid) or best_snapshot_by_miner.get(str(reigning_uid))
+                        leader_before_snapshot = _snapshot_for_uid(
+                            reigning_uid,
+                            reigning_reward,
+                            fallback=existing_snapshot if isinstance(existing_snapshot, dict) else None,
+                        )
+
         reigning_is_eligible = bool(reigning_uid is not None and reigning_uid in eligible_uids)
-        leader_before_snapshot = None
-        if reigning_uid is not None:
-            current_winner_snapshot = summary_state.get("current_winner_snapshot")
-            if isinstance(current_winner_snapshot, dict) and current_winner_snapshot.get("uid") == reigning_uid:
-                leader_before_snapshot = dict(current_winner_snapshot)
-            else:
-                existing_snapshot = best_snapshot_by_miner.get(reigning_uid) or best_snapshot_by_miner.get(str(reigning_uid))
-                leader_before_snapshot = _snapshot_for_uid(reigning_uid, reigning_reward, fallback=existing_snapshot if isinstance(existing_snapshot, dict) else None)
 
         challenger_uid: int | None = None
         challenger_reward = 0.0
-        if eligible_uids:
+        if eligible_uids and reigning_uid is not None:
             ranked_uids = sorted(
                 (int(uid) for uid in eligible_uids),
                 key=lambda uid: (
@@ -575,16 +659,12 @@ class ValidatorSettlementMixin:
                 ),
                 reverse=True,
             )
-            if reigning_uid is not None:
-                for uid_i in ranked_uids:
-                    if int(uid_i) == int(reigning_uid):
-                        continue
-                    challenger_uid = int(uid_i)
-                    challenger_reward = float(best_by_miner.get(uid_i, 0.0) or 0.0)
-                    break
-            elif ranked_uids:
-                challenger_uid = int(ranked_uids[0])
-                challenger_reward = float(best_by_miner.get(challenger_uid, 0.0) or 0.0)
+            for uid_i in ranked_uids:
+                if int(uid_i) == int(reigning_uid):
+                    continue
+                challenger_uid = int(uid_i)
+                challenger_reward = float(best_by_miner.get(uid_i, 0.0) or 0.0)
+                break
 
         winner_uid: int | None = None
         winner_reward = 0.0

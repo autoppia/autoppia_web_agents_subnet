@@ -185,18 +185,21 @@ async def evaluate_with_stateful_cua(
                 )
                 break
             except Exception as exc:
-                bt.logging.warning(f"[stateful_cua_eval] miner {uid} /act failed: {exc}")
-                actions = []
+                bt.logging.warning(f"[stateful_cua_eval] miner {uid} /act failed (step {step_index}), stopping early: {exc}")
+                break
+
+            # If the miner returned no actions there is nothing left to execute —
+            # continuing would just waste the remaining task budget on NOOP steps.
+            if not actions:
+                bt.logging.warning(f"[stateful_cua_eval] miner {uid} returned no actions at step {step_index}, stopping early")
+                break
 
             # Single-step semantics: execute at most one action per loop.
             action_executed = None
             try:
-                if actions:
-                    action = actions[0]
-                    action_executed = action
-                    step_result = await _await_with_task_deadline(evaluator.step(action), start_ts=start_ts)
-                else:
-                    step_result = await _await_with_task_deadline(evaluator.step(None), start_ts=start_ts)
+                action = actions[0]
+                action_executed = action
+                step_result = await _await_with_task_deadline(evaluator.step(action), start_ts=start_ts)
             except TimeoutError:
                 bt.logging.warning(
                     f"[stateful_cua_eval] miner {uid} hard timeout reached during evaluator step for task {getattr(task, 'id', '?')}: {time.monotonic() - start_ts:.2f}s >= {TASK_TIMEOUT_SECONDS:.2f}s"

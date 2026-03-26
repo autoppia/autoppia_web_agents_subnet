@@ -5,11 +5,14 @@ import asyncio
 import threading
 import time
 import traceback
+from inspect import Parameter, Signature
 
 import bittensor as bt
 
 from autoppia_web_agents_subnet.base.neuron import BaseNeuron
 from autoppia_web_agents_subnet.protocol import StartRoundSynapse
+
+BLACKLIST_RETURN_ANNOTATION = __import__("typing").Tuple[bool, str]
 
 
 class BaseMinerNeuron(BaseNeuron):
@@ -39,9 +42,26 @@ class BaseMinerNeuron(BaseNeuron):
 
         # Attach RPCs
         bt.logging.info("Attaching forward function to miner axon.")
+
+        async def _blacklist_wrapper(
+            synapse: StartRoundSynapse,
+        ) -> tuple[bool, str]:
+            return await self.blacklist(synapse)
+
+        _blacklist_wrapper.__signature__ = Signature(  # type: ignore[attr-defined]
+            [
+                Parameter(
+                    name="synapse",
+                    kind=Parameter.POSITIONAL_OR_KEYWORD,
+                    annotation=StartRoundSynapse,
+                )
+            ],
+            return_annotation=BLACKLIST_RETURN_ANNOTATION,
+        )
+
         self.axon.attach(
             forward_fn=self.forward,
-            blacklist_fn=self.blacklist,
+            blacklist_fn=_blacklist_wrapper,
             priority_fn=self.priority,
         )
         bt.logging.info(f"Axon created: {self.axon}")

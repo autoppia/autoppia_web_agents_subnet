@@ -57,6 +57,32 @@ class TestRoundLogCapture:
             os.chdir(orig_cwd)
             ColoredLogger.clear_round_log_file()
 
+    def test_set_round_log_file_overwrites_stale_round_log_content(self, tmp_path):
+        """
+        Reusing the same season/round identifiers after a reset must not append old log lines.
+        """
+        from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+
+        orig_cwd = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+            ColoredLogger.clear_round_log_file()
+            round_id = "validator_round_1_1_reused"
+            ColoredLogger.set_round_log_file(round_id)
+            path = ColoredLogger.get_round_log_file()
+            assert path is not None
+            Path(path).write_text("stale_previous_round_line\n", encoding="utf-8")
+            ColoredLogger.clear_round_log_file()
+
+            ColoredLogger.set_round_log_file(round_id)
+            logging.getLogger().info("fresh_round_line")
+            content = Path(path).read_text(encoding="utf-8")
+            assert "fresh_round_line" in content
+            assert "stale_previous_round_line" not in content
+        finally:
+            os.chdir(orig_cwd)
+            ColoredLogger.clear_round_log_file()
+
     def test_loguru_writes_to_round_log_file_if_available(self, tmp_path):
         """If loguru is available, it also writes to the same file (no collision)."""
         from autoppia_web_agents_subnet.utils.logging import ColoredLogger
@@ -95,6 +121,24 @@ class TestRoundLogCapture:
         finally:
             os.chdir(orig_cwd)
             ColoredLogger.clear_round_log_file()
+
+    def test_build_round_log_upload_variants_include_truncated_tail_payloads(self):
+        """
+        Very large round logs should have smaller fallback payloads for 413 retries.
+        """
+        from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+
+        content = ("old\n" * 10) + ("x" * 2_500_000) + "\nlatest important line\n"
+        variants = ColoredLogger.build_round_log_upload_variants(content)
+
+        assert variants[0][0] == "full"
+        assert variants[0][1] == content
+        assert len(variants) > 1
+
+        truncated_label, truncated_payload = variants[1]
+        assert truncated_label.startswith("tail_")
+        assert "[AUTOPPIA ROUND LOG TRUNCATED FOR S3 UPLOAD]" in truncated_payload
+        assert "latest important line" in truncated_payload
 
     def test_subnet_logging_does_not_import_iwa(self):
         """Subnet utils.logging must not import autoppia_iwa (no hard dependency)."""

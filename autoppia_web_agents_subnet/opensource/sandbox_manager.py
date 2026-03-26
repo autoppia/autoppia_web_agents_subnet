@@ -173,6 +173,33 @@ def _env_int(name: str, default: int) -> int:
         return int(default)
 
 
+def _prune_old_build_cache() -> None:
+    """
+    Best-effort cleanup for old BuildKit cache.
+
+    `docker image prune` does not touch builder cache, and validators that
+    rebuild sandbox/web images accumulate a large amount of it over time.
+    """
+    if not _env_bool("SANDBOX_PRUNE_BUILD_CACHE", True):
+        return
+
+    until = (os.getenv("SANDBOX_PRUNE_BUILD_CACHE_UNTIL") or "168h").strip()
+    keep_storage = (os.getenv("SANDBOX_PRUNE_BUILD_CACHE_KEEP_STORAGE") or "20gb").strip()
+    cmd = ["docker", "builder", "prune", "-f"]
+    if until:
+        cmd.extend(["--filter", f"until={until}"])
+    if keep_storage:
+        cmd.extend(["--keep-storage", keep_storage])
+
+    with contextlib.suppress(Exception):
+        subprocess.run(
+            cmd,
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+
 def _docker_log_config(*, kind: str) -> LogConfig | None:
     """
     Best-effort protection against log spam filling validator disk.
@@ -301,12 +328,29 @@ class SandboxManager:
             return f"{prefix}-{self.instance}-{uid}-{ts_ms}"
         return f"{prefix}-{uid}-{ts_ms}"
 
+    def _remove_old_images(self, current_image: str, base_name: str) -> None:
+        """Remove old versions of this image (same base name, different fingerprint tag).
+        Only removes images not in use (force=False); in-use images are skipped silently.
+        """
+        client = get_client()
+        try:
+            for img in client.images.list():
+                for tag in img.tags or []:
+                    if tag.startswith(base_name + ":") and tag != current_image:
+                        with contextlib.suppress(Exception):
+                            client.images.remove(tag, force=False)
+                            bt.logging.info(f"[sandbox] Removed old image: {tag}")
+        except Exception as exc:
+            bt.logging.warning(f"[sandbox] Could not clean up old images for {base_name}: {exc}")
+
     def deploy_gateway(self):
         self._validate_gateway_provider_keys()
 
         if not check_image(self.gateway_image):
             bt.logging.info("Sandbox gateway image not found; building...")
             build_image(self.gateway_ctx, self.gateway_image)
+            self._remove_old_images(self.gateway_image, SANDBOX_GATEWAY_IMAGE)
+            _prune_old_build_cache()
 
         cleanup_containers([SANDBOX_GATEWAY_HOST])
         _ensure_writable_file(os.path.join(self.host_log_dir, "gateway.log"))
@@ -626,6 +670,8 @@ class SandboxManager:
             if not check_image(self.sandbox_image):
                 bt.logging.info("Sandbox agent image not found; building...")
                 build_image(self.sandbox_ctx, self.sandbox_image)
+                self._remove_old_images(self.sandbox_image, SANDBOX_AGENT_IMAGE)
+                _prune_old_build_cache()
 
             repo_dir = self._clone_repo(github_url)
             bt.logging.info(f"Cloned repo for agent {uid} to {repo_dir}.")

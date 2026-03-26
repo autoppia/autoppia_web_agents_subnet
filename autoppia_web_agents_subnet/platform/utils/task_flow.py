@@ -951,16 +951,20 @@ async def submit_task_results(
         accumulators["cost"] += float(task_total_cost)
         accumulators["tasks"] += 1
 
-        agent_run.total_tasks = accumulators["tasks"]
-        agent_run.completed_tasks = accumulators["tasks"]
+        attempted_tasks = int(accumulators["tasks"] or 0)
+        expected_total_tasks = int(getattr(agent_run, "total_tasks", 0) or attempted_tasks)
+        total_tasks_for_run = max(expected_total_tasks, attempted_tasks)
+
+        agent_run.total_tasks = total_tasks_for_run
+        agent_run.completed_tasks = attempted_tasks
         agent_run.total_reward = accumulators["reward"]
-        agent_run.average_reward = accumulators["reward"] / accumulators["tasks"] if accumulators["tasks"] else None
-        agent_run.average_score = accumulators["eval_score"] / accumulators["tasks"] if accumulators["tasks"] else None
-        agent_run.average_execution_time = accumulators["execution_time"] / accumulators["tasks"] if accumulators["tasks"] else None
+        agent_run.average_reward = accumulators["reward"] / total_tasks_for_run if total_tasks_for_run else None
+        agent_run.average_score = accumulators["eval_score"] / total_tasks_for_run if total_tasks_for_run else None
+        agent_run.average_execution_time = accumulators["execution_time"] / attempted_tasks if attempted_tasks else None
         try:
             meta = dict(getattr(agent_run, "metadata", {}) or {})
             meta["total_cost"] = float(accumulators["cost"])
-            meta["average_cost"] = float(accumulators["cost"] / accumulators["tasks"]) if accumulators["tasks"] else 0.0
+            meta["average_cost"] = float(accumulators["cost"] / attempted_tasks) if attempted_tasks else 0.0
             agent_run.metadata = meta
         except Exception:
             pass

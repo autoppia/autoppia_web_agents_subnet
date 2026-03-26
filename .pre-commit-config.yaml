@@ -14,3 +14,12 @@ repos:
         args: [ "--fix", "--line-length", "200" ]
       - id: ruff-format
         args: [ "--line-length", "200" ]
+
+  - repo: local
+    hooks:
+      - id: validator-regression-suite
+        name: validator regression suite
+        entry: validator_env/bin/pytest -q tests/validator/scenarios tests/validator/unit/test_iwap_integration.py tests/validator/unit/test_platform_mixin_helpers.py tests/validator/unit/test_round_log_capture.py tests/validator/unit/test_sandbox_manager.py tests/validator/unit/test_settlement_mixin.py tests/validator/unit/test_validator_forward.py
+        language: system
+        pass_filenames: false
+        stages: [pre-push]

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
+from httpx import HTTPStatusError, Request, Response
 
 from autoppia_web_agents_subnet.platform.mixin import ValidatorPlatformMixin
 
@@ -17,6 +20,7 @@ def _bind_platform_helpers(validator):
     validator._find_reusable_commit_stats = ValidatorPlatformMixin._find_reusable_commit_stats.__get__(validator, type(validator))
     validator._current_round_run_payload = ValidatorPlatformMixin._current_round_run_payload.__get__(validator, type(validator))
     validator._best_run_payload_for_miner = ValidatorPlatformMixin._best_run_payload_for_miner.__get__(validator, type(validator))
+    validator._upload_round_log_snapshot = ValidatorPlatformMixin._upload_round_log_snapshot.__get__(validator, type(validator))
     return validator
 
 
@@ -184,3 +188,62 @@ def test_current_round_run_payload_and_best_run_selection():
     # _best_run_payload_for_miner strips transient failure fields when sourcing current run.
     assert "failed_tasks" not in best_payload
     assert "zero_reason" not in best_payload
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_upload_round_log_snapshot_retries_with_truncated_tail_after_413(tmp_path):
+    """
+    Scenario:
+    The full round log is too large for the gateway and IWAP returns 413.
+
+    What this test proves:
+    the validator retries with a truncated tail payload so it still gets an S3 URL
+    instead of losing the round log entirely.
+    """
+    from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+
+    validator = _bind_platform_helpers(Mock())
+    validator.current_round_id = "validator_round_1_1_biglog"
+    validator._iwap_offline_mode = False
+    validator._round_log_last_upload_round_id = None
+    validator._round_log_last_upload_ts = 0.0
+    validator._round_log_last_uploaded_size = -1
+    validator._round_log_last_uploaded_url = None
+    validator._log_iwap_phase = Mock()
+    validator.uid = 83
+    validator.wallet = SimpleNamespace(hotkey=SimpleNamespace(ss58_address="5FValidator"))
+    validator.season_manager = SimpleNamespace(season_number=1)
+    validator.round_manager = SimpleNamespace(round_number=1)
+
+    request = Request("POST", "https://api.example/round-log")
+    response = Response(413, request=request)
+    attempts: list[str] = []
+
+    async def _upload(*, content: str, **_kwargs):
+        attempts.append(content)
+        if len(attempts) == 1:
+            raise HTTPStatusError("payload too large", request=request, response=response)
+        return "https://logs.example/truncated.log"
+
+    validator.iwap_client = SimpleNamespace(upload_round_log=AsyncMock(side_effect=_upload))
+
+    orig_cwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+        ColoredLogger.clear_round_log_file()
+        ColoredLogger.set_round_log_file("validator_round_1_1_biglog")
+        path = ColoredLogger.get_round_log_file()
+        assert path is not None
+        Path(path).write_text(("x" * 2_500_000) + "\nfinal line\n", encoding="utf-8")
+
+        url = await validator._upload_round_log_snapshot(reason="test", force=True, min_interval_seconds=0.0)
+    finally:
+        os.chdir(orig_cwd)
+        ColoredLogger.clear_round_log_file()
+
+    assert url == "https://logs.example/truncated.log"
+    assert len(attempts) == 2
+    assert len(attempts[1].encode("utf-8")) < len(attempts[0].encode("utf-8"))
+    assert "[AUTOPPIA ROUND LOG TRUNCATED FOR S3 UPLOAD]" in attempts[1]
+    assert "final line" in attempts[1]

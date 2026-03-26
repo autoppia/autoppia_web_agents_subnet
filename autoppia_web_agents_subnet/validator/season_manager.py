@@ -14,6 +14,7 @@ from autoppia_iwa.src.demo_webs.config import demo_web_projects
 from autoppia_web_agents_subnet import SUBNET_IWA_VERSION
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.validator.config import (
+    BLOCKS_PER_EPOCH as CONFIG_BLOCKS_PER_EPOCH,
     MINIMUM_START_BLOCK,
     SEASON_SIZE_EPOCHS,
     TASKS_PER_SEASON,
@@ -32,7 +33,7 @@ class SeasonManager:
     3. If round != 1: Load tasks from JSON (in case of restart)
     """
 
-    BLOCKS_PER_EPOCH = 360
+    BLOCKS_PER_EPOCH = CONFIG_BLOCKS_PER_EPOCH
     TASKS_DIR = Path("data")
 
     def __init__(self):

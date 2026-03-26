@@ -81,6 +81,69 @@ class TestSettlementPhase:
                 # Should have called aggregate_scores_from_commitments
                 mock_aggregate.assert_called_once()
 
+    async def test_settlement_disables_next_round_reuse_when_own_all_zero_payload_is_excluded(self, dummy_validator):
+        from autoppia_web_agents_subnet.platform.mixin import ValidatorPlatformMixin
+        from tests.conftest import _bind_settlement_mixin
+
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        dummy_validator._extract_round_numbers_from_round_id = ValidatorPlatformMixin._extract_round_numbers_from_round_id
+        dummy_validator._current_round_numbers = ValidatorPlatformMixin._current_round_numbers.__get__(dummy_validator, type(dummy_validator))
+        dummy_validator._current_round_run_payload = ValidatorPlatformMixin._current_round_run_payload.__get__(dummy_validator, type(dummy_validator))
+        dummy_validator._current_round_all_runs_zero = ValidatorPlatformMixin._current_round_all_runs_zero.__get__(dummy_validator, type(dummy_validator))
+        dummy_validator._purge_evaluated_commits_for_round = ValidatorPlatformMixin._purge_evaluated_commits_for_round.__get__(dummy_validator, type(dummy_validator))
+        dummy_validator._mark_all_zero_round_for_re_evaluation = ValidatorPlatformMixin._mark_all_zero_round_for_re_evaluation.__get__(dummy_validator, type(dummy_validator))
+        dummy_validator._apply_post_consensus_reuse_policy = ValidatorPlatformMixin._apply_post_consensus_reuse_policy.__get__(dummy_validator, type(dummy_validator))
+        dummy_validator.current_round_id = "validator_round_1_1_reuse_guard"
+        dummy_validator.season_manager = Mock(season_number=1)
+        dummy_validator.current_agent_runs = {
+            48: Mock(
+                total_tasks=25,
+                completed_tasks=0,
+                failed_tasks=25,
+                average_reward=0.0,
+                average_score=0.0,
+                average_execution_time=180.0,
+                zero_reason="task_failed",
+                metadata={"average_cost": 0.0},
+            )
+        }
+        dummy_validator.agent_run_accumulators = {
+            48: {"tasks": 25, "reward": 0.0, "eval_score": 0.0, "execution_time": 4500.0, "cost": 0.0},
+        }
+        dummy_validator.miners_reused_this_round = set()
+        dummy_validator._evaluated_commits_by_miner = {
+            48: {
+                "https://github.com/example/miner48|deadbeef": {
+                    "agent_run_id": "agent-run-48-old",
+                    "total_tasks": 25,
+                    "evaluated_season": 1,
+                    "evaluated_round": 1,
+                }
+            }
+        }
+        assert dummy_validator._mark_all_zero_round_for_re_evaluation() is True
+
+        dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
+        dummy_validator._wait_until_specific_block = AsyncMock()
+        dummy_validator._calculate_final_weights = AsyncMock()
+
+        with patch("autoppia_web_agents_subnet.validator.settlement.mixin.publish_round_snapshot"):
+            with patch("autoppia_web_agents_subnet.validator.settlement.mixin.aggregate_scores_from_commitments") as mock_aggregate:
+                mock_aggregate.return_value = (
+                    {},
+                    {"skips": {"all_zero_when_others_positive": [("test_hotkey_address", "cid-ours")]}},
+                )
+
+                await dummy_validator._run_settlement_phase(agents_evaluated=1)
+
+        assert dummy_validator._disable_reuse_until == {
+            "season": 1,
+            "round": 2,
+            "reason": "all_zero_excluded_by_consensus",
+            "miner_uids": [48],
+        }
+        assert dummy_validator._last_all_zero_round_policy["reuse_preserved"] is False
+
     async def test_settlement_calls_calculate_final_weights(self, dummy_validator):
         from tests.conftest import _bind_settlement_mixin
 
@@ -102,6 +165,28 @@ class TestSettlementPhase:
                 dummy_validator._calculate_final_weights.assert_called_once()
                 call_args = dummy_validator._calculate_final_weights.call_args
                 assert call_args[1]["consensus_rewards"] == mock_scores
+
+    async def test_settlement_uploads_round_log_checkpoints_across_snapshot_consensus_and_weights(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin
+
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+
+        dummy_validator._get_async_subtensor = AsyncMock(return_value=Mock())
+        dummy_validator._wait_until_specific_block = AsyncMock()
+        dummy_validator._calculate_final_weights = AsyncMock()
+        dummy_validator._try_upload_round_log_checkpoint = AsyncMock()
+
+        with patch("autoppia_web_agents_subnet.validator.settlement.mixin.publish_round_snapshot"):
+            with patch("autoppia_web_agents_subnet.validator.settlement.mixin.aggregate_scores_from_commitments") as mock_aggregate:
+                mock_aggregate.return_value = ({48: 0.42}, {"source": "test"})
+
+                await dummy_validator._run_settlement_phase(agents_evaluated=1)
+
+        reasons = [call.kwargs["reason"] for call in dummy_validator._try_upload_round_log_checkpoint.await_args_list]
+        assert "settlement_snapshot_published" in reasons
+        assert "settlement_fetch_block_reached" in reasons
+        assert "settlement_consensus_aggregated" in reasons
+        assert "settlement_weights_finalized" in reasons
 
     async def test_settlement_enters_complete_phase(self, dummy_validator):
         from tests.conftest import _bind_settlement_mixin
@@ -458,6 +543,50 @@ class TestWaitLogic:
 
                 # Should have entered WAITING phase
                 assert RoundPhase.WAITING in [t.phase for t in dummy_validator.round_manager.phase_history]
+
+    async def test_wait_uploads_round_log_checkpoints_during_progress_logs(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin_with_wait
+
+        dummy_validator = _bind_settlement_mixin_with_wait(dummy_validator)
+        dummy_validator.block = 1000
+        dummy_validator.subtensor.get_current_block = Mock(side_effect=[1000, 1010, 1030])
+        dummy_validator._try_upload_round_log_checkpoint = AsyncMock()
+
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            with patch("time.time", side_effect=[0, 13, 26]):
+                await dummy_validator._wait_until_specific_block(target_block=1030, target_description="test block")
+
+        reasons = [call.kwargs["reason"] for call in dummy_validator._try_upload_round_log_checkpoint.await_args_list]
+        assert reasons == ["wait_progress:test block", "wait_progress:test block"]
+
+    async def test_wait_uploads_round_log_checkpoint_before_timeout(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin_with_wait
+
+        dummy_validator = _bind_settlement_mixin_with_wait(dummy_validator)
+        dummy_validator.block = 1000
+        dummy_validator._try_upload_round_log_checkpoint = AsyncMock()
+
+        with patch("time.monotonic", side_effect=[0.0, 721.0]):
+            with pytest.raises(TimeoutError):
+                await dummy_validator._wait_until_specific_block(target_block=1020, target_description="test block")
+
+        dummy_validator._try_upload_round_log_checkpoint.assert_awaited_once()
+        assert dummy_validator._try_upload_round_log_checkpoint.await_args.kwargs["reason"] == "wait_timeout:test block"
+
+    async def test_wait_uploads_round_log_checkpoint_before_block_read_failure_raises(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin_with_wait
+
+        dummy_validator = _bind_settlement_mixin_with_wait(dummy_validator)
+        dummy_validator.block = 1000
+        dummy_validator.subtensor.get_current_block = Mock(side_effect=[RuntimeError("rpc down")] * 5)
+        dummy_validator._try_upload_round_log_checkpoint = AsyncMock()
+
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            with pytest.raises(RuntimeError, match="Failed to read current block 5 times"):
+                await dummy_validator._wait_until_specific_block(target_block=1020, target_description="test block")
+
+        dummy_validator._try_upload_round_log_checkpoint.assert_awaited_once()
+        assert dummy_validator._try_upload_round_log_checkpoint.await_args.kwargs["reason"] == "wait_block_read_failure:test block"
 
 
 @pytest.mark.unit

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -9,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import bittensor as bt
+import httpx
 
 from autoppia_web_agents_subnet.platform import client as iwa_main, models as iwa_models
 from autoppia_web_agents_subnet.platform.utils.iwa_core import (
@@ -69,6 +71,9 @@ class ValidatorPlatformMixin:
         self.agent_run_accumulators: dict[int, dict[str, float]] = {}
         # (repo, commit) already evaluated per miner -> persisted best-run candidate data.
         self._evaluated_commits_by_miner: dict[int, dict[str, dict[str, Any]]] = {}  # uid -> "repo|commit" -> {agent_run_id, ...stats}
+        self._disable_reuse_until: dict[str, Any] | None = None
+        self._pending_all_zero_round_policy: dict[str, Any] | None = None
+        self._last_all_zero_round_policy: dict[str, Any] | None = None
         # Track completed (miner_uid, task_id) to avoid duplicates
         self._completed_pairs: set[tuple[int, str]] = set()
         # Round-log periodic upload state (best effort, no hard dependency).
@@ -131,6 +136,18 @@ class ValidatorPlatformMixin:
         normalized_repo: str | None,
         commit_sha: str | None,
     ) -> dict[str, Any] | None:
+        reuse_guard = getattr(self, "_disable_reuse_until", None)
+        if isinstance(reuse_guard, dict):
+            season_number, round_number = self._current_round_numbers()
+            try:
+                guard_season = int(reuse_guard.get("season"))
+                guard_round = int(reuse_guard.get("round"))
+            except Exception:
+                guard_season = None
+                guard_round = None
+            if guard_season is not None and guard_round is not None and int(season_number) == guard_season and int(round_number) <= guard_round:
+                return None
+
         stored_map = (getattr(self, "_evaluated_commits_by_miner", None) or {}).get(uid) or {}
         if not isinstance(stored_map, dict):
             return None
@@ -149,6 +166,7 @@ class ValidatorPlatformMixin:
             if isinstance(entry, dict):
                 candidates.append(entry)
 
+        valid_candidates: list[dict[str, Any]] = []
         for entry in candidates:
             if not entry.get("agent_run_id"):
                 continue
@@ -160,12 +178,411 @@ class ValidatorPlatformMixin:
                 total_tasks = 0
             if total_tasks <= 0:
                 continue
-            return entry
-        return None
+            valid_candidates.append(entry)
+
+        if not valid_candidates:
+            return None
+
+        def _candidate_key(entry: dict[str, Any]) -> tuple[float, float, float, int]:
+            try:
+                reward = float(entry.get("average_reward", entry.get("reward", 0.0)) or 0.0)
+            except Exception:
+                reward = 0.0
+            try:
+                score = float(entry.get("average_score", entry.get("score", 0.0)) or 0.0)
+            except Exception:
+                score = 0.0
+            try:
+                exec_time = float(entry.get("average_execution_time", entry.get("time", 0.0)) or 0.0)
+            except Exception:
+                exec_time = 0.0
+            try:
+                total_tasks = int(entry.get("total_tasks", 0) or 0)
+            except Exception:
+                total_tasks = 0
+            return (reward, score, -exec_time, total_tasks)
+
+        return max(valid_candidates, key=_candidate_key)
+
+    def _purge_evaluated_commits_for_round(
+        self,
+        *,
+        season_number: int,
+        round_number: int,
+        miner_uids: set[int] | None = None,
+    ) -> int:
+        commits_by_miner = getattr(self, "_evaluated_commits_by_miner", None)
+        if not isinstance(commits_by_miner, dict):
+            return 0
+
+        target_uids = {int(uid) for uid in (miner_uids or set())}
+        removed = 0
+        for uid, entries in list(commits_by_miner.items()):
+            try:
+                uid_i = int(uid)
+            except Exception:
+                uid_i = uid
+            if target_uids and uid_i not in target_uids:
+                continue
+            if not isinstance(entries, dict):
+                continue
+            kept_entries: dict[str, dict[str, Any]] = {}
+            for key, stats in entries.items():
+                if not isinstance(stats, dict):
+                    kept_entries[key] = stats
+                    continue
+                try:
+                    stats_season = int(stats.get("evaluated_season", -1) or -1)
+                    stats_round = int(stats.get("evaluated_round", -1) or -1)
+                except Exception:
+                    stats_season = -1
+                    stats_round = -1
+                if stats_season == int(season_number) and stats_round == int(round_number):
+                    removed += 1
+                    continue
+                kept_entries[key] = stats
+            if kept_entries:
+                commits_by_miner[uid] = kept_entries
+            else:
+                commits_by_miner.pop(uid, None)
+        return removed
+
+    def _current_round_all_runs_zero(self) -> bool:
+        active_uids = {int(uid) for uid in (set(getattr(self, "active_miner_uids", None) or set()) | set((getattr(self, "current_agent_runs", None) or {}).keys()))}
+        if not active_uids:
+            return False
+
+        miners_reused = {int(uid) for uid in (getattr(self, "miners_reused_this_round", None) or set())}
+        inspected_uids: set[int] = set()
+        for uid_i in sorted(active_uids):
+            if uid_i in miners_reused:
+                continue
+            payload = self._current_round_run_payload(uid_i)
+            if not isinstance(payload, dict):
+                inspected_uids.add(uid_i)
+                continue
+            zero_reason = str(payload.get("zero_reason", "") or "")
+            if zero_reason == "round_window_exceeded":
+                continue
+            inspected_uids.add(uid_i)
+            try:
+                reward = float(payload.get("reward", 0.0) or 0.0)
+            except Exception:
+                reward = 0.0
+            if reward > 0.0:
+                return False
+
+        return bool(inspected_uids)
+
+    def _effective_signal_all_runs_zero(self) -> bool:
+        """
+        Returns True only when the validator has no positive effective signal for any active miner.
+
+        Effective signal is what consensus should care about:
+        - current round run if it improved the miner
+        - otherwise the best historical run carried in the snapshot
+
+        This intentionally differs from `_current_round_all_runs_zero()`, which is still used for
+        local re-evaluation policy when the freshly evaluated round itself looks suspicious.
+        """
+        active_uids = {int(uid) for uid in (set(getattr(self, "active_miner_uids", None) or set()) | set((getattr(self, "current_agent_runs", None) or {}).keys()))}
+        if not active_uids:
+            return False
+
+        for uid_i in sorted(active_uids):
+            best_payload = self._best_run_payload_for_miner(uid_i)
+            if not isinstance(best_payload, dict):
+                continue
+            try:
+                reward = float(best_payload.get("reward", 0.0) or 0.0)
+            except Exception:
+                reward = 0.0
+            if reward > 0.0:
+                return False
+
+        return True
+
+    def _mark_all_zero_round_for_re_evaluation(self) -> bool:
+        season_number, round_number = self._current_round_numbers()
+        if season_number is None or round_number is None:
+            return False
+
+        is_all_zero = self._current_round_all_runs_zero()
+        if not is_all_zero:
+            return False
+
+        current_runs = getattr(self, "current_agent_runs", None) or {}
+        miners_reused = {int(uid) for uid in (getattr(self, "miners_reused_this_round", None) or set())}
+        inspected_uids: set[int] = set()
+        for uid in list(current_runs.keys()):
+            try:
+                uid_i = int(uid)
+            except Exception:
+                continue
+            if uid_i in miners_reused:
+                continue
+            payload = self._current_round_run_payload(uid_i)
+            if not isinstance(payload, dict):
+                continue
+            if str(payload.get("zero_reason", "") or "") == "round_window_exceeded":
+                continue
+            inspected_uids.add(uid_i)
+
+        if not inspected_uids:
+            return False
+
+        self._pending_all_zero_round_policy = {
+            "season": int(season_number),
+            "round": int(round_number),
+            "miner_uids": sorted(inspected_uids),
+        }
+        self._last_all_zero_round_policy = {
+            "season": int(season_number),
+            "round": int(round_number),
+            "miner_uids": sorted(inspected_uids),
+            "purged_entries": 0,
+            "reuse_preserved": None,
+            "status": "pending_consensus",
+        }
+        return True
+
+    def _apply_post_consensus_reuse_policy(self, details: dict[str, Any] | None) -> bool:
+        pending = getattr(self, "_pending_all_zero_round_policy", None)
+        if not isinstance(pending, dict):
+            return False
+
+        try:
+            season_number = int(pending.get("season"))
+            round_number = int(pending.get("round"))
+        except Exception:
+            self._pending_all_zero_round_policy = None
+            return False
+
+        miner_uids_raw = pending.get("miner_uids") or []
+        miner_uids: set[int] = set()
+        for uid_raw in miner_uids_raw:
+            try:
+                miner_uids.add(int(uid_raw))
+            except Exception:
+                continue
+
+        skips = {}
+        if isinstance(details, dict):
+            raw_skips = details.get("skips")
+            if isinstance(raw_skips, dict):
+                skips = raw_skips
+
+        excluded_all_zero = skips.get("all_zero_when_others_positive") or []
+        validator_hotkey = str(getattr(getattr(getattr(self, "wallet", None), "hotkey", None), "ss58_address", "") or "")
+        excluded_by_consensus = False
+        if validator_hotkey and isinstance(excluded_all_zero, list):
+            for entry in excluded_all_zero:
+                if not isinstance(entry, tuple | list) or not entry:
+                    continue
+                hotkey = str(entry[0] or "")
+                if hotkey == validator_hotkey:
+                    excluded_by_consensus = True
+                    break
+
+        purged_entries = 0
+        if excluded_by_consensus:
+            purged_entries = self._purge_evaluated_commits_for_round(
+                season_number=season_number,
+                round_number=round_number,
+                miner_uids=miner_uids,
+            )
+            self._disable_reuse_until = {
+                "season": int(season_number),
+                "round": int(round_number) + 1,
+                "reason": "all_zero_excluded_by_consensus",
+                "miner_uids": sorted(miner_uids),
+            }
+
+        self._last_all_zero_round_policy = {
+            "season": int(season_number),
+            "round": int(round_number),
+            "miner_uids": sorted(miner_uids),
+            "purged_entries": int(purged_entries),
+            "reuse_preserved": not excluded_by_consensus,
+            "status": "excluded_by_consensus" if excluded_by_consensus else "preserved_after_consensus",
+        }
+        self._pending_all_zero_round_policy = None
+        return excluded_by_consensus
 
     def _log_iwap_phase(self, phase: str, message: str, *, level: str = "info", exc_info: bool = False) -> None:
         # Delegate to logging utility (keeps test compatibility with monkeypatching this method)
         log_iwap_phase(phase, message, level=level, exc_info=exc_info)
+
+    def _round_checkpoint_path(self, round_id: str | None = None) -> Path | None:
+        target_round_id = str(round_id or getattr(self, "current_round_id", "") or "").strip()
+        if not target_round_id:
+            return None
+
+        season_number, round_number = self._extract_round_numbers_from_round_id(target_round_id)
+        root_getter = getattr(self, "_state_summary_root", None)
+        try:
+            base = root_getter() if callable(root_getter) else Path(os.getenv("IWAP_BACKUP_DIR", "data"))
+        except Exception:
+            base = Path(os.getenv("IWAP_BACKUP_DIR", "data"))
+
+        base = Path(base)
+        if season_number is not None and round_number is not None:
+            base = base / f"season_{int(season_number)}" / f"round_{int(round_number)}"
+        base.mkdir(parents=True, exist_ok=True)
+        return base / "round_checkpoint.json"
+
+    def _persist_round_checkpoint(
+        self,
+        *,
+        reason: str,
+        status: str = "in_progress",
+        round_id: str | None = None,
+        extra: dict[str, Any] | None = None,
+    ) -> Path | None:
+        checkpoint_path = self._round_checkpoint_path(round_id)
+        if checkpoint_path is None:
+            return None
+
+        target_round_id = str(round_id or getattr(self, "current_round_id", "") or "").strip()
+        season_number, round_number = self._extract_round_numbers_from_round_id(target_round_id)
+        round_log_file = None
+        round_log_exists = False
+        round_log_size = 0
+        try:
+            from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+
+            round_log_file = ColoredLogger.get_round_log_file()
+        except Exception:
+            round_log_file = None
+
+        if round_log_file:
+            try:
+                round_log_path = Path(round_log_file)
+                round_log_exists = round_log_path.exists()
+                if round_log_exists:
+                    round_log_size = int(round_log_path.stat().st_size)
+            except Exception:
+                round_log_exists = False
+                round_log_size = 0
+
+        phase_history_payload: list[dict[str, Any]] = []
+        round_manager = getattr(self, "round_manager", None)
+        for item in list(getattr(round_manager, "phase_history", []) or [])[-20:]:
+            phase = getattr(item, "phase", None)
+            phase_history_payload.append(
+                {
+                    "phase": getattr(phase, "name", str(phase)) if phase is not None else None,
+                    "block": getattr(item, "block", None),
+                    "note": getattr(item, "note", None),
+                    "entered_at": getattr(item, "entered_at", None),
+                }
+            )
+
+        current_agent_run_ids: dict[str, str] = {}
+        for uid, run in (getattr(self, "current_agent_runs", None) or {}).items():
+            agent_run_id = getattr(run, "agent_run_id", None)
+            if not agent_run_id:
+                continue
+            current_agent_run_ids[str(uid)] = str(agent_run_id)
+
+        payload = {
+            "version": 1,
+            "validator_round_id": target_round_id,
+            "season_number": season_number,
+            "round_number_in_season": round_number,
+            "validator_uid": getattr(self, "uid", None),
+            "validator_hotkey": getattr(getattr(getattr(self, "wallet", None), "hotkey", None), "ss58_address", None),
+            "status": str(status or "in_progress"),
+            "reason": str(reason or "unknown"),
+            "timestamp": time.time(),
+            "current_block": int(getattr(self, "block", 0) or 0),
+            "current_phase": getattr(getattr(round_manager, "current_phase", None), "name", str(getattr(round_manager, "current_phase", None) or "")),
+            "phase_history": phase_history_payload,
+            "active_miner_uids": sorted(int(uid) for uid in (getattr(self, "active_miner_uids", None) or [])),
+            "miners_reused_this_round": sorted(int(uid) for uid in (getattr(self, "miners_reused_this_round", None) or [])),
+            "eligibility_status_by_uid": {str(uid): status for uid, status in (getattr(self, "eligibility_status_by_uid", None) or {}).items()},
+            "current_agent_runs": current_agent_run_ids,
+            "round_log_file": round_log_file,
+            "round_log_exists": round_log_exists,
+            "round_log_size": round_log_size,
+            "last_round_log_upload_url": getattr(self, "_round_log_last_uploaded_url", None),
+            "last_round_log_upload_ts": getattr(self, "_round_log_last_upload_ts", 0.0),
+            "last_round_log_uploaded_size": getattr(self, "_round_log_last_uploaded_size", -1),
+            "extra": extra or {},
+        }
+
+        try:
+            checkpoint_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+        except Exception:
+            bt.logging.warning(f"IWAP | Could not persist round checkpoint for {target_round_id}")
+            return None
+        return checkpoint_path
+
+    async def _try_upload_round_log_checkpoint(
+        self,
+        *,
+        reason: str,
+        force: bool = False,
+        min_interval_seconds: float | None = None,
+        phase: str = "Phase 5",
+    ) -> str | None:
+        """
+        Best-effort wrapper around round-log uploads.
+
+        Settlement and forward paths should never crash just because the
+        observability snapshot could not be uploaded.
+        """
+        persist_checkpoint = getattr(self, "_persist_round_checkpoint", None)
+        if callable(persist_checkpoint):
+            with contextlib.suppress(Exception):
+                persist_checkpoint(
+                    reason=reason,
+                    status="checkpoint_requested",
+                    extra={
+                        "force": bool(force),
+                        "min_interval_seconds": float(min_interval_seconds) if min_interval_seconds is not None else None,
+                        "phase": phase,
+                    },
+                )
+        uploader = getattr(self, "_upload_round_log_snapshot", None)
+        if not callable(uploader):
+            return None
+        try:
+            url = await uploader(
+                reason=reason,
+                force=force,
+                min_interval_seconds=min_interval_seconds,
+            )
+            if callable(persist_checkpoint):
+                with contextlib.suppress(Exception):
+                    persist_checkpoint(
+                        reason=reason,
+                        status="checkpoint_uploaded",
+                        extra={
+                            "phase": phase,
+                            "round_log_url": url,
+                        },
+                    )
+            return url
+        except Exception as exc:
+            if callable(persist_checkpoint):
+                with contextlib.suppress(Exception):
+                    persist_checkpoint(
+                        reason=reason,
+                        status="checkpoint_upload_failed",
+                        extra={
+                            "phase": phase,
+                            "error_type": type(exc).__name__,
+                            "error_message": str(exc),
+                        },
+                    )
+            self._log_iwap_phase(
+                phase,
+                f"round-log checkpoint upload failed ({reason}): {type(exc).__name__}: {exc}",
+                level="warning",
+                exc_info=False,
+            )
+            return None
 
     def _generate_validator_round_id(self, *, current_block: int) -> str:
         """
@@ -333,19 +750,59 @@ class ValidatorPlatformMixin:
         except Exception:
             validator_hotkey = None
 
-        try:
-            url = await self.iwap_client.upload_round_log(
-                validator_round_id=round_id,
-                content=content,
-                season_number=season_number if isinstance(season_number, int) else None,
-                round_number_in_season=round_number_in_season if isinstance(round_number_in_season, int) else None,
-                validator_uid=validator_uid if isinstance(validator_uid, int) else None,
-                validator_hotkey=validator_hotkey,
-            )
-        except Exception as exc:
+        upload_variants = ColoredLogger.build_round_log_upload_variants(content)
+        url: str | None = None
+        upload_exc: Exception | None = None
+        for variant_label, variant_content in upload_variants:
+            try:
+                url = await self.iwap_client.upload_round_log(
+                    validator_round_id=round_id,
+                    content=variant_content,
+                    season_number=season_number if isinstance(season_number, int) else None,
+                    round_number_in_season=round_number_in_season if isinstance(round_number_in_season, int) else None,
+                    validator_uid=validator_uid if isinstance(validator_uid, int) else None,
+                    validator_hotkey=validator_hotkey,
+                )
+                if variant_label != "full":
+                    self._log_iwap_phase(
+                        "Phase 5",
+                        f"round-log upload succeeded with truncated payload ({variant_label}) for {round_id}",
+                        level="warning",
+                        exc_info=False,
+                    )
+                break
+            except httpx.HTTPStatusError as exc:
+                upload_exc = exc
+                status_code = exc.response.status_code if exc.response is not None else None
+                has_smaller_variant = variant_label != upload_variants[-1][0]
+                if status_code == 413 and has_smaller_variant:
+                    self._log_iwap_phase(
+                        "Phase 5",
+                        f"round-log upload hit 413 ({variant_label}) for {round_id}; retrying with a smaller tail payload",
+                        level="warning",
+                        exc_info=False,
+                    )
+                    continue
+                break
+            except Exception as exc:
+                upload_exc = exc
+                break
+
+        if upload_exc is not None and not isinstance(url, str):
+            persist_checkpoint = getattr(self, "_persist_round_checkpoint", None)
+            if callable(persist_checkpoint):
+                with contextlib.suppress(Exception):
+                    persist_checkpoint(
+                        reason=reason,
+                        status="round_log_upload_failed",
+                        extra={
+                            "error_type": type(upload_exc).__name__,
+                            "error_message": str(upload_exc),
+                        },
+                    )
             self._log_iwap_phase(
                 "Phase 5",
-                f"round-log upload failed ({reason}) for {round_id}: {type(exc).__name__}: {exc}",
+                f"round-log upload failed ({reason}) for {round_id}: {type(upload_exc).__name__}: {upload_exc}",
                 level="warning",
                 exc_info=False,
             )
@@ -355,6 +812,17 @@ class ValidatorPlatformMixin:
         self._round_log_last_uploaded_size = content_size
         if isinstance(url, str) and url.strip():
             self._round_log_last_uploaded_url = url.strip()
+            persist_checkpoint = getattr(self, "_persist_round_checkpoint", None)
+            if callable(persist_checkpoint):
+                with contextlib.suppress(Exception):
+                    persist_checkpoint(
+                        reason=reason,
+                        status="round_log_uploaded",
+                        extra={
+                            "round_log_url": self._round_log_last_uploaded_url,
+                            "round_log_size": content_size,
+                        },
+                    )
             self._log_iwap_phase(
                 "Phase 5",
                 f"round-log uploaded ({reason}) for {round_id}",
@@ -420,13 +888,15 @@ class ValidatorPlatformMixin:
             self.prev_round_run_stats = {}
             for uid, run in current_runs.items():
                 acc = getattr(self, "agent_run_accumulators", {}).get(uid, {})
-                tasks = int(acc.get("tasks", 0) or 0)
+                attempted_tasks = int(acc.get("tasks", 0) or 0)
+                expected_total_tasks = int(getattr(run, "total_tasks", 0) or attempted_tasks)
+                total_tasks_for_run = max(expected_total_tasks, attempted_tasks)
                 reward_sum = float(acc.get("reward", 0.0) or 0.0)
                 eval_sum = float(acc.get("eval_score", 0.0) or 0.0)
                 time_sum = float(acc.get("execution_time", 0.0) or 0.0)
-                avg_score = (eval_sum / tasks) if tasks else (getattr(run, "average_score", None) or 0.0)
-                avg_reward = (reward_sum / tasks) if tasks else (getattr(run, "average_reward", None) or 0.0)
-                avg_time = (time_sum / tasks) if tasks else (getattr(run, "average_execution_time", None) or 0.0)
+                avg_score = (eval_sum / total_tasks_for_run) if total_tasks_for_run else (getattr(run, "average_score", None) or 0.0)
+                avg_reward = (reward_sum / total_tasks_for_run) if total_tasks_for_run else (getattr(run, "average_reward", None) or 0.0)
+                avg_time = (time_sum / attempted_tasks) if attempted_tasks else (getattr(run, "average_execution_time", None) or 0.0)
                 round_rewards = getattr(getattr(self, "round_manager", None), "round_rewards", {}) or {}
                 miner_rewards = round_rewards.get(uid, []) or []
                 success_tasks = len([r for r in miner_rewards if float(r) >= 0.5])
@@ -436,10 +906,13 @@ class ValidatorPlatformMixin:
                     "average_score": avg_score,
                     "average_reward": avg_reward,
                     "average_execution_time": avg_time,
-                    "total_tasks": tasks or len(miner_rewards),
+                    "total_tasks": total_tasks_for_run or len(miner_rewards),
+                    "tasks_attempted": attempted_tasks,
                     "success_tasks": success_tasks,
-                    "failed_tasks": (tasks or len(miner_rewards)) - success_tasks,
+                    "failed_tasks": max((total_tasks_for_run or len(miner_rewards)) - success_tasks, 0),
                     "zero_reason": getattr(agent_for_uid, "zero_reason", None) if agent_for_uid else None,
+                    "early_stop_reason": getattr(agent_for_uid, "early_stop_reason", None) if agent_for_uid else None,
+                    "early_stop_message": getattr(agent_for_uid, "early_stop_message", None) if agent_for_uid else None,
                 }
         self.current_round_id = None
         self.current_round_tasks = {}
@@ -468,7 +941,27 @@ class ValidatorPlatformMixin:
         self._current_round_number = None
 
     @staticmethod
-    def _round_metrics_payload_from_stats(stats: dict[str, Any] | None) -> dict[str, Any] | None:
+    def _derive_early_stop_fields(
+        *,
+        tasks_attempted: int,
+        tasks_received: int,
+        zero_reason: Any,
+        early_stop_reason: Any,
+        early_stop_message: Any,
+    ) -> tuple[str | None, str | None]:
+        derived_reason = str(early_stop_reason) if isinstance(early_stop_reason, str) and early_stop_reason.strip() else None
+        derived_message = str(early_stop_message) if isinstance(early_stop_message, str) and early_stop_message.strip() else None
+        if derived_reason or derived_message:
+            return derived_reason, derived_message
+        if zero_reason == "over_cost_limit" and tasks_attempted > 0 and tasks_received > tasks_attempted:
+            return (
+                "over_cost_limit",
+                (f"Stopped early after {tasks_attempted}/{tasks_received} tasks: too many tasks exceeded the per-task cost limit."),
+            )
+        return None, None
+
+    @classmethod
+    def _round_metrics_payload_from_stats(cls, stats: dict[str, Any] | None) -> dict[str, Any] | None:
         if not isinstance(stats, dict):
             return None
         try:
@@ -477,21 +970,34 @@ class ValidatorPlatformMixin:
             avg_time = float(stats.get("average_execution_time", 0.0) or 0.0)
             avg_cost = float(stats.get("average_cost", 0.0) or 0.0)
             tasks_received = int(stats.get("total_tasks", 0) or 0)
+            tasks_attempted = int(stats.get("tasks_attempted", tasks_received) or 0)
             tasks_success = int(stats.get("success_tasks", 0) or 0)
         except Exception:
             return None
+        zero_reason = stats.get("zero_reason")
+        early_stop_reason, early_stop_message = cls._derive_early_stop_fields(
+            tasks_attempted=tasks_attempted,
+            tasks_received=tasks_received,
+            zero_reason=zero_reason,
+            early_stop_reason=stats.get("early_stop_reason"),
+            early_stop_message=stats.get("early_stop_message"),
+        )
         payload = {
             "reward": reward,
             "score": score,
             "time": avg_time,
             "cost": avg_cost,
             "tasks_received": tasks_received,
+            "tasks_attempted": tasks_attempted,
             "tasks_success": tasks_success,
             "github_url": stats.get("github_url"),
             "normalized_repo": stats.get("normalized_repo"),
             "commit_sha": stats.get("commit_sha"),
             "season": (int(stats["evaluated_season"]) if stats.get("evaluated_season") is not None else None),
             "round": (int(stats["evaluated_round"]) if stats.get("evaluated_round") is not None else None),
+            "zero_reason": zero_reason,
+            "early_stop_reason": early_stop_reason,
+            "early_stop_message": early_stop_message,
         }
         evaluation_context = stats.get("evaluation_context")
         if isinstance(evaluation_context, dict):
@@ -519,14 +1025,16 @@ class ValidatorPlatformMixin:
         acc = (getattr(self, "agent_run_accumulators", None) or {}).get(uid, {})
         round_rewards = getattr(getattr(self, "round_manager", None), "round_rewards", {}) or {}
         miner_rewards = round_rewards.get(uid, []) or []
-        total_tasks = int(acc.get("tasks", 0) or getattr(run, "total_tasks", 0) or len(miner_rewards))
+        attempted_tasks = int(acc.get("tasks", 0) or len(miner_rewards))
+        expected_total_tasks = int(getattr(run, "total_tasks", 0) or attempted_tasks)
+        total_tasks = max(expected_total_tasks, attempted_tasks)
         success_tasks = int(getattr(run, "completed_tasks", 0) or len([reward for reward in miner_rewards if float(reward) >= 0.5]))
         failed_tasks = int(getattr(run, "failed_tasks", 0) or max(total_tasks - success_tasks, 0))
         if total_tasks > 0:
             avg_reward = float(acc.get("reward", 0.0) or 0.0) / float(total_tasks)
             avg_score = float(acc.get("eval_score", 0.0) or 0.0) / float(total_tasks)
-            avg_time = float(acc.get("execution_time", 0.0) or 0.0) / float(total_tasks)
-            avg_cost = float(acc.get("cost", 0.0) or 0.0) / float(total_tasks)
+            avg_time = float(acc.get("execution_time", 0.0) or 0.0) / float(attempted_tasks) if attempted_tasks > 0 else 0.0
+            avg_cost = float(acc.get("cost", 0.0) or 0.0) / float(attempted_tasks) if attempted_tasks > 0 else 0.0
         else:
             avg_reward = float(getattr(run, "average_reward", 0.0) or 0.0)
             avg_score = float(getattr(run, "average_score", 0.0) or 0.0)
@@ -535,12 +1043,21 @@ class ValidatorPlatformMixin:
             avg_cost = float(run_meta.get("average_cost", 0.0) or 0.0) if isinstance(run_meta, dict) else 0.0
         agent_info = (getattr(self, "agents_dict", None) or {}).get(uid)
         season_number, round_number_in_season = self._current_round_numbers()
+        zero_reason = getattr(run, "zero_reason", None)
+        early_stop_reason, early_stop_message = ValidatorPlatformMixin._derive_early_stop_fields(
+            tasks_attempted=attempted_tasks,
+            tasks_received=total_tasks,
+            zero_reason=zero_reason,
+            early_stop_reason=getattr(run, "early_stop_reason", None),
+            early_stop_message=getattr(run, "early_stop_message", None),
+        )
         return {
             "reward": avg_reward,
             "score": avg_score,
             "time": avg_time,
             "cost": avg_cost,
             "tasks_received": total_tasks,
+            "tasks_attempted": attempted_tasks,
             "tasks_success": success_tasks,
             "failed_tasks": failed_tasks,
             "github_url": getattr(agent_info, "github_url", None) if agent_info is not None else None,
@@ -548,7 +1065,9 @@ class ValidatorPlatformMixin:
             "commit_sha": getattr(agent_info, "git_commit", None) if agent_info is not None else None,
             "season": season_number,
             "round": round_number_in_season,
-            "zero_reason": getattr(run, "zero_reason", None),
+            "zero_reason": zero_reason,
+            "early_stop_reason": early_stop_reason,
+            "early_stop_message": early_stop_message,
             "evaluation_context": self._evaluation_context_payload(),
         }
 

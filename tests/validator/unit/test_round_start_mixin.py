@@ -71,6 +71,26 @@ class TestRoundStart:
         # Should clear agents
         assert len(dummy_validator.agents_dict) == 0
 
+    async def test_season_transition_resets_reuse_and_all_zero_policies(self, dummy_validator):
+        from tests.conftest import _bind_round_start_mixin
+
+        dummy_validator = _bind_round_start_mixin(dummy_validator)
+
+        dummy_validator.block = 4600
+        dummy_validator.season_manager.should_start_new_season = Mock(return_value=True)
+        dummy_validator.season_manager.generate_season_tasks.reset_mock()
+        dummy_validator._evaluated_commits_by_miner = {48: {"repo|deadbeef": {"agent_run_id": "run-1"}}}
+        dummy_validator._disable_reuse_until = {"season": 1, "round": 3, "reason": "all_zero_excluded_by_consensus"}
+        dummy_validator._pending_all_zero_round_policy = {"season": 1, "round": 2, "miner_uids": [48]}
+        dummy_validator._last_all_zero_round_policy = {"season": 1, "round": 2, "status": "excluded_by_consensus"}
+
+        await dummy_validator._start_round()
+
+        assert dummy_validator._evaluated_commits_by_miner == {}
+        assert dummy_validator._disable_reuse_until is None
+        assert dummy_validator._pending_all_zero_round_policy is None
+        assert dummy_validator._last_all_zero_round_policy is None
+
     async def test_round_manager_start_new_round_is_called(self, dummy_validator):
         from tests.conftest import _bind_round_start_mixin
 
@@ -412,6 +432,7 @@ class TestHandshake:
         dummy_validator.agents_dict = {1: existing}
 
         with (
+            patch("autoppia_web_agents_subnet.validator.round_start.mixin.ENABLE_EVALUATION_COOLDOWN", True),
             patch("autoppia_web_agents_subnet.validator.round_start.mixin.EVALUATION_COOLDOWN_MIN_ROUNDS", 1),
             patch("autoppia_web_agents_subnet.validator.round_start.mixin.EVALUATION_COOLDOWN_MAX_ROUNDS", 2),
             patch("autoppia_web_agents_subnet.validator.round_start.mixin.EVALUATION_COOLDOWN_NO_RESPONSE_BADNESS", 0.0),
@@ -440,6 +461,25 @@ class TestHandshake:
             pending_agent_info = dummy_validator.agents_queue.put.call_args.args[0]
             assert pending_agent_info.uid == 1
             assert pending_agent_info.github_url == "https://github.com/test/agent1/commit/new"
+
+    async def test_cooldown_feature_flag_disabled_returns_inactive(self, dummy_validator):
+        from autoppia_web_agents_subnet.validator.round_start.mixin import _is_cooldown_active
+
+        with (
+            patch("autoppia_web_agents_subnet.validator.round_start.mixin.ENABLE_EVALUATION_COOLDOWN", False),
+            patch("autoppia_web_agents_subnet.validator.round_start.mixin.EVALUATION_COOLDOWN_MIN_ROUNDS", 1),
+            patch("autoppia_web_agents_subnet.validator.round_start.mixin.EVALUATION_COOLDOWN_MAX_ROUNDS", 5),
+        ):
+            assert (
+                _is_cooldown_active(
+                    current_round=5,
+                    last_evaluated_round=4,
+                    miner_score=0.42,
+                    best_score_ever=1.0,
+                    handshake_responded=True,
+                )
+                is False
+            )
 
 
 @pytest.mark.unit

@@ -357,3 +357,48 @@ class TestGateway:
                 manager = SandboxManager()
                 with pytest.raises(RuntimeError, match="Missing API keys"):
                     manager.deploy_gateway()
+
+
+@pytest.mark.unit
+class TestDockerCacheCleanup:
+    """Test Docker cache cleanup helpers."""
+
+    def test_prune_old_build_cache_invokes_builder_prune_with_until_filter(self):
+        """Old builder cache should be pruned conservatively with an age filter."""
+        from autoppia_web_agents_subnet.opensource.sandbox_manager import _prune_old_build_cache
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "SANDBOX_PRUNE_BUILD_CACHE": "true",
+                    "SANDBOX_PRUNE_BUILD_CACHE_UNTIL": "240h",
+                    "SANDBOX_PRUNE_BUILD_CACHE_KEEP_STORAGE": "25gb",
+                },
+                clear=False,
+            ),
+            patch("autoppia_web_agents_subnet.opensource.sandbox_manager.subprocess.run") as mock_run,
+        ):
+            _prune_old_build_cache()
+
+            mock_run.assert_called_once()
+            cmd = mock_run.call_args[0][0]
+            assert cmd == ["docker", "builder", "prune", "-f", "--filter", "until=240h", "--keep-storage", "25gb"]
+
+    def test_prune_old_build_cache_can_be_disabled(self):
+        """The extra builder-cache cleanup should be opt-out via env."""
+        from autoppia_web_agents_subnet.opensource.sandbox_manager import _prune_old_build_cache
+
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "SANDBOX_PRUNE_BUILD_CACHE": "false",
+                },
+                clear=False,
+            ),
+            patch("autoppia_web_agents_subnet.opensource.sandbox_manager.subprocess.run") as mock_run,
+        ):
+            _prune_old_build_cache()
+
+            mock_run.assert_not_called()

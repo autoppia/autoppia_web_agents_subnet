@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 import socket
 import time
 from collections import Counter
@@ -17,6 +18,7 @@ from autoppia_web_agents_subnet.protocol import StartRoundSynapse
 from autoppia_web_agents_subnet.utils.log_colors import round_details_tag
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.validator.config import (
+    ENABLE_EVALUATION_COOLDOWN,
     EVALUATION_COOLDOWN_MAX_ROUNDS,
     EVALUATION_COOLDOWN_MIN_ROUNDS,
     EVALUATION_COOLDOWN_NO_RESPONSE_BADNESS,
@@ -25,6 +27,7 @@ from autoppia_web_agents_subnet.validator.config import (
     MAX_MINERS_PER_REPO,
     MAX_MINERS_PER_ROUND_BY_STAKE,
     MIN_MINER_STAKE_ALPHA,
+    SANDBOX_GATEWAY_HOST,
     SANDBOX_GATEWAY_PORT,
     SKIP_ROUND_IF_STARTED_AFTER_FRACTION,
 )
@@ -32,6 +35,26 @@ from autoppia_web_agents_subnet.validator.models import AgentInfo
 from autoppia_web_agents_subnet.validator.round_manager import RoundPhase
 from autoppia_web_agents_subnet.validator.round_start.synapse_handler import send_start_round_synapse_to_miners
 from autoppia_web_agents_subnet.validator.round_start.types import RoundStartResult
+
+_DEMO_WEBS_DEFAULT_START_PORT = 8000
+_DEMO_WEBS_DEFAULT_API_PORT = 8090
+_DEMO_WEBS_DEFAULT_DB_PORT = 5437
+_DEMO_WEB_EXPECTED_STACK = (
+    ("autocinema", ("movies", "autocinema"), 0),
+    ("autobooks", ("books", "autobooks"), 1),
+    ("autozone", ("autozone",), 2),
+    ("autodining", ("autodining",), 3),
+    ("autocrm", ("autocrm",), 4),
+    ("automail", ("automail",), 5),
+    ("autodelivery", ("autodelivery",), 6),
+    ("autolodge", ("autolodge",), 7),
+    ("autoconnect", ("autoconnect",), 8),
+    ("autowork", ("autowork",), 9),
+    ("autocalendar", ("autocalendar",), 10),
+    ("autolist", ("autolist",), 11),
+    ("autodrive", ("autodrive",), 12),
+    ("autohealth", ("autohealth",), 13),
+)
 
 
 def _clear_queue_best_effort(q: object) -> None:
@@ -96,6 +119,8 @@ def _is_cooldown_active(
     best_score_ever: float | None = None,
     handshake_responded: bool = True,
 ) -> bool:
+    if not ENABLE_EVALUATION_COOLDOWN:
+        return False
     if not isinstance(last_evaluated_round, int):
         return False
     effective_cooldown = _resolve_adaptive_cooldown_rounds(
@@ -117,12 +142,69 @@ class ValidatorRoundStartMixin:
         except Exception:
             return False
 
+    @staticmethod
+    def _expected_demo_web_services() -> list[dict[str, object]]:
+        demo_base_port = int(os.getenv("DEMO_WEBS_STARTING_PORT", str(_DEMO_WEBS_DEFAULT_START_PORT)))
+        demo_api_port = int(
+            os.getenv(
+                "DEMO_WEB_SERVICE_PORT",
+                os.getenv("WEBS_PORT", str(_DEMO_WEBS_DEFAULT_API_PORT)),
+            )
+        )
+        demo_db_port = int(
+            os.getenv(
+                "DEMO_WEBS_POSTGRES_PORT",
+                os.getenv("WEBS_PG_PORT", str(_DEMO_WEBS_DEFAULT_DB_PORT)),
+            )
+        )
+
+        expected = [
+            {
+                "display": "web_server",
+                "kind": "infra",
+                "port": demo_api_port,
+                "compose_projects": ("webs_server",),
+                "compose_service": "app",
+            },
+            {
+                "display": "db",
+                "kind": "infra",
+                "port": demo_db_port,
+                "compose_projects": ("webs_server",),
+                "compose_service": "db",
+            },
+        ]
+
+        for display, compose_names, offset in _DEMO_WEB_EXPECTED_STACK:
+            port = demo_base_port + int(offset)
+            expected.append(
+                {
+                    "display": display,
+                    "kind": "demo",
+                    "port": port,
+                    "compose_projects": tuple(f"{name}_{port}" for name in compose_names),
+                    "compose_service": "web",
+                }
+            )
+
+        expected.append(
+            {
+                "display": "sandbox-gateway",
+                "kind": "sandbox",
+                "port": int(SANDBOX_GATEWAY_PORT),
+                "compose_projects": tuple(),
+                "compose_service": None,
+                "container_names": tuple(item for item in (str(SANDBOX_GATEWAY_HOST or ""), "sandbox-gateway") if item),
+            }
+        )
+        return expected
+
     def _log_round_start_runtime_healthcheck(self) -> None:
         """
         Print a compact runtime health snapshot at round start:
         - Docker daemon availability
+        - Expected demo-web stack status with explicit service names
         - Relevant container status/health/ports
-        - Local TCP checks for critical ports (demo backend and sandbox gateway)
         """
         bt.logging.info(round_details_tag("🔎 Runtime Healthcheck"))
 
@@ -133,6 +215,7 @@ class ValidatorRoundStartMixin:
 
             containers = docker_client.containers.list(all=True)
             relevant_rows: list[tuple[str, str, str, str, str]] = []
+            container_rows: list[dict[str, object]] = []
 
             for container in containers:
                 try:
@@ -145,6 +228,9 @@ class ValidatorRoundStartMixin:
                 state = str((attrs.get("State") or {}).get("Status") or getattr(container, "status", "unknown"))
                 health = str(((attrs.get("State") or {}).get("Health") or {}).get("Status") or "-")
                 image = str((attrs.get("Config") or {}).get("Image") or "?")
+                labels = (attrs.get("Config") or {}).get("Labels") or {}
+                compose_project = str(labels.get("com.docker.compose.project") or "")
+                compose_service = str(labels.get("com.docker.compose.service") or "")
                 ports_map = (attrs.get("NetworkSettings") or {}).get("Ports") or {}
 
                 host_ports: set[int] = set()
@@ -168,11 +254,70 @@ class ValidatorRoundStartMixin:
 
                 name_l = name.lower()
                 relevant = name_l.startswith("sandbox-") or "demo" in name_l or "iwap" in name_l or "autoppia" in name_l or 8090 in host_ports or int(SANDBOX_GATEWAY_PORT) in host_ports
-                if not relevant:
-                    continue
+                if not relevant and (compose_project == "webs_server" or compose_service in {"app", "db", "web"}):
+                    relevant = True
+                if relevant:
+                    ports_str = ",".join(sorted(set(compact_ports))) if compact_ports else "-"
+                    relevant_rows.append((name, state, health, ports_str, image))
 
-                ports_str = ",".join(sorted(set(compact_ports))) if compact_ports else "-"
-                relevant_rows.append((name, state, health, ports_str, image))
+                container_rows.append(
+                    {
+                        "name": name,
+                        "state": state,
+                        "health": health,
+                        "image": image,
+                        "ports_str": ",".join(sorted(set(compact_ports))) if compact_ports else "-",
+                        "host_ports": host_ports,
+                        "compose_project": compose_project,
+                        "compose_service": compose_service,
+                    }
+                )
+
+            bt.logging.info(round_details_tag("Expected demo-web services:"))
+            for expected in self._expected_demo_web_services():
+                expected_port = int(expected["port"])
+                port_open = self._is_local_tcp_port_open(expected_port)
+                compose_projects = tuple(str(item) for item in expected.get("compose_projects", tuple()))
+                container_names = tuple(str(item) for item in expected.get("container_names", tuple()) if str(item))
+                compose_service = expected.get("compose_service")
+
+                matching_rows: list[dict[str, object]] = []
+                for row in container_rows:
+                    row_name = str(row["name"])
+                    row_project = str(row["compose_project"])
+                    row_service = str(row["compose_service"])
+                    row_ports = set(int(p) for p in row["host_ports"])
+                    project_match = bool(compose_projects) and row_project in compose_projects
+                    service_match = compose_service is None or row_service == str(compose_service)
+                    name_match = bool(container_names) and row_name in container_names
+                    port_match = expected_port in row_ports
+                    if (project_match and service_match) or name_match or port_match:
+                        matching_rows.append(row)
+
+                preferred_row = next((row for row in matching_rows if str(row["state"]) == "running"), None)
+                if preferred_row is None and matching_rows:
+                    preferred_row = matching_rows[0]
+
+                if preferred_row is None:
+                    status = "MISSING"
+                    container_name = "-"
+                    state = "-"
+                    health = "-"
+                    image = "-"
+                else:
+                    state = str(preferred_row["state"])
+                    health = str(preferred_row["health"])
+                    image = str(preferred_row["image"])
+                    container_name = str(preferred_row["name"])
+                    status = "OK" if state == "running" and port_open else "DOWN"
+
+                bt.logging.info(
+                    round_details_tag(
+                        f"[service] {expected['display']!s} {status} | "
+                        f"docker={container_name} | state={state} | health={health} | "
+                        f"port={expected_port}:{'OPEN' if port_open else 'CLOSED'} | image={image}"
+                    )
+                )
 
             if not relevant_rows:
                 bt.logging.warning(round_details_tag("Docker containers (relevant): none found (sandbox/demo/iwap/8090/gateway)"))
@@ -182,11 +327,6 @@ class ValidatorRoundStartMixin:
                     bt.logging.info(round_details_tag(f"[docker] {name} | state={state} | health={health} | ports={ports_str} | image={image}"))
         except Exception as exc:
             bt.logging.warning(round_details_tag(f"Docker healthcheck error: {exc}"))
-
-        critical_ports = [8090, int(SANDBOX_GATEWAY_PORT)]
-        for port in critical_ports:
-            is_open = self._is_local_tcp_port_open(port)
-            bt.logging.info(round_details_tag(f"[tcp] 127.0.0.1:{port} => {'OPEN' if is_open else 'CLOSED'}"))
 
     async def _start_round(self) -> RoundStartResult:
         current_block = self.block
@@ -229,6 +369,13 @@ class ValidatorRoundStartMixin:
             # New season = new tasks → re-evaluate all commits; clear "already evaluated" map.
             if hasattr(self, "_evaluated_commits_by_miner"):
                 self._evaluated_commits_by_miner = {}
+            # Per-season all-zero/reuse policy must not leak across season boundaries.
+            if hasattr(self, "_disable_reuse_until"):
+                self._disable_reuse_until = None
+            if hasattr(self, "_pending_all_zero_round_policy"):
+                self._pending_all_zero_round_policy = None
+            if hasattr(self, "_last_all_zero_round_policy"):
+                self._last_all_zero_round_policy = None
 
         current_block = self.block
         self.round_manager.start_new_round(current_block)
@@ -243,8 +390,13 @@ class ValidatorRoundStartMixin:
 
         # Configure per-round log file (data/logs/season-<season>-round-<round>.log).
         round_id_for_log = self.current_round_id
-        with contextlib.suppress(Exception):
+        try:
             ColoredLogger.set_round_log_file(str(round_id_for_log))
+        except Exception as exc:
+            ColoredLogger.warning(
+                f"Failed to initialize round log file for {round_id_for_log}: {type(exc).__name__}: {exc}",
+                ColoredLogger.YELLOW,
+            )
 
         wait_info = self.round_manager.get_wait_info(current_block)
 

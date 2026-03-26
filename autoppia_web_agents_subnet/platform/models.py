@@ -161,6 +161,7 @@ class AgentRunIWAP:
     average_reward: float | None = None
     total_reward: float | None = None
     total_tasks: int = 0
+    tasks_attempted: int = 0
     completed_tasks: int = 0
     failed_tasks: int = 0
     rank: int | None = None
@@ -168,6 +169,8 @@ class AgentRunIWAP:
     metadata: dict[str, Any] = field(default_factory=dict)
     # Reason for score 0 when applicable (e.g. task_timeout, over_cost_limit); copied from source when reused
     zero_reason: str | None = None
+    early_stop_reason: str | None = None
+    early_stop_message: str | None = None
 
     def to_payload(self) -> dict[str, Any]:
         data = asdict(self)
@@ -255,6 +258,8 @@ class FinishRoundAgentRunIWAP:
     tasks_failed: int | None = None
     # Reason for score 0 when applicable (e.g. over_cost_limit, deploy_failed, task_failed)
     zero_reason: str | None = None
+    early_stop_reason: str | None = None
+    early_stop_message: str | None = None
 
     def to_payload(self) -> dict[str, Any]:
         return _drop_nones(asdict(self))

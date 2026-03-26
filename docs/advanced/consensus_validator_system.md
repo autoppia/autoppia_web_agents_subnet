@@ -248,9 +248,6 @@ All validators set the SAME weights → consensus achieved ✅
 ### Core Settings
 
 ```python
-# Enable/disable distributed consensus
-ENABLE_DISTRIBUTED_CONSENSUS = true  # Default: enabled
-
 # When to stop task evaluation and upload to IPFS (absolute % of round)
 STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION = 0.90  # Production: 90%
 
@@ -264,9 +261,6 @@ MIN_VALIDATOR_STAKE_FOR_CONSENSUS_TAO = 10000.0  # 10k τ minimum
 ### Environment Variables (.env)
 
 ```bash
-# Enable consensus (default: true)
-ENABLE_DISTRIBUTED_CONSENSUS=true
-
 # IPFS node endpoint
 IPFS_API_URL=http://ipfs.metahash73.com:5001/api/v0
 
@@ -713,13 +707,7 @@ pm2 logs validator --lines 100 | grep "Skip\|wrong_epoch\|ipfs_fail"
 
 ### Q: Can I disable consensus temporarily?
 
-**A:** Yes, set in `.env`:
-
-```bash
-ENABLE_DISTRIBUTED_CONSENSUS=false
-```
-
-Each validator will then work independently (no IPFS sharing).
+**A:** Not via `.env` in the current runtime. The distributed consensus flow is always active in the validator codebase, so if you want to disable or bypass it you need a code change rather than an environment flag.
 
 ### Q: What happens if IPFS node is down?
 

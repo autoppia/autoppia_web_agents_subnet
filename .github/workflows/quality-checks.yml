@@ -1,0 +1,102 @@
+name: Quality checks
+
+on:
+  push:
+    # Ejecutar en cualquier rama (incluida fix/sonar) para evitar problemas de coincidencia de patrones
+    branches:
+      - main
+      - master
+      - "fix/**"
+      - "fix/*"
+  pull_request:
+    branches:
+      - main
+      - master
+      - "fix/**"
+      - "fix/*"
+  # Permite lanzar el workflow manualmente desde la pestaña "Actions"
+  workflow_dispatch:
+
+jobs:
+  lint-and-audit:
+    name: Lint & dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install "ruff==0.10.0" radon
+
+      - name: Ruff check
+        run: ruff check .
+
+      - name: Ruff format check
+        run: ruff format --check --line-length 200 .
+
+      - name: Ruff maintainability report
+        run: ruff check autoppia_web_agents_subnet --select C901,PLR0913,PLR0915 --output-format=concise
+        continue-on-error: true
+
+      - name: Radon cyclomatic complexity
+        run: |
+          echo "=== Cyclomatic complexity (autoppia_web_agents_subnet) ==="
+          radon cc autoppia_web_agents_subnet -a -s --total-average
+
+      - name: Radon maintainability index
+        run: |
+          echo "=== Maintainability index (autoppia_web_agents_subnet) ==="
+          radon mi autoppia_web_agents_subnet -s
+
+      - name: Radon complexity gate (package only, fail on F)
+        continue-on-error: true
+        run: |
+          bad=$(radon cc autoppia_web_agents_subnet -n F --no-assert 2>/dev/null | grep -c . || true)
+          if [ "${bad:-0}" -gt 0 ]; then
+            echo "::error::autoppia_web_agents_subnet/ has cyclomatic complexity F (41+). Run 'radon cc autoppia_web_agents_subnet -n F' locally to list."
+            radon cc autoppia_web_agents_subnet -n F --no-assert
+            exit 1
+          fi
+
+      - name: Radon maintainability gate (package only, fail on D/E)
+        run: |
+          bad=$(radon mi autoppia_web_agents_subnet -n D 2>/dev/null | grep -c . || true)
+          if [ "${bad:-0}" -gt 0 ]; then
+            echo "::error::autoppia_web_agents_subnet/ has maintainability index D or E (threshold: min C). Run 'radon mi autoppia_web_agents_subnet -n D' locally to list."
+            radon mi autoppia_web_agents_subnet -n D
+            exit 1
+          fi
+
+  pre-commit:
+    name: Pre-commit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pre-commit
+        run: pip install pre-commit
+
+      - name: Run pre-commit
+        run: pre-commit run --all-files

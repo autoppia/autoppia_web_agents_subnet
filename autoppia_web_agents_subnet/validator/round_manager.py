@@ -7,6 +7,7 @@ from typing import Any
 
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.validator.config import (
+    BLOCKS_PER_EPOCH as CONFIG_BLOCKS_PER_EPOCH,
     FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION,
     MINIMUM_START_BLOCK,
     ROUND_SIZE_EPOCHS,
@@ -62,7 +63,7 @@ class RoundManager:
     - Phase tracking for observability
     """
 
-    BLOCKS_PER_EPOCH = 360
+    BLOCKS_PER_EPOCH = CONFIG_BLOCKS_PER_EPOCH
     SECONDS_PER_BLOCK = 12
 
     def __init__(

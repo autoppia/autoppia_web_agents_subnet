@@ -11,7 +11,7 @@ Tests verify that:
 from __future__ import annotations
 
 import contextlib
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
@@ -68,6 +68,7 @@ async def test_register_participating_miners_success():
     """Test successful registration of miners in IWAP."""
     ctx = MockContext()
     ctx.iwap_client.start_agent_run = AsyncMock(return_value={"status": "success"})
+    ctx._persist_round_checkpoint = Mock()
 
     await register_participating_miners_in_iwap(ctx)
 
@@ -90,6 +91,9 @@ async def test_register_participating_miners_success():
     assert second_call["agent_run"].miner_uid == 55
     assert second_call["miner_identity"].uid == 55
     assert second_call["miner_identity"].hotkey == "5Gx9a..."
+    persisted_reasons = [call.kwargs["reason"] for call in ctx._persist_round_checkpoint.call_args_list]
+    assert persisted_reasons.count("start_agent_run_started") == 2
+    assert persisted_reasons.count("start_agent_run_completed") == 2
 
 
 @pytest.mark.asyncio
@@ -157,6 +161,23 @@ async def test_register_miners_missing_handshake_data():
 
 
 @pytest.mark.asyncio
+async def test_register_miners_persists_checkpoint_for_reused_miner():
+    """Reused miners should still leave a durable checkpoint entry for crash forensics."""
+    ctx = MockContext()
+    ctx.active_miner_uids = [42, 55]
+    ctx.miners_reused_this_round = {42}
+    ctx._persist_round_checkpoint = Mock()
+    ctx.iwap_client.start_agent_run = AsyncMock(return_value={"status": "success"})
+
+    await register_participating_miners_in_iwap(ctx)
+
+    reuse_calls = [call.kwargs for call in ctx._persist_round_checkpoint.call_args_list if call.kwargs.get("reason") == "start_agent_run_skipped_reuse"]
+    assert len(reuse_calls) == 1
+    assert reuse_calls[0]["extra"]["miner_uid"] == 42
+    assert reuse_calls[0]["extra"]["reuse"] is True
+
+
+@pytest.mark.asyncio
 async def test_submit_task_results_success():
     """Test successful submission of task results to IWAP."""
     ctx = MockContext()
@@ -220,6 +241,87 @@ async def test_submit_task_results_success():
 
     # Verify add_evaluation was called
     assert ctx.iwap_client.add_evaluation.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_submit_task_results_keeps_reward_normalized_by_season_tasks_after_partial_run():
+    """
+    Scenario:
+    A miner belongs to a 100-task season, but the validator only manages to attempt 20 tasks before
+    stopping early. Seven of those attempted tasks pass with `eval_score=1.0`, but their shaped reward
+    is lower (`0.9`) because reward is normally slightly below score after time/cost shaping.
+
+    What this test proves:
+    submit_task_results must not rewrite the run into `7/20` semantics. The live run state must keep:
+    - total_tasks = 100
+    - average_reward = 6.3 / 100
+    - average_score = 7 / 100
+    - average_execution_time and average_cost averaged over the 20 attempted tasks
+    """
+    ctx = MockContext()
+    ctx.current_agent_runs = {
+        42: iwa_models.AgentRunIWAP(
+            agent_run_id="1/1_UID42",
+            validator_round_id="1/1",
+            validator_uid=1,
+            validator_hotkey="5FValidator...",
+            miner_uid=42,
+            miner_hotkey="5F3sa...",
+            is_sota=False,
+            version=None,
+            started_at=1234567890.0,
+            total_tasks=100,
+            completed_tasks=0,
+            failed_tasks=100,
+        )
+    }
+    ctx.active_miner_uids = [42]
+
+    from autoppia_iwa.src.data_generation.tasks.classes import Task
+    from autoppia_iwa.src.demo_webs.classes import WebProject
+    from autoppia_iwa.src.web_agents.classes import TaskSolution
+
+    from autoppia_web_agents_subnet.validator.models import TaskWithProject
+
+    project = WebProject(name="test-project", frontend_url="http://test.com")
+    ctx.iwap_client.add_evaluation = AsyncMock()
+
+    for idx in range(20):
+        task_id = f"task-{idx}"
+        task = Task(url="http://test.com", prompt=f"Test task {idx}")
+        task.id = task_id
+        task_item = TaskWithProject(project=project, task=task)
+        ctx.current_round_tasks[task_id] = iwa_models.TaskIWAP(
+            task_id=task_id,
+            validator_round_id="1/1",
+            url="http://test.com",
+            prompt=f"Test task {idx}",
+            tests=[],
+            is_web_real=True,
+            specifications={},
+            use_case="test",
+        )
+        solution = TaskSolution(task_id=task_id, actions=[], web_agent_id="42")
+        eval_score = 1.0 if idx < 7 else 0.0
+        reward = 0.9 if idx < 7 else 0.0
+        await submit_task_results(
+            ctx,
+            task_item=task_item,
+            task_solutions=[solution],
+            eval_scores=[eval_score],
+            test_results_list=[[]],
+            evaluation_results=[{}],
+            execution_times=[10.0],
+            rewards=[reward],
+        )
+
+    run = ctx.current_agent_runs[42]
+    assert run.total_tasks == 100
+    assert run.completed_tasks == 20
+    assert run.average_reward == pytest.approx(0.063)
+    assert run.average_score == pytest.approx(0.07)
+    assert run.average_execution_time == pytest.approx(10.0)
+    assert run.metadata["average_cost"] == pytest.approx(0.0)
 
 
 @pytest.mark.asyncio

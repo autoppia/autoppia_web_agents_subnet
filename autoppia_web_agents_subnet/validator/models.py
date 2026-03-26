@@ -105,3 +105,5 @@ class AgentInfo:
     pending_received_round: int | None = None
     # When score is 0, optional reason for dashboard (e.g. over_cost_limit, task_timeout, deploy_failed).
     zero_reason: str | None = None
+    early_stop_reason: str | None = None
+    early_stop_message: str | None = None

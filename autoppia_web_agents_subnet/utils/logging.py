@@ -43,6 +43,7 @@ class ColoredLogger:
     _round_log_logger: logging.Logger | None = None
     _round_log_bt_logger: logging.Logger | None = None
     _round_log_loguru_id: int | None = None
+    _ROUND_LOG_UPLOAD_TAIL_LIMITS = (2_000_000, 1_000_000, 512_000, 256_000)
 
     @staticmethod
     def _resolve_round_log_logger() -> logging.Logger:
@@ -105,8 +106,8 @@ class ColoredLogger:
     def set_round_log_file(round_id: str) -> None:
         """
         Persist all logger output for the current round to a dedicated log file.
-        - Append-only: we never truncate; everything is written to the same file
-          for the whole round, so you get "all logs up to the end" (or up to any error).
+        - Fresh file per round start: if the same season/round identifiers are reused
+          after a reset, we overwrite the old file to avoid mixing stale and new logs.
         - Writes from: root logger, bittensor logger, and loguru (IWA etc.) to the same file.
         - The file is read and uploaded at round finish; if upload fails, the file
           remains on disk with the full log. clear_round_log_file only stops writing.
@@ -127,7 +128,7 @@ class ColoredLogger:
         round_dir.mkdir(parents=True, exist_ok=True)
         log_path = round_dir / "round.log"
 
-        handler = logging.FileHandler(log_path, mode="a", encoding="utf-8")
+        handler = logging.FileHandler(log_path, mode="w", encoding="utf-8")
         handler.setLevel(logging.DEBUG)
         handler.setFormatter(
             logging.Formatter(
@@ -152,7 +153,7 @@ class ColoredLogger:
                 str(log_path),
                 format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} | {message}",
                 level="DEBUG",
-                mode="a",
+                mode="w",
                 encoding="utf-8",
             )
         except Exception:
@@ -174,3 +175,43 @@ class ColoredLogger:
     def clear_round_log_file() -> None:
         ColoredLogger._close_round_log_file()
         ColoredLogger._round_log_file = None
+
+    @staticmethod
+    def _trim_utf8_tail(content: str, *, max_bytes: int) -> str:
+        if max_bytes <= 0:
+            return ""
+        raw = content.encode("utf-8", errors="replace")
+        if len(raw) <= max_bytes:
+            return content
+        tail = raw[-max_bytes:]
+        return tail.decode("utf-8", errors="ignore")
+
+    @staticmethod
+    def build_round_log_upload_variants(content: str) -> list[tuple[str, str]]:
+        """
+        Build progressively smaller payload variants for S3/IWAP round-log upload.
+
+        The first entry is always the full log. Smaller entries keep the newest tail
+        and prepend a short header explaining that the upload was truncated after a
+        413/size failure, so we still persist something useful instead of losing the
+        round log entirely.
+        """
+        raw = content.encode("utf-8", errors="replace")
+        total_bytes = len(raw)
+        variants: list[tuple[str, str]] = [("full", content)]
+        seen_payloads: set[str] = {content}
+
+        for limit in ColoredLogger._ROUND_LOG_UPLOAD_TAIL_LIMITS:
+            if total_bytes <= limit:
+                continue
+            header = f"[AUTOPPIA ROUND LOG TRUNCATED FOR S3 UPLOAD]\noriginal_bytes={total_bytes}\nupload_bytes_limit={limit}\nupload_mode=tail_only_after_413\n\n"
+            header_bytes = len(header.encode("utf-8", errors="replace"))
+            tail_budget = max(limit - header_bytes, 0)
+            tail = ColoredLogger._trim_utf8_tail(content, max_bytes=tail_budget)
+            payload = header + tail
+            if payload in seen_payloads:
+                continue
+            seen_payloads.add(payload)
+            variants.append((f"tail_{limit}", payload))
+
+        return variants

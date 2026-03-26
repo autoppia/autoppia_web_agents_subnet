@@ -211,6 +211,57 @@ def _get_finish_retry_policy() -> tuple[int, int]:
     return max_retries, retry_interval_sec
 
 
+def _get_start_retry_policy() -> tuple[int, int]:
+    """
+    Return (max_retries, retry_interval_sec) for recoverable start_round retries.
+    Config keys:
+      - validator_config.START_ROUND_MAX_RETRIES
+      - validator_config.START_ROUND_RETRY_SECONDS
+    """
+    try:
+        max_retries = int(getattr(validator_config, "START_ROUND_MAX_RETRIES", 3))
+    except Exception:
+        max_retries = 3
+    try:
+        retry_interval_sec = int(getattr(validator_config, "START_ROUND_RETRY_SECONDS", 15))
+    except Exception:
+        retry_interval_sec = 15
+
+    max_retries = max(0, max_retries)
+    retry_interval_sec = max(1, retry_interval_sec)
+    return max_retries, retry_interval_sec
+
+
+def _parse_round_window_not_active(exc: httpx.HTTPStatusError) -> tuple[int | None, int | None, int | None] | None:
+    response = exc.response
+    if response is None or response.status_code not in (400, 409):
+        return None
+    detail: Any = None
+    try:
+        detail = response.json()
+    except Exception:
+        try:
+            detail = response.text
+        except Exception:
+            detail = None
+    if isinstance(detail, dict) and "detail" in detail:
+        detail = detail["detail"]
+    if not isinstance(detail, dict) or detail.get("error") != "round window not active":
+        return None
+
+    def _coerce_int(value: Any) -> int | None:
+        try:
+            return int(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    return (
+        _coerce_int(detail.get("currentBlock")),
+        _coerce_int(detail.get("startBlock")),
+        _coerce_int(detail.get("endBlock")),
+    )
+
+
 def _extract_round_numbers_from_round_id(round_id: str | None) -> tuple[int | None, int | None]:
     if not isinstance(round_id, str) or not round_id:
         return None, None
@@ -299,6 +350,158 @@ def _extract_round_summary_v2(*, season_history: dict[Any, Any], season_number: 
     return None
 
 
+def _extract_previous_round_leader_after(
+    *,
+    season_history: dict[Any, Any],
+    season_number: int,
+    round_number_in_season: int,
+) -> dict[str, Any] | None:
+    previous_round = int(round_number_in_season) - 1
+    if previous_round <= 0:
+        return None
+    previous_summary = _extract_round_summary_v2(
+        season_history=season_history,
+        season_number=season_number,
+        round_number_in_season=previous_round,
+    )
+    if not isinstance(previous_summary, dict):
+        return None
+    leader_after = previous_summary.get("leader_after_round")
+    return dict(leader_after) if isinstance(leader_after, dict) else None
+
+
+def _canonicalize_consensus_snapshot(
+    snapshot: dict[str, Any] | None,
+    *,
+    best_run_by_uid: dict[int, dict[str, Any]],
+    preserve_reward: bool = False,
+) -> dict[str, Any] | None:
+    if not isinstance(snapshot, dict):
+        return None
+
+    normalized = dict(snapshot)
+    try:
+        uid = int(normalized.get("uid"))
+    except Exception:
+        return normalized
+
+    normalized["uid"] = uid
+    if preserve_reward:
+        return normalized
+
+    best_run = best_run_by_uid.get(uid)
+    if not isinstance(best_run, dict):
+        return normalized
+
+    for key in ("reward", "score", "time", "cost", "weight"):
+        if best_run.get(key) is not None:
+            normalized[key] = float(best_run.get(key) or 0.0)
+    return normalized
+
+
+def _top_consensus_snapshot(
+    best_run_by_uid: dict[int, dict[str, Any]],
+    *,
+    exclude_uid: int | None = None,
+) -> dict[str, Any] | None:
+    ranked: list[tuple[float, float, float, int, dict[str, Any]]] = []
+    for uid_raw, best_run in best_run_by_uid.items():
+        if not isinstance(best_run, dict):
+            continue
+        try:
+            uid = int(uid_raw)
+        except Exception:
+            continue
+        if exclude_uid is not None and uid == int(exclude_uid):
+            continue
+        try:
+            reward = float(best_run.get("reward", 0.0) or 0.0)
+            score = float(best_run.get("score", 0.0) or 0.0)
+            time_s = float(best_run.get("time", 0.0) or 0.0)
+        except Exception:
+            continue
+        if reward <= 0.0:
+            continue
+        ranked.append((reward, score, -time_s, -uid, {"uid": uid, **{k: v for k, v in best_run.items() if v is not None}}))
+
+    if not ranked:
+        return None
+
+    ranked.sort(reverse=True)
+    top = dict(ranked[0][4])
+    top["uid"] = int(top["uid"])
+    return top
+
+
+def _normalize_post_consensus_leadership_summary(
+    summary: dict[str, Any] | None,
+    *,
+    best_run_by_uid: dict[int, dict[str, Any]],
+    previous_leader_after: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    normalized = dict(summary) if isinstance(summary, dict) else {}
+    try:
+        required_improvement_pct = float(normalized.get("percentage_to_dethrone", 0.05) or 0.05)
+    except Exception:
+        required_improvement_pct = 0.05
+
+    leader_before = (
+        dict(previous_leader_after)
+        if isinstance(previous_leader_after, dict)
+        else _canonicalize_consensus_snapshot(
+            normalized.get("leader_before_round"),
+            best_run_by_uid=best_run_by_uid,
+            preserve_reward=True,
+        )
+    )
+    candidate = _canonicalize_consensus_snapshot(
+        normalized.get("candidate_this_round"),
+        best_run_by_uid=best_run_by_uid,
+    )
+    leader_after_existing = _canonicalize_consensus_snapshot(
+        normalized.get("leader_after_round"),
+        best_run_by_uid=best_run_by_uid,
+    )
+
+    if leader_before is None:
+        top_snapshot = candidate or leader_after_existing or _top_consensus_snapshot(best_run_by_uid)
+        normalized["leader_before_round"] = None
+        normalized["candidate_this_round"] = dict(top_snapshot) if isinstance(top_snapshot, dict) else None
+        normalized["leader_after_round"] = dict(top_snapshot) if isinstance(top_snapshot, dict) else None
+        normalized["required_reward_to_dethrone"] = None
+        normalized["dethroned"] = False
+        return normalized
+
+    try:
+        leader_before_uid = int(leader_before.get("uid")) if leader_before.get("uid") is not None else None
+    except Exception:
+        leader_before_uid = None
+
+    if candidate is None:
+        candidate = _top_consensus_snapshot(best_run_by_uid, exclude_uid=leader_before_uid)
+
+    try:
+        leader_before_reward = float(leader_before.get("reward", 0.0) or 0.0)
+    except Exception:
+        leader_before_reward = 0.0
+    threshold = float(leader_before_reward * (1.0 + required_improvement_pct))
+
+    dethroned = False
+    if isinstance(candidate, dict):
+        try:
+            candidate_reward = float(candidate.get("reward", 0.0) or 0.0)
+        except Exception:
+            candidate_reward = 0.0
+        dethroned = bool(candidate_reward > threshold)
+
+    normalized["leader_before_round"] = dict(leader_before)
+    normalized["candidate_this_round"] = dict(candidate) if isinstance(candidate, dict) else None
+    normalized["leader_after_round"] = dict(candidate if dethroned and isinstance(candidate, dict) else leader_before)
+    normalized["required_reward_to_dethrone"] = threshold
+    normalized["dethroned"] = dethroned
+    return normalized
+
+
 def _persist_round_summary_file(
     *,
     ctx,
@@ -335,7 +538,190 @@ def _persist_round_summary_file(
         ColoredLogger.warning(f"IWAP | Could not persist round artifacts for season={season_number} round={round_number}")
 
 
+def _pending_finish_dir(ctx) -> Path:
+    root_getter = getattr(ctx, "_state_summary_root", None)
+    base = root_getter() if callable(root_getter) else Path("data")
+    target = Path(base) / "pending_finish"
+    target.mkdir(parents=True, exist_ok=True)
+    return target
+
+
+def _round_checkpoint_files(ctx) -> list[Path]:
+    root_getter = getattr(ctx, "_state_summary_root", None)
+    base = root_getter() if callable(root_getter) else Path("data")
+    base = Path(base)
+    return sorted(base.glob("season_*/round_*/round_checkpoint.json"))
+
+
+async def _flush_pending_round_log_replays(ctx) -> None:
+    if getattr(ctx, "_iwap_offline_mode", False):
+        return
+
+    checkpoint_files = _round_checkpoint_files(ctx)
+    if not checkpoint_files:
+        return
+
+    from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+
+    for checkpoint_file in checkpoint_files:
+        try:
+            payload = json.loads(checkpoint_file.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        status = str(payload.get("status", "") or "").strip().lower()
+        if status == "completed":
+            continue
+
+        validator_round_id = str(payload.get("validator_round_id", "") or "").strip()
+        if not validator_round_id:
+            continue
+
+        round_log_file = str(payload.get("round_log_file", "") or "").strip()
+        round_log_path = Path(round_log_file) if round_log_file else checkpoint_file.with_name("round.log")
+        if not round_log_path.exists():
+            continue
+
+        try:
+            content = round_log_path.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            continue
+
+        content_size = len(content.encode("utf-8", errors="replace"))
+        last_uploaded_size = int(payload.get("last_round_log_uploaded_size", -1) or -1)
+        if content_size > 0 and last_uploaded_size == content_size and str(payload.get("last_round_log_upload_url", "") or "").strip():
+            continue
+
+        variants = ColoredLogger.build_round_log_upload_variants(content)
+        replay_url: str | None = None
+        replay_exc: Exception | None = None
+        for variant_label, variant_content in variants:
+            try:
+                replay_url = await ctx.iwap_client.upload_round_log(
+                    validator_round_id=validator_round_id,
+                    content=variant_content,
+                    season_number=payload.get("season_number"),
+                    round_number_in_season=payload.get("round_number_in_season"),
+                    validator_uid=payload.get("validator_uid"),
+                    validator_hotkey=payload.get("validator_hotkey"),
+                )
+                if variant_label != "full":
+                    log_iwap_phase(
+                        "Phase 5",
+                        f"pending round-log replay succeeded with truncated payload ({variant_label}) for {validator_round_id}",
+                        level="warning",
+                        exc_info=False,
+                    )
+                break
+            except httpx.HTTPStatusError as exc:
+                replay_exc = exc
+                status_code = exc.response.status_code if exc.response is not None else None
+                has_smaller_variant = variant_label != variants[-1][0]
+                if status_code == 413 and has_smaller_variant:
+                    log_iwap_phase(
+                        "Phase 5",
+                        f"pending round-log replay hit 413 ({variant_label}) for {validator_round_id}; retrying with a smaller tail payload",
+                        level="warning",
+                        exc_info=False,
+                    )
+                    continue
+                break
+            except Exception as exc:
+                replay_exc = exc
+                break
+
+        if replay_url:
+            payload["last_round_log_upload_url"] = replay_url
+            payload["last_round_log_uploaded_size"] = content_size
+            payload["replayed_at"] = time.time()
+            payload["replayed_from_startup"] = True
+            checkpoint_file.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+            log_iwap_phase(
+                "Phase 5",
+                f"pending round-log replay flushed for round_id={validator_round_id}",
+                level="success",
+                exc_info=False,
+            )
+            continue
+
+        if replay_exc is not None:
+            bt.logging.warning(f"IWAP | pending round-log replay failed for {validator_round_id}: {type(replay_exc).__name__}: {replay_exc}")
+
+
+def _finish_request_to_jsonable(finish_request: Any) -> dict[str, Any]:
+    if hasattr(finish_request, "to_payload"):
+        payload = finish_request.to_payload()
+        if isinstance(payload, dict):
+            return payload
+    if hasattr(finish_request, "model_dump"):
+        return finish_request.model_dump(mode="json")
+    if hasattr(finish_request, "dict"):
+        return finish_request.dict()
+    raise TypeError("finish_request is not serializable")
+
+
+class _PendingFinishRequest:
+    def __init__(self, payload: dict[str, Any]) -> None:
+        self._payload = dict(payload)
+        self.summary = self._payload.get("summary")
+
+    def to_payload(self) -> dict[str, Any]:
+        return dict(self._payload)
+
+
+def _persist_pending_finish_request(*, ctx, validator_round_id: str, finish_request: Any) -> None:
+    try:
+        payload = {
+            "validator_round_id": str(validator_round_id),
+            "finish_request": _finish_request_to_jsonable(finish_request),
+            "persisted_at": time.time(),
+        }
+        target = _pending_finish_dir(ctx) / f"{validator_round_id}.json"
+        target.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    except Exception:
+        bt.logging.warning(f"IWAP | Could not persist pending finish payload for {validator_round_id}")
+
+
+async def _flush_pending_finish_requests(ctx) -> None:
+    if getattr(ctx, "_iwap_offline_mode", False):
+        return
+    pending_dir = _pending_finish_dir(ctx)
+    files = sorted(pending_dir.glob("*.json"))
+    if not files:
+        return
+
+    for pending_file in files:
+        try:
+            payload = json.loads(pending_file.read_text(encoding="utf-8"))
+            validator_round_id = str(payload.get("validator_round_id") or "").strip()
+            finish_request_payload = payload.get("finish_request")
+            if not validator_round_id or not isinstance(finish_request_payload, dict):
+                pending_file.unlink(missing_ok=True)
+                continue
+            finish_request = _PendingFinishRequest(finish_request_payload)
+            await ctx.iwap_client.finish_round(
+                validator_round_id=validator_round_id,
+                finish_request=finish_request,
+            )
+            pending_file.unlink(missing_ok=True)
+            log_iwap_phase("Phase 5", f"pending finish_round flushed for round_id={validator_round_id}", level="success", exc_info=False)
+        except Exception as exc:
+            if isinstance(exc, httpx.HTTPStatusError) and _is_main_authority_or_grace_error(exc):
+                log_iwap_phase(
+                    "Phase 5",
+                    f"pending finish_round still blocked for {pending_file.stem}; will retry later",
+                    level="warning",
+                    exc_info=False,
+                )
+                continue
+            bt.logging.warning(f"IWAP | pending finish replay failed for {pending_file.stem}: {type(exc).__name__}: {exc}")
+
+
 async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
+    with contextlib.suppress(Exception):
+        await _flush_pending_round_log_replays(ctx)
+    with contextlib.suppress(Exception):
+        await _flush_pending_finish_requests(ctx)
     # Gate for downstream IWAP writes (start_agent_run/registration). Only set true once
     # round creation + set_tasks completed (or duplicate/idempotent equivalent).
     ctx._iwap_round_ready = False
@@ -464,6 +850,23 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
         metadata=round_metadata,
     )
 
+    def _apply_start_round_response(resp: Any) -> tuple[bool, bool]:
+        vrid = _extract_validator_round_id(resp)
+        if vrid != ctx.current_round_id:
+            ctx.current_round_id = vrid
+        response_shadow_mode = bool(resp.get("shadow_mode")) if isinstance(resp, dict) else False
+        if response_shadow_mode:
+            ctx._iwap_shadow_mode = True
+            log_iwap_phase(
+                "Phase 1",
+                (f"start_round accepted in SHADOW mode for round_id={ctx.current_round_id}; continuing idempotent IWAP writes with non-authoritative close semantics"),
+                level="warning",
+            )
+        return True, response_shadow_mode
+
+    def _is_recoverable_start_error(exc: httpx.HTTPStatusError) -> bool:
+        return _is_main_authority_or_grace_error(exc) or _parse_round_window_not_active(exc) is not None
+
     start_round_ok = False
     shadow_mode = False
     try:
@@ -472,29 +875,9 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
             validator_round=validator_round,
             validator_snapshot=validator_snapshot,
         )
-        vrid = _extract_validator_round_id(resp)
-        if vrid != ctx.current_round_id:
-            ctx.current_round_id = vrid
-        shadow_mode = bool(resp.get("shadow_mode")) if isinstance(resp, dict) else False
-        if shadow_mode:
-            ctx._iwap_shadow_mode = True
-            log_iwap_phase(
-                "Phase 1",
-                (f"start_round accepted in SHADOW mode for round_id={ctx.current_round_id}; continuing idempotent IWAP writes with non-authoritative close semantics"),
-                level="warning",
-            )
-        start_round_ok = True
+        start_round_ok, shadow_mode = _apply_start_round_response(resp)
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code if exc.response is not None else None
-        if _is_main_authority_or_grace_error(exc):
-            log_iwap_phase(
-                "Phase 1",
-                (f"start_round returned {status} due to main-validator authority/grace guard; enabling SHADOW mode and continuing on-chain"),
-                level="warning",
-                exc_info=False,
-            )
-            ctx._iwap_shadow_mode = True
-            return
         if _is_duplicate_like_error(exc):
             detail = _extract_error_detail(exc).lower()
             season_conflict = "cannot start season" in detail and "still active" in detail
@@ -520,6 +903,118 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
                 )
                 ctx._iwap_offline_mode = True
                 return
+            if _is_recoverable_start_error(exc):
+                max_retries, retry_interval_sec = _get_start_retry_policy()
+                last_exc: Exception = exc
+                initial_window = _parse_round_window_not_active(exc)
+                if initial_window is not None:
+                    current_block_seen, start_block_seen, end_block_seen = initial_window
+                    log_iwap_phase(
+                        "Phase 1",
+                        (
+                            f"start_round returned {status} because the round window is not active "
+                            f"(current_block={current_block_seen}, start_block={start_block_seen}, end_block={end_block_seen}); "
+                            f"retrying up to {max_retries} time(s) every {retry_interval_sec}s before degrading to local-only mode"
+                        ),
+                        level="warning",
+                        exc_info=False,
+                    )
+                else:
+                    log_iwap_phase(
+                        "Phase 1",
+                        (
+                            f"start_round returned {status} due to main-validator authority/grace guard; "
+                            f"retrying up to {max_retries} time(s) every {retry_interval_sec}s before degrading to shadow/local-only mode"
+                        ),
+                        level="warning",
+                        exc_info=False,
+                    )
+
+                retried_success = False
+                for attempt in range(1, max_retries + 1):
+                    log_iwap_phase(
+                        "Phase 1",
+                        f"start_round retry {attempt}/{max_retries} for round_id={ctx.current_round_id} in {retry_interval_sec}s",
+                        level="warning",
+                        exc_info=False,
+                    )
+                    await asyncio.sleep(retry_interval_sec)
+                    try:
+                        retry_resp = await ctx.iwap_client.start_round(
+                            validator_identity=validator_identity,
+                            validator_round=validator_round,
+                            validator_snapshot=validator_snapshot,
+                        )
+                    except httpx.HTTPStatusError as retry_exc:
+                        if _is_duplicate_like_error(retry_exc):
+                            start_round_ok = True
+                            retried_success = True
+                            break
+                        mismatch = _parse_round_mismatch(retry_exc)
+                        if mismatch is not None:
+                            expected, got = mismatch
+                            log_iwap_phase(
+                                "Phase 1",
+                                (f"start_round retry rejected due to round_number mismatch (expected={expected}, got={got}); continuing without IWAP sync"),
+                                level="error",
+                            )
+                            ctx._iwap_offline_mode = True
+                            return
+                        last_exc = retry_exc
+                        if _is_recoverable_start_error(retry_exc):
+                            continue
+                        exc = retry_exc
+                        break
+                    except Exception as retry_exc:
+                        last_exc = retry_exc
+                        exc = retry_exc
+                        break
+                    else:
+                        start_round_ok, shadow_mode = _apply_start_round_response(retry_resp)
+                        retried_success = True
+                        log_iwap_phase(
+                            "Phase 1",
+                            f"start_round succeeded on retry for round_id={ctx.current_round_id}",
+                            level="success",
+                        )
+                        break
+
+                if retried_success:
+                    pass
+                elif isinstance(last_exc, httpx.HTTPStatusError) and _is_main_authority_or_grace_error(last_exc):
+                    log_iwap_phase(
+                        "Phase 1",
+                        (
+                            f"start_round still blocked by main-validator authority/grace after retries for round_id={ctx.current_round_id}; "
+                            "keeping validator online in SHADOW/local-only mode for this round"
+                        ),
+                        level="warning",
+                        exc_info=False,
+                    )
+                    ctx._iwap_shadow_mode = True
+                    return
+                elif isinstance(last_exc, httpx.HTTPStatusError) and _parse_round_window_not_active(last_exc) is not None:
+                    current_block_seen, start_block_seen, end_block_seen = _parse_round_window_not_active(last_exc) or (None, None, None)
+                    log_iwap_phase(
+                        "Phase 1",
+                        (
+                            f"start_round still outside the active window after retries for round_id={ctx.current_round_id} "
+                            f"(current_block={current_block_seen}, start_block={start_block_seen}, end_block={end_block_seen}); "
+                            "keeping validator online and skipping IWAP writes for this round"
+                        ),
+                        level="warning",
+                        exc_info=False,
+                    )
+                    return
+                else:
+                    log_iwap_phase(
+                        "Phase 1",
+                        f"start_round failed for round_id={ctx.current_round_id}",
+                        level="error",
+                        exc_info=False,
+                    )
+                    ctx._iwap_offline_mode = True
+                    return
             else:
                 log_iwap_phase(
                     "Phase 1",
@@ -707,6 +1202,18 @@ async def register_participating_miners_in_iwap(ctx) -> None:
                 miner_uid,
                 {"reward": 0.0, "eval_score": 0.0, "execution_time": 0.0, "cost": 0.0, "tasks": 0},
             )
+            persist_checkpoint = getattr(ctx, "_persist_round_checkpoint", None)
+            if callable(persist_checkpoint):
+                with contextlib.suppress(Exception):
+                    persist_checkpoint(
+                        reason="start_agent_run_skipped_reuse",
+                        status="registering_miners",
+                        extra={
+                            "miner_uid": int(miner_uid),
+                            "agent_run_id": str(agent_run_id),
+                            "reuse": True,
+                        },
+                    )
             log_iwap_phase(
                 "Phase 3",
                 f"Skipping start_agent_run for miner_uid={miner_uid}; keeping best historical run for this round",
@@ -724,11 +1231,24 @@ async def register_participating_miners_in_iwap(ctx) -> None:
             is_sota=False,
             version=None,
             started_at=now_ts,
+            total_tasks=int(len(getattr(ctx, "season_tasks", []) or []) or 0),
             metadata={"handshake_note": getattr(handshake_payload, "note", None)},
         )
 
         try:
             start_agent_run_message = f"Calling start_agent_run for miner_uid={miner_uid}, agent_run_id={agent_run_id}"
+            persist_checkpoint = getattr(ctx, "_persist_round_checkpoint", None)
+            if callable(persist_checkpoint):
+                with contextlib.suppress(Exception):
+                    persist_checkpoint(
+                        reason="start_agent_run_started",
+                        status="registering_miners",
+                        extra={
+                            "miner_uid": int(miner_uid),
+                            "agent_run_id": str(agent_run_id),
+                            "reuse": False,
+                        },
+                    )
             log_iwap_phase("Phase 3", start_agent_run_message)
             try:
                 await ctx.iwap_client.start_agent_run(
@@ -767,6 +1287,16 @@ async def register_participating_miners_in_iwap(ctx) -> None:
                 )
             else:
                 start_agent_run_error = f"start_agent_run failed for miner_uid={miner_uid}, agent_run_id={agent_run_id}"
+                if callable(persist_checkpoint):
+                    with contextlib.suppress(Exception):
+                        persist_checkpoint(
+                            reason="start_agent_run_failed",
+                            status="registering_miners",
+                            extra={
+                                "miner_uid": int(miner_uid),
+                                "agent_run_id": str(agent_run_id),
+                            },
+                        )
                 log_iwap_phase(
                     "Phase 3",
                     start_agent_run_error,
@@ -776,10 +1306,30 @@ async def register_participating_miners_in_iwap(ctx) -> None:
                 continue
         except Exception:
             start_agent_run_error = f"start_agent_run failed for miner_uid={miner_uid}, agent_run_id={agent_run_id}"
+            if callable(persist_checkpoint):
+                with contextlib.suppress(Exception):
+                    persist_checkpoint(
+                        reason="start_agent_run_failed",
+                        status="registering_miners",
+                        extra={
+                            "miner_uid": int(miner_uid),
+                            "agent_run_id": str(agent_run_id),
+                        },
+                    )
             log_iwap_phase("Phase 3", start_agent_run_error, level="error", exc_info=False)
             continue
         else:
             start_agent_run_success = f"start_agent_run completed for miner_uid={miner_uid}, agent_run_id={agent_run_id}"
+            if callable(persist_checkpoint):
+                with contextlib.suppress(Exception):
+                    persist_checkpoint(
+                        reason="start_agent_run_completed",
+                        status="registering_miners",
+                        extra={
+                            "miner_uid": int(miner_uid),
+                            "agent_run_id": str(agent_run_id),
+                        },
+                    )
             log_iwap_phase("Phase 3", start_agent_run_success, level="success")
             # Update local state for bookkeeping
             ctx.current_agent_runs[miner_uid] = agent_run
@@ -807,6 +1357,10 @@ async def finish_round_flow(
             "⚠️ OFFLINE MODE: Skipping finish_round backend call - cleaning up local state",
             level="warning",
         )
+        persist_checkpoint = getattr(ctx, "_persist_round_checkpoint", None)
+        if callable(persist_checkpoint):
+            with contextlib.suppress(Exception):
+                persist_checkpoint(reason="finish_round_offline", status="completed")
         ctx._reset_iwap_round_state()
         bt.logging.info("✅ Round completed locally - weights were set on-chain successfully")
         return True
@@ -820,7 +1374,8 @@ async def finish_round_flow(
         season_for_round = 0
     if round_for_round is None:
         round_for_round = 0
-    # Upload full round log (append-only file: all logs from round start; never truncated on error)
+    # Upload the full round log first; if the gateway rejects it for size,
+    # fall back to a truncated tail snapshot so we still persist something useful.
     round_log_file: str | None = None
     round_log_url: str | None = None
     round_log_error: str | None = None
@@ -850,14 +1405,26 @@ async def finish_round_flow(
                             validator_hotkey = getattr(validator_hotkey, "ss58_address", None)
                     except Exception:
                         pass
-                    round_log_url = await ctx.iwap_client.upload_round_log(
-                        validator_round_id=round_id,
-                        content=round_log_contents,
-                        season_number=season_for_round,
-                        round_number_in_season=round_for_round,
-                        validator_uid=validator_uid if isinstance(validator_uid, int) else None,
-                        validator_hotkey=validator_hotkey,
-                    )
+                    upload_variants = ColoredLogger.build_round_log_upload_variants(round_log_contents)
+                    for variant_label, variant_content in upload_variants:
+                        try:
+                            round_log_url = await ctx.iwap_client.upload_round_log(
+                                validator_round_id=round_id,
+                                content=variant_content,
+                                season_number=season_for_round,
+                                round_number_in_season=round_for_round,
+                                validator_uid=validator_uid if isinstance(validator_uid, int) else None,
+                                validator_hotkey=validator_hotkey,
+                            )
+                            if round_log_url is not None:
+                                break
+                        except httpx.HTTPStatusError as exc:
+                            status_code = exc.response.status_code if exc.response is not None else None
+                            has_smaller_variant = variant_label != upload_variants[-1][0]
+                            if status_code == 413 and has_smaller_variant:
+                                bt.logging.warning(f"Round log upload hit 413 for {round_id} ({variant_label}); retrying with a smaller tail payload")
+                                continue
+                            raise
                     if round_log_url is None:
                         round_log_error = "upload rejected: no url returned"
                 else:
@@ -979,6 +1546,7 @@ async def finish_round_flow(
             pass
 
         tasks_received = int(effective_run.get("tasks_received", 0) or 0)
+        tasks_attempted = int(effective_run.get("tasks_attempted", tasks_received) or 0)
         tasks_success = int(effective_run.get("tasks_success", 0) or 0)
         tasks_failed = int(max(tasks_received - tasks_success, 0))
         avg_time = float(effective_run.get("time", 0.0) or 0.0)
@@ -990,6 +1558,7 @@ async def finish_round_flow(
             "avg_eval_time": avg_time,
             "avg_cost": avg_cost,
             "tasks_sent": tasks_received,
+            "tasks_attempted": tasks_attempted,
             "tasks_success": tasks_success,
             "tasks_failed": tasks_failed,
             "github_url": effective_run.get("github_url"),
@@ -1007,7 +1576,7 @@ async def finish_round_flow(
             "miner_uid": miner_uid,
             "miner_hotkey": miner_hotkey,
             "miner_name": miner_name,
-            "tasks_attempted": tasks_received,
+            "tasks_attempted": tasks_attempted,
             "tasks_completed": tasks_success,
             "tasks_failed": tasks_failed,
             "best_run": best_run,
@@ -1015,6 +1584,10 @@ async def finish_round_flow(
         }
         if current_run and current_run.get("zero_reason") is not None:
             miner_payload["zero_reason"] = current_run.get("zero_reason")
+        if current_run and current_run.get("early_stop_reason") is not None:
+            miner_payload["early_stop_reason"] = current_run.get("early_stop_reason")
+        if current_run and current_run.get("early_stop_message") is not None:
+            miner_payload["early_stop_message"] = current_run.get("early_stop_message")
         local_evaluation_miners.append(miner_payload)
 
     agent_run_summaries: list[iwa_models.FinishRoundAgentRunIWAP] = []
@@ -1035,10 +1608,12 @@ async def finish_round_flow(
                 miner_name=miner_name or f"Miner {miner_uid}",
                 avg_reward=float(current_run.get("reward", 0.0) or 0.0),
                 avg_evaluation_time=float(current_run.get("time", 0.0) or 0.0),
-                tasks_attempted=int(current_run.get("tasks_received", 0) or 0),
+                tasks_attempted=int(current_run.get("tasks_attempted", current_run.get("tasks_received", 0)) or 0),
                 tasks_completed=int(current_run.get("tasks_success", 0) or 0),
                 tasks_failed=int(current_run.get("failed_tasks", 0) or 0),
                 zero_reason=current_run.get("zero_reason"),
+                early_stop_reason=current_run.get("early_stop_reason"),
+                early_stop_message=current_run.get("early_stop_message"),
             )
         )
 
@@ -1244,6 +1819,8 @@ async def finish_round_flow(
             local_stats = local_stats_by_miner.get(miner_uid) or {}
             best_run_payload = best_run_getter(miner_uid)
             current_run_payload = current_run_getter(miner_uid)
+            current_run_dict = current_run_payload if isinstance(current_run_payload, dict) else {}
+            best_run_dict = best_run_payload if isinstance(best_run_payload, dict) else {}
 
             # Obtener miner_hotkey
             miner_hotkey = None
@@ -1265,32 +1842,40 @@ async def finish_round_flow(
             avg_eval_time = current_stats.get("avg_eval_time") or consensus_stats.get("avg_eval_time") or local_stats.get("avg_eval_time", 0.0)
             avg_cost = current_stats.get("avg_cost") or consensus_stats.get("avg_cost") or local_stats.get("avg_cost", 0.0)
             # IMPORTANT:
-            # reward/score/time/cost here are consensus-level metrics, but the
-            # task counters inside best/current runs should describe those runs
-            # themselves, not the round-level aggregate repeated per validator.
-            tasks_sent = int(best_run_payload.get("tasks_received", 0) or 0) if isinstance(best_run_payload, dict) else int(consensus_stats.get("tasks_sent") or local_stats.get("tasks_sent", 0) or 0)
-            tasks_success = (
-                int(best_run_payload.get("tasks_success", 0) or 0) if isinstance(best_run_payload, dict) else int(consensus_stats.get("tasks_success") or local_stats.get("tasks_success", 0) or 0)
-            )
-            github_url = best_run_payload.get("github_url") if isinstance(best_run_payload, dict) else local_stats.get("github_url")
-            normalized_repo = best_run_payload.get("normalized_repo") if isinstance(best_run_payload, dict) else local_stats.get("normalized_repo")
-            commit_sha = best_run_payload.get("commit_sha") if isinstance(best_run_payload, dict) else local_stats.get("commit_sha")
-            evaluation_context = best_run_payload.get("evaluation_context") if isinstance(best_run_payload, dict) else local_stats.get("evaluation_context")
+            # best_run_consensus must describe the consensus view of THIS round,
+            # not the miner's historical best run. Use current-round payload and
+            # aggregated round stats first, and only fall back to best_run for
+            # identity fields when there is no round-local data.
+            if "tasks_received" in current_run_dict:
+                tasks_sent = int(current_run_dict.get("tasks_received", 0) or 0)
+            else:
+                tasks_sent = int(current_stats.get("tasks_sent") or 0) or int(consensus_stats.get("tasks_sent") or 0) or int(local_stats.get("tasks_sent", 0) or 0)
+            if "tasks_success" in current_run_dict:
+                tasks_success = int(current_run_dict.get("tasks_success", 0) or 0)
+            else:
+                tasks_success = int(current_stats.get("tasks_success") or 0) or int(consensus_stats.get("tasks_success") or 0) or int(local_stats.get("tasks_success", 0) or 0)
+            github_url = current_run_dict.get("github_url") or local_stats.get("github_url") or best_run_dict.get("github_url")
+            normalized_repo = current_run_dict.get("normalized_repo") or local_stats.get("normalized_repo") or best_run_dict.get("normalized_repo")
+            commit_sha = current_run_dict.get("commit_sha") or local_stats.get("commit_sha") or best_run_dict.get("commit_sha")
+            evaluation_context = current_run_dict.get("evaluation_context") if isinstance(current_run_dict.get("evaluation_context"), dict) else local_stats.get("evaluation_context")
+            if not isinstance(evaluation_context, dict):
+                fallback_context = best_run_dict.get("evaluation_context")
+                evaluation_context = dict(fallback_context) if isinstance(fallback_context, dict) else local_stats.get("evaluation_context")
 
             current_run_consensus = None
-            if (isinstance(current_stats, dict) and current_stats) or isinstance(current_run_payload, dict):
+            if (isinstance(current_stats, dict) and current_stats) or current_run_dict:
                 current_run_consensus = {
-                    "reward": float(current_stats.get("avg_reward", 0.0) if isinstance(current_stats, dict) and current_stats else current_run_payload.get("reward", 0.0) or 0.0),
-                    "score": float(current_stats.get("avg_eval_score", 0.0) if isinstance(current_stats, dict) and current_stats else current_run_payload.get("score", 0.0) or 0.0),
-                    "time": float(current_stats.get("avg_eval_time", 0.0) if isinstance(current_stats, dict) and current_stats else current_run_payload.get("time", 0.0) or 0.0),
-                    "cost": float(current_stats.get("avg_cost", 0.0) if isinstance(current_stats, dict) and current_stats else current_run_payload.get("cost", 0.0) or 0.0),
-                    "tasks_received": int(current_run_payload.get("tasks_received", 0) or 0) if isinstance(current_run_payload, dict) else int(current_stats.get("tasks_sent", 0) or 0),
-                    "tasks_success": int(current_run_payload.get("tasks_success", 0) or 0) if isinstance(current_run_payload, dict) else int(current_stats.get("tasks_success", 0) or 0),
-                    "github_url": current_run_payload.get("github_url") if isinstance(current_run_payload, dict) else github_url,
-                    "normalized_repo": current_run_payload.get("normalized_repo") if isinstance(current_run_payload, dict) else normalized_repo,
-                    "commit_sha": current_run_payload.get("commit_sha") if isinstance(current_run_payload, dict) else commit_sha,
+                    "reward": float(current_stats.get("avg_reward", 0.0) if isinstance(current_stats, dict) and current_stats else current_run_dict.get("reward", 0.0) or 0.0),
+                    "score": float(current_stats.get("avg_eval_score", 0.0) if isinstance(current_stats, dict) and current_stats else current_run_dict.get("score", 0.0) or 0.0),
+                    "time": float(current_stats.get("avg_eval_time", 0.0) if isinstance(current_stats, dict) and current_stats else current_run_dict.get("time", 0.0) or 0.0),
+                    "cost": float(current_stats.get("avg_cost", 0.0) if isinstance(current_stats, dict) and current_stats else current_run_dict.get("cost", 0.0) or 0.0),
+                    "tasks_received": int(current_run_dict.get("tasks_received", 0) or 0) if current_run_dict else int(current_stats.get("tasks_sent", 0) or 0),
+                    "tasks_success": int(current_run_dict.get("tasks_success", 0) or 0) if current_run_dict else int(current_stats.get("tasks_success", 0) or 0),
+                    "github_url": current_run_dict.get("github_url") if current_run_dict else github_url,
+                    "normalized_repo": current_run_dict.get("normalized_repo") if current_run_dict else normalized_repo,
+                    "commit_sha": current_run_dict.get("commit_sha") if current_run_dict else commit_sha,
                 }
-                current_context = current_run_payload.get("evaluation_context") if isinstance(current_run_payload, dict) else None
+                current_context = current_run_dict.get("evaluation_context") if current_run_dict else None
                 if isinstance(current_context, dict):
                     current_run_consensus["evaluation_context"] = dict(current_context)
                 elif isinstance(evaluation_context, dict):
@@ -1354,38 +1939,23 @@ async def finish_round_flow(
             season_number=int(season_number_for_summary or 0),
             round_number_in_season=int(round_number_for_summary or 0),
         )
+        previous_leader_after = _extract_previous_round_leader_after(
+            season_history=getattr(ctx, "_season_competition_history", {}) or {},
+            season_number=int(season_number_for_summary or 0),
+            round_number_in_season=int(round_number_for_summary or 0),
+        )
         best_run_by_uid = {
             int(miner_payload.get("uid")): dict(miner_payload.get("best_run_consensus") or {})
             for miner_payload in post_consensus_miners
             if isinstance(miner_payload, dict) and miner_payload.get("uid") is not None
         }
 
-        def _canonical_summary_snapshot(existing: dict[str, Any] | None) -> dict[str, Any] | None:
-            if not isinstance(existing, dict):
-                return None
-            try:
-                snapshot_uid = int(existing.get("uid"))
-            except Exception:
-                return dict(existing)
-            best_run = best_run_by_uid.get(snapshot_uid)
-            if not isinstance(best_run, dict):
-                return dict(existing)
-            return {
-                "uid": snapshot_uid,
-                "reward": float(best_run.get("reward", existing.get("reward", 0.0)) or 0.0),
-                "score": float(best_run.get("score", existing.get("score", 0.0)) or 0.0),
-                "time": float(best_run.get("time", existing.get("time", 0.0)) or 0.0),
-                "cost": float(best_run.get("cost", existing.get("cost", 0.0)) or 0.0),
-                **({"weight": float(best_run.get("weight"))} if best_run.get("weight") is not None else {}),
-            }
-
         if isinstance(post_consensus_json_summary, dict):
-            post_consensus_json_summary = {
-                **post_consensus_json_summary,
-                "leader_before_round": _canonical_summary_snapshot(post_consensus_json_summary.get("leader_before_round")),
-                "candidate_this_round": _canonical_summary_snapshot(post_consensus_json_summary.get("candidate_this_round")),
-                "leader_after_round": _canonical_summary_snapshot(post_consensus_json_summary.get("leader_after_round")),
-            }
+            post_consensus_json_summary = _normalize_post_consensus_leadership_summary(
+                post_consensus_json_summary,
+                best_run_by_uid=best_run_by_uid,
+                previous_leader_after=previous_leader_after,
+            )
 
         post_consensus_evaluation = {
             "season": int(season_number_for_summary or 0),
@@ -1545,20 +2115,31 @@ async def finish_round_flow(
                     break
 
             if retried_success:
+                persist_checkpoint = getattr(ctx, "_persist_round_checkpoint", None)
+                if callable(persist_checkpoint):
+                    with contextlib.suppress(Exception):
+                        persist_checkpoint(reason="finish_round_completed", status="completed")
                 success = True
-                ctx._reset_iwap_round_state()
                 return success
 
             # If retries exhausted and still authority/grace blocked, keep local completion and continue.
             if isinstance(last_exc, httpx.HTTPStatusError) and _is_main_authority_or_grace_error(last_exc):
+                _persist_pending_finish_request(
+                    ctx=ctx,
+                    validator_round_id=round_id,
+                    finish_request=finish_request,
+                )
                 log_iwap_phase(
                     "Phase 5",
-                    (f"finish_round still blocked after retries for round_id={round_id}; continuing without IWAP close for this validator round"),
+                    (f"finish_round still blocked after retries for round_id={round_id}; persisted pending finish payload and continuing without IWAP close for this validator round"),
                     level="warning",
                     exc_info=False,
                 )
+                persist_checkpoint = getattr(ctx, "_persist_round_checkpoint", None)
+                if callable(persist_checkpoint):
+                    with contextlib.suppress(Exception):
+                        persist_checkpoint(reason="finish_round_pending", status="pending_finish")
                 success = False
-                ctx._reset_iwap_round_state()
                 return success
 
             # Replace original exception so generic handler logs the real non-authority failure.
@@ -1583,18 +2164,31 @@ async def finish_round_flow(
                 finish_request=finish_request,
             )
             success = True
+            persist_checkpoint = getattr(ctx, "_persist_round_checkpoint", None)
+            if callable(persist_checkpoint):
+                with contextlib.suppress(Exception):
+                    persist_checkpoint(reason="finish_round_fallback_completed", status="completed")
             log_iwap_phase(
                 "Phase 5",
                 f"finish_round fallback succeeded for round_id={round_id}",
                 level="success",
             )
         except Exception as fallback_exc:
+            _persist_pending_finish_request(
+                ctx=ctx,
+                validator_round_id=round_id,
+                finish_request=finish_request,
+            )
             log_iwap_phase(
                 "Phase 5",
-                f"finish_round fallback also failed for round_id={round_id}: {type(fallback_exc).__name__}: {fallback_exc}",
+                f"finish_round fallback also failed for round_id={round_id}: {type(fallback_exc).__name__}: {fallback_exc}. Pending finish payload persisted for retry.",
                 level="error",
             )
     else:
+        persist_checkpoint = getattr(ctx, "_persist_round_checkpoint", None)
+        if callable(persist_checkpoint):
+            with contextlib.suppress(Exception):
+                persist_checkpoint(reason="finish_round_completed", status="completed")
         log_iwap_phase(
             "Phase 5",
             f"finish_round completed for round_id={round_id}",
