@@ -646,8 +646,6 @@ class ValidatorSettlementMixin:
                             fallback=existing_snapshot if isinstance(existing_snapshot, dict) else None,
                         )
 
-        reigning_is_eligible = bool(reigning_uid is not None and reigning_uid in eligible_uids)
-
         challenger_uid: int | None = None
         challenger_reward = 0.0
         if eligible_uids and reigning_uid is not None:
@@ -671,19 +669,20 @@ class ValidatorSettlementMixin:
         dethroned = False
         required_reward_to_dethrone: float | None = None
 
-        if eligible_uids and best_uid is not None and best_reward > 0.0:
+        reigning_is_eligible = bool(reigning_uid is not None and reigning_uid in eligible_uids)
+
+        if reigning_uid is not None and reigning_reward > 0.0:
+            winner_uid = reigning_uid
+            winner_reward = reigning_reward
+            if challenger_uid is not None:
+                required_reward_to_dethrone = float(reigning_reward * (1.0 + required_improvement_pct))
+                if challenger_reward > required_reward_to_dethrone:
+                    dethroned = True
+                    winner_uid = challenger_uid
+                    winner_reward = challenger_reward
+        elif eligible_uids and best_uid is not None and best_reward > 0.0:
             winner_uid = best_uid
             winner_reward = best_reward
-
-            if reigning_is_eligible and reigning_uid is not None and reigning_reward > 0.0:
-                winner_uid = reigning_uid
-                winner_reward = reigning_reward
-                if challenger_uid is not None:
-                    required_reward_to_dethrone = float(reigning_reward * (1.0 + required_improvement_pct))
-                    if challenger_reward > required_reward_to_dethrone:
-                        dethroned = True
-                        winner_uid = challenger_uid
-                        winner_reward = challenger_reward
         elif not eligible_uids:
             winner_uid = None
             winner_reward = 0.0
