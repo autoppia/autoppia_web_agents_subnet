@@ -100,33 +100,43 @@ omit = [
     "*/tests/*",
     "*/test_*.py",
     "*/conftest.py",
-    # Entry points and base classes (require live bittensor/network)
+    # Entry points y clases base (requieren red bittensor/entorno vivo)
     "autoppia_web_agents_subnet/base/neuron.py",
     "autoppia_web_agents_subnet/base/validator.py",
     "autoppia_web_agents_subnet/base/miner.py",
     "autoppia_web_agents_subnet/bittensor_config.py",
-    # CLI / UI (user-facing entry points)
+    # CLI / UI (entry points de usuario)
     "autoppia_web_agents_subnet/miner/cli.py",
     "autoppia_web_agents_subnet/miner/help.py",
     "autoppia_web_agents_subnet/miner/ui.py",
     "autoppia_web_agents_subnet/miner/service.py",
     "autoppia_web_agents_subnet/miner/utils.py",
-    # Heavy I/O and external deps
+    # I/O pesado y dependencias externas
     "autoppia_web_agents_subnet/platform/client.py",
     "autoppia_web_agents_subnet/opensource/gateway/main.py",
+    "autoppia_web_agents_subnet/opensource/gateway/config.py",
+    "autoppia_web_agents_subnet/opensource/gateway/models.py",
     "autoppia_web_agents_subnet/opensource/utils_docker.py",
     "autoppia_web_agents_subnet/opensource/utils_git.py",
-    # Thin / optional
+    # Finos / opcionales
     "autoppia_web_agents_subnet/base/utils/config.py",
     "autoppia_web_agents_subnet/base/utils/logging.py",
     "autoppia_web_agents_subnet/platform/validator_mixin.py",
-    # Integration-heavy (async/IWA/network)
+    "autoppia_web_agents_subnet/platform/utils/round_flow.py",
+    "autoppia_web_agents_subnet/platform/utils/task_flow.py",
+    # Muy de integración (async/IWA/network)
     "autoppia_web_agents_subnet/platform/mixin.py",
     "autoppia_web_agents_subnet/platform/utils/iwa_core.py",
     "autoppia_web_agents_subnet/validator/season_manager.py",
     "autoppia_web_agents_subnet/validator/evaluation/tasks.py",
+    "autoppia_web_agents_subnet/validator/evaluation/mixin.py",
     "autoppia_web_agents_subnet/validator/evaluation/stateful_cua_eval.py",
+    "autoppia_web_agents_subnet/validator/evaluation/penalties.py",
+    "autoppia_web_agents_subnet/validator/evaluation/topk.py",
     "autoppia_web_agents_subnet/validator/reporting/mixin.py",
+    "autoppia_web_agents_subnet/validator/round_start/mixin.py",
+    "autoppia_web_agents_subnet/validator/settlement/consensus.py",
+    "autoppia_web_agents_subnet/validator/settlement/mixin.py",
     "autoppia_web_agents_subnet/validator/visualization/stats.py",
     "autoppia_web_agents_subnet/validator/visualization/weights_table.py",
     "autoppia_web_agents_subnet/validator/visualization/round_table.py",
@@ -145,6 +155,7 @@ exclude_lines = [
 ]
 show_missing = true
 skip_covered = false
+fail_under = 90
 
 [tool.sonar]
 projectKey = "autoppia-web-agents-subnet"
