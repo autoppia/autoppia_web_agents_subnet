@@ -13,9 +13,9 @@ TESTING = _env_bool("TESTING", False)
 # BURN CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════
 # BURN_AMOUNT_PERCENTAGE: 0.0-1.0 (qué fracción se quema, el resto premia a miners)
-# 1.0 = quemar todo. 0.9 = 90% burn, 10% a winner. Igual que en main.
+# 1.0 = quemar todo. 0.0 = sin burn; el ganador se lleva el peso (salvo fallback on-chain).
 BURN_UID = _env_int("BURN_UID", 5)
-BURN_AMOUNT_PERCENTAGE = _env_float("BURN_AMOUNT_PERCENTAGE", 0.925)
+BURN_AMOUNT_PERCENTAGE = _env_float("BURN_AMOUNT_PERCENTAGE", 0.0)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -25,13 +25,17 @@ BURN_AMOUNT_PERCENTAGE = _env_float("BURN_AMOUNT_PERCENTAGE", 0.925)
 # Season/round scheduling must always come from this file for the validator.
 # Do not read these values from the process environment, otherwise PM2 can keep
 # stale overrides after resets/restarts.
-# Chain epoch size is 360 blocks. Round length is expressed in epochs.
+# Chain epoch size is 360 blocks. Round/season lengths are in "epochs" (multiples of 360 blocks).
+# Wall time below assumes ~12 s/block (Bittensor-style); if el bloque cambia, escala proporcional.
 BLOCKS_PER_EPOCH = 360
-ROUND_SIZE_EPOCHS = 5
-ROUNDS_PER_SEASON = 28
-SEASON_SIZE_EPOCHS = 140
+# Round = 5 epochs = 1800 bloques ≈ 6 h → 4 rounds/día (~12 s/bloque).
+# Season = 100 epochs = 36000 bloques ≈ 5 días; 20 rounds x 6 h = 5 días.
+ROUND_SIZE_EPOCHS = 5.0
+ROUNDS_PER_SEASON = 20
+SEASON_SIZE_EPOCHS = 100.0
+# Anchor: bloque 7860474 ≈ 20:35 → +425 bloques (~12 s/bloque, 85 min) ≈ 22:00.
+MINIMUM_START_BLOCK = 7860899
 # IMPORTANT: season/round math uses MINIMUM_START_BLOCK always.
-MINIMUM_START_BLOCK = 7802800
 STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION = _env_float("STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION", 0.94, test_default=0.94)
 FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION = _env_float("FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION", 0.97, test_default=0.97)
 SKIP_ROUND_IF_STARTED_AFTER_FRACTION = _env_float("SKIP_ROUND_IF_STARTED_AFTER_FRACTION", 0.30, test_default=0.30)

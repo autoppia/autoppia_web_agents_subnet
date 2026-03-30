@@ -4,11 +4,11 @@ from urllib.parse import urlparse
 
 from autoppia_web_agents_subnet.utils.env import _env_float, _env_int
 
-# Must match validator and chain: 1 epoch = 360 blocks.
+# Must match validator config (5/100 epochs, anchor alineado con MINIMUM_START_BLOCK del validador).
 BLOCKS_PER_EPOCH = _env_int("BLOCKS_PER_EPOCH", 360, test_default=360)
 ROUND_SIZE_EPOCHS = _env_float("ROUND_SIZE_EPOCHS", 5.0, test_default=5.0)
-SEASON_SIZE_EPOCHS = _env_float("SEASON_SIZE_EPOCHS", 140.0, test_default=140.0)
-MINIMUM_START_BLOCK = _env_int("MINIMUM_START_BLOCK", 7_758_721, test_default=7_758_721)
+SEASON_SIZE_EPOCHS = _env_float("SEASON_SIZE_EPOCHS", 100.0, test_default=100.0)
+MINIMUM_START_BLOCK = _env_int("MINIMUM_START_BLOCK", 7_860_899, test_default=7_860_899)
 
 
 def season_block_length() -> int:
