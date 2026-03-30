@@ -384,7 +384,8 @@ async def test_post_consensus_null_best_run_contributes_zero_for_that_miner_when
 
     What this test proves:
     a validator is not excluded just because one miner is null.
-    For that specific miner, `best_run = null` still contributes zero.
+    For that specific miner, `best_run = null` contributes no signal at all, so the
+    miner consensus only uses validators that actually published a best run.
     """
     validator = dummy_validator
     _configure_consensus_validator(
@@ -425,8 +426,8 @@ async def test_post_consensus_null_best_run_contributes_zero_for_that_miner_when
     ):
         consensus_rewards, details = await aggregate_scores_from_commitments(validator, st=Mock())
 
-    assert consensus_rewards[48] == pytest.approx(0.2)
-    assert details["stats_by_miner"][48]["avg_reward"] == pytest.approx(0.2)
+    assert consensus_rewards[48] == pytest.approx(0.4)
+    assert details["stats_by_miner"][48]["avg_reward"] == pytest.approx(0.4)
     assert details["stats_by_miner"][48]["tasks_sent"] == 100
     assert details["stats_by_miner"][48]["tasks_success"] == 40
     assert details["skips"]["all_zero_when_others_positive"] == []
@@ -472,7 +473,7 @@ async def test_post_consensus_excludes_all_zero_validator_when_others_have_posit
         validator_version="16.0.3",
         best_run=None,
     )
-    payload_new_big["summary"] = {"validator_all_runs_zero": True}
+    payload_new_big["summary"] = {"validator_all_best_runs_zero": True}
 
     with (
         patch("autoppia_web_agents_subnet.validator.settlement.consensus.read_all_plain_commitments", new=AsyncMock(return_value=commits)),
@@ -493,6 +494,61 @@ async def test_post_consensus_excludes_all_zero_validator_when_others_have_posit
         {"hotkey": "hk-old-2", "uid": 1, "stake": 10000.0, "cid": "cid-2"},
     ]
     assert details["skips"]["all_zero_when_others_positive"] == [("hk-new-big", "cid-3")]
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_post_consensus_keeps_validator_with_positive_best_run_even_if_summary_claims_all_zero(dummy_validator):
+    """
+    Scenario:
+    A validator had no fresh current-round evaluations because miners were in cooldown, so its payload
+    summary incorrectly says `validator_all_best_runs_zero=true`, but it still carries a positive `best_run`.
+
+    What this test proves:
+    consensus must keep that validator, because the effective signal it publishes is still positive.
+    """
+    validator = dummy_validator
+    _configure_consensus_validator(
+        validator,
+        version="16.0.0",
+        hotkeys=["hk-old", "hk-cooldown"],
+        stakes=[10000.0, 20000.0],
+    )
+
+    commits = {
+        "hk-old": {"v": 1, "s": 1, "r": 1, "c": "cid-1"},
+        "hk-cooldown": {"v": 1, "s": 1, "r": 1, "c": "cid-2"},
+    }
+    payload_old = _payload_for_miner(
+        uid=48,
+        validator_version="16.0.1",
+        best_run=_best_run(reward=0.20, score=0.20, time_s=20.0, cost=0.02, tasks_received=100, tasks_success=20),
+    )
+    payload_cooldown = _payload_for_miner(
+        uid=48,
+        validator_version="16.0.2",
+        best_run=_best_run(reward=0.22, score=0.22, time_s=22.0, cost=0.02, tasks_received=100, tasks_success=22),
+        current_run={"reward": 0.0, "score": 0.0, "time": 0.0, "cost": 0.0, "tasks_received": 0, "tasks_success": 0},
+    )
+    payload_cooldown["summary"] = {"validator_all_best_runs_zero": True}
+
+    with (
+        patch("autoppia_web_agents_subnet.validator.settlement.consensus.read_all_plain_commitments", new=AsyncMock(return_value=commits)),
+        patch(
+            "autoppia_web_agents_subnet.validator.settlement.consensus.get_json_async",
+            new=AsyncMock(side_effect=[(payload_old, None, None), (payload_cooldown, None, None)]),
+        ),
+    ):
+        consensus_rewards, details = await aggregate_scores_from_commitments(validator, st=Mock())
+
+    expected = (10000.0 * 0.20 + 20000.0 * 0.22) / 30000.0
+    assert consensus_rewards[48] == pytest.approx(expected)
+    assert details["stats_by_miner"][48]["avg_reward"] == pytest.approx(expected)
+    assert details["validators"] == [
+        {"hotkey": "hk-old", "uid": 0, "stake": 10000.0, "cid": "cid-1"},
+        {"hotkey": "hk-cooldown", "uid": 1, "stake": 20000.0, "cid": "cid-2"},
+    ]
+    assert details["skips"]["all_zero_when_others_positive"] == []
 
 
 @pytest.mark.integration
@@ -520,8 +576,8 @@ async def test_post_consensus_keeps_all_zero_validators_when_everyone_is_all_zer
     }
     payload_1 = _payload_for_miner(uid=48, validator_version="16.0.1", best_run=None)
     payload_2 = _payload_for_miner(uid=48, validator_version="16.0.2", best_run=_best_run(reward=0.0, score=0.0, time_s=0.0, cost=0.0, tasks_received=100, tasks_success=0))
-    payload_1["summary"] = {"validator_all_runs_zero": True}
-    payload_2["summary"] = {"validator_all_runs_zero": True}
+    payload_1["summary"] = {"validator_all_best_runs_zero": True}
+    payload_2["summary"] = {"validator_all_best_runs_zero": True}
 
     with (
         patch("autoppia_web_agents_subnet.validator.settlement.consensus.read_all_plain_commitments", new=AsyncMock(return_value=commits)),
@@ -535,6 +591,75 @@ async def test_post_consensus_keeps_all_zero_validators_when_everyone_is_all_zer
     assert consensus_rewards[48] == pytest.approx(0.0)
     assert details["stats_by_miner"][48]["avg_reward"] == pytest.approx(0.0)
     assert details["skips"]["all_zero_when_others_positive"] == []
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_post_consensus_does_not_dilute_single_positive_validator_with_empty_payloads(dummy_validator):
+    """
+    Scenario:
+    One validator publishes a valid best run for a miner.
+    The other validators publish miner lists with no best/current run payloads at all.
+
+    What this test proves:
+    empty payloads are treated as "no signal", not as zero votes, so they must not dilute
+    the only validator that actually produced a best run.
+    """
+    validator = dummy_validator
+    _configure_consensus_validator(
+        validator,
+        version="16.0.0",
+        hotkeys=["hk-a", "hk-b", "hk-c", "hk-d"],
+        stakes=[1500000.0, 80000.0, 220000.0, 580000.0],
+    )
+
+    commits = {
+        "hk-a": {"v": 1, "s": 1, "r": 1, "c": "cid-a"},
+        "hk-b": {"v": 1, "s": 1, "r": 1, "c": "cid-b"},
+        "hk-c": {"v": 1, "s": 1, "r": 1, "c": "cid-c"},
+        "hk-d": {"v": 1, "s": 1, "r": 1, "c": "cid-d"},
+    }
+    payload_signal = {
+        "validator_version": "16.0.0",
+        "miners": [
+            {"uid": 168, "best_run": _best_run(reward=0.2765, score=0.28, time_s=87.0, cost=0.0034, tasks_received=25, tasks_success=7), "current_run": None},
+            {"uid": 196, "best_run": _best_run(reward=0.2761, score=0.28, time_s=90.8, cost=0.0025, tasks_received=25, tasks_success=7), "current_run": None},
+        ],
+        "summary": {"validator_all_best_runs_zero": False},
+    }
+    payload_empty_1 = {
+        "validator_version": "16.0.0",
+        "miners": [{"uid": 168}, {"uid": 196}],
+        "summary": {"validator_all_best_runs_zero": True},
+    }
+    payload_empty_2 = {
+        "validator_version": "16.0.0",
+        "miners": [{"uid": 168}, {"uid": 196}],
+        "summary": {"validator_all_best_runs_zero": True},
+    }
+    payload_empty_3 = {
+        "validator_version": "16.0.0",
+        "miners": [{"uid": 168}, {"uid": 196}],
+        "summary": {"validator_all_best_runs_zero": True},
+    }
+
+    with (
+        patch("autoppia_web_agents_subnet.validator.settlement.consensus.read_all_plain_commitments", new=AsyncMock(return_value=commits)),
+        patch(
+            "autoppia_web_agents_subnet.validator.settlement.consensus.get_json_async",
+            new=AsyncMock(side_effect=[(payload_signal, None, None), (payload_empty_1, None, None), (payload_empty_2, None, None), (payload_empty_3, None, None)]),
+        ),
+    ):
+        consensus_rewards, details = await aggregate_scores_from_commitments(validator, st=Mock())
+
+    assert consensus_rewards[168] == pytest.approx(0.2765)
+    assert consensus_rewards[196] == pytest.approx(0.2761)
+    assert details["validators"] == [{"hotkey": "hk-a", "uid": 0, "stake": 1500000.0, "cid": "cid-a"}]
+    assert details["skips"]["all_zero_when_others_positive"] == [
+        ("hk-b", "cid-b"),
+        ("hk-c", "cid-c"),
+        ("hk-d", "cid-d"),
+    ]
 
 
 @pytest.mark.integration

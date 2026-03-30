@@ -350,6 +350,158 @@ def _extract_round_summary_v2(*, season_history: dict[Any, Any], season_number: 
     return None
 
 
+def _extract_previous_round_leader_after(
+    *,
+    season_history: dict[Any, Any],
+    season_number: int,
+    round_number_in_season: int,
+) -> dict[str, Any] | None:
+    previous_round = int(round_number_in_season) - 1
+    if previous_round <= 0:
+        return None
+    previous_summary = _extract_round_summary_v2(
+        season_history=season_history,
+        season_number=season_number,
+        round_number_in_season=previous_round,
+    )
+    if not isinstance(previous_summary, dict):
+        return None
+    leader_after = previous_summary.get("leader_after_round")
+    return dict(leader_after) if isinstance(leader_after, dict) else None
+
+
+def _canonicalize_consensus_snapshot(
+    snapshot: dict[str, Any] | None,
+    *,
+    best_run_by_uid: dict[int, dict[str, Any]],
+    preserve_reward: bool = False,
+) -> dict[str, Any] | None:
+    if not isinstance(snapshot, dict):
+        return None
+
+    normalized = dict(snapshot)
+    try:
+        uid = int(normalized.get("uid"))
+    except Exception:
+        return normalized
+
+    normalized["uid"] = uid
+    if preserve_reward:
+        return normalized
+
+    best_run = best_run_by_uid.get(uid)
+    if not isinstance(best_run, dict):
+        return normalized
+
+    for key in ("reward", "score", "time", "cost", "weight"):
+        if best_run.get(key) is not None:
+            normalized[key] = float(best_run.get(key) or 0.0)
+    return normalized
+
+
+def _top_consensus_snapshot(
+    best_run_by_uid: dict[int, dict[str, Any]],
+    *,
+    exclude_uid: int | None = None,
+) -> dict[str, Any] | None:
+    ranked: list[tuple[float, float, float, int, dict[str, Any]]] = []
+    for uid_raw, best_run in best_run_by_uid.items():
+        if not isinstance(best_run, dict):
+            continue
+        try:
+            uid = int(uid_raw)
+        except Exception:
+            continue
+        if exclude_uid is not None and uid == int(exclude_uid):
+            continue
+        try:
+            reward = float(best_run.get("reward", 0.0) or 0.0)
+            score = float(best_run.get("score", 0.0) or 0.0)
+            time_s = float(best_run.get("time", 0.0) or 0.0)
+        except Exception:
+            continue
+        if reward <= 0.0:
+            continue
+        ranked.append((reward, score, -time_s, -uid, {"uid": uid, **{k: v for k, v in best_run.items() if v is not None}}))
+
+    if not ranked:
+        return None
+
+    ranked.sort(reverse=True)
+    top = dict(ranked[0][4])
+    top["uid"] = int(top["uid"])
+    return top
+
+
+def _normalize_post_consensus_leadership_summary(
+    summary: dict[str, Any] | None,
+    *,
+    best_run_by_uid: dict[int, dict[str, Any]],
+    previous_leader_after: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    normalized = dict(summary) if isinstance(summary, dict) else {}
+    try:
+        required_improvement_pct = float(normalized.get("percentage_to_dethrone", 0.05) or 0.05)
+    except Exception:
+        required_improvement_pct = 0.05
+
+    leader_before = (
+        dict(previous_leader_after)
+        if isinstance(previous_leader_after, dict)
+        else _canonicalize_consensus_snapshot(
+            normalized.get("leader_before_round"),
+            best_run_by_uid=best_run_by_uid,
+            preserve_reward=True,
+        )
+    )
+    candidate = _canonicalize_consensus_snapshot(
+        normalized.get("candidate_this_round"),
+        best_run_by_uid=best_run_by_uid,
+    )
+    leader_after_existing = _canonicalize_consensus_snapshot(
+        normalized.get("leader_after_round"),
+        best_run_by_uid=best_run_by_uid,
+    )
+
+    if leader_before is None:
+        top_snapshot = candidate or leader_after_existing or _top_consensus_snapshot(best_run_by_uid)
+        normalized["leader_before_round"] = None
+        normalized["candidate_this_round"] = dict(top_snapshot) if isinstance(top_snapshot, dict) else None
+        normalized["leader_after_round"] = dict(top_snapshot) if isinstance(top_snapshot, dict) else None
+        normalized["required_reward_to_dethrone"] = None
+        normalized["dethroned"] = False
+        return normalized
+
+    try:
+        leader_before_uid = int(leader_before.get("uid")) if leader_before.get("uid") is not None else None
+    except Exception:
+        leader_before_uid = None
+
+    if candidate is None:
+        candidate = _top_consensus_snapshot(best_run_by_uid, exclude_uid=leader_before_uid)
+
+    try:
+        leader_before_reward = float(leader_before.get("reward", 0.0) or 0.0)
+    except Exception:
+        leader_before_reward = 0.0
+    threshold = float(leader_before_reward * (1.0 + required_improvement_pct))
+
+    dethroned = False
+    if isinstance(candidate, dict):
+        try:
+            candidate_reward = float(candidate.get("reward", 0.0) or 0.0)
+        except Exception:
+            candidate_reward = 0.0
+        dethroned = bool(candidate_reward > threshold)
+
+    normalized["leader_before_round"] = dict(leader_before)
+    normalized["candidate_this_round"] = dict(candidate) if isinstance(candidate, dict) else None
+    normalized["leader_after_round"] = dict(candidate if dethroned and isinstance(candidate, dict) else leader_before)
+    normalized["required_reward_to_dethrone"] = threshold
+    normalized["dethroned"] = dethroned
+    return normalized
+
+
 def _persist_round_summary_file(
     *,
     ctx,
@@ -1787,78 +1939,23 @@ async def finish_round_flow(
             season_number=int(season_number_for_summary or 0),
             round_number_in_season=int(round_number_for_summary or 0),
         )
+        previous_leader_after = _extract_previous_round_leader_after(
+            season_history=getattr(ctx, "_season_competition_history", {}) or {},
+            season_number=int(season_number_for_summary or 0),
+            round_number_in_season=int(round_number_for_summary or 0),
+        )
         best_run_by_uid = {
             int(miner_payload.get("uid")): dict(miner_payload.get("best_run_consensus") or {})
             for miner_payload in post_consensus_miners
             if isinstance(miner_payload, dict) and miner_payload.get("uid") is not None
         }
 
-        def _canonical_summary_snapshot(existing: dict[str, Any] | None) -> dict[str, Any] | None:
-            if not isinstance(existing, dict):
-                return None
-            try:
-                snapshot_uid = int(existing.get("uid"))
-            except Exception:
-                return dict(existing)
-            best_run = best_run_by_uid.get(snapshot_uid)
-            if not isinstance(best_run, dict):
-                return dict(existing)
-            return {
-                "uid": snapshot_uid,
-                "reward": float(best_run.get("reward", existing.get("reward", 0.0)) or 0.0),
-                "score": float(best_run.get("score", existing.get("score", 0.0)) or 0.0),
-                "time": float(best_run.get("time", existing.get("time", 0.0)) or 0.0),
-                "cost": float(best_run.get("cost", existing.get("cost", 0.0)) or 0.0),
-                **({"weight": float(best_run.get("weight"))} if best_run.get("weight") is not None else {}),
-            }
-
-        def _normalize_leadership_summary(summary: dict[str, Any]) -> dict[str, Any]:
-            normalized = dict(summary)
-            leader_before = normalized.get("leader_before_round")
-            candidate = normalized.get("candidate_this_round")
-            leader_after = normalized.get("leader_after_round")
-            required_improvement_pct = float(normalized.get("percentage_to_dethrone", 0.05) or 0.05)
-
-            if not isinstance(leader_before, dict):
-                leader_before = None
-            if not isinstance(candidate, dict):
-                candidate = None
-            if not isinstance(leader_after, dict):
-                leader_after = None
-
-            # In round 1 there is no reigning leader: if we still have a candidate, that candidate is
-            # the only valid leader-after snapshot.
-            if leader_before is None and candidate is not None:
-                normalized["leader_after_round"] = dict(candidate)
-                normalized["dethroned"] = False
-                return normalized
-
-            if leader_before is None:
-                normalized["dethroned"] = False
-                return normalized
-
-            if candidate is None:
-                normalized["leader_after_round"] = dict(leader_before)
-                normalized["dethroned"] = False
-                return normalized
-
-            leader_before_reward = float(leader_before.get("reward", 0.0) or 0.0)
-            candidate_reward = float(candidate.get("reward", 0.0) or 0.0)
-            threshold = leader_before_reward * (1.0 + required_improvement_pct)
-            dethroned = bool(candidate_reward > threshold)
-
-            normalized["dethroned"] = dethroned
-            normalized["leader_after_round"] = dict(candidate if dethroned else leader_before)
-            return normalized
-
         if isinstance(post_consensus_json_summary, dict):
-            post_consensus_json_summary = {
-                **post_consensus_json_summary,
-                "leader_before_round": _canonical_summary_snapshot(post_consensus_json_summary.get("leader_before_round")),
-                "candidate_this_round": _canonical_summary_snapshot(post_consensus_json_summary.get("candidate_this_round")),
-                "leader_after_round": _canonical_summary_snapshot(post_consensus_json_summary.get("leader_after_round")),
-            }
-            post_consensus_json_summary = _normalize_leadership_summary(post_consensus_json_summary)
+            post_consensus_json_summary = _normalize_post_consensus_leadership_summary(
+                post_consensus_json_summary,
+                best_run_by_uid=best_run_by_uid,
+                previous_leader_after=previous_leader_after,
+            )
 
         post_consensus_evaluation = {
             "season": int(season_number_for_summary or 0),

@@ -338,7 +338,7 @@ class TestWeightCalculation:
                 assert float(rewards[2]) == pytest.approx(1.0)
                 assert float(rewards[1]) == pytest.approx(0.0)
 
-    async def test_weight_calculation_requires_eligibility_for_active_leader(self, dummy_validator):
+    async def test_weight_calculation_keeps_active_leader_when_it_is_temporarily_ineligible(self, dummy_validator):
         from tests.conftest import _bind_settlement_mixin
 
         dummy_validator = _bind_settlement_mixin(dummy_validator)
@@ -353,17 +353,62 @@ class TestWeightCalculation:
             dummy_validator.round_manager.round_number = 2
             dummy_validator.eligibility_status_by_uid = {2: "evaluated"}
             await dummy_validator._calculate_final_weights(consensus_rewards={1: 0.0, 2: 0.7})
-            assert dummy_validator._last_round_winner_uid == 2
+            assert dummy_validator._last_round_winner_uid == 1
 
             rewards = dummy_validator.update_scores.call_args[1]["rewards"]
-            assert float(rewards[2]) == pytest.approx(1.0)
-            assert float(rewards[1]) == pytest.approx(0.0)
+            assert float(rewards[1]) == pytest.approx(1.0)
+            assert float(rewards[2]) == pytest.approx(0.0)
+
+    async def test_weight_calculation_switches_to_eligible_challenger_when_threshold_is_beaten(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin
+
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        dummy_validator.season_manager.season_number = 10
+        dummy_validator.round_manager.round_number = 1
+
+        with patch("autoppia_web_agents_subnet.validator.config.LAST_WINNER_BONUS_PCT", 0.05):
+            with patch("autoppia_web_agents_subnet.validator.settlement.mixin.render_round_summary_table"):
+                dummy_validator.eligibility_status_by_uid = {1: "evaluated", 2: "evaluated"}
+                await dummy_validator._calculate_final_weights(consensus_rewards={1: 0.9, 2: 0.8})
+                assert dummy_validator._last_round_winner_uid == 1
+
+                dummy_validator.round_manager.round_number = 2
+                dummy_validator.eligibility_status_by_uid = {2: "evaluated"}
+                await dummy_validator._calculate_final_weights(consensus_rewards={1: 0.0, 2: 0.96})
+                assert dummy_validator._last_round_winner_uid == 2
+
+                rewards = dummy_validator.update_scores.call_args[1]["rewards"]
+                assert float(rewards[2]) == pytest.approx(1.0)
+                assert float(rewards[1]) == pytest.approx(0.0)
+
+    async def test_weight_calculation_restores_leader_only_when_it_reclaims_threshold(self, dummy_validator):
+        from tests.conftest import _bind_settlement_mixin
+
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        dummy_validator.season_manager.season_number = 11
+        dummy_validator.round_manager.round_number = 1
+
+        with patch("autoppia_web_agents_subnet.validator.config.LAST_WINNER_BONUS_PCT", 0.05):
+            with patch("autoppia_web_agents_subnet.validator.settlement.mixin.render_round_summary_table"):
+                dummy_validator.eligibility_status_by_uid = {1: "evaluated", 2: "evaluated"}
+                await dummy_validator._calculate_final_weights(consensus_rewards={1: 0.9, 2: 0.8})
+                assert dummy_validator._last_round_winner_uid == 1
+
+                dummy_validator.round_manager.round_number = 2
+                dummy_validator.eligibility_status_by_uid = {2: "evaluated"}
+                await dummy_validator._calculate_final_weights(consensus_rewards={1: 0.0, 2: 0.96})
+                assert dummy_validator._last_round_winner_uid == 2
+
+                dummy_validator.round_manager.round_number = 3
+                dummy_validator.eligibility_status_by_uid = {1: "evaluated", 2: "evaluated"}
+                await dummy_validator._calculate_final_weights(consensus_rewards={1: 1.02, 2: 0.5})
+                assert dummy_validator._last_round_winner_uid == 1
 
     async def test_weight_calculation_restores_best_score_when_miner_becomes_eligible_again(self, dummy_validator):
         from tests.conftest import _bind_settlement_mixin
 
         dummy_validator = _bind_settlement_mixin(dummy_validator)
-        dummy_validator.season_manager.season_number = 10
+        dummy_validator.season_manager.season_number = 12
         dummy_validator.round_manager.round_number = 1
 
         with patch("autoppia_web_agents_subnet.validator.settlement.mixin.render_round_summary_table"):
@@ -374,7 +419,7 @@ class TestWeightCalculation:
             dummy_validator.round_manager.round_number = 2
             dummy_validator.eligibility_status_by_uid = {2: "evaluated"}
             await dummy_validator._calculate_final_weights(consensus_rewards={1: 0.0, 2: 0.7})
-            assert dummy_validator._last_round_winner_uid == 2
+            assert dummy_validator._last_round_winner_uid == 1
 
             dummy_validator.round_manager.round_number = 3
             dummy_validator.eligibility_status_by_uid = {1: "evaluated", 2: "evaluated"}

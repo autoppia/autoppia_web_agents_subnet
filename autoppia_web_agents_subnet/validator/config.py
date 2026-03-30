@@ -27,17 +27,17 @@ BURN_AMOUNT_PERCENTAGE = _env_float("BURN_AMOUNT_PERCENTAGE", 0.925)
 # stale overrides after resets/restarts.
 # Chain epoch size is 360 blocks. Round length is expressed in epochs.
 BLOCKS_PER_EPOCH = 360
-ROUND_SIZE_EPOCHS = 1
-ROUNDS_PER_SEASON = 3
-SEASON_SIZE_EPOCHS = ROUND_SIZE_EPOCHS * ROUNDS_PER_SEASON
+ROUND_SIZE_EPOCHS = 5
+ROUNDS_PER_SEASON = 28
+SEASON_SIZE_EPOCHS = 140
 # IMPORTANT: season/round math uses MINIMUM_START_BLOCK always.
-MINIMUM_START_BLOCK = 7771500
+MINIMUM_START_BLOCK = 7802800
 STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION = _env_float("STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION", 0.94, test_default=0.94)
 FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION = _env_float("FETCH_IPFS_VALIDATOR_PAYLOADS_CALCULATE_WEIGHT_AT_ROUND_FRACTION", 0.97, test_default=0.97)
 SKIP_ROUND_IF_STARTED_AFTER_FRACTION = _env_float("SKIP_ROUND_IF_STARTED_AFTER_FRACTION", 0.30, test_default=0.30)
 
 # Source of truth: tasks per season.
-TASKS_PER_SEASON = 25
+TASKS_PER_SEASON = 50
 CONCURRENT_EVALUATION_NUM = _env_int("CONCURRENT_EVALUATION_NUM", 5)
 AGENT_MAX_STEPS = _env_int("AGENT_MAX_STEPS", 12, test_default=12)
 AGENT_STEP_TIMEOUT_SECONDS = _env_int("AGENT_STEP_TIMEOUT_SECONDS", 25)
@@ -77,6 +77,9 @@ MAX_MINERS_PER_REPO = _env_int("MAX_MINERS_PER_REPO", 2)
 # - Better miners wait fewer rounds.
 # - Worse/non-responding miners wait more rounds.
 # - Max cooldown is capped to keep iteration speed.
+# Disabled by default for now. When `false`, validators always evaluate changed submissions
+# immediately and skip the adaptive round-based waiting logic entirely.
+ENABLE_EVALUATION_COOLDOWN = _env_bool("ENABLE_EVALUATION_COOLDOWN", False)
 EVALUATION_COOLDOWN_MIN_ROUNDS = _env_int("EVALUATION_COOLDOWN_MIN_ROUNDS", 1)
 EVALUATION_COOLDOWN_MAX_ROUNDS = _env_int("EVALUATION_COOLDOWN_MAX_ROUNDS", 5)
 EVALUATION_COOLDOWN_NO_RESPONSE_BADNESS = _env_float("EVALUATION_COOLDOWN_NO_RESPONSE_BADNESS", 0.2)
