@@ -63,8 +63,8 @@ async def test_evaluate_with_stateful_cua_does_not_mutate_task_url(monkeypatch):
         def __init__(self, *_, **__):
             pass
 
-        async def act(self, *_, screenshot=None, **__):
-            captured["act_screenshot"] = screenshot
+        async def step(self, *_, screenshot=None, **__):
+            captured["step_screenshot"] = screenshot
             return [object()]
 
     monkeypatch.setattr(module, "AsyncStatefulEvaluator", CapturingEvaluator)
@@ -82,4 +82,4 @@ async def test_evaluate_with_stateful_cua_does_not_mutate_task_url(monkeypatch):
     assert qs["seed"] == ["7"]
     assert qs["web_agent_id"] == ["123"]
     assert qs["validator_id"] == ["validator-test"]
-    assert captured["act_screenshot"] is None
+    assert captured["step_screenshot"] is None

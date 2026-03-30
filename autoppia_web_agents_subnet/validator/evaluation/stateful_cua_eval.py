@@ -169,7 +169,7 @@ async def evaluate_with_stateful_cua(
                 if screenshot is None:
                     screenshot = getattr(snapshot, "screenshot_after", None)
                 actions = await _await_with_task_deadline(
-                    agent.act(
+                    agent.step(
                         task=task_for_eval,  # Send task with placeholders, NOT replaced
                         snapshot_html=html,
                         screenshot=_to_screenshot_b64(screenshot),
@@ -181,11 +181,11 @@ async def evaluate_with_stateful_cua(
                 )
             except TimeoutError:
                 bt.logging.warning(
-                    f"[stateful_cua_eval] miner {uid} hard timeout reached during /act for task {getattr(task, 'id', '?')}: {time.monotonic() - start_ts:.2f}s >= {TASK_TIMEOUT_SECONDS:.2f}s"
+                    f"[stateful_cua_eval] miner {uid} hard timeout reached during /step for task {getattr(task, 'id', '?')}: {time.monotonic() - start_ts:.2f}s >= {TASK_TIMEOUT_SECONDS:.2f}s"
                 )
                 break
             except Exception as exc:
-                bt.logging.warning(f"[stateful_cua_eval] miner {uid} /act failed (step {step_index}), stopping early: {exc}")
+                bt.logging.warning(f"[stateful_cua_eval] miner {uid} /step failed (step {step_index}), stopping early: {exc}")
                 break
 
             # If the miner returned no actions there is nothing left to execute —

@@ -367,8 +367,11 @@ def pytest_configure(config):
         def __init__(self, base_url: str, **_: object):
             self.base_url = base_url
 
-        async def act(self, *_, **__):
+        async def step(self, *_, **__):
             return []
+
+        async def act(self, *_, **__):
+            return await self.step(*_, **__)
 
     cua_module.ApifiedWebCUA = _ApifiedWebCUAStub  # type: ignore[attr-defined]
     sys.modules["autoppia_iwa.src.web_agents.cua"] = cua_module
