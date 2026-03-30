@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from autoppia_web_agents_subnet.platform.utils.round_flow import _normalize_post_consensus_leadership_summary
 from autoppia_web_agents_subnet.validator.settlement.consensus import _build_local_round_summary
 
 
@@ -228,6 +229,55 @@ async def test_settlement_dethrones_when_candidate_beats_required_percentage(dum
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+async def test_settlement_uses_previous_round_leader_snapshot_for_dethrone_threshold(dummy_validator):
+    """
+    Scenario:
+    The previous round ended with miner 48 at 0.17548, but the aggregated
+    summary state was later contaminated with an inflated current_winner_reward.
+
+    What this test proves:
+    settlement must use the previous round `leader_after_round` snapshot as the
+    reigning baseline for the next round, instead of the mutable season summary.
+    """
+    validator = _setup_settlement_validator(dummy_validator)
+
+    with (
+        patch("autoppia_web_agents_subnet.validator.settlement.mixin.render_round_summary_table"),
+        patch("autoppia_web_agents_subnet.validator.settlement.mixin.validator_config.LAST_WINNER_BONUS_PCT", 0.05),
+    ):
+        await validator._calculate_final_weights(consensus_rewards={48: 0.17547999119965071, 127: 0.17522848947837152})
+        validator.round_manager.round_number = 2
+        validator._agg_meta_cache = {
+            "stats_by_miner": {
+                48: _stats_entry(score=0.08, time_s=80.71, cost=0.0020),
+                127: _stats_entry(score=0.13078707785595142, time_s=117.16, cost=0.0028),
+            }
+        }
+        season_summary = validator._season_competition_history[1]["summary"]
+        season_summary["current_winner_uid"] = 48
+        season_summary["current_winner_reward"] = 0.1849726186432933
+        season_summary["current_winner_snapshot"] = {
+            "uid": 48,
+            "reward": 0.1849726186432933,
+            "score": 0.08,
+            "time": 80.71,
+            "cost": 0.0020,
+        }
+        await validator._calculate_final_weights(consensus_rewards={48: 0.1849726186432933, 127: 0.1907841665631254})
+
+    round_entry = validator._season_competition_history[1]["rounds"][2]
+    summary = round_entry["post_consensus_json"]["summary"]
+    assert summary["leader_before_round"]["uid"] == 48
+    assert summary["leader_before_round"]["reward"] == pytest.approx(0.17547999119965071)
+    assert round_entry["decision"]["required_reward_to_dethrone"] == pytest.approx(0.17547999119965071 * 1.05)
+    assert summary["candidate_this_round"]["uid"] == 127
+    assert summary["candidate_this_round"]["reward"] == pytest.approx(0.1907841665631254)
+    assert summary["dethroned"] is True
+    assert summary["leader_after_round"]["uid"] == 127
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
 async def test_settlement_single_eligible_reigning_leader_has_no_candidate(dummy_validator):
     """
     Scenario:
@@ -254,3 +304,42 @@ async def test_settlement_single_eligible_reigning_leader_has_no_candidate(dummy
     assert summary["leader_before_round"]["uid"] == 48
     assert summary["candidate_this_round"] is None
     assert summary["leader_after_round"]["uid"] == 48
+
+
+def test_post_consensus_normalization_preserves_leader_before_chain_and_allows_dethrone():
+    """
+    Scenario:
+    The previous round ended with miner 168 at 0.17548. In the current round,
+    miner 168 improves to 0.18497 and miner 196 reaches 0.19078.
+
+    What this test proves:
+    - `leader_before_round` must stay anchored to the previous round reward
+    - the dethrone threshold must be computed from that previous reward
+    - the current-round incumbent improvement must not inflate the threshold
+    """
+    summary = {
+        "round": 2,
+        "season": 1,
+        "percentage_to_dethrone": 0.05,
+        "leader_before_round": {"uid": 168, "reward": 0.17547999119965071, "score": 0.28, "time": 86.99, "cost": 0.0034},
+        "candidate_this_round": {"uid": 196, "reward": 0.1907841665631254, "score": 0.13, "time": 117.16, "cost": 0.0028},
+        "leader_after_round": {"uid": 196, "reward": 0.1907841665631254, "score": 0.13, "time": 117.16, "cost": 0.0028},
+        "dethroned": True,
+    }
+    best_run_by_uid = {
+        168: {"reward": 0.1849726186432933, "score": 0.08, "time": 80.71, "cost": 0.0020},
+        196: {"reward": 0.1907841665631254, "score": 0.13078707785595142, "time": 117.16, "cost": 0.0028},
+    }
+
+    normalized = _normalize_post_consensus_leadership_summary(
+        summary,
+        best_run_by_uid=best_run_by_uid,
+    )
+
+    assert normalized["leader_before_round"]["uid"] == 168
+    assert normalized["leader_before_round"]["reward"] == pytest.approx(0.17547999119965071)
+    assert normalized["required_reward_to_dethrone"] == pytest.approx(0.17547999119965071 * 1.05)
+    assert normalized["candidate_this_round"]["uid"] == 196
+    assert normalized["candidate_this_round"]["reward"] == pytest.approx(0.1907841665631254)
+    assert normalized["dethroned"] is True
+    assert normalized["leader_after_round"]["uid"] == 196

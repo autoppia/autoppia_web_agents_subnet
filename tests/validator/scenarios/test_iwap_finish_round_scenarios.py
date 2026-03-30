@@ -505,6 +505,19 @@ async def test_finish_round_canonicalizes_summary_snapshots_from_best_run_consen
     ctx._season_competition_history = {
         1: {
             "rounds": {
+                1: {
+                    "post_consensus_json": {
+                        "summary": {
+                            "season": 1,
+                            "round": 1,
+                            "percentage_to_dethrone": 0.05,
+                            "dethroned": False,
+                            "leader_before_round": None,
+                            "candidate_this_round": {"uid": 48, "reward": 0.90, "score": 0.70, "time": 11.0, "cost": 0.03},
+                            "leader_after_round": {"uid": 48, "reward": 0.90, "score": 0.70, "time": 11.0, "cost": 0.03},
+                        }
+                    }
+                },
                 2: {
                     "post_consensus_json": {
                         "summary": {
@@ -517,7 +530,7 @@ async def test_finish_round_canonicalizes_summary_snapshots_from_best_run_consen
                             "leader_after_round": {"uid": 127, "reward": 777.0, "score": 777.0, "time": 777.0, "cost": 777.0},
                         }
                     }
-                }
+                },
             }
         }
     }
@@ -782,6 +795,19 @@ async def test_finish_round_repairs_dethrone_when_candidate_beats_threshold_but_
     ctx._season_competition_history = {
         1: {
             "rounds": {
+                1: {
+                    "post_consensus_json": {
+                        "summary": {
+                            "season": 1,
+                            "round": 1,
+                            "percentage_to_dethrone": 0.05,
+                            "dethroned": False,
+                            "leader_before_round": None,
+                            "candidate_this_round": {"uid": 48, "reward": 0.90, "score": 0.70, "time": 11.0, "cost": 0.03},
+                            "leader_after_round": {"uid": 48, "reward": 0.90, "score": 0.70, "time": 11.0, "cost": 0.03},
+                        }
+                    }
+                },
                 2: {
                     "post_consensus_json": {
                         "summary": {
@@ -794,7 +820,7 @@ async def test_finish_round_repairs_dethrone_when_candidate_beats_threshold_but_
                             "leader_after_round": {"uid": 48, "reward": 777.0, "score": 777.0, "time": 777.0, "cost": 777.0},
                         }
                     }
-                }
+                },
             }
         }
     }

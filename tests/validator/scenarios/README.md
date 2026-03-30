@@ -16,7 +16,7 @@ Covered now:
 - two compatible validators plus one higher-stake incompatible validator across two miners
 - an all-zero validator is excluded from consensus when other validators have positive signal
 - if every validator is all-zero, nobody is auto-excluded
-- the snapshot summary exposes `validator_all_runs_zero` explicitly
+- the snapshot summary exposes `validator_all_best_runs_zero` explicitly
 - `best_run` still counts when `current_run` is `null`
 - `best_run` metrics and `current_run` metrics stay separated in post-consensus output
 - `best_run = null` contributes zero
@@ -58,7 +58,7 @@ Covered now:
 - changing validator conditions changes the evaluation-context hash
 - if the evaluation-context hash changes, reuse is blocked and the commit must be re-evaluated
 - if a validator finishes a suspicious all-zero round, reuse is disabled for the next round
-- the published snapshot sets `summary.validator_all_runs_zero` to true or false from local runs
+- the published snapshot sets `summary.validator_all_current_runs_zero` and `summary.validator_all_best_runs_zero` from local runs
 - a round that only ended with `round_window_exceeded` does not trigger the all-zero reuse guard
 - if the next round keeps the same commit and there is no new current run yet, the previous `best_run` still persists
 - the IPFS round snapshot matches the validator's local `best_run` and `current_run`

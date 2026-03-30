@@ -17,6 +17,7 @@ def _bind_platform_helpers(validator):
     validator._is_same_evaluation_context = ValidatorPlatformMixin._is_same_evaluation_context.__get__(validator, type(validator))
     validator._find_reusable_commit_stats = ValidatorPlatformMixin._find_reusable_commit_stats.__get__(validator, type(validator))
     validator._current_round_all_runs_zero = ValidatorPlatformMixin._current_round_all_runs_zero.__get__(validator, type(validator))
+    validator._effective_signal_all_runs_zero = ValidatorPlatformMixin._effective_signal_all_runs_zero.__get__(validator, type(validator))
     validator._purge_evaluated_commits_for_round = ValidatorPlatformMixin._purge_evaluated_commits_for_round.__get__(validator, type(validator))
     validator._mark_all_zero_round_for_re_evaluation = ValidatorPlatformMixin._mark_all_zero_round_for_re_evaluation.__get__(validator, type(validator))
     validator._apply_post_consensus_reuse_policy = ValidatorPlatformMixin._apply_post_consensus_reuse_policy.__get__(validator, type(validator))
@@ -262,7 +263,24 @@ async def test_ipfs_snapshot_matches_local_best_and_current_run_payloads(dummy_v
 
     assert miner_payload["best_run"]["reward"] == pytest.approx(0.7)
     assert miner_payload["best_run"]["tasks_received"] == 100
-    assert payload["summary"]["validator_all_runs_zero"] is False
+    assert "subnet_version" not in payload
+    assert payload["summary"]["validator_all_best_runs_zero"] is False
+    assert payload["summary"]["validator_all_current_runs_zero"] is False
+    assert "validator_all_runs_zero" not in payload["summary"]
+    assert "validator_all_runs_zero_current_round" not in payload["summary"]
+    assert "validator_all_runs_zero_effective_signal" not in payload["summary"]
+
+
+@pytest.mark.integration
+def test_effective_signal_all_runs_zero_is_true_when_active_miners_have_no_best_signal(dummy_validator):
+    validator = _bind_platform_helpers(dummy_validator)
+    validator.active_miner_uids = {48, 127}
+    validator.current_agent_runs = {}
+    validator.agent_run_accumulators = {}
+    validator.agents_dict = {}
+    validator._evaluated_commits_by_miner = {}
+
+    assert validator._effective_signal_all_runs_zero() is True
 
 
 @pytest.mark.integration
@@ -421,7 +439,7 @@ async def test_ipfs_snapshot_marks_summary_all_runs_zero_when_every_local_run_is
     The validator is about to publish a round snapshot where every local miner run ended at zero.
 
     What this test proves:
-    the snapshot summary carries an explicit `validator_all_runs_zero=true` flag so other validators
+    the snapshot summary carries explicit current-round and best-run all-zero flags so other validators
     can exclude this payload from consensus when they still have positive signal.
     """
     validator = _bind_platform_helpers(dummy_validator)
@@ -466,7 +484,92 @@ async def test_ipfs_snapshot_marks_summary_all_runs_zero_when_every_local_run_is
         cid = await publish_round_snapshot(validator, st=Mock(), scores={48: 0.0, 127: 0.0})
 
     assert cid == "QmCID"
-    assert captured_payloads[0]["summary"]["validator_all_runs_zero"] is True
+    assert captured_payloads[0]["summary"]["validator_all_current_runs_zero"] is True
+    assert captured_payloads[0]["summary"]["validator_all_best_runs_zero"] is True
+    assert "validator_all_runs_zero" not in captured_payloads[0]["summary"]
+    assert "validator_all_runs_zero_current_round" not in captured_payloads[0]["summary"]
+    assert "validator_all_runs_zero_effective_signal" not in captured_payloads[0]["summary"]
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_ipfs_snapshot_does_not_mark_all_zero_when_best_run_remains_positive_during_cooldown(dummy_validator):
+    """
+    Scenario:
+    The current round produced only zero current_run payloads because no fresh evaluation happened,
+    but the validator still carries a positive best historical run for that same miner.
+
+    What this test proves:
+    the published snapshot must not declare `validator_all_best_runs_zero=true` in this case, because the
+    validator still has effective positive signal that consensus should keep.
+    """
+    validator = _bind_platform_helpers(dummy_validator)
+    validator.uid = 83
+    validator.version = "16.0.0"
+    validator.current_round_id = "validator_round_1_2_payload_cooldown"
+    validator.wallet.hotkey.ss58_address = "5FValidator"
+    validator.active_miner_uids = {48}
+    validator.round_manager.sync_boundaries(validator.block)
+    validator.round_manager.round_number = 2
+    validator.season_manager.season_number = 1
+    validator.agents_dict = {
+        48: SimpleNamespace(
+            agent_name="miner-48",
+            github_url="https://github.com/example/miner48/commit/newsha",
+            normalized_repo="https://github.com/example/miner48",
+            git_commit="newsha",
+        )
+    }
+    validator.current_agent_runs = {
+        48: SimpleNamespace(
+            total_tasks=100,
+            completed_tasks=0,
+            failed_tasks=100,
+            average_reward=0.0,
+            average_score=0.0,
+            average_execution_time=0.0,
+            zero_reason="cooldown_pending",
+            metadata={"average_cost": 0.0},
+        )
+    }
+    validator.round_manager.round_rewards = {48: [0.0] * 100}
+    validator.agent_run_accumulators = {48: {"tasks": 0, "reward": 0.0, "eval_score": 0.0, "execution_time": 0.0, "cost": 0.0}}
+    validator._evaluated_commits_by_miner = {
+        48: {
+            "https://github.com/example/miner48|oldsha": {
+                "agent_run_id": "agent-run-48-old",
+                "total_tasks": 100,
+                "average_reward": 0.22,
+                "average_score": 0.22,
+                "average_execution_time": 22.0,
+                "average_cost": 0.02,
+                "success_tasks": 22,
+                "evaluated_season": 1,
+                "evaluated_round": 1,
+                "evaluation_context": validator._evaluation_context_payload(),
+            }
+        }
+    }
+    validator._get_async_subtensor = AsyncMock(return_value=Mock())
+
+    captured_payloads: list[dict] = []
+
+    async def _capture_add_json(payload, **_kwargs):
+        captured_payloads.append(payload)
+        return ("QmCID", "sha256", 123)
+
+    with (
+        patch("autoppia_web_agents_subnet.validator.settlement.consensus.add_json_async", new=_capture_add_json),
+        patch("autoppia_web_agents_subnet.validator.settlement.consensus.write_plain_commitment_json", new=AsyncMock(return_value=True)),
+    ):
+        cid = await publish_round_snapshot(validator, st=Mock(), scores={48: 0.22})
+
+    assert cid == "QmCID"
+    assert captured_payloads[0]["summary"]["validator_all_current_runs_zero"] is True
+    assert captured_payloads[0]["summary"]["validator_all_best_runs_zero"] is False
+    assert "validator_all_runs_zero" not in captured_payloads[0]["summary"]
+    assert "validator_all_runs_zero_current_round" not in captured_payloads[0]["summary"]
+    assert "validator_all_runs_zero_effective_signal" not in captured_payloads[0]["summary"]
 
 
 @pytest.mark.integration

@@ -512,6 +512,80 @@ class Validator(
         return winner
 
     @classmethod
+    def _resolve_loaded_round_leadership(
+        cls,
+        *,
+        previous_leader: dict | None,
+        post_consensus_json: dict,
+        required_improvement_pct: float,
+    ) -> tuple[dict | None, dict | None, dict | None, bool]:
+        winner = cls._winner_snapshot_from_post_consensus(post_consensus_json)
+        if not isinstance(previous_leader, dict):
+            return None, winner, winner, False
+
+        leader_before = dict(previous_leader)
+        miners = post_consensus_json.get("miners")
+        candidate: dict | None = None
+        if isinstance(miners, list):
+            ranked: list[tuple[float, float, float, int, dict]] = []
+            for miner_entry in miners:
+                if not isinstance(miner_entry, dict):
+                    continue
+                try:
+                    uid_i = int(miner_entry.get("uid"))
+                except Exception:
+                    continue
+                if uid_i == int(leader_before.get("uid")):
+                    continue
+                best_run = miner_entry.get("best_run_consensus")
+                if not isinstance(best_run, dict):
+                    continue
+                try:
+                    reward_f = float(best_run.get("reward", 0.0) or 0.0)
+                    score_f = float(best_run.get("score", 0.0) or 0.0)
+                    time_f = float(best_run.get("time", 0.0) or 0.0)
+                except Exception:
+                    continue
+                if reward_f <= 0.0:
+                    continue
+                ranked.append(
+                    (
+                        reward_f,
+                        score_f,
+                        -time_f,
+                        -uid_i,
+                        {
+                            "uid": uid_i,
+                            "reward": reward_f,
+                            "score": score_f,
+                            "time": time_f,
+                            "cost": float(best_run.get("cost", 0.0) or 0.0),
+                        },
+                    )
+                )
+            if ranked:
+                ranked.sort(reverse=True)
+                candidate = dict(ranked[0][4])
+
+        try:
+            leader_before_reward = float(leader_before.get("reward", 0.0) or 0.0)
+        except Exception:
+            leader_before_reward = 0.0
+
+        if not isinstance(candidate, dict):
+            return leader_before, None, leader_before, False
+
+        try:
+            candidate_reward = float(candidate.get("reward", 0.0) or 0.0)
+        except Exception:
+            candidate_reward = 0.0
+
+        threshold = leader_before_reward * (1.0 + float(required_improvement_pct))
+        dethroned = bool(candidate_reward > threshold)
+        leader_after = dict(candidate if dethroned else leader_before)
+        return leader_before, candidate, leader_after, dethroned
+
+    @classmethod
     def _coerce_loaded_leader_after_snapshot(cls, post_consensus_json: dict) -> dict | None:
         """
         Repair impossible persisted leader snapshots before they are rehydrated.
@@ -640,7 +714,35 @@ class Validator(
 
                 summary = post_consensus_json.get("summary")
                 if isinstance(summary, dict):
-                    leader_after = self._coerce_loaded_leader_after_snapshot(post_consensus_json)
+                    try:
+                        required_improvement_pct = float(summary.get("percentage_to_dethrone", 0.0) or 0.0)
+                    except Exception:
+                        required_improvement_pct = 0.0
+                    summary_loaded["required_improvement_pct"] = required_improvement_pct
+
+                    previous_leader = summary_loaded.get("current_winner_snapshot")
+                    if not isinstance(previous_leader, dict):
+                        previous_leader = None
+
+                    (
+                        leader_before,
+                        candidate,
+                        leader_after,
+                        dethroned,
+                    ) = self._resolve_loaded_round_leadership(
+                        previous_leader=previous_leader,
+                        post_consensus_json=post_consensus_json,
+                        required_improvement_pct=required_improvement_pct,
+                    )
+
+                    repaired_summary = dict(summary)
+                    repaired_summary["leader_before_round"] = leader_before
+                    repaired_summary["candidate_this_round"] = candidate
+                    repaired_summary["leader_after_round"] = leader_after
+                    repaired_summary["dethroned"] = dethroned
+                    post_consensus_json["summary"] = repaired_summary
+                    rounds_loaded[round_i]["post_consensus_json"] = dict(post_consensus_json)
+
                     if isinstance(leader_after, dict):
                         try:
                             summary_loaded["current_winner_uid"] = int(leader_after.get("uid")) if leader_after.get("uid") is not None else None
@@ -651,10 +753,6 @@ class Validator(
                         except Exception:
                             summary_loaded["current_winner_reward"] = 0.0
                         summary_loaded["current_winner_snapshot"] = {k: v for k, v in dict(leader_after).items() if k != "weight"}
-                    try:
-                        summary_loaded["required_improvement_pct"] = float(summary.get("percentage_to_dethrone", 0.0) or 0.0)
-                    except Exception:
-                        summary_loaded["required_improvement_pct"] = 0.0
 
             loaded[season_i] = {
                 "rounds": rounds_loaded,

@@ -29,6 +29,7 @@ def _bind_version_helpers(validator):
     validator._clear_all_artifacts_including_tasks = Validator._clear_all_artifacts_including_tasks.__get__(validator, type(validator))
     validator._invalidate_round_artifacts_if_context_changed = Validator._invalidate_round_artifacts_if_context_changed.__get__(validator, type(validator))
     validator._winner_snapshot_from_post_consensus = Validator._winner_snapshot_from_post_consensus
+    validator._resolve_loaded_round_leadership = Validator._resolve_loaded_round_leadership.__get__(validator, type(validator))
     validator._coerce_loaded_leader_after_snapshot = Validator._coerce_loaded_leader_after_snapshot.__get__(validator, type(validator))
     validator._load_competition_state = Validator._load_competition_state.__get__(validator, type(validator))
     validator._load_evaluated_commit_history = Validator._load_evaluated_commit_history.__get__(validator, type(validator))
@@ -568,3 +569,78 @@ def test_load_competition_state_repairs_impossible_stale_leader_after_snapshot(t
     assert summary["current_winner_uid"] == 48
     assert summary["current_winner_reward"] == pytest.approx(0.1539)
     assert summary["current_winner_snapshot"]["uid"] == 48
+
+
+@pytest.mark.integration
+def test_load_competition_state_repairs_leader_chain_from_previous_round(tmp_path):
+    """
+    Scenario:
+    Round 2 was persisted with a corrupted summary that inflated the reigning
+    leader reward to the current-round consensus value and kept the wrong
+    `leader_after_round`, even though the challenger should have dethroned.
+
+    What this test proves:
+    rehydration rebuilds the leader chain from the previous round winner plus
+    the current round post-consensus miners, so the loaded current winner stays
+    continuous across rounds.
+    """
+    validator = _make_validator(tmp_path, version="16.0.0")
+    season_dir = tmp_path / "season_1"
+    round_1_dir = season_dir / "round_1"
+    round_2_dir = season_dir / "round_2"
+    round_1_dir.mkdir(parents=True, exist_ok=True)
+    round_2_dir.mkdir(parents=True, exist_ok=True)
+
+    (round_1_dir / "post_consensus.json").write_text(
+        json.dumps(
+            {
+                "summary": {
+                    "leader_before_round": None,
+                    "candidate_this_round": {"uid": 168, "reward": 0.17547999119965071},
+                    "leader_after_round": {"uid": 168, "reward": 0.17547999119965071, "score": 0.28, "time": 86.99, "cost": 0.0034},
+                    "percentage_to_dethrone": 0.05,
+                    "dethroned": False,
+                },
+                "miners": [
+                    {"uid": 168, "best_run_consensus": {"reward": 0.17547999119965071, "score": 0.28, "time": 86.99, "cost": 0.0034}},
+                    {"uid": 196, "best_run_consensus": {"reward": 0.17522848947837152, "score": 0.28, "time": 90.80, "cost": 0.0025}},
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+    (round_2_dir / "post_consensus.json").write_text(
+        json.dumps(
+            {
+                "summary": {
+                    "leader_before_round": {"uid": 168, "reward": 0.1849726186432933, "score": 0.08, "time": 80.71, "cost": 0.0020},
+                    "candidate_this_round": {"uid": 196, "reward": 0.1907841665631254, "score": 0.13, "time": 117.16, "cost": 0.0028},
+                    "leader_after_round": {"uid": 168, "reward": 0.1849726186432933, "score": 0.08, "time": 80.71, "cost": 0.0020},
+                    "percentage_to_dethrone": 0.05,
+                    "dethroned": False,
+                },
+                "miners": [
+                    {"uid": 168, "best_run_consensus": {"reward": 0.1849726186432933, "score": 0.08, "time": 80.71, "cost": 0.0020}},
+                    {"uid": 196, "best_run_consensus": {"reward": 0.1907841665631254, "score": 0.13078707785595142, "time": 117.16, "cost": 0.0028}},
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+    validator._load_competition_state()
+
+    summary = validator._season_competition_history[1]["summary"]
+    assert summary["current_winner_uid"] == 196
+    assert summary["current_winner_reward"] == pytest.approx(0.1907841665631254)
+
+    repaired_round_2 = validator._season_competition_history[1]["rounds"][2]["post_consensus_json"]["summary"]
+    assert repaired_round_2["leader_before_round"]["uid"] == 168
+    assert repaired_round_2["leader_before_round"]["reward"] == pytest.approx(0.17547999119965071)
+    assert repaired_round_2["dethroned"] is True
+    assert repaired_round_2["leader_after_round"]["uid"] == 196

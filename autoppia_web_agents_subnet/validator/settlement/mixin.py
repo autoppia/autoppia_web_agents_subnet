@@ -529,6 +529,22 @@ class ValidatorSettlementMixin:
                 snapshot["weight"] = float(weight)
             return snapshot
 
+        def _previous_round_leader_after_snapshot() -> dict | None:
+            previous_round = int(round_key) - 1
+            if previous_round <= 0:
+                return None
+            previous_entry = rounds_state.get(previous_round) or rounds_state.get(str(previous_round))
+            if not isinstance(previous_entry, dict):
+                return None
+            previous_post = previous_entry.get("post_consensus_json")
+            if not isinstance(previous_post, dict):
+                return None
+            previous_summary = previous_post.get("summary")
+            if not isinstance(previous_summary, dict):
+                return None
+            leader_after = previous_summary.get("leader_after_round")
+            return dict(leader_after) if isinstance(leader_after, dict) else None
+
         if round_number_in_season > 0:
             round_key = int(round_number_in_season)
         else:
@@ -579,35 +595,56 @@ class ValidatorSettlementMixin:
                 best_reward = best_f
                 best_uid = uid_i
 
-        reigning_uid_raw = summary_state.get("current_winner_uid")
-        reigning_uid: int | None
-        try:
-            reigning_uid = int(reigning_uid_raw) if reigning_uid_raw is not None else None
-        except Exception:
-            reigning_uid = None
-
+        leader_before_snapshot = None
+        reigning_uid: int | None = None
         reigning_reward = 0.0
-        if reigning_uid is not None:
+
+        previous_leader_after = _previous_round_leader_after_snapshot()
+        if isinstance(previous_leader_after, dict):
             try:
-                reigning_reward = float(summary_state.get("current_winner_reward", summary_state.get("current_winner_score", 0.0)) or 0.0)
+                reigning_uid = int(previous_leader_after.get("uid")) if previous_leader_after.get("uid") is not None else None
             except Exception:
-                reigning_reward = 0.0
-            if reigning_reward <= 0.0:
+                reigning_uid = None
+            if reigning_uid is not None:
                 try:
-                    reigning_reward = float(best_by_miner.get(reigning_uid, 0.0) or 0.0)
+                    reigning_reward = float(previous_leader_after.get("reward", 0.0) or 0.0)
                 except Exception:
                     reigning_reward = 0.0
-            if reigning_reward <= 0.0:
+                if reigning_reward > 0.0:
+                    leader_before_snapshot = dict(previous_leader_after)
+                else:
+                    reigning_uid = None
+
+        if reigning_uid is None:
+            reigning_uid_raw = summary_state.get("current_winner_uid")
+            try:
+                reigning_uid = int(reigning_uid_raw) if reigning_uid_raw is not None else None
+            except Exception:
                 reigning_uid = None
-        reigning_is_eligible = bool(reigning_uid is not None and reigning_uid in eligible_uids)
-        leader_before_snapshot = None
-        if reigning_uid is not None:
-            current_winner_snapshot = summary_state.get("current_winner_snapshot")
-            if isinstance(current_winner_snapshot, dict) and current_winner_snapshot.get("uid") == reigning_uid:
-                leader_before_snapshot = dict(current_winner_snapshot)
-            else:
-                existing_snapshot = best_snapshot_by_miner.get(reigning_uid) or best_snapshot_by_miner.get(str(reigning_uid))
-                leader_before_snapshot = _snapshot_for_uid(reigning_uid, reigning_reward, fallback=existing_snapshot if isinstance(existing_snapshot, dict) else None)
+
+            if reigning_uid is not None:
+                try:
+                    reigning_reward = float(summary_state.get("current_winner_reward", summary_state.get("current_winner_score", 0.0)) or 0.0)
+                except Exception:
+                    reigning_reward = 0.0
+                if reigning_reward <= 0.0:
+                    try:
+                        reigning_reward = float(best_by_miner.get(reigning_uid, 0.0) or 0.0)
+                    except Exception:
+                        reigning_reward = 0.0
+                if reigning_reward <= 0.0:
+                    reigning_uid = None
+                else:
+                    current_winner_snapshot = summary_state.get("current_winner_snapshot")
+                    if isinstance(current_winner_snapshot, dict) and current_winner_snapshot.get("uid") == reigning_uid:
+                        leader_before_snapshot = dict(current_winner_snapshot)
+                    else:
+                        existing_snapshot = best_snapshot_by_miner.get(reigning_uid) or best_snapshot_by_miner.get(str(reigning_uid))
+                        leader_before_snapshot = _snapshot_for_uid(
+                            reigning_uid,
+                            reigning_reward,
+                            fallback=existing_snapshot if isinstance(existing_snapshot, dict) else None,
+                        )
 
         challenger_uid: int | None = None
         challenger_reward = 0.0
@@ -632,19 +669,20 @@ class ValidatorSettlementMixin:
         dethroned = False
         required_reward_to_dethrone: float | None = None
 
-        if eligible_uids and best_uid is not None and best_reward > 0.0:
+        reigning_is_eligible = bool(reigning_uid is not None and reigning_uid in eligible_uids)
+
+        if reigning_uid is not None and reigning_reward > 0.0:
+            winner_uid = reigning_uid
+            winner_reward = reigning_reward
+            if challenger_uid is not None:
+                required_reward_to_dethrone = float(reigning_reward * (1.0 + required_improvement_pct))
+                if challenger_reward > required_reward_to_dethrone:
+                    dethroned = True
+                    winner_uid = challenger_uid
+                    winner_reward = challenger_reward
+        elif eligible_uids and best_uid is not None and best_reward > 0.0:
             winner_uid = best_uid
             winner_reward = best_reward
-
-            if reigning_is_eligible and reigning_uid is not None and reigning_reward > 0.0:
-                winner_uid = reigning_uid
-                winner_reward = reigning_reward
-                if challenger_uid is not None:
-                    required_reward_to_dethrone = float(reigning_reward * (1.0 + required_improvement_pct))
-                    if challenger_reward > required_reward_to_dethrone:
-                        dethroned = True
-                        winner_uid = challenger_uid
-                        winner_reward = challenger_reward
         elif not eligible_uids:
             winner_uid = None
             winner_reward = 0.0

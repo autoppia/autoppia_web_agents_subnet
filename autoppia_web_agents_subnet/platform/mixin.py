@@ -248,21 +248,18 @@ class ValidatorPlatformMixin:
         return removed
 
     def _current_round_all_runs_zero(self) -> bool:
-        current_runs = getattr(self, "current_agent_runs", None) or {}
-        if not isinstance(current_runs, dict) or not current_runs:
+        active_uids = {int(uid) for uid in (set(getattr(self, "active_miner_uids", None) or set()) | set((getattr(self, "current_agent_runs", None) or {}).keys()))}
+        if not active_uids:
             return False
 
         miners_reused = {int(uid) for uid in (getattr(self, "miners_reused_this_round", None) or set())}
         inspected_uids: set[int] = set()
-        for uid in list(current_runs.keys()):
-            try:
-                uid_i = int(uid)
-            except Exception:
-                continue
+        for uid_i in sorted(active_uids):
             if uid_i in miners_reused:
                 continue
             payload = self._current_round_run_payload(uid_i)
             if not isinstance(payload, dict):
+                inspected_uids.add(uid_i)
                 continue
             zero_reason = str(payload.get("zero_reason", "") or "")
             if zero_reason == "round_window_exceeded":
@@ -276,6 +273,34 @@ class ValidatorPlatformMixin:
                 return False
 
         return bool(inspected_uids)
+
+    def _effective_signal_all_runs_zero(self) -> bool:
+        """
+        Returns True only when the validator has no positive effective signal for any active miner.
+
+        Effective signal is what consensus should care about:
+        - current round run if it improved the miner
+        - otherwise the best historical run carried in the snapshot
+
+        This intentionally differs from `_current_round_all_runs_zero()`, which is still used for
+        local re-evaluation policy when the freshly evaluated round itself looks suspicious.
+        """
+        active_uids = {int(uid) for uid in (set(getattr(self, "active_miner_uids", None) or set()) | set((getattr(self, "current_agent_runs", None) or {}).keys()))}
+        if not active_uids:
+            return False
+
+        for uid_i in sorted(active_uids):
+            best_payload = self._best_run_payload_for_miner(uid_i)
+            if not isinstance(best_payload, dict):
+                continue
+            try:
+                reward = float(best_payload.get("reward", 0.0) or 0.0)
+            except Exception:
+                reward = 0.0
+            if reward > 0.0:
+                return False
+
+        return True
 
     def _mark_all_zero_round_for_re_evaluation(self) -> bool:
         season_number, round_number = self._current_round_numbers()

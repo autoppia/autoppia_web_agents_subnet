@@ -190,38 +190,37 @@ def _extract_metrics_from_payload(payload: dict[str, Any]) -> tuple[dict[int, fl
                 continue
             best_run = miner_entry.get("best_run")
             if not isinstance(best_run, dict):
-                best_run = None
+                continue
             reward = 0.0
             score = 0.0
             avg_time = 0.0
             avg_cost = 0.0
             tasks_received = 0
             tasks_success = 0
-            if best_run is not None:
-                try:
-                    reward = float(best_run.get("reward", 0.0) or 0.0)
-                except Exception:
-                    reward = 0.0
-                try:
-                    score = float(best_run.get("score", 0.0) or 0.0)
-                except Exception:
-                    score = 0.0
-                try:
-                    avg_time = float(best_run.get("time", 0.0) or 0.0)
-                except Exception:
-                    avg_time = 0.0
-                try:
-                    avg_cost = float(best_run.get("cost", 0.0) or 0.0)
-                except Exception:
-                    avg_cost = 0.0
-                try:
-                    tasks_received = int(best_run.get("tasks_received", 0) or 0)
-                except Exception:
-                    tasks_received = 0
-                try:
-                    tasks_success = int(best_run.get("tasks_success", 0) or 0)
-                except Exception:
-                    tasks_success = 0
+            try:
+                reward = float(best_run.get("reward", 0.0) or 0.0)
+            except Exception:
+                reward = 0.0
+            try:
+                score = float(best_run.get("score", 0.0) or 0.0)
+            except Exception:
+                score = 0.0
+            try:
+                avg_time = float(best_run.get("time", 0.0) or 0.0)
+            except Exception:
+                avg_time = 0.0
+            try:
+                avg_cost = float(best_run.get("cost", 0.0) or 0.0)
+            except Exception:
+                avg_cost = 0.0
+            try:
+                tasks_received = int(best_run.get("tasks_received", 0) or 0)
+            except Exception:
+                tasks_received = 0
+            try:
+                tasks_success = int(best_run.get("tasks_success", 0) or 0)
+            except Exception:
+                tasks_success = 0
             rewards[uid] = reward
             metrics[uid] = {
                 "avg_reward": reward,
@@ -293,8 +292,13 @@ def _validator_payload_is_all_zero(rewards: dict[int, float]) -> bool:
 
 def _payload_declares_all_runs_zero(payload: dict[str, Any], rewards: dict[int, float]) -> bool:
     summary = payload.get("summary")
-    if isinstance(summary, dict) and isinstance(summary.get("validator_all_runs_zero"), bool):
-        return bool(summary.get("validator_all_runs_zero"))
+    # Effective signal for consensus is based on published best_run rewards. A validator that carries
+    # a positive best_run from a previous round must not be excluded just because its current round
+    # had no fresh evaluations (e.g. miners in cooldown).
+    if _validator_payload_has_positive_best_run_signal(rewards):
+        return False
+    if isinstance(summary, dict) and isinstance(summary.get("validator_all_best_runs_zero"), bool):
+        return bool(summary.get("validator_all_best_runs_zero"))
     return _validator_payload_is_all_zero(rewards)
 
 
@@ -415,12 +419,16 @@ def _build_local_round_summary(
             else:
                 leader_after = leader_before
 
+    current_round_all_zero = bool(getattr(self, "_current_round_all_runs_zero", lambda: False)())
+    effective_signal_all_zero = bool(getattr(self, "_effective_signal_all_runs_zero", lambda: False)())
+
     return {
         "season": int(season_number),
         "round": int(round_number),
         "percentage_to_dethrone": float(percentage_to_dethrone),
         "dethroned": bool(dethroned),
-        "validator_all_runs_zero": bool(getattr(self, "_current_round_all_runs_zero", lambda: False)()),
+        "validator_all_best_runs_zero": effective_signal_all_zero,
+        "validator_all_current_runs_zero": current_round_all_zero,
         "leader_before_round": leader_before,
         "candidate_this_round": candidate_snapshot,
         "leader_after_round": leader_after,
@@ -782,7 +790,8 @@ async def aggregate_scores_from_commitments(
 
         rewards, miner_metrics = _extract_metrics_from_payload(payload)
         current_run_metrics = _extract_current_run_metrics_from_payload(payload)
-        if not isinstance(rewards, dict) or not rewards:
+        payload_declares_all_zero = _payload_declares_all_runs_zero(payload, rewards)
+        if not isinstance(rewards, dict):
             continue
         compatible_payloads.append(
             {
@@ -794,6 +803,7 @@ async def aggregate_scores_from_commitments(
                 "rewards": rewards,
                 "miner_metrics": miner_metrics,
                 "current_run_metrics": current_run_metrics,
+                "declares_all_zero": payload_declares_all_zero,
             }
         )
 
@@ -808,11 +818,14 @@ async def aggregate_scores_from_commitments(
         miner_metrics = entry["miner_metrics"]
         current_run_metrics = entry["current_run_metrics"]
         payload = entry["payload"]
+        declares_all_zero = bool(entry.get("declares_all_zero"))
 
-        if has_positive_best_run_signal and _payload_declares_all_runs_zero(payload, rewards):
+        if has_positive_best_run_signal and declares_all_zero:
             skipped_all_zero_when_others_positive += 1
             skipped_all_zero_when_others_positive_list.append((hk, cid))
             bt.logging.debug(f"⏭️ Skip {hk[:10]}…: all miners published reward=0/null while other validators have positive best_run signal")
+            continue
+        if not rewards:
             continue
 
         per_val_map: dict[int, float] = {}
