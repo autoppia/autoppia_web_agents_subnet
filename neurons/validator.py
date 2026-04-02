@@ -28,6 +28,10 @@ def _init_validator_entrypoint_env() -> None:
     """
 
     repo_root = Path(__file__).resolve().parents[1]
+    custom_env = (os.getenv("AUTOPPIA_VALIDATOR_ENV_FILE") or "").strip()
+    if custom_env:
+        load_dotenv(Path(custom_env).expanduser(), override=True)
+        return
     load_dotenv(repo_root / ".env", override=True)
 
 
@@ -902,12 +906,15 @@ class Validator(
                 target_block = int(getattr(self.round_manager, "target_block", 0) or 0)
                 remaining_blocks = max(target_block - current_block_after_handshake, 0)
                 min_blocks_to_participate = int(
-                    getattr(
-                        self.round_manager,
-                        "SKIP_ROUND_MIN_BLOCKS_AFTER_HANDSHAKE",
-                        10,
+                    (
+                        os.getenv("SKIP_ROUND_MIN_BLOCKS_AFTER_HANDSHAKE")
+                        or getattr(
+                            self.round_manager,
+                            "SKIP_ROUND_MIN_BLOCKS_AFTER_HANDSHAKE",
+                            10,
+                        )
+                        or 10
                     )
-                    or 10
                 )
                 if target_block > 0 and remaining_blocks < min_blocks_to_participate:
                     bt.logging.warning(

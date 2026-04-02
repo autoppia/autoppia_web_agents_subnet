@@ -283,6 +283,7 @@ class TestGateway:
     def test_gateway_is_initialized_with_correct_target(self):
         """Test that gateway is initialized with correct target URL."""
         from autoppia_web_agents_subnet.opensource.sandbox_manager import SandboxManager
+        from autoppia_web_agents_subnet.validator.config import SANDBOX_GATEWAY_HOST
 
         with patch.dict(
             os.environ,
@@ -311,7 +312,7 @@ class TestGateway:
                                 # Should have created gateway container
                                 mock_docker.containers.run.assert_called()
                                 call_kwargs = mock_docker.containers.run.call_args[1]
-                                assert call_kwargs["name"] == "sandbox-gateway"
+                                assert call_kwargs["name"] == SANDBOX_GATEWAY_HOST
 
     def test_gateway_container_is_created_on_sandbox_network(self):
         """Test that gateway container is created on sandbox network."""

@@ -512,6 +512,27 @@ class ValidatorRoundStartMixin:
         else:
             candidate_uids = [uid for _, uid in candidate_stakes]
 
+        raw_allowlist = (os.getenv("MINER_HOTKEY_ALLOWLIST") or "").strip()
+        if raw_allowlist:
+            allowlist = {part.strip() for part in raw_allowlist.split(",") if part.strip()}
+            hotkeys = list(getattr(metagraph, "hotkeys", []))
+            before_allowlist = len(candidate_uids)
+            filtered_candidate_uids: list[int] = []
+            for uid in candidate_uids:
+                try:
+                    hotkey = str(hotkeys[uid]).strip()
+                except Exception:
+                    hotkey = ""
+                if hotkey in allowlist:
+                    filtered_candidate_uids.append(uid)
+            candidate_uids = filtered_candidate_uids
+            bt.logging.info(
+                f"[handshake] MINER_HOTKEY_ALLOWLIST applied: before={before_allowlist} after={len(candidate_uids)}"
+            )
+            if not candidate_uids:
+                bt.logging.warning("No miners remain after MINER_HOTKEY_ALLOWLIST filtering; active_miner_uids will be empty")
+                return
+
         bt.logging.info(
             "[handshake] Candidate selection summary "
             f"total={n - 1}|eligible_by_stake={candidates_after_stake}|"

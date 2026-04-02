@@ -277,7 +277,6 @@ class TestScoreCalculation:
         from tests.conftest import _bind_evaluation_mixin
 
         validator_with_agents = _bind_evaluation_mixin(validator_with_agents)
-
         validator_with_agents.season_manager.get_season_tasks = AsyncMock(return_value=season_tasks)
         validator_with_agents.sandbox_manager = Mock()
 
@@ -293,11 +292,6 @@ class TestScoreCalculation:
             ):
                 mock_normalize.return_value = ("https://github.com/test/agent", "main")
                 mock_ls_remote.return_value = "deadbeef"
-                # Return different scores for each task (3 agents * 5 tasks = 15 evaluations)
-                # Reward function is binary: eval_score >= 1.0 -> solved (reward ~1.0), else 0.
-                # Agent 1: 1.0, 0.0, 1.0, 0.0, 1.0 -> 3 solved, avg_reward = 3/5 = 0.6
-                # Agent 2: 0.0, 0.0, 0.0, 0.0, 0.0 -> 0 solved, avg_reward = 0.0
-                # Agent 3: 1.0, 1.0, 1.0, 1.0, 1.0 -> 5 solved, avg_reward = 1.0
                 mock_eval.side_effect = [
                     (1.0, None, None),
                     (0.0, None, None),
@@ -318,12 +312,72 @@ class TestScoreCalculation:
 
                 await validator_with_agents._run_evaluation_phase()
 
-                # Check that agent scores were calculated (average of rewards)
-                # With eval_score=1.0, exec_time=0, cost=0: reward = 1.0
-                # Agent 1: 3 solved out of 5 tasks -> avg_reward = 3*1.0/5 = 0.6
                 agent = validator_with_agents.agents_dict[1]
-                expected_avg = 3.0 / 5.0  # 3 solved tasks, reward=1.0 each
+                expected_avg = 3.0 / 5.0
                 assert abs(agent.score - expected_avg) < 0.01
+
+    async def test_evaluation_applies_overfit_penalty_when_alt_seed_reward_drops(self, dummy_validator):
+        """Overfit penalty should reduce the stored reward for the original task."""
+        import queue
+
+        from autoppia_web_agents_subnet.validator.models import AgentInfo, TaskWithProject
+        from tests.conftest import _bind_evaluation_mixin
+
+        validator = _bind_evaluation_mixin(dummy_validator)
+        validator.agents_queue = queue.Queue()
+        agent = AgentInfo(
+            uid=1,
+            agent_name="test_agent_1",
+            github_url="https://github.com/test/agent1/tree/main",
+            score=0.0,
+        )
+        validator.agents_dict = {1: agent}
+        validator.agents_queue.put(agent)
+        validator.current_agent_runs = {
+            1: Mock(
+                agent_run_id="run-1",
+                total_tasks=1,
+                metadata={},
+                average_score=0.0,
+                average_reward=0.0,
+                average_execution_time=0.0,
+            )
+        }
+
+        task = Mock()
+        task.id = "task-1"
+        task.url = "https://example.com/task?seed=123"
+        task.prompt = "Test task"
+        task.tests = []
+        season_tasks = [TaskWithProject(project=None, task=task)]
+        validator.season_manager.get_season_tasks = AsyncMock(return_value=season_tasks)
+
+        validator.sandbox_manager = Mock()
+        validator.sandbox_manager.deploy_agent = Mock(return_value=Mock(base_url="http://localhost:8001", git_commit="deadbeef"))
+        validator.sandbox_manager.cleanup_agent = Mock()
+        validator.sandbox_manager.set_allowed_task_ids = Mock(return_value=True)
+        validator.sandbox_manager.get_usage_for_task = Mock(return_value={"total_cost": 0.0})
+
+        with (
+            patch("autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url", return_value=("https://github.com/test/agent1", "main")),
+            patch("autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit", return_value="deadbeef"),
+            patch("autoppia_web_agents_subnet.validator.config.CONCURRENT_EVALUATION_NUM", 1),
+            patch("autoppia_web_agents_subnet.validator.config.OVERFIT_PENALIZATION_ENABLED", True),
+            patch("autoppia_web_agents_subnet.validator.config.OVERFIT_DIFF_REWARD_THRESHOLD", 0.25),
+            patch("autoppia_web_agents_subnet.validator.config.OVERFIT_REWARD_PENALTY", 0.25),
+            patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua", new_callable=AsyncMock) as mock_eval,
+        ):
+            mock_eval.side_effect = [
+                (1.0, 0.0, None),  # base task
+                (0.0, 0.0, None),  # alt-seed task
+            ]
+
+            agents_evaluated = await validator._run_evaluation_phase()
+
+        assert agents_evaluated == 1
+        assert validator.round_manager.round_rewards[1] == pytest.approx([0.75])
+        assert validator.current_agent_runs[1].average_reward == pytest.approx(0.75)
+        assert mock_eval.await_count == 2
 
     async def test_evaluation_updates_agent_score_in_agents_dict(self, validator_with_agents, season_tasks):
         """Test that evaluation updates agent.score in agents_dict."""

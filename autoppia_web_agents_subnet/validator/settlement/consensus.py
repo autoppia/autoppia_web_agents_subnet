@@ -195,6 +195,7 @@ def _extract_metrics_from_payload(payload: dict[str, Any]) -> tuple[dict[int, fl
             score = 0.0
             avg_time = 0.0
             avg_cost = 0.0
+            avg_penalty = 0.0
             tasks_received = 0
             tasks_success = 0
             try:
@@ -214,6 +215,10 @@ def _extract_metrics_from_payload(payload: dict[str, Any]) -> tuple[dict[int, fl
             except Exception:
                 avg_cost = 0.0
             try:
+                avg_penalty = float(best_run.get("penalty", 0.0) or 0.0)
+            except Exception:
+                avg_penalty = 0.0
+            try:
                 tasks_received = int(best_run.get("tasks_received", 0) or 0)
             except Exception:
                 tasks_received = 0
@@ -227,6 +232,7 @@ def _extract_metrics_from_payload(payload: dict[str, Any]) -> tuple[dict[int, fl
                 "avg_eval_score": score,
                 "avg_eval_time": avg_time,
                 "avg_cost": avg_cost,
+                "avg_penalty": avg_penalty,
                 "tasks_sent": tasks_received,
                 "tasks_success": tasks_success,
             }
@@ -276,6 +282,7 @@ def _extract_current_run_metrics_from_payload(payload: dict[str, Any]) -> dict[i
             "avg_eval_score": float(current_run.get("score", 0.0) or 0.0),
             "avg_eval_time": float(current_run.get("time", 0.0) or 0.0),
             "avg_cost": float(current_run.get("cost", 0.0) or 0.0),
+            "avg_penalty": float(current_run.get("penalty", 0.0) or 0.0),
             "tasks_sent": int(current_run.get("tasks_received", 0) or 0),
             "tasks_success": int(current_run.get("tasks_success", 0) or 0),
         }
@@ -862,6 +869,8 @@ async def aggregate_scores_from_commitments(
                         "avg_eval_time_den": 0.0,
                         "avg_cost_num": 0.0,
                         "avg_cost_den": 0.0,
+                        "avg_penalty_num": 0.0,
+                        "avg_penalty_den": 0.0,
                         "tasks_sent_sum": 0,
                         "tasks_success_sum": 0,
                         "handshake_ok_num": 0.0,
@@ -894,6 +903,10 @@ async def aggregate_scores_from_commitments(
                 if avg_cost is not None:
                     acc["avg_cost_num"] += effective_weight * float(avg_cost)
                     acc["avg_cost_den"] += effective_weight
+                avg_penalty = _extract_metric_value(entry_raw, "avg_penalty", "penalty")
+                if avg_penalty is not None:
+                    acc["avg_penalty_num"] += effective_weight * float(avg_penalty)
+                    acc["avg_penalty_den"] += effective_weight
 
                 tasks_sent = _extract_int_metric_value(entry_raw, "tasks_sent", "tasks_attempted")
                 if tasks_sent is not None:
@@ -924,6 +937,8 @@ async def aggregate_scores_from_commitments(
                         "avg_eval_time_den": 0.0,
                         "avg_cost_num": 0.0,
                         "avg_cost_den": 0.0,
+                        "avg_penalty_num": 0.0,
+                        "avg_penalty_den": 0.0,
                         "tasks_sent_sum": 0,
                         "tasks_success_sum": 0,
                     },
@@ -944,6 +959,10 @@ async def aggregate_scores_from_commitments(
                 if avg_cost is not None:
                     acc["avg_cost_num"] += effective_weight * float(avg_cost)
                     acc["avg_cost_den"] += effective_weight
+                avg_penalty = _extract_metric_value(entry_raw, "avg_penalty", "penalty")
+                if avg_penalty is not None:
+                    acc["avg_penalty_num"] += effective_weight * float(avg_penalty)
+                    acc["avg_penalty_den"] += effective_weight
                 tasks_sent = _extract_int_metric_value(entry_raw, "tasks_sent")
                 if tasks_sent is not None:
                     acc["tasks_sent_sum"] += int(tasks_sent)
@@ -982,6 +1001,8 @@ async def aggregate_scores_from_commitments(
             stats_entry["avg_eval_time"] = float(acc["avg_eval_time_num"] / acc["avg_eval_time_den"])
         if acc.get("avg_cost_den", 0.0) > 0.0:
             stats_entry["avg_cost"] = float(acc["avg_cost_num"] / acc["avg_cost_den"])
+        if acc.get("avg_penalty_den", 0.0) > 0.0:
+            stats_entry["avg_penalty"] = float(acc["avg_penalty_num"] / acc["avg_penalty_den"])
         if acc.get("tasks_sent_sum", 0) > 0:
             stats_entry["tasks_sent"] = int(acc["tasks_sent_sum"])
         if acc.get("tasks_success_sum", 0) > 0:
@@ -1004,6 +1025,8 @@ async def aggregate_scores_from_commitments(
             stats_entry["avg_eval_time"] = float(acc["avg_eval_time_num"] / acc["avg_eval_time_den"])
         if acc.get("avg_cost_den", 0.0) > 0.0:
             stats_entry["avg_cost"] = float(acc["avg_cost_num"] / acc["avg_cost_den"])
+        if acc.get("avg_penalty_den", 0.0) > 0.0:
+            stats_entry["avg_penalty"] = float(acc["avg_penalty_num"] / acc["avg_penalty_den"])
         if acc.get("tasks_sent_sum", 0) > 0:
             stats_entry["tasks_sent"] = int(acc["tasks_sent_sum"])
         if acc.get("tasks_success_sum", 0) > 0:

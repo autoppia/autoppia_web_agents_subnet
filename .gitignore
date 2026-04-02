@@ -189,6 +189,7 @@ cython_debug/
 .vscode/
 
 testing/
+tests/local_runs/
 data/mongodb_data/
 data/validator_state/
 data/iwap_payloads/

@@ -43,6 +43,18 @@ from autoppia_web_agents_subnet.validator.models import TaskWithProject
 class ValidatorPlatformMixin:
     """Shared IWAP integration helpers extracted from the validator loop."""
 
+    @staticmethod
+    def _read_config_flag(config_obj: Any, *path: str, default: bool = False) -> bool:
+        current: Any = config_obj
+        for part in path:
+            if current is None:
+                return bool(default)
+            if isinstance(current, dict):
+                current = current.get(part)
+            else:
+                current = getattr(current, part, None)
+        return bool(current) if current is not None else bool(default)
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Unify all validator local artifacts under the bittensor neuron path tree.
@@ -55,6 +67,7 @@ class ValidatorPlatformMixin:
         backup_dir = Path(os.environ.get("IWAP_BACKUP_DIR", str(default_backup_dir)))
         self._IWAP_VALIDATOR_AUTH_MESSAGE = IWAP_VALIDATOR_AUTH_MESSAGE or "I am a honest validator"
         self._auth_warning_emitted = False
+        self._iwap_force_mock_client = self._read_config_flag(getattr(self, "config", None), "iwap", "mock_client")
         self.iwap_client = iwa_main.IWAPClient(
             base_url=IWAP_API_BASE_URL,
             backup_dir=backup_dir,
@@ -65,6 +78,7 @@ class ValidatorPlatformMixin:
         self.current_agent_runs: dict[int, iwa_models.AgentRunIWAP] = {}
         self.current_miner_snapshots: dict[int, iwa_models.MinerSnapshotIWAP] = {}
         self._iwap_shadow_mode = False
+        self._iwap_offline_mode = bool(self._iwap_force_mock_client)
         self.round_handshake_payloads: dict[int, Any] = {}
         self.eligibility_status_by_uid: dict[int, str] = {}
         self.round_start_timestamp: float = 0.0
@@ -83,6 +97,10 @@ class ValidatorPlatformMixin:
         self._round_log_last_upload_round_id: str | None = None
         # Phase flags for IWAP steps (p1=start_round, p2=set_tasks)
         self._phases: dict[str, Any] = {"p1_done": False, "p2_done": False}
+        if self._iwap_force_mock_client:
+            bt.logging.warning(
+                "IWAP mock-client mode enabled: validator will execute the full local/on-chain flow without sending Platform HTTP requests."
+            )
 
     def _evaluation_context_payload(self) -> dict[str, Any]:
         season_number, _round_number = self._current_round_numbers()
@@ -897,6 +915,8 @@ class ValidatorPlatformMixin:
                 avg_score = (eval_sum / total_tasks_for_run) if total_tasks_for_run else (getattr(run, "average_score", None) or 0.0)
                 avg_reward = (reward_sum / total_tasks_for_run) if total_tasks_for_run else (getattr(run, "average_reward", None) or 0.0)
                 avg_time = (time_sum / attempted_tasks) if attempted_tasks else (getattr(run, "average_execution_time", None) or 0.0)
+                penalty_sum = float(acc.get("penalty", 0.0) or 0.0)
+                avg_penalty = (penalty_sum / total_tasks_for_run) if total_tasks_for_run else 0.0
                 round_rewards = getattr(getattr(self, "round_manager", None), "round_rewards", {}) or {}
                 miner_rewards = round_rewards.get(uid, []) or []
                 success_tasks = len([r for r in miner_rewards if float(r) >= 0.5])
@@ -906,6 +926,7 @@ class ValidatorPlatformMixin:
                     "average_score": avg_score,
                     "average_reward": avg_reward,
                     "average_execution_time": avg_time,
+                    "average_penalty": avg_penalty,
                     "total_tasks": total_tasks_for_run or len(miner_rewards),
                     "tasks_attempted": attempted_tasks,
                     "success_tasks": success_tasks,
@@ -969,6 +990,7 @@ class ValidatorPlatformMixin:
             score = float(stats.get("average_score", 0.0) or 0.0)
             avg_time = float(stats.get("average_execution_time", 0.0) or 0.0)
             avg_cost = float(stats.get("average_cost", 0.0) or 0.0)
+            avg_penalty = float(stats.get("average_penalty", 0.0) or 0.0)
             tasks_received = int(stats.get("total_tasks", 0) or 0)
             tasks_attempted = int(stats.get("tasks_attempted", tasks_received) or 0)
             tasks_success = int(stats.get("success_tasks", 0) or 0)
@@ -987,6 +1009,7 @@ class ValidatorPlatformMixin:
             "score": score,
             "time": avg_time,
             "cost": avg_cost,
+            "penalty": avg_penalty,
             "tasks_received": tasks_received,
             "tasks_attempted": tasks_attempted,
             "tasks_success": tasks_success,
@@ -1035,12 +1058,14 @@ class ValidatorPlatformMixin:
             avg_score = float(acc.get("eval_score", 0.0) or 0.0) / float(total_tasks)
             avg_time = float(acc.get("execution_time", 0.0) or 0.0) / float(attempted_tasks) if attempted_tasks > 0 else 0.0
             avg_cost = float(acc.get("cost", 0.0) or 0.0) / float(attempted_tasks) if attempted_tasks > 0 else 0.0
+            avg_penalty = float(acc.get("penalty", 0.0) or 0.0) / float(total_tasks)
         else:
             avg_reward = float(getattr(run, "average_reward", 0.0) or 0.0)
             avg_score = float(getattr(run, "average_score", 0.0) or 0.0)
             avg_time = float(getattr(run, "average_execution_time", 0.0) or 0.0)
             run_meta = getattr(run, "metadata", {}) or {}
             avg_cost = float(run_meta.get("average_cost", 0.0) or 0.0) if isinstance(run_meta, dict) else 0.0
+            avg_penalty = float(run_meta.get("average_penalty", 0.0) or 0.0) if isinstance(run_meta, dict) else 0.0
         agent_info = (getattr(self, "agents_dict", None) or {}).get(uid)
         season_number, round_number_in_season = self._current_round_numbers()
         zero_reason = getattr(run, "zero_reason", None)
@@ -1056,6 +1081,7 @@ class ValidatorPlatformMixin:
             "score": avg_score,
             "time": avg_time,
             "cost": avg_cost,
+            "penalty": avg_penalty,
             "tasks_received": total_tasks,
             "tasks_attempted": attempted_tasks,
             "tasks_success": success_tasks,

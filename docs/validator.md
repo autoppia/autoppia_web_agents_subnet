@@ -239,6 +239,23 @@ pm2 start neurons/validator.py \
   --logging.debug
 ```
 
+### **Local Full-Flow Without IWAP Writes**
+
+Use `--iwap.mock-client` to run the validator round flow locally without sending any Platform/IWAP HTTP requests. The validator still performs handshake, evaluation, settlement, and on-chain weight logic, but skips dashboard/backend writes.
+
+```bash
+pm2 start neurons/validator.py \
+  --name "subnet-36-validator-local" \
+  --interpreter python \
+  -- \
+  --netuid 36 \
+  --subtensor.network finney \
+  --wallet.name your_coldkey \
+  --wallet.hotkey your_hotkey \
+  --iwap.mock-client \
+  --logging.debug
+```
+
 ---
 
 ## 🔄 7. Updates & Maintenance

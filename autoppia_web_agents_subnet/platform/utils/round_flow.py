@@ -729,6 +729,16 @@ async def start_round_flow(ctx, *, current_block: int, n_tasks: int) -> None:
     if not ctx.current_round_id:
         return
 
+    if getattr(ctx, "_iwap_force_mock_client", False):
+        ctx._iwap_offline_mode = True
+        log_iwap_phase(
+            "Phase 1",
+            "⚠️ IWAP mock-client mode enabled: skipping all Platform HTTP requests while continuing the validator round locally",
+            level="warning",
+        )
+        bt.logging.info("✅ IWAP mock-client mode active: validator will continue with handshake, evaluation, settlement, and on-chain weights without dashboard sync")
+        return
+
     ctx._s3_task_log_urls = []
 
     # 🔍 FIX: Fetch a fresh block height to avoid TTL-cached values around round boundaries
@@ -1350,20 +1360,7 @@ async def finish_round_flow(
     if not ctx.current_round_id:
         return True
 
-    # If IWAP is offline, skip backend sync but still cleanup state
-    if getattr(ctx, "_iwap_offline_mode", False):
-        log_iwap_phase(
-            "Phase 5",
-            "⚠️ OFFLINE MODE: Skipping finish_round backend call - cleaning up local state",
-            level="warning",
-        )
-        persist_checkpoint = getattr(ctx, "_persist_round_checkpoint", None)
-        if callable(persist_checkpoint):
-            with contextlib.suppress(Exception):
-                persist_checkpoint(reason="finish_round_offline", status="completed")
-        ctx._reset_iwap_round_state()
-        bt.logging.info("✅ Round completed locally - weights were set on-chain successfully")
-        return True
+    offline_mode = bool(getattr(ctx, "_iwap_offline_mode", False))
 
     # Upload round log as early as possible so we always persist it even if something
     # fails later (consensus, summary, finish_round API). You get the same logs the
@@ -1379,59 +1376,62 @@ async def finish_round_flow(
     round_log_file: str | None = None
     round_log_url: str | None = None
     round_log_error: str | None = None
-    try:
-        # Prefer shared periodic uploader when available (keeps single source of truth
-        # for throttling and retry behavior). Force upload at finish.
-        uploader = getattr(ctx, "_upload_round_log_snapshot", None)
-        if callable(uploader):
-            round_log_url = await uploader(
-                reason="finish_round",
-                force=True,
-                min_interval_seconds=0.0,
-            )
-        if round_log_url is None:
-            from autoppia_web_agents_subnet.utils.logging import ColoredLogger
+    if offline_mode:
+        round_log_error = "offline mode: round log upload skipped"
+    else:
+        try:
+            # Prefer shared periodic uploader when available (keeps single source of truth
+            # for throttling and retry behavior). Force upload at finish.
+            uploader = getattr(ctx, "_upload_round_log_snapshot", None)
+            if callable(uploader):
+                round_log_url = await uploader(
+                    reason="finish_round",
+                    force=True,
+                    min_interval_seconds=0.0,
+                )
+            if round_log_url is None:
+                from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 
-            round_log_file = ColoredLogger.get_round_log_file()
-            if round_log_file:
-                round_log_path = Path(round_log_file)
-                if round_log_path.exists():
-                    round_log_contents = round_log_path.read_text(encoding="utf-8", errors="replace")
-                    validator_uid = getattr(ctx, "uid", None)
-                    validator_hotkey = None
-                    try:
-                        validator_hotkey = getattr(ctx.wallet, "hotkey", None)
-                        if validator_hotkey is not None:
-                            validator_hotkey = getattr(validator_hotkey, "ss58_address", None)
-                    except Exception:
-                        pass
-                    upload_variants = ColoredLogger.build_round_log_upload_variants(round_log_contents)
-                    for variant_label, variant_content in upload_variants:
+                round_log_file = ColoredLogger.get_round_log_file()
+                if round_log_file:
+                    round_log_path = Path(round_log_file)
+                    if round_log_path.exists():
+                        round_log_contents = round_log_path.read_text(encoding="utf-8", errors="replace")
+                        validator_uid = getattr(ctx, "uid", None)
+                        validator_hotkey = None
                         try:
-                            round_log_url = await ctx.iwap_client.upload_round_log(
-                                validator_round_id=round_id,
-                                content=variant_content,
-                                season_number=season_for_round,
-                                round_number_in_season=round_for_round,
-                                validator_uid=validator_uid if isinstance(validator_uid, int) else None,
-                                validator_hotkey=validator_hotkey,
-                            )
-                            if round_log_url is not None:
-                                break
-                        except httpx.HTTPStatusError as exc:
-                            status_code = exc.response.status_code if exc.response is not None else None
-                            has_smaller_variant = variant_label != upload_variants[-1][0]
-                            if status_code == 413 and has_smaller_variant:
-                                bt.logging.warning(f"Round log upload hit 413 for {round_id} ({variant_label}); retrying with a smaller tail payload")
-                                continue
-                            raise
-                    if round_log_url is None:
-                        round_log_error = "upload rejected: no url returned"
-                else:
-                    round_log_error = f"round log file not found: {round_log_file}"
-    except Exception as exc:
-        round_log_error = f"upload failed: {type(exc).__name__}: {exc}"
-        bt.logging.warning(f"Failed to upload round log for round_id={round_id}: {round_log_error}")
+                            validator_hotkey = getattr(ctx.wallet, "hotkey", None)
+                            if validator_hotkey is not None:
+                                validator_hotkey = getattr(validator_hotkey, "ss58_address", None)
+                        except Exception:
+                            pass
+                        upload_variants = ColoredLogger.build_round_log_upload_variants(round_log_contents)
+                        for variant_label, variant_content in upload_variants:
+                            try:
+                                round_log_url = await ctx.iwap_client.upload_round_log(
+                                    validator_round_id=round_id,
+                                    content=variant_content,
+                                    season_number=season_for_round,
+                                    round_number_in_season=round_for_round,
+                                    validator_uid=validator_uid if isinstance(validator_uid, int) else None,
+                                    validator_hotkey=validator_hotkey,
+                                )
+                                if round_log_url is not None:
+                                    break
+                            except httpx.HTTPStatusError as exc:
+                                status_code = exc.response.status_code if exc.response is not None else None
+                                has_smaller_variant = variant_label != upload_variants[-1][0]
+                                if status_code == 413 and has_smaller_variant:
+                                    bt.logging.warning(f"Round log upload hit 413 for {round_id} ({variant_label}); retrying with a smaller tail payload")
+                                    continue
+                                raise
+                        if round_log_url is None:
+                            round_log_error = "upload rejected: no url returned"
+                    else:
+                        round_log_error = f"round log file not found: {round_log_file}"
+        except Exception as exc:
+            round_log_error = f"upload failed: {type(exc).__name__}: {exc}"
+            bt.logging.warning(f"Failed to upload round log for round_id={round_id}: {round_log_error}")
 
     ended_at = time.time()
     for agent_run in ctx.current_agent_runs.values():
@@ -1500,6 +1500,7 @@ async def finish_round_flow(
                 "score": float(local_avg_eval_scores.get(miner_uid, 0.0) or 0.0),
                 "time": 0.0,
                 "cost": float(local_avg_costs.get(miner_uid, 0.0) or 0.0),
+                "penalty": 0.0,
                 "tasks_received": 0,
                 "tasks_success": 0,
                 "season": season_number_for_summary,
@@ -1553,10 +1554,12 @@ async def finish_round_flow(
         avg_cost = float(effective_run.get("cost", 0.0) or 0.0)
         avg_reward_value = float(effective_run.get("reward", 0.0) or 0.0)
         avg_eval_score = float(effective_run.get("score", 0.0) or 0.0)
+        avg_penalty = float(effective_run.get("penalty", 0.0) or 0.0)
 
         local_stats_by_miner[miner_uid] = {
             "avg_eval_time": avg_time,
             "avg_cost": avg_cost,
+            "avg_penalty": avg_penalty,
             "tasks_sent": tasks_received,
             "tasks_attempted": tasks_attempted,
             "tasks_success": tasks_success,
@@ -1573,6 +1576,7 @@ async def finish_round_flow(
             "avg_eval_score": avg_eval_score,
             "avg_evaluation_time": avg_time,
             "avg_cost": avg_cost,
+            "avg_penalty": avg_penalty,
             "miner_uid": miner_uid,
             "miner_hotkey": miner_hotkey,
             "miner_name": miner_name,
@@ -1869,6 +1873,7 @@ async def finish_round_flow(
                     "score": float(current_stats.get("avg_eval_score", 0.0) if isinstance(current_stats, dict) and current_stats else current_run_dict.get("score", 0.0) or 0.0),
                     "time": float(current_stats.get("avg_eval_time", 0.0) if isinstance(current_stats, dict) and current_stats else current_run_dict.get("time", 0.0) or 0.0),
                     "cost": float(current_stats.get("avg_cost", 0.0) if isinstance(current_stats, dict) and current_stats else current_run_dict.get("cost", 0.0) or 0.0),
+                    "penalty": float(current_stats.get("avg_penalty", 0.0) if isinstance(current_stats, dict) and current_stats else current_run_dict.get("penalty", 0.0) or 0.0),
                     "tasks_received": int(current_run_dict.get("tasks_received", 0) or 0) if current_run_dict else int(current_stats.get("tasks_sent", 0) or 0),
                     "tasks_success": int(current_run_dict.get("tasks_success", 0) or 0) if current_run_dict else int(current_stats.get("tasks_success", 0) or 0),
                     "github_url": current_run_dict.get("github_url") if current_run_dict else github_url,
@@ -1891,6 +1896,7 @@ async def finish_round_flow(
                         "score": float(post_consensus_avg_eval_score),
                         "time": float(avg_eval_time),
                         "cost": float(avg_cost),
+                        "penalty": float(current_stats.get("avg_penalty", 0.0) or consensus_stats.get("avg_penalty", 0.0) or local_stats.get("avg_penalty", 0.0) or 0.0),
                         "tasks_received": int(tasks_sent),
                         "tasks_success": int(tasks_success),
                         "github_url": github_url,
@@ -1925,6 +1931,7 @@ async def finish_round_flow(
                         "score": 0.0,
                         "time": 0.0,
                         "cost": 0.0,
+                        "penalty": 0.0,
                         "tasks_received": 0,
                         "tasks_success": 0,
                         "rank": max_rank + 1,
@@ -2063,6 +2070,20 @@ async def finish_round_flow(
         ipfs_downloaded=ipfs_downloaded,
         s3_logs_url=round_log_url,
     )
+
+    if offline_mode:
+        log_iwap_phase(
+            "Phase 5",
+            "⚠️ OFFLINE MODE: Skipping finish_round backend call after persisting local round artifacts",
+            level="warning",
+        )
+        persist_checkpoint = getattr(ctx, "_persist_round_checkpoint", None)
+        if callable(persist_checkpoint):
+            with contextlib.suppress(Exception):
+                persist_checkpoint(reason="finish_round_offline", status="completed")
+        ctx._reset_iwap_round_state()
+        bt.logging.info("✅ Round completed locally - weights were set on-chain successfully")
+        return True
 
     round_id = ctx.current_round_id
     post_consensus_miners_count = len(post_consensus_evaluation.get("miners", [])) if post_consensus_evaluation else 0

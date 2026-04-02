@@ -91,6 +91,12 @@ def add_validator_args(parser: argparse.ArgumentParser) -> None:
         help="Disables setting weights.",
         default=False,
     )
+    parser.add_argument(
+        "--iwap.mock-client",
+        action="store_true",
+        default=False,
+        help="Run the full validator flow without sending IWAP/Platform HTTP requests.",
+    )
 
 
 def add_miner_args(parser: argparse.ArgumentParser) -> None:

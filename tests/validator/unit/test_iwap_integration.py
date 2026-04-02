@@ -373,6 +373,25 @@ async def test_offline_mode_detection():
 
 
 @pytest.mark.asyncio
+async def test_mock_client_flag_skips_platform_calls_but_keeps_round_local():
+    """Test that the explicit mock-client flag forces IWAP offline mode from startup."""
+    ctx = MockContext()
+    ctx._iwap_force_mock_client = True
+    ctx._iwap_offline_mode = False
+    ctx.iwap_client.auth_check = AsyncMock()
+    ctx.iwap_client.start_round = AsyncMock()
+    ctx.iwap_client.set_tasks = AsyncMock()
+
+    await start_round_flow(ctx, current_block=1000, n_tasks=5)
+
+    assert ctx._iwap_offline_mode is True
+    assert ctx._iwap_round_ready is False
+    ctx.iwap_client.auth_check.assert_not_awaited()
+    ctx.iwap_client.start_round.assert_not_awaited()
+    ctx.iwap_client.set_tasks.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_full_integration_flow():
     """Test the complete IWAP integration flow from start to finish."""
     ctx = MockContext()
