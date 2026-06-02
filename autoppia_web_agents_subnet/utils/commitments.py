@@ -57,6 +57,9 @@ async def write_plain_commitment_json(
     period: int | None = None,
 ) -> bool:
     payload = _json_dump_compact(data)
+    if hasattr(st, "set_commitment"):
+        response = await st.set_commitment(wallet=wallet, netuid=netuid, data=payload, period=period)
+        return bool(getattr(response, "is_success", response))
     return await st.commit(wallet=wallet, netuid=netuid, data=payload, period=period)
 
 
