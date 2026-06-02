@@ -10,6 +10,15 @@ import bittensor as bt
 # ───────────────────────── utilities ───────────────────────── #
 
 
+def _bt_component(module_name: str, class_name: str):
+    return getattr(bt, module_name, None) or getattr(bt, class_name)
+
+
+def _bt_config(parser: argparse.ArgumentParser):
+    config_factory = getattr(bt, "config", None) or getattr(bt, "Config")
+    return config_factory(parser)
+
+
 def is_cuda_available() -> str:
     """Return 'cuda' if a CUDA device/toolchain looks available, else 'cpu'."""
     try:
@@ -126,10 +135,10 @@ def config(role: str = "auto") -> bt.config:
     parser = argparse.ArgumentParser(conflict_handler="resolve")
 
     # 1) Core bittensor argument groups
-    bt.wallet.add_args(parser)
-    bt.subtensor.add_args(parser)
+    _bt_component("wallet", "Wallet").add_args(parser)
+    _bt_component("subtensor", "Subtensor").add_args(parser)
     bt.logging.add_args(parser)
-    bt.axon.add_args(parser)
+    _bt_component("axon", "Axon").add_args(parser)
 
     # 2) Shared defaults
     add_shared_args(parser)
@@ -144,7 +153,7 @@ def config(role: str = "auto") -> bt.config:
         add_validator_args(parser)
         add_miner_args(parser)
 
-    return bt.config(parser)
+    return _bt_config(parser)
 
 
 # ─────────────────────────── convenience ─────────────────────────── #

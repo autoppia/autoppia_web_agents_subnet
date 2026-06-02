@@ -30,9 +30,9 @@ def _init_validator_entrypoint_env() -> None:
     repo_root = Path(__file__).resolve().parents[1]
     custom_env = (os.getenv("AUTOPPIA_VALIDATOR_ENV_FILE") or "").strip()
     if custom_env:
-        load_dotenv(Path(custom_env).expanduser(), override=True)
+        load_dotenv(Path(custom_env).expanduser(), override=False)
         return
-    load_dotenv(repo_root / ".env", override=True)
+    load_dotenv(repo_root / ".env", override=False)
 
 
 _init_validator_entrypoint_env()

@@ -10,6 +10,7 @@ from inspect import Parameter, Signature
 import bittensor as bt
 
 from autoppia_web_agents_subnet.base.neuron import BaseNeuron
+from autoppia_web_agents_subnet.base.utils.config import _bt_component
 from autoppia_web_agents_subnet.protocol import StartRoundSynapse
 
 BLACKLIST_RETURN_ANNOTATION = __import__("typing").Tuple[bool, str]
@@ -35,7 +36,7 @@ class BaseMinerNeuron(BaseNeuron):
             bt.logging.warning("You are allowing non-registered entities to send requests to your miner. This is a security risk.")
 
         # The axon handles request processing, allowing validators to send this miner requests.
-        self.axon = bt.axon(
+        self.axon = _bt_component("axon", "Axon")(
             wallet=self.wallet,
             config=self.config() if callable(self.config) else self.config,
         )

@@ -29,7 +29,7 @@ import bittensor as bt
 import numpy as np
 
 from autoppia_web_agents_subnet.base.neuron import BaseNeuron
-from autoppia_web_agents_subnet.base.utils.config import add_validator_args
+from autoppia_web_agents_subnet.base.utils.config import _bt_component, add_validator_args
 from autoppia_web_agents_subnet.base.utils.weight_utils import (
     convert_weights_and_uids_for_emit,
     process_weights_for_netuid,
@@ -54,7 +54,7 @@ class BaseValidatorNeuron(BaseNeuron):
         # Save a copy of the hotkeys to local memory.
         self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
 
-        self.dendrite = bt.dendrite(wallet=self.wallet)
+        self.dendrite = _bt_component("dendrite", "Dendrite")(wallet=self.wallet)
 
         bt.logging.info(f"Dendrite: {self.dendrite}")
 
@@ -85,7 +85,7 @@ class BaseValidatorNeuron(BaseNeuron):
 
         bt.logging.info("serving ip to chain...")
         try:
-            self.axon = bt.axon(wallet=self.wallet, config=self.config)
+            self.axon = _bt_component("axon", "Axon")(wallet=self.wallet, config=self.config)
 
             try:
                 self.subtensor.serve_axon(

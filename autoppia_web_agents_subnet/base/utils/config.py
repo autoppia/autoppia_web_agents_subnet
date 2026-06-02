@@ -25,6 +25,15 @@ import bittensor as bt
 from .logging import setup_events_logger
 
 
+def _bt_component(module_name: str, class_name: str):
+    return getattr(bt, module_name, None) or getattr(bt, class_name)
+
+
+def _bt_config(parser: argparse.ArgumentParser):
+    config_factory = getattr(bt, "config", None) or getattr(bt, "Config")
+    return config_factory(parser)
+
+
 def is_cuda_available():
     try:
         output = subprocess.check_output(["nvidia-smi", "-L"], stderr=subprocess.STDOUT)
@@ -265,9 +274,9 @@ def config(cls):
     Returns the configuration object specific to this miner or validator after adding relevant arguments.
     """
     parser = argparse.ArgumentParser()
-    bt.wallet.add_args(parser)
-    bt.subtensor.add_args(parser)
+    _bt_component("wallet", "Wallet").add_args(parser)
+    _bt_component("subtensor", "Subtensor").add_args(parser)
     bt.logging.add_args(parser)
-    bt.axon.add_args(parser)
+    _bt_component("axon", "Axon").add_args(parser)
     cls.add_args(parser)
-    return bt.config(parser)
+    return _bt_config(parser)

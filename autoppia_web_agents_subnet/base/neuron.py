@@ -27,7 +27,7 @@ import bittensor as bt
 from autoppia_web_agents_subnet import SUBNET_IWA_VERSION, __least_acceptable_version__, __spec_version__
 
 # Sync calls set weights and also resyncs the metagraph.
-from autoppia_web_agents_subnet.base.utils.config import add_args, check_config, config
+from autoppia_web_agents_subnet.base.utils.config import _bt_component, add_args, check_config, config
 from autoppia_web_agents_subnet.base.utils.misc import _get_current_block_serialized, ttl_get_block
 from autoppia_web_agents_subnet.utils.logging_filter import apply_subnet_module_logging_filters
 
@@ -143,11 +143,11 @@ class BaseNeuron(ABC):
 
         # The wallet holds the cryptographic key pairs for the miner.
 
-        self.wallet = bt.wallet(config=self.config)
+        self.wallet = _bt_component("wallet", "Wallet")(config=self.config)
         while True:
             try:
                 bt.logging.info("Initializing subtensor and metagraph")
-                self.subtensor = bt.subtensor(config=self.config)
+                self.subtensor = _bt_component("subtensor", "Subtensor")(config=self.config)
                 self.metagraph = self.subtensor.metagraph(self.config.netuid)
                 break
             except Exception as e:
