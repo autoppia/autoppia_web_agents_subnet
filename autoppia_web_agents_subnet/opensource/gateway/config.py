@@ -41,6 +41,7 @@ CHUTES_ALLOWED_PATHS = _csv_env("CHUTES_ALLOWED_PATHS") or {
     "/v1/responses",
 }
 ANTHROPIC_ALLOWED_PATHS = _csv_env("ANTHROPIC_ALLOWED_PATHS") or {
+    "/v1/messages",
     "/v1/chat/completions",
     "/v1/responses",
 }

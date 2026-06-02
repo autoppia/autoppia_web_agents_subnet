@@ -514,6 +514,7 @@ async def proxy_request(request: Request, path: str):
 
         if provider == "anthropic" and ANTHROPIC_API_KEY:
             headers["Authorization"] = f"Bearer {ANTHROPIC_API_KEY}"
+            headers["x-api-key"] = ANTHROPIC_API_KEY
 
         body = await request.body()
         parsed_body = None

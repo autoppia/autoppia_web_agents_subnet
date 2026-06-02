@@ -593,6 +593,7 @@ class SandboxManager:
             "SANDBOX_GATEWAY_URL": gateway_url,
             "OPENAI_BASE_URL": f"{gateway_url}/openai/v1",
             "CHUTES_BASE_URL": f"{gateway_url}/chutes/v1",
+            "ANTHROPIC_BASE_URL": f"{gateway_url}/anthropic",
             "SANDBOX_AGENT_PORT": str(SANDBOX_AGENT_PORT),
             "SANDBOX_AGENT_UID": str(uid),
             # Ensure any `print(...)` diagnostics appear immediately in `docker logs`.
