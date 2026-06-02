@@ -45,6 +45,11 @@ TASKS_PER_SEASON = _env_int("TASKS_PER_SEASON", 50, test_default=50)
 CONCURRENT_EVALUATION_NUM = _env_int("CONCURRENT_EVALUATION_NUM", 5)
 TRAJECTORY_MAX_TOOLS = _env_int("TRAJECTORY_MAX_TOOLS", 12, test_default=12)
 TASK_TIMEOUT_SECONDS = _env_float("TASK_TIMEOUT_SECONDS", 180.0, test_default=180.0)
+FIND_TRAJECTORY_TIMEOUT_SECONDS = _env_float(
+    "FIND_TRAJECTORY_TIMEOUT_SECONDS",
+    min(float(TASK_TIMEOUT_SECONDS), 300.0),
+    test_default=min(float(TASK_TIMEOUT_SECONDS), 120.0),
+)
 SHOULD_RECORD_GIF = _env_bool("SHOULD_RECORD_GIF", True)
 # Upload the per-round validator log to IWAP/S3 periodically during evaluation.
 # This reduces observability gaps when round settlement is skipped/late.

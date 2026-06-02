@@ -16,6 +16,7 @@ from autoppia_iwa.src.web_agents.classes import TaskSolution
 
 from autoppia_web_agents_subnet.utils.iwa_log_filter import enforce_iwa_log_filter
 from autoppia_web_agents_subnet.validator.config import (
+    FIND_TRAJECTORY_TIMEOUT_SECONDS,
     SHOULD_RECORD_GIF,
     TASK_TIMEOUT_SECONDS,
 )
@@ -94,6 +95,14 @@ async def _await_with_task_timeout(coro: Any, *, start_ts: float) -> Any:
     return await asyncio.wait_for(coro, timeout=remaining)
 
 
+async def _await_find_trajectory(coro: Any, *, start_ts: float) -> Any:
+    remaining_task_timeout = _remaining_task_timeout(start_ts)
+    timeout = min(float(FIND_TRAJECTORY_TIMEOUT_SECONDS), remaining_task_timeout)
+    if timeout <= 0.0:
+        raise TimeoutError
+    return await asyncio.wait_for(coro, timeout=timeout)
+
+
 async def evaluate_trajectory(
     *,
     task: Task,
@@ -119,11 +128,11 @@ async def evaluate_trajectory(
             id=str(uid),
             name=f"miner-{uid}",
             base_url=base_url,
-            timeout=float(TASK_TIMEOUT_SECONDS),
+            timeout=float(FIND_TRAJECTORY_TIMEOUT_SECONDS),
             endpoint_path="/find_trayectory",
         )
 
-        solution = await _await_with_task_timeout(trajectory_client.find_trayectory(task_for_eval), start_ts=start_ts)
+        solution = await _await_find_trajectory(trajectory_client.find_trayectory(task_for_eval), start_ts=start_ts)
         solution.task_id = str(getattr(task_for_eval, "id", getattr(solution, "task_id", "")))
         solution.web_agent_id = str(uid)
 
@@ -167,7 +176,7 @@ async def evaluate_trajectory(
 
     except asyncio.TimeoutError:
         bt.logging.warning(
-            f"[trajectory_eval] miner {uid} hard timeout for task {getattr(task, 'id', '?')}: {time.monotonic() - start_ts:.2f}s >= {TASK_TIMEOUT_SECONDS:.2f}s"
+            f"[trajectory_eval] miner {uid} timeout for task {getattr(task, 'id', '?')}: elapsed={time.monotonic() - start_ts:.2f}s find_trayectory_timeout={FIND_TRAJECTORY_TIMEOUT_SECONDS:.2f}s task_timeout={TASK_TIMEOUT_SECONDS:.2f}s"
         )
     except Exception as exc:
         bt.logging.error(f"[trajectory_eval] miner {uid} evaluation error for task {getattr(task, 'id', '?')}: {exc}")
