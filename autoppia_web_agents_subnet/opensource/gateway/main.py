@@ -534,10 +534,9 @@ async def proxy_request(request: Request, path: str):
                 raise HTTPException(status_code=400, detail=f"Invalid JSON body: {exc}") from exc
             if not isinstance(parsed_body, dict):
                 raise HTTPException(status_code=400, detail="JSON body must be an object")
-            # Disallow streaming: usage accounting (and cost limiting) relies on a
-            # usage object in the final JSON response.
-            if parsed_body.get("stream") is True:
-                raise HTTPException(status_code=400, detail="Streaming is not supported")
+            # Streaming clients such as Claude Code may not expose a non-streaming
+            # mode. We proxy those responses and skip usage parsing if the final
+            # response is not JSON.
 
         model = None
         if request.method in ("POST", "PUT", "PATCH"):
