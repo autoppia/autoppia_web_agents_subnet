@@ -64,10 +64,15 @@ class TestAgentDeployment:
                 assert agent is None
 
     @pytest.mark.requires_docker
-    def test_deployment_configures_environment_variables(self):
+    def test_deployment_configures_environment_variables(self, monkeypatch):
         """Test that deployment configures correct environment variables."""
         from autoppia_web_agents_subnet.opensource.sandbox_manager import SandboxManager
         from autoppia_web_agents_subnet.validator.config import SANDBOX_AGENT_PORT
+
+        monkeypatch.setenv("AUTOPPIA_HARVESTER_PROVIDER", "openai")
+        monkeypatch.setenv("AUTOPPIA_HARVESTER_OPENAI_MODEL", "gpt-5")
+        monkeypatch.setenv("AUTOPPIA_HARVESTER_MAX_OUTPUT_TOKENS", "2048")
+        monkeypatch.setenv("FIND_TRAJECTORY_TIMEOUT_SECONDS", "120")
 
         with patch("autoppia_web_agents_subnet.opensource.sandbox_manager.get_client") as mock_client, patch("autoppia_web_agents_subnet.opensource.sandbox_manager.ensure_network"):
             with patch("autoppia_web_agents_subnet.opensource.sandbox_manager.check_image", return_value=True):
@@ -90,6 +95,10 @@ class TestAgentDeployment:
                     assert "OPENAI_BASE_URL" in env
                     assert "CHUTES_BASE_URL" in env
                     assert env.get("SANDBOX_AGENT_PORT") == str(SANDBOX_AGENT_PORT)
+                    assert env.get("AUTOPPIA_HARVESTER_PROVIDER") == "openai"
+                    assert env.get("AUTOPPIA_HARVESTER_OPENAI_MODEL") == "gpt-5"
+                    assert env.get("AUTOPPIA_HARVESTER_MAX_OUTPUT_TOKENS") == "2048"
+                    assert env.get("FIND_TRAJECTORY_TIMEOUT_SECONDS") == "120"
 
     @pytest.mark.requires_docker
     def test_deployment_exposes_correct_port(self):
@@ -302,7 +311,7 @@ class TestGateway:
                             "autoppia_web_agents_subnet.opensource.sandbox_manager.check_image",
                             return_value=True,
                         ):
-                            with patch.object(SandboxManager, "_wait_for_gateway_health", return_value=True):
+                            with patch.object(SandboxManager, "_wait_for_gateway_ready", return_value=True):
                                 mock_docker = MagicMock()
                                 mock_client.return_value = mock_docker
 
@@ -335,7 +344,7 @@ class TestGateway:
                             "autoppia_web_agents_subnet.opensource.sandbox_manager.check_image",
                             return_value=True,
                         ):
-                            with patch.object(SandboxManager, "_wait_for_gateway_health", return_value=True):
+                            with patch.object(SandboxManager, "_wait_for_gateway_ready", return_value=True):
                                 mock_docker = MagicMock()
                                 mock_client.return_value = mock_docker
 

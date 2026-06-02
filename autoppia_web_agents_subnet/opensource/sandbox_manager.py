@@ -610,10 +610,15 @@ class SandboxManager:
         if SANDBOX_AGENT_RETURN_METRICS:
             env["AGENT_RETURN_METRICS"] = "1"
         for key in (
+            "AUTOPPIA_HARVESTER_PROVIDER",
             "AUTOPPIA_HARVESTER_CLAUDE_BIN",
             "AUTOPPIA_HARVESTER_CLAUDE_MODEL",
+            "AUTOPPIA_HARVESTER_OPENAI_MODEL",
+            "AUTOPPIA_HARVESTER_MAX_OUTPUT_TOKENS",
             "AUTOPPIA_HARVESTER_TIMEOUT_SECONDS",
             "AUTOPPIA_HARVESTER_WEB_AGENT_ID",
+            "OPENAI_MODEL",
+            "FIND_TRAJECTORY_TIMEOUT_SECONDS",
             "ANTHROPIC_API_KEY",
         ):
             value = os.getenv(key)
