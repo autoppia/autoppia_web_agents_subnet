@@ -438,10 +438,13 @@ class SandboxManager:
         except Exception:
             pass
 
-        if not self._wait_for_gateway_health():
+        if not self._wait_for_gateway_ready():
             with contextlib.suppress(Exception):
                 stop_and_remove(self.gateway_container)
-            raise RuntimeError(f"Gateway failed health check at http://127.0.0.1:{SANDBOX_GATEWAY_PORT}/health")
+            raise RuntimeError(
+                f"Gateway failed readiness check at http://127.0.0.1:{SANDBOX_GATEWAY_PORT}. "
+                "Verify SANDBOX_GATEWAY_INSTANCE and SANDBOX_GATEWAY_PORT_OFFSET are unique per validator."
+            )
 
         # Fail-fast if the gateway cannot reach its upstream providers. This avoids
         # silent "all tasks fail" behavior when the gateway has no internet egress.
@@ -557,14 +560,16 @@ class SandboxManager:
             missing = ", ".join(missing_key_envs)
             raise RuntimeError(f"Missing API keys for allowed gateway providers ({providers}). Set: {missing}")
 
-    def _wait_for_gateway_health(self, timeout: int = 20, retry_interval: float = 1.0) -> bool:
+    def _wait_for_gateway_ready(self, timeout: int = 20, retry_interval: float = 1.0) -> bool:
         health_url = f"http://127.0.0.1:{SANDBOX_GATEWAY_PORT}/health"
+        admin_url = f"http://127.0.0.1:{SANDBOX_GATEWAY_PORT}/usage/__autoppia_gateway_readiness__"
         deadline = time.time() + timeout
 
         while time.time() < deadline:
             try:
-                response = httpx.get(health_url, timeout=3.0)
-                if response.status_code < 400:
+                health = httpx.get(health_url, timeout=3.0)
+                admin = httpx.get(admin_url, headers=self._gateway_admin_headers(), timeout=3.0)
+                if health.status_code < 400 and admin.status_code == 200:
                     return True
             except Exception:
                 pass
