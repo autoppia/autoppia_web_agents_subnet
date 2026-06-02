@@ -4,6 +4,7 @@ import asyncio
 import copy
 import time
 from typing import Any
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 import bittensor as bt
 from autoppia_iwa.src.data_generation.tasks.classes import Task
@@ -36,6 +37,54 @@ def _empty_solution(task: Task, uid: int) -> TaskSolution:
 
 def _remaining_task_timeout(start_ts: float) -> float:
     return max(float(TASK_TIMEOUT_SECONDS) - float(time.monotonic() - start_ts), 0.0)
+
+
+def _extract_seed(url: str | None) -> str | None:
+    if not url:
+        return None
+    try:
+        values = parse_qs(urlparse(url).query).get("seed") or []
+        seed = str(values[0]).strip() if values else ""
+        return seed or None
+    except Exception:
+        return None
+
+
+def _url_with_seed(url: str | None, seed: str | None) -> str | None:
+    if not url or not seed:
+        return url
+    try:
+        parsed = urlparse(url)
+        if not parsed.scheme or not parsed.netloc:
+            return url
+        query = parse_qs(parsed.query, keep_blank_values=True)
+        if query.get("seed") == [str(seed)]:
+            return url
+        query["seed"] = [str(seed)]
+        return urlunparse(parsed._replace(query=urlencode(query, doseq=True)))
+    except Exception:
+        return url
+
+
+def _normalize_navigation_seeds(solution: TaskSolution, task: Task) -> None:
+    seed = _extract_seed(getattr(task, "url", None))
+    if not seed:
+        return
+
+    updated = 0
+    for action in getattr(solution, "actions", []) or []:
+        if action.__class__.__name__ != "NavigateAction":
+            continue
+        current_url = getattr(action, "url", None)
+        next_url = _url_with_seed(current_url, seed)
+        if next_url and next_url != current_url:
+            setattr(action, "url", next_url)
+            updated += 1
+
+    if updated:
+        bt.logging.info(
+            f"[trajectory_eval] normalized seed={seed} on {updated} NavigateAction URL(s) for task {getattr(task, 'id', '?')}"
+        )
 
 
 async def _await_with_task_timeout(coro: Any, *, start_ts: float) -> Any:
@@ -87,6 +136,7 @@ async def evaluate_trajectory(
 
         solution.replace_credentials(str(uid))
         solution.actions = solution.replace_web_agent_id()
+        _normalize_navigation_seeds(solution, task_for_eval)
 
         evaluator_config = EvaluatorConfig(
             should_record_gif=SHOULD_RECORD_GIF,
