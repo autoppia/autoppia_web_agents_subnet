@@ -31,7 +31,7 @@ class TestEvaluationPhase:
         validator_with_agents.sandbox_manager.deploy_agent = Mock(return_value=mock_instance)
         validator_with_agents.sandbox_manager.cleanup_agent = Mock()
 
-        with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua", new_callable=AsyncMock) as mock_eval:
+        with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_trajectory", new_callable=AsyncMock) as mock_eval:
             with (
                 patch("autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url") as mock_normalize,
                 patch("autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit") as mock_ls_remote,
@@ -127,7 +127,7 @@ class TestEvaluationPhase:
         validator_with_agents.sandbox_manager.cleanup_agent = Mock()
 
         with patch("autoppia_web_agents_subnet.validator.config.CONCURRENT_EVALUATION_NUM", 1):
-            with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua", new_callable=AsyncMock) as mock_eval:
+            with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_trajectory", new_callable=AsyncMock) as mock_eval:
                 with (
                     patch("autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url") as mock_normalize,
                     patch("autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit") as mock_ls_remote,
@@ -161,7 +161,7 @@ class TestAgentDeployment:
         validator_with_agents.sandbox_manager.deploy_agent = Mock(return_value=mock_instance)
         validator_with_agents.sandbox_manager.cleanup_agent = Mock()
 
-        with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua", new_callable=AsyncMock) as mock_eval:
+        with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_trajectory", new_callable=AsyncMock) as mock_eval:
             with (
                 patch("autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url") as mock_normalize,
                 patch("autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit") as mock_ls_remote,
@@ -252,7 +252,7 @@ class TestAgentDeployment:
         validator_with_agents.sandbox_manager.deploy_agent = Mock(return_value=mock_instance)
         validator_with_agents.sandbox_manager.cleanup_agent = Mock()
 
-        with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua", new_callable=AsyncMock) as mock_eval:
+        with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_trajectory", new_callable=AsyncMock) as mock_eval:
             with (
                 patch("autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url") as mock_normalize,
                 patch("autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit") as mock_ls_remote,
@@ -285,7 +285,7 @@ class TestScoreCalculation:
         validator_with_agents.sandbox_manager.deploy_agent = Mock(return_value=mock_instance)
         validator_with_agents.sandbox_manager.cleanup_agent = Mock()
 
-        with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua", new_callable=AsyncMock) as mock_eval:
+        with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_trajectory", new_callable=AsyncMock) as mock_eval:
             with (
                 patch("autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url") as mock_normalize,
                 patch("autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit") as mock_ls_remote,
@@ -365,7 +365,7 @@ class TestScoreCalculation:
             patch("autoppia_web_agents_subnet.validator.config.OVERFIT_PENALIZATION_ENABLED", True),
             patch("autoppia_web_agents_subnet.validator.config.OVERFIT_DIFF_REWARD_THRESHOLD", 0.25),
             patch("autoppia_web_agents_subnet.validator.config.OVERFIT_REWARD_PENALTY", 0.25),
-            patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua", new_callable=AsyncMock) as mock_eval,
+            patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_trajectory", new_callable=AsyncMock) as mock_eval,
         ):
             mock_eval.side_effect = [
                 (1.0, 0.0, None),  # base task
@@ -393,7 +393,7 @@ class TestScoreCalculation:
         validator_with_agents.sandbox_manager.deploy_agent = Mock(return_value=mock_instance)
         validator_with_agents.sandbox_manager.cleanup_agent = Mock()
 
-        with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua", new_callable=AsyncMock) as mock_eval:
+        with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_trajectory", new_callable=AsyncMock) as mock_eval:
             with (
                 patch("autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url") as mock_normalize,
                 patch("autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit") as mock_ls_remote,
@@ -438,7 +438,7 @@ class TestScoreCalculation:
             except ZeroDivisionError:
                 pytest.fail("Should handle empty scores list without ZeroDivisionError")
 
-    async def test_evaluation_handles_exceptions_in_evaluate_with_stateful_cua(self, validator_with_agents, season_tasks):
+    async def test_evaluation_handles_exceptions_in_evaluate_trajectory(self, validator_with_agents, season_tasks):
         """Test that evaluation handles exceptions during task evaluation."""
         from tests.conftest import _bind_evaluation_mixin
 
@@ -452,7 +452,7 @@ class TestScoreCalculation:
         validator_with_agents.sandbox_manager.deploy_agent = Mock(return_value=mock_instance)
         validator_with_agents.sandbox_manager.cleanup_agent = Mock()
 
-        with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua", new_callable=AsyncMock) as mock_eval:
+        with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_trajectory", new_callable=AsyncMock) as mock_eval:
             with (
                 patch("autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url") as mock_normalize,
                 patch("autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit") as mock_ls_remote,

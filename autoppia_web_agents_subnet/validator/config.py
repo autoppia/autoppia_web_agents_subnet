@@ -43,8 +43,7 @@ SKIP_ROUND_IF_STARTED_AFTER_FRACTION = _env_float("SKIP_ROUND_IF_STARTED_AFTER_F
 # Source of truth: tasks per season.
 TASKS_PER_SEASON = _env_int("TASKS_PER_SEASON", 50, test_default=50)
 CONCURRENT_EVALUATION_NUM = _env_int("CONCURRENT_EVALUATION_NUM", 5)
-AGENT_MAX_STEPS = _env_int("AGENT_MAX_STEPS", 12, test_default=12)
-AGENT_STEP_TIMEOUT_SECONDS = _env_int("AGENT_STEP_TIMEOUT_SECONDS", 25)
+TRAJECTORY_MAX_TOOLS = _env_int("TRAJECTORY_MAX_TOOLS", 12, test_default=12)
 TASK_TIMEOUT_SECONDS = _env_float("TASK_TIMEOUT_SECONDS", 180.0, test_default=180.0)
 SHOULD_RECORD_GIF = _env_bool("SHOULD_RECORD_GIF", True)
 # Upload the per-round validator log to IWAP/S3 periodically during evaluation.

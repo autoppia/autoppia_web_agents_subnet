@@ -351,7 +351,7 @@ class TestConcurrencyEdgeCases:
             return (1.0, None, None)  # Return tuple as expected
 
         with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url", return_value=("https://github.com/test/agent", "main")):
-            with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua", new=mock_evaluate):
+            with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_trajectory", new=mock_evaluate):
                 with patch(
                     "autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit",
                     return_value="deadbeef",

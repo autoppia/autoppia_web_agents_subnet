@@ -620,8 +620,8 @@ check_log_marker "IWAP mock-client mode active" "round.log missing IWAP mock-cli
 check_log_marker "OFFLINE MODE: Skipping miner registration" "round.log missing offline miner registration skip marker"
 check_log_marker "Starting evaluation phase" "round.log missing evaluation phase start marker"
 check_log_marker "Evaluation phase completed" "round.log missing evaluation phase completion marker"
-check_log_marker "\\[MINER_ACTIONS\\].*uid=${EXPECTED_MINER_UID}" "round.log missing MINER_ACTIONS marker for expected miner"
-check_log_marker "\\[EXEC_ACTIONS\\].*uid=${EXPECTED_MINER_UID}" "round.log missing EXEC_ACTIONS marker for expected miner"
+check_log_marker "\\[MINER_TOOLS\\].*uid=${EXPECTED_MINER_UID}" "round.log missing MINER_TOOLS marker for expected miner"
+check_log_marker "\\[EXEC_TOOLS\\].*uid=${EXPECTED_MINER_UID}" "round.log missing EXEC_TOOLS marker for expected miner"
 check_log_marker "IWAP submission skipped for agent ${EXPECTED_MINER_UID}" "round.log missing offline IWAP submission skip marker"
 check_log_marker "\\[IPFS\\] \\[UPLOAD\\].*Round ${EXPECTED_ROUND} \\| 1 miners" "round.log missing IPFS upload summary for expected round"
 check_log_marker "\\[IPFS\\] \\[UPLOAD\\].*SUCCESS - CID:" "round.log missing successful IPFS upload marker"
@@ -632,8 +632,8 @@ if rg -q "Service unavailable at .*StartRoundSynapse|Timed out waiting for ipfs_
   exit 1
 fi
 
-if rg -q "ApifiedWebAgent\\.step failed:" "$ROUND_LOG_FILE"; then
-  echo "round.log warning: ApifiedWebAgent.step validation failure observed during smoke test" >&2
+if rg -q "\\[trajectory_eval\\].*/find_trayectory|Failed to find trayectory" "$ROUND_LOG_FILE"; then
+  echo "round.log warning: trajectory validation failure observed during smoke test" >&2
 fi
 
 if [[ "${OVERFIT_PENALIZATION_ENABLED:-false}" == "true" ]]; then

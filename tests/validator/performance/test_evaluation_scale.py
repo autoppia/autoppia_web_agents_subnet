@@ -69,7 +69,7 @@ class TestEvaluationScaling:
 
         # Patch normalize_and_validate_github_url to always return valid URL
         with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url", return_value=("https://github.com/test/agent", "main")):
-            with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua", new=fast_evaluate):
+            with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_trajectory", new=fast_evaluate):
                 with patch(
                     "autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit",
                     return_value="deadbeef",
@@ -129,7 +129,7 @@ class TestEvaluationScaling:
         validator_with_agents.sandbox_manager.cleanup_agent = Mock()
 
         with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url", return_value=("https://github.com/test/agent", "main")):
-            with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua", new=mock_evaluate):
+            with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_trajectory", new=mock_evaluate):
                 with patch(
                     "autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit",
                     return_value="deadbeef",
@@ -201,7 +201,7 @@ class TestEvaluationScaling:
             return (0.8, None, None)
 
         with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url", return_value=("https://github.com/test/agent", "main")):
-            with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua", new=mock_evaluate):
+            with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_trajectory", new=mock_evaluate):
                 # Run both evaluations concurrently
                 with patch(
                     "autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit",
@@ -278,7 +278,7 @@ class TestEvaluationThroughput:
                 return mock_evaluate
 
             with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url", return_value=("https://github.com/test/agent", "main")):
-                with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua", new=make_mock_evaluate(task_count)):
+                with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_trajectory", new=make_mock_evaluate(task_count)):
                     with patch(
                         "autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit",
                         return_value="deadbeef",
@@ -336,7 +336,7 @@ class TestEvaluationThroughput:
             return (0.8, None, None)
 
         with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url", return_value=("https://github.com/test/agent", "main")):
-            with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua", new=mock_evaluate):
+            with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_trajectory", new=mock_evaluate):
                 with patch(
                     "autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit",
                     return_value="deadbeef",

@@ -278,7 +278,8 @@ def pytest_configure(config):
     demo_classes = types.ModuleType("autoppia_iwa.src.demo_webs.classes")
 
     class WebProjectStub:
-        def __init__(self, name: str = "demo", frontend_url: str = "https://demo"):
+        def __init__(self, name: str = "demo", frontend_url: str = "https://demo", id: str = "demo"):
+            self.id = id
             self.name = name
             self.frontend_url = frontend_url
 
@@ -338,10 +339,27 @@ def pytest_configure(config):
     web_agents_pkg = types.ModuleType("autoppia_iwa.src.web_agents.classes")
 
     class TaskSolutionStub:
-        def __init__(self, task_id: str, actions=None, web_agent_id: str = "0"):
+        def __init__(self, task_id: str, actions=None, web_agent_id: str = "0", recording=None, **_):
             self.task_id = task_id
             self.actions = actions or []
             self.web_agent_id = web_agent_id
+            self.recording = recording
+
+        @property
+        def trajectory(self):
+            out = []
+            for action in self.actions:
+                if hasattr(action, "to_tool_call"):
+                    out.append(action.to_tool_call())
+                elif isinstance(action, dict):
+                    out.append(action)
+            return out
+
+        def replace_credentials(self, _web_agent_id: str):
+            return self.actions
+
+        def replace_web_agent_id(self):
+            return self.actions
 
     web_agents_pkg.TaskSolution = TaskSolutionStub  # type: ignore[attr-defined]
 
@@ -358,6 +376,19 @@ def pytest_configure(config):
     web_agents_pkg.sanitize_snapshot_html = _sanitize_snapshot_html  # type: ignore[attr-defined]
     web_agents_pkg.replace_credentials_in_action = _replace_credentials_in_action  # type: ignore[attr-defined]
     sys.modules["autoppia_iwa.src.web_agents.classes"] = web_agents_pkg
+
+    harvester_module = types.ModuleType("autoppia_iwa.src.web_agents.apified_harvester")
+
+    class ApifiedTrajectoryClientStub:
+        def __init__(self, base_url: str, id: str = "0", **_):
+            self.base_url = base_url
+            self.id = id
+
+        async def find_trayectory(self, task):
+            return TaskSolutionStub(task_id=getattr(task, "id", "task"), actions=[], web_agent_id=self.id)
+
+    harvester_module.ApifiedHarvester = ApifiedTrajectoryClientStub  # type: ignore[attr-defined]
+    sys.modules["autoppia_iwa.src.web_agents.apified_harvester"] = harvester_module
 
     # Minimal stub for CUA interfaces (only needed for imports; tests patch
     # concrete implementations with fakes).
@@ -408,41 +439,31 @@ def pytest_configure(config):
     if not hasattr(eval_pkg, "__path__"):
         eval_pkg.__path__ = []  # type: ignore[attr-defined]
 
-    # Lightweight stub for the stateful evaluator used by evaluation.eval.
-    stateful_module = types.ModuleType("autoppia_iwa.src.evaluation.stateful_evaluator")
+    concurrent_config_module = types.ModuleType("autoppia_iwa.src.evaluation.legacy.concurrent_config")
 
-    class ScoreDetailsStub:
-        def __init__(self, raw_score: float = 0.0, tests_passed: int = 0, total_tests: int = 0, success: bool = False):
-            self.raw_score = float(raw_score)
-            self.tests_passed = int(tests_passed)
-            self.total_tests = int(total_tests)
-            self.success = bool(success)
+    class EvaluatorConfigStub:
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
 
-    class AsyncStatefulEvaluatorStub:
+    concurrent_config_module.EvaluatorConfig = EvaluatorConfigStub  # type: ignore[attr-defined]
+    sys.modules["autoppia_iwa.src.evaluation.legacy.concurrent_config"] = concurrent_config_module
+
+    concurrent_module = types.ModuleType("autoppia_iwa.src.evaluation.concurrent_evaluator")
+
+    class ConcurrentEvaluatorStub:
         def __init__(self, *_, **__):
-            self._step_called = False
+            pass
 
-        async def reset(self):
-            # First reset returns zero score.
+        async def evaluate_single_task_solution(self, _task, task_solution):
             return types.SimpleNamespace(
-                score=ScoreDetailsStub(raw_score=0.0, tests_passed=0, total_tests=1, success=False),
-                snapshot=types.SimpleNamespace(html="", url="https://example.com"),
+                raw_score=1.0 if getattr(task_solution, "actions", None) else 0.0,
+                final_score=1.0 if getattr(task_solution, "actions", None) else 0.0,
+                execution_history=[],
+                gif_recording="",
             )
 
-        async def step(self, action):
-            # Any step moves score to 1.0 and marks success.
-            self._step_called = True
-            return types.SimpleNamespace(
-                score=ScoreDetailsStub(raw_score=1.0, tests_passed=1, total_tests=1, success=True),
-                snapshot=types.SimpleNamespace(html="", url="https://example.com/after"),
-            )
-
-        async def close(self):
-            return None
-
-    stateful_module.AsyncStatefulEvaluator = AsyncStatefulEvaluatorStub  # type: ignore[attr-defined]
-    stateful_module.ScoreDetails = ScoreDetailsStub  # type: ignore[attr-defined]
-    sys.modules["autoppia_iwa.src.evaluation.stateful_evaluator"] = stateful_module
+    concurrent_module.ConcurrentEvaluator = ConcurrentEvaluatorStub  # type: ignore[attr-defined]
+    sys.modules["autoppia_iwa.src.evaluation.concurrent_evaluator"] = concurrent_module
 
     demo_config = types.ModuleType("autoppia_iwa.src.demo_webs.config")
     demo_config.demo_web_projects = [demo_classes.WebProject()]  # type: ignore[attr-defined]

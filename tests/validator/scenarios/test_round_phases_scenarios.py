@@ -159,7 +159,7 @@ async def test_round_phase_finishes_current_miner_but_zeroes_remaining_pending_m
         patch("autoppia_web_agents_subnet.validator.config.STOP_TASK_EVALUATION_AND_UPLOAD_IPFS_AT_ROUND_FRACTION", 0.94),
         patch("autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url", return_value=("https://github.com/example/miner-1", "main")),
         patch("autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit", return_value="deadbeef"),
-        patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua", new=AsyncMock(return_value=(1.0, 3.0, None))),
+        patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_trajectory", new=AsyncMock(return_value=(1.0, 3.0, None))),
         patch("autoppia_web_agents_subnet.validator.evaluation.mixin.calculate_reward_for_task", return_value=0.9),
     ):
         agents_evaluated = await validator._run_evaluation_phase()

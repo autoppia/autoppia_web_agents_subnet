@@ -131,7 +131,7 @@ omit = [
     "autoppia_web_agents_subnet/validator/season_manager.py",
     "autoppia_web_agents_subnet/validator/evaluation/tasks.py",
     "autoppia_web_agents_subnet/validator/evaluation/mixin.py",
-    "autoppia_web_agents_subnet/validator/evaluation/stateful_cua_eval.py",
+    "autoppia_web_agents_subnet/validator/evaluation/trajectory_eval.py",
     "autoppia_web_agents_subnet/validator/evaluation/penalties.py",
     "autoppia_web_agents_subnet/validator/evaluation/topk.py",
     "autoppia_web_agents_subnet/validator/reporting/mixin.py",

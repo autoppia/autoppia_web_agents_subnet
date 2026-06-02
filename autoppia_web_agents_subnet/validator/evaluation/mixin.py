@@ -19,8 +19,8 @@ from autoppia_web_agents_subnet.validator.evaluation.overfitting import (
     apply_overfit_penalty,
     build_overfit_checks,
 )
+from autoppia_web_agents_subnet.validator.evaluation.trajectory_eval import evaluate_trajectory
 from autoppia_web_agents_subnet.validator.evaluation.rewards import calculate_reward_for_task
-from autoppia_web_agents_subnet.validator.evaluation.stateful_cua_eval import evaluate_with_stateful_cua
 from autoppia_web_agents_subnet.validator.round_manager import RoundPhase
 
 
@@ -530,7 +530,7 @@ class ValidatorEvaluationMixin:
             eval_details: list[tuple[float, float]] = []  # (score, exec_time_s) per evaluated task (for task_timeout detection)
             task_timeout_sec = float(getattr(validator_config, "TASK_TIMEOUT_SECONDS", 180.0) or 180.0)
             batch_size = int(getattr(validator_config, "CONCURRENT_EVALUATION_NUM", 1) or 1)
-            max_steps = int(getattr(validator_config, "AGENT_MAX_STEPS", 30) or 30)
+            max_tools = int(getattr(validator_config, "TRAJECTORY_MAX_TOOLS", 30) or 30)
             cost_limit_exceed_count = int(
                 getattr(
                     validator_config,
@@ -549,11 +549,12 @@ class ValidatorEvaluationMixin:
                     batch_tasks = season_tasks[i : i + batch_size]
                     eval_results = await asyncio.gather(
                         *[
-                            evaluate_with_stateful_cua(
+                            evaluate_trajectory(
                                 task=task_item.task,
+                                project=task_item.project,
                                 uid=agent.uid,
                                 base_url=agent_instance.base_url,
-                                max_steps=max_steps,
+                                max_tools=max_tools,
                             )
                             for task_item in batch_tasks
                         ],
@@ -665,7 +666,7 @@ class ValidatorEvaluationMixin:
                         def _summarize_task_solution(ts, _ts_cls=_TaskSolution) -> str:
                             try:
                                 if _ts_cls is not None and isinstance(ts, _ts_cls):
-                                    actions = getattr(ts, "actions", []) or []
+                                    tools = getattr(ts, "trajectory", None) or getattr(ts, "actions", []) or []
                                     task_id = getattr(ts, "task_id", None)
                                     recording = getattr(ts, "recording", None)
                                     rec_keys = []
@@ -679,14 +680,14 @@ class ValidatorEvaluationMixin:
                                         gif_present = bool(recording.get("gif_recording"))
                                     elif isinstance(recording, list):
                                         exec_hist_len = len(recording)
-                                    action_types = []
-                                    for a in actions[:3]:
-                                        t = getattr(a, "type", None) or (a.get("type") if isinstance(a, dict) else None)
+                                    tool_names = []
+                                    for a in tools[:3]:
+                                        t = getattr(a, "name", None) or getattr(a, "type", None) or (a.get("name") or a.get("type") if isinstance(a, dict) else None)
                                         if t:
-                                            action_types.append(str(t))
+                                            tool_names.append(str(t))
                                     return (
-                                        f"TaskSolution(task_id={task_id!r}, actions={len(actions)}, "
-                                        f"action_types={action_types}, recording_keys={rec_keys}, "
+                                        f"TaskSolution(task_id={task_id!r}, tools={len(tools)}, "
+                                        f"tool_names={tool_names}, recording_keys={rec_keys}, "
                                         f"execution_history={exec_hist_len}, gif_present={gif_present})"
                                     )
                                 if isinstance(ts, dict):
@@ -700,23 +701,25 @@ class ValidatorEvaluationMixin:
 
                         ColoredLogger.debug(f"    Task solution: {_summarize_task_solution(task_solution)}", ColoredLogger.BLUE)
 
-                        # Log actions returned by the miner for easy grep/debug.
+                        # Log tools returned by the miner for easy grep/debug.
                         try:
-                            action_list = []
-                            action_list = task_solution.get("actions") or [] if isinstance(task_solution, dict) else getattr(task_solution, "actions", []) or []
-                            action_types = []
-                            for a in action_list:
-                                t = getattr(a, "type", None) or (a.get("type") if isinstance(a, dict) else None)
+                            if isinstance(task_solution, dict):
+                                tool_list = task_solution.get("trajectory") or task_solution.get("actions") or []
+                            else:
+                                tool_list = getattr(task_solution, "trajectory", None) or getattr(task_solution, "actions", []) or []
+                            tool_names = []
+                            for a in tool_list:
+                                t = getattr(a, "name", None) or getattr(a, "type", None) or (a.get("name") or a.get("type") if isinstance(a, dict) else None)
                                 if t:
-                                    action_types.append(str(t))
+                                    tool_names.append(str(t))
                             ColoredLogger.info(
-                                f"[MINER_ACTIONS] task_id={task_item.task.id} uid={agent.uid} actions={action_types}",
+                                f"[MINER_TOOLS] task_id={task_item.task.id} uid={agent.uid} tools={tool_names}",
                                 ColoredLogger.CYAN,
                             )
                         except Exception:
                             pass
 
-                        # Log the actions actually executed by the evaluator (execution_history).
+                        # Log the tools actually executed by the evaluator (execution_history).
                         # This is the ground truth used for backend event checks.
                         try:
                             recording = None
@@ -740,18 +743,17 @@ class ValidatorEvaluationMixin:
                                     last_url = snap.get("current_url") or snap.get("url") or last_url if isinstance(snap, dict) else getattr(snap, "current_url", None) or last_url
 
                             ColoredLogger.info(
-                                f"[EXEC_ACTIONS] task_id={task_item.task.id} uid={agent.uid} actions={exec_types} last_url={last_url}",
+                                f"[EXEC_TOOLS] task_id={task_item.task.id} uid={agent.uid} tools={exec_types} last_url={last_url}",
                                 ColoredLogger.CYAN,
                             )
 
-                            # Detect and surface cases where the miner returned N actions but the evaluator executed M.
-                            # This helps confirm/deny "missing last action" hypotheses quickly.
+                            # Detect and surface cases where the miner returned N tools but the evaluator executed M.
                             try:
-                                miner_n = len(action_list) if isinstance(action_list, list) else 0
+                                miner_n = len(tool_list) if isinstance(tool_list, list) else 0
                                 exec_n = len(exec_hist) if isinstance(exec_hist, list) else 0
                                 if miner_n != exec_n:
                                     ColoredLogger.warning(
-                                        f"[MISMATCH_MINER_EXEC] task_id={task_item.task.id} uid={agent.uid} miner_actions={miner_n} exec_actions={exec_n}",
+                                        f"[MISMATCH_MINER_EXEC] task_id={task_item.task.id} uid={agent.uid} miner_tools={miner_n} exec_tools={exec_n}",
                                         ColoredLogger.YELLOW,
                                     )
                             except Exception:
@@ -768,11 +770,12 @@ class ValidatorEvaluationMixin:
                         overfit_metadata = None
                         overfit_check = overfit_checks.get(str(getattr(task_item.task, "id", "")))
                         if overfit_check is not None:
-                            alt_score, alt_exec_time, _ = await evaluate_with_stateful_cua(
+                            alt_score, alt_exec_time, _ = await evaluate_trajectory(
                                 task=overfit_check.alt_task,
+                                project=task_item.project,
                                 uid=agent.uid,
                                 base_url=agent_instance.base_url,
-                                max_steps=max_steps,
+                                max_tools=max_tools,
                             )
                             try:
                                 alt_exec_time_s = float(alt_exec_time) if alt_exec_time is not None else 0.0
@@ -972,7 +975,7 @@ class ValidatorEvaluationMixin:
                 - exec_time: Execution time
                 - cost: Token cost
                 - reward: Calculated reward
-                - task_solution: TaskSolution from evaluate_with_stateful_cua
+                - task_solution: TaskSolution from evaluate_trajectory
         """
         if not hasattr(self, "current_round_id") or not self.current_round_id:
             ColoredLogger.warning("No current round ID, skipping IWAP submission", ColoredLogger.YELLOW)
@@ -1013,7 +1016,7 @@ class ValidatorEvaluationMixin:
                 ColoredLogger.warning(f"Task {base_task_id} not found in current round tasks", ColoredLogger.YELLOW)
                 continue
 
-            # task_solution comes from evaluate_with_stateful_cua (TaskSolution); support dict for backwards compat
+            # task_solution comes from evaluate_trajectory.
             task_solution = eval_data["task_solution"]
 
             # Extract solution and actions
@@ -1053,20 +1056,6 @@ class ValidatorEvaluationMixin:
 
                 if gif_payload:
                     evaluation_meta_dict["gif_recording"] = gif_payload
-            elif isinstance(task_solution, dict):
-                # Legacy: dict form (e.g. execution_history, test_results)
-                evaluation_meta_dict = task_solution
-                # Extract actions from execution_history if present
-                if "execution_history" in task_solution:
-                    execution_history = task_solution["execution_history"]
-                    if isinstance(execution_history, list):
-                        for step in execution_history:
-                            if isinstance(step, dict) and "action" in step:
-                                actions.append(step["action"])
-                # Extract test_results
-                test_results_data = task_solution.get("test_results", [])
-                # Create solution object with extracted actions
-                solution = TaskSolution(task_id=base_task_id, actions=actions, web_agent_id=str(agent_uid))
             else:
                 # Fallback: create empty solution
                 solution = TaskSolution(task_id=base_task_id, actions=[], web_agent_id=str(agent_uid))
@@ -1107,8 +1096,8 @@ class ValidatorEvaluationMixin:
                     d["selector"] = sel if isinstance(sel, dict) else getattr(sel, "__dict__", str(sel))
                 return d or {"type": getattr(a, "type", type(a).__name__)}
 
-            # Extract the executed actions from the evaluator recording (ground truth).
-            exec_actions = []
+            # Extract the executed tools from the evaluator recording (ground truth).
+            exec_tools = []
             try:
                 ts_obj = eval_data.get("task_solution")
                 recording = ts_obj.get("recording") if isinstance(ts_obj, dict) else getattr(ts_obj, "recording", None)
@@ -1120,22 +1109,22 @@ class ValidatorEvaluationMixin:
                 if isinstance(exec_hist, list):
                     for h in exec_hist:
                         a = getattr(h, "action", None) if not isinstance(h, dict) else h.get("action")
-                        exec_actions.append(_action_to_dict(a))
+                        exec_tools.append(_action_to_dict(a))
             except Exception:
-                exec_actions = []
+                exec_tools = []
 
             # Emit a compact log of what will be persisted to IWAP.
-            actions = []
+            tools = []
             try:
                 ts = evaluation_payload.get("task_solution") if isinstance(evaluation_payload, dict) else None
                 if isinstance(ts, dict):
-                    actions = ts.get("actions") or []
-                action_types = []
-                for a in actions:
+                    tools = ts.get("trajectory") or ts.get("actions") or []
+                tool_names = []
+                for a in tools:
                     if isinstance(a, dict) and a.get("type"):
-                        action_types.append(str(a.get("type")))
+                        tool_names.append(str(a.get("type")))
                 ColoredLogger.info(
-                    f"[IWAP_ACTIONS] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} actions={action_types}",
+                    f"[IWAP_TOOLS] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} tools={tool_names}",
                     ColoredLogger.CYAN,
                 )
             except Exception:
@@ -1162,7 +1151,7 @@ class ValidatorEvaluationMixin:
                     try:
                         pl = task_log_payload.get("payload") if isinstance(task_log_payload, dict) else None
                         steps = pl.get("steps") if isinstance(pl, dict) else None
-                        s3_actions = []
+                        s3_tools = []
                         if isinstance(steps, list) and steps:
                             for step in steps:
                                 if not isinstance(step, dict):
@@ -1172,21 +1161,21 @@ class ValidatorEvaluationMixin:
                                     continue
                                 act = ao.get("action")
                                 if isinstance(act, dict):
-                                    s3_actions.append(act)
-                        s3_types = [a.get("type") for a in s3_actions if isinstance(a, dict) and a.get("type")]
+                                    s3_tools.append(act)
+                        s3_types = [a.get("type") for a in s3_tools if isinstance(a, dict) and a.get("type")]
                         ColoredLogger.info(
-                            f"[S3_ACTIONS] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} actions={s3_types}",
+                            f"[S3_TOOLS] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} tools={s3_types}",
                             ColoredLogger.CYAN,
                         )
 
-                        # Compare executed vs persisted-to-IWAP vs persisted-to-S3 action counts.
+                        # Compare executed vs persisted-to-IWAP vs persisted-to-S3 tool counts.
                         try:
-                            iwap_n = len(actions) if isinstance(actions, list) else 0
-                            exec_n = len(exec_actions) if isinstance(exec_actions, list) else 0
-                            s3_n = len(s3_actions) if isinstance(s3_actions, list) else 0
+                            iwap_n = len(tools) if isinstance(tools, list) else 0
+                            exec_n = len(exec_tools) if isinstance(exec_tools, list) else 0
+                            s3_n = len(s3_tools) if isinstance(s3_tools, list) else 0
                             if (exec_n and exec_n != iwap_n) or (exec_n and exec_n != s3_n) or (iwap_n and iwap_n != s3_n):
                                 ColoredLogger.warning(
-                                    f"[MISMATCH_ACTIONS] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} exec={exec_n} iwap={iwap_n} s3={s3_n}",
+                                    f"[MISMATCH_TOOLS] task_id={full_task_id} agent_run_id={agent_run.agent_run_id} exec={exec_n} iwap={iwap_n} s3={s3_n}",
                                     ColoredLogger.YELLOW,
                                 )
                         except Exception:

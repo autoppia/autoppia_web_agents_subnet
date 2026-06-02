@@ -123,7 +123,7 @@ async def test_over_cost_stop_keeps_reward_normalized_by_total_tasks(dummy_valid
         patch("autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url", return_value=("https://github.com/example/miner", "main")),
         patch("autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit", return_value="deadbeef"),
         patch(
-            "autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua",
+            "autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_trajectory",
             new=AsyncMock(return_value=(1.0, 10.0, {"actions": [], "recording": {"execution_history": []}})),
         ) as mock_eval,
         patch("autoppia_web_agents_subnet.validator.evaluation.mixin.calculate_reward_for_task", return_value=0.0),

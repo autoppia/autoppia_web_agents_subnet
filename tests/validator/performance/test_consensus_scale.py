@@ -314,7 +314,7 @@ class TestStressTests:
 
             # Mock evaluation
             with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url", return_value=("https://github.com/test/agent", "main")):
-                with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua", new=AsyncMock(return_value=(0.8, None, None))):
+                with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_trajectory", new=AsyncMock(return_value=(0.8, None, None))):
                     with patch(
                         "autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit",
                         return_value="deadbeef",
@@ -375,7 +375,7 @@ class TestStressTests:
             return (1.0, None, None)
 
         with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url", return_value=("https://github.com/test/agent", "main")):
-            with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua", new=mock_evaluate):
+            with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_trajectory", new=mock_evaluate):
                 with patch(
                     "autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit",
                     return_value="deadbeef",

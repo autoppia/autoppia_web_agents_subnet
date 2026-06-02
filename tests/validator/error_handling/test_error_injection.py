@@ -226,7 +226,7 @@ class TestSandboxErrors:
 
         # Mock evaluation to raise exception
         with (
-            patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua", new=AsyncMock(side_effect=Exception("Evaluation error"))),
+            patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_trajectory", new=AsyncMock(side_effect=Exception("Evaluation error"))),
             patch(
                 "autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit",
                 return_value="deadbeef",
@@ -271,7 +271,7 @@ class TestNetworkErrors:
         validator_with_agents.sandbox_manager.cleanup_agent = Mock()
 
         # Mock evaluation to timeout
-        with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_with_stateful_cua", new=AsyncMock(side_effect=TimeoutError("Agent timeout"))):
+        with patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_trajectory", new=AsyncMock(side_effect=TimeoutError("Agent timeout"))):
             # Should not crash
             await validator_with_agents._run_evaluation_phase()
 
