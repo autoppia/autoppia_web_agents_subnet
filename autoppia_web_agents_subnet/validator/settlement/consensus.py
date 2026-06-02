@@ -759,7 +759,7 @@ async def aggregate_scores_from_commitments(
 
             bt.logging.info("=" * 80)
             bt.logging.info(f"[IPFS] [DOWNLOAD] Validator {hk[:12]}... (UID {validator_uid}) | CID: {cid}")
-            bt.logging.info(f"[IPFS] [DOWNLOAD] URL: http://ipfs.metahash73.com:5001/api/v0/cat?arg={cid}")
+            bt.logging.info(f"[IPFS] [DOWNLOAD] URL: {IPFS_API_URL.rstrip('/')}/cat?arg={cid}")
             bt.logging.info(f"[IPFS] [DOWNLOAD] Payload: {payload_json}")
             payload_rewards, payload_metrics = _extract_metrics_from_payload(payload)
             miner_count = len(payload_rewards)
