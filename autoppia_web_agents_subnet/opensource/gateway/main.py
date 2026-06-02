@@ -513,8 +513,8 @@ async def proxy_request(request: Request, path: str):
             headers["Authorization"] = f"Bearer {CHUTES_API_KEY}"
 
         if provider == "anthropic" and ANTHROPIC_API_KEY:
-            headers["Authorization"] = f"Bearer {ANTHROPIC_API_KEY}"
             headers["x-api-key"] = ANTHROPIC_API_KEY
+            headers["anthropic-version"] = request.headers.get("anthropic-version") or "2023-06-01"
 
         body = await request.body()
         parsed_body = None

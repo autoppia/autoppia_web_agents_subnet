@@ -505,9 +505,13 @@ class SandboxManager:
         # Keep the inline script short and robust: print status and a short body prefix.
         py = (
             "import os,sys,httpx\n"
-            "url=sys.argv[1]; key_env=sys.argv[2]; timeout=float(sys.argv[3])\n"
+            "url=sys.argv[1]; key_env=sys.argv[2]; timeout=float(sys.argv[3]); provider=sys.argv[4]\n"
             "key=(os.getenv(key_env) or '').strip()\n"
-            "headers={'Authorization': f'Bearer {key}'} if key else {}\n"
+            "headers={}\n"
+            "if key and provider == 'anthropic':\n"
+            "  headers={'x-api-key': key, 'anthropic-version': '2023-06-01'}\n"
+            "elif key:\n"
+            "  headers={'Authorization': f'Bearer {key}'}\n"
             "try:\n"
             "  r=httpx.get(url, headers=headers, timeout=timeout, follow_redirects=True)\n"
             "  body=(r.text or '')[:200].replace('\\n',' ')\n"
@@ -520,7 +524,7 @@ class SandboxManager:
 
         try:
             res = self.gateway_container.exec_run(  # type: ignore[attr-defined]
-                ["python", "-c", py, url, key_env, str(timeout_s)],
+                ["python", "-c", py, url, key_env, str(timeout_s), provider_s],
                 stdout=True,
                 stderr=True,
             )
