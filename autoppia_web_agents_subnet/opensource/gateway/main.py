@@ -49,6 +49,7 @@ logging.basicConfig(
     ],
 )
 logger = logging.getLogger(__name__)
+UNATTRIBUTED_TASK_ID = "__unattributed__"
 
 
 class LLMGateway:
@@ -114,9 +115,10 @@ class LLMGateway:
         if task_id in self.allowed_task_ids:
             return task_id
 
-        logger.error("Missing or invalid task ID for usage tracking.")
-        logger.error(f"Task ID: {task_id}")
-        return None
+        logger.warning("Missing or invalid task ID for usage tracking; using unattributed usage bucket.")
+        logger.warning(f"Task ID: {task_id}")
+        self.usage_per_task.setdefault(UNATTRIBUTED_TASK_ID, LLMUsage())
+        return UNATTRIBUTED_TASK_ID
 
     def get_usage_for_task(self, task_id: str) -> LLMUsage:
         return self.usage_per_task.get(task_id, LLMUsage())
@@ -339,6 +341,7 @@ class LLMGateway:
             task_ids = []
         self.allowed_task_ids = set(task_ids)
         self.usage_per_task = {task_id: LLMUsage() for task_id in task_ids}
+        self.usage_per_task[UNATTRIBUTED_TASK_ID] = LLMUsage()
         self._custom_chutes_pricing = {}
 
     def is_cost_exceeded(self, task_id: str) -> bool:
@@ -470,10 +473,9 @@ async def proxy_request(request: Request, path: str):
         if not provider:
             raise HTTPException(status_code=400, detail="Unsupported provider!")
 
-        # Detect task ID for usage tracking
+        # Detect task ID for usage tracking. Some clients, including Claude Code,
+        # cannot inject custom headers; those requests are tracked separately.
         task_id = gateway.detect_task_id(request)
-        if not task_id:
-            raise HTTPException(status_code=400, detail="Task ID not found!")
 
         if gateway.is_cost_exceeded(task_id):
             current_usage = gateway.get_usage_for_task(task_id)
