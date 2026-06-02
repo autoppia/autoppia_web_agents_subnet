@@ -599,6 +599,16 @@ class SandboxManager:
             env["AGENT_LOG_DECISIONS"] = "1"
         if SANDBOX_AGENT_RETURN_METRICS:
             env["AGENT_RETURN_METRICS"] = "1"
+        for key in (
+            "AUTOPPIA_HARVESTER_CLAUDE_BIN",
+            "AUTOPPIA_HARVESTER_CLAUDE_MODEL",
+            "AUTOPPIA_HARVESTER_TIMEOUT_SECONDS",
+            "AUTOPPIA_HARVESTER_WEB_AGENT_ID",
+            "ANTHROPIC_API_KEY",
+        ):
+            value = os.getenv(key)
+            if value:
+                env[key] = value
 
         # Ensure the nested mountpoint exists inside the bind-mounted repo dir
         # so Docker can mount /app/logs even when /app itself is read-only.
