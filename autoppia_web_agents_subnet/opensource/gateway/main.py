@@ -580,6 +580,10 @@ async def proxy_request(request: Request, path: str):
         upstream_body = body
         forced_response_format = False
         if request.method in ("POST", "PUT", "PATCH") and isinstance(parsed_body, dict):
+            if provider == "anthropic" and "context_management" in parsed_body:
+                parsed_body = dict(parsed_body)
+                parsed_body.pop("context_management", None)
+                upstream_body = json.dumps(parsed_body).encode("utf-8")
             # Force response_format=json_object for chat completions where possible to
             # reduce miner-side parsing failures (fallback on upstream rejection).
             parsed_body2, forced_response_format = gateway._maybe_force_json_response_format(provider, suffix, parsed_body)
