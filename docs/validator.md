@@ -129,6 +129,16 @@ CHUTES_TEMPERATURE=0.7
 CHUTES_USE_BEARER=False
 ```
 
+### **Option C: Anthropic LLM**
+
+```bash
+LLM_PROVIDER="anthropic"
+ANTHROPIC_API_KEY="your-api-key-here"
+ANTHROPIC_MODEL="claude-sonnet-4.5"
+ANTHROPIC_MAX_TOKENS=4096
+ANTHROPIC_TEMPERATURE=0.7
+```
+
 ---
 
 ## 🌐 3. Demo Webs Setup

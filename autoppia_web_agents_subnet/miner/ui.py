@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -32,6 +33,10 @@ def print_warning(msg: str) -> None:
 
 def print_success(msg: str) -> None:
     console.print(f"[bold green]OK:[/bold green] {msg}")
+
+
+def print_info(msg: str) -> None:
+    console.print(f"[bold cyan]INFO:[/bold cyan] {msg}")
 
 
 def _wallet_table(wallet: Any, network_label: str, netuid: int) -> Table:
@@ -99,3 +104,20 @@ def show_chain_state_panel(
 
 def show_commitment_panel(data: dict[str, Any], *, title: str, border_style: str) -> None:
     console.print(Panel(_commitment_detail_table(data), title=title, border_style=border_style))
+
+
+def make_table(*, title: str | None = None, border_style: str = "dim") -> Table:
+    return Table(title=title, border_style=border_style, box=box.ROUNDED, header_style="bold cyan")
+
+
+def show_panel(renderable: Any, *, title: str, border_style: str = "blue") -> None:
+    console.print(Panel(renderable, title=title, border_style=border_style))
+
+
+def key_value_table(rows: list[tuple[str, Any]]) -> Table:
+    table = Table(show_header=False, border_style="dim", pad_edge=False, box=None)
+    table.add_column("Key", style="bold")
+    table.add_column("Value")
+    for key, value in rows:
+        table.add_row(str(key), "" if value is None else str(value))
+    return table

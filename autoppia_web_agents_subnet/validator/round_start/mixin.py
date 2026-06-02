@@ -6,6 +6,7 @@ import os
 import socket
 import time
 from collections import Counter
+from types import SimpleNamespace
 
 import bittensor as bt
 
@@ -14,7 +15,7 @@ from autoppia_web_agents_subnet.opensource.utils_git import (
     normalize_and_validate_github_url,
     resolve_remote_ref_commit,
 )
-from autoppia_web_agents_subnet.protocol import StartRoundSynapse
+from autoppia_web_agents_subnet.utils.commitments import read_all_plain_commitments
 from autoppia_web_agents_subnet.utils.log_colors import round_details_tag
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.validator.config import (
@@ -26,6 +27,7 @@ from autoppia_web_agents_subnet.validator.config import (
     MAX_MINERS_PER_COLDKEY,
     MAX_MINERS_PER_REPO,
     MAX_MINERS_PER_ROUND_BY_STAKE,
+    MINER_DISCOVERY_MODE,
     MIN_MINER_STAKE_ALPHA,
     SANDBOX_GATEWAY_HOST,
     SANDBOX_GATEWAY_PORT,
@@ -33,7 +35,6 @@ from autoppia_web_agents_subnet.validator.config import (
 )
 from autoppia_web_agents_subnet.validator.models import AgentInfo
 from autoppia_web_agents_subnet.validator.round_manager import RoundPhase
-from autoppia_web_agents_subnet.validator.round_start.synapse_handler import send_start_round_synapse_to_miners
 from autoppia_web_agents_subnet.validator.round_start.types import RoundStartResult
 
 _DEMO_WEBS_DEFAULT_START_PORT = 8000
@@ -456,6 +457,7 @@ class ValidatorRoundStartMixin:
             stakes = list(getattr(metagraph, "stake", [0.0] * n))
         except Exception:
             stakes = [0.0] * n
+        hotkeys = list(getattr(metagraph, "hotkeys", []))
         coldkeys = list(getattr(metagraph, "coldkeys", []))
         max_by_coldkey = int(MAX_MINERS_PER_COLDKEY)
         max_by_repo = int(MAX_MINERS_PER_REPO)
@@ -515,7 +517,6 @@ class ValidatorRoundStartMixin:
         raw_allowlist = (os.getenv("MINER_HOTKEY_ALLOWLIST") or "").strip()
         if raw_allowlist:
             allowlist = {part.strip() for part in raw_allowlist.split(",") if part.strip()}
-            hotkeys = list(getattr(metagraph, "hotkeys", []))
             before_allowlist = len(candidate_uids)
             filtered_candidate_uids: list[int] = []
             for uid in candidate_uids:
@@ -553,80 +554,66 @@ class ValidatorRoundStartMixin:
         except Exception:
             pass
 
-        # Build axon list aligned with candidate_uids.
-        try:
-            miner_axons = [metagraph.axons[uid] for uid in candidate_uids]
-        except Exception as exc:
-            bt.logging.warning(f"Failed to resolve miner axons for handshake: {exc}")
-            return
-
-        round_id = str(getattr(self, "current_round_id", "") or getattr(self.round_manager, "round_number", ""))
-        validator_id = str(getattr(self, "uid", "unknown"))
-
-        start_synapse = StartRoundSynapse(
-            version=getattr(self, "version", ""),
-            round_id=round_id,
-            validator_id=validator_id,
-            note="autoppia-web-agents-subnet",
-        )
-
-        responses = await send_start_round_synapse_to_miners(
-            validator=self,
-            miner_axons=miner_axons,
-            start_synapse=start_synapse,
-            timeout=60,
-        )
-
-        new_agents_count = 0
         current_round = int(getattr(self.round_manager, "round_number", 0) or 0)
         repo_to_count: dict[str, int] = {}
         repo_owner_by_season = getattr(self, "_season_repo_owners", None)
         if not isinstance(repo_owner_by_season, dict):
             repo_owner_by_season = {}
             self._season_repo_owners = repo_owner_by_season
-        active_handshake_uids: list[int] = []
-        responded_count = 0
-        response_missing_count = 0
+
+        self.miners_reused_this_round = set()
+        self.handshake_results = {}
+        self.eligibility_status_by_uid = {}
+
+        if MINER_DISCOVERY_MODE != "commitments":
+            bt.logging.warning(f"[handshake] Unsupported MINER_DISCOVERY_MODE={MINER_DISCOVERY_MODE!r}; expected 'commitments'")
+            self.active_miner_uids = []
+            return
+
+        netuid = int(getattr(self.config, "netuid", 36) or 36)
+        try:
+            st = await self._get_async_subtensor()
+            all_commitments = await read_all_plain_commitments(st, netuid=netuid)
+        except Exception as exc:
+            bt.logging.error(f"[commitments] Failed to read on-chain commitments: {exc}")
+            all_commitments = {}
+
+        hotkey_to_uid: dict[str, int] = {}
+        for uid_idx in range(len(hotkeys)):
+            hk = hotkeys[uid_idx]
+            if hk:
+                hotkey_to_uid[str(hk).strip()] = uid_idx
+
+        commitment_by_uid: dict[int, dict[str, object]] = {}
+        for hk, data in (all_commitments or {}).items():
+            if not isinstance(data, dict) or data.get("t") != "m":
+                continue
+            uid = hotkey_to_uid.get(str(hk).strip())
+            if uid is not None:
+                commitment_by_uid[uid] = data
+
+        bt.logging.info(
+            f"[commitments] On-chain: {len(all_commitments or {})} total commitments, "
+            f"{len(commitment_by_uid)} miner commitments matched to UIDs"
+        )
+
+        new_agents_count = 0
+        no_commitment_count = 0
         restored_from_pending_count = 0
-        missing_handshake_field_count = 0
+        missing_commitment_field_count = 0
         invalid_repo_count = 0
         repo_cap_skip_count = 0
         cooldown_skip_count = 0
         unchanged_commit_skip_count = 0
         queued_for_eval_count = 0
-        self.miners_reused_this_round = set()
-        self.handshake_results: dict[int, str] = {}
-        self.eligibility_status_by_uid: dict[int, str] = {}
-        # Diagnostics for handshake transport/payload quality.
-        transport_status_counts: Counter[str] = Counter()
-        transport_status_message_counts: Counter[str] = Counter()
-        missing_name_count = 0
-        missing_github_count = 0
-        missing_both_count = 0
-        missing_fields_due_transport_count = 0
-        missing_fields_on_200_count = 0
-        valid_handshake_payload_count = 0
-        handshake_issue_rows: list[dict[str, object]] = []
+        active_commitment_uids: list[int] = []
 
-        for idx, uid in enumerate(candidate_uids):
-            resp = responses[idx] if idx < len(responses) else None
-            if resp is None:
-                response_missing_count += 1
-                self.handshake_results[int(uid)] = "no_response"
-                self.eligibility_status_by_uid[int(uid)] = "no_response"
-                handshake_issue_rows.append(
-                    {
-                        "uid": int(uid),
-                        "status_code": None,
-                        "status_message": "no_response",
-                        "has_agent_name": False,
-                        "has_github_url": False,
-                        "reason": "no_response",
-                    }
-                )
-                # If we have a pending submission recorded during cooldown, we
-                # can evaluate it once the cooldown expires even if the miner
-                # fails to respond in this round.
+        for uid in candidate_uids:
+            commitment = commitment_by_uid.get(uid)
+            if commitment is None:
+                no_commitment_count += 1
+                self.handshake_results[int(uid)] = "no_commitment"
+                self.eligibility_status_by_uid[int(uid)] = "no_commitment"
                 existing = self.agents_dict.get(uid)
                 if (
                     isinstance(existing, AgentInfo)
@@ -653,76 +640,14 @@ class ValidatorRoundStartMixin:
                     restored_from_pending_count += 1
                 continue
 
-            responded_count += 1
-            _d = getattr(resp, "dendrite", None)
-            _status_code = getattr(_d, "status_code", None)
-            _status_message = getattr(_d, "status_message", None)
-            _status_code_key = str(_status_code) if _status_code is not None else "none"
-            transport_status_counts[_status_code_key] += 1
-            transport_status_message_counts[f"{_status_code_key}:{_status_message}"] += 1
-
-            agent_name = getattr(resp, "agent_name", None)
-            raw_github_url = getattr(resp, "github_url", None)
-            agent_image = getattr(resp, "agent_image", None)
-            has_agent_name = bool(str(agent_name).strip()) if agent_name is not None else False
-            has_github_url = bool(str(raw_github_url).strip()) if raw_github_url is not None else False
-            if not has_agent_name:
-                missing_name_count += 1
-            if not has_github_url:
-                missing_github_count += 1
-            if not has_agent_name and not has_github_url:
-                missing_both_count += 1
-
-            if has_agent_name and has_github_url and _status_code == 200:
-                valid_handshake_payload_count += 1
+            agent_name = str(commitment.get("n") or "").strip() or None
+            raw_github_url = str(commitment.get("g") or "").strip() or None
+            agent_image = str(commitment.get("i") or "").strip() or None
 
             if not agent_name or not raw_github_url:
-                if _status_code == 200:
-                    missing_fields_on_200_count += 1
-                else:
-                    missing_fields_due_transport_count += 1
-
-                if _status_code == 408:
-                    _reason = "transport_timeout"
-                elif _status_code and _status_code != 200:
-                    _reason = f"transport_status_{_status_code}"
-                elif not has_agent_name and not has_github_url:
-                    _reason = "missing_agent_name_and_github_url"
-                elif not has_agent_name:
-                    _reason = "missing_agent_name"
-                else:
-                    _reason = "missing_github_url"
-
-                handshake_issue_rows.append(
-                    {
-                        "uid": int(uid),
-                        "status_code": _status_code,
-                        "status_message": _status_message,
-                        "has_agent_name": has_agent_name,
-                        "has_github_url": has_github_url,
-                        "reason": _reason,
-                    }
-                )
-
-                # Debug: log first occurrence so we can see what the validator actually received
-                if missing_handshake_field_count == 0:
-                    try:
-                        _dump = getattr(resp, "model_dump", None)
-                        _dump = _dump() if callable(_dump) else getattr(resp, "__dict__", {})
-                        _keys = list(_dump.keys()) if isinstance(_dump, dict) else []
-                        bt.logging.warning(
-                            f"[handshake] DEBUG first missing_fields: uid={uid} "
-                            f"agent_name={agent_name!r} github_url={raw_github_url!r} "
-                            f"resp_type={type(resp).__name__} status_code={_status_code} "
-                            f"status_message={_status_message!r} dump_keys={_keys}"
-                        )
-                    except Exception as _e:
-                        bt.logging.warning(f"[handshake] DEBUG first missing_fields uid={uid} error={_e}")
-                # Strict: an explicit submission is required. Treat missing fields
-                # as an invalid submission for this uid.
                 existing = self.agents_dict.get(uid)
                 if isinstance(existing, AgentInfo):
-                    try:
+                    with contextlib.suppress(Exception):
                         existing.agent_name = agent_name or getattr(existing, "agent_name", "")
                         existing.agent_image = agent_image
                         existing.github_url = raw_github_url or ""
@@ -730,8 +655,6 @@ class ValidatorRoundStartMixin:
                         existing.git_commit = None
                         existing.score = 0.0
                         existing.evaluated = True
-                    except Exception:
-                        pass
                     self.agents_dict[uid] = existing
                 else:
                     self.agents_dict[uid] = AgentInfo(
@@ -746,19 +669,15 @@ class ValidatorRoundStartMixin:
                     )
                     if self.round_manager.round_number == 1:
                         self.agents_on_first_handshake.append(uid)
-                missing_handshake_field_count += 1
-                # Keep handshake_results aligned with transport diagnostics:
-                # when transport failed (non-200), persist transport reason;
-                # otherwise persist semantic missing-field reason.
-                if _reason.startswith("transport_"):
-                    self.handshake_results[int(uid)] = _reason
+                missing_commitment_field_count += 1
+                if not agent_name and not raw_github_url:
+                    result = "missing_agent_name_and_github_url"
                 elif not agent_name:
-                    self.handshake_results[int(uid)] = "missing_agent_name"
-                elif not raw_github_url:
-                    self.handshake_results[int(uid)] = "missing_github_url"
+                    result = "missing_agent_name"
                 else:
-                    self.handshake_results[int(uid)] = "missing_fields"
-                self.eligibility_status_by_uid[int(uid)] = self.handshake_results[int(uid)]
+                    result = "missing_github_url"
+                self.handshake_results[int(uid)] = result
+                self.eligibility_status_by_uid[int(uid)] = result
                 continue
 
             if max_by_coldkey > 0:
@@ -768,16 +687,13 @@ class ValidatorRoundStartMixin:
                     if raw_coldkey:
                         response_coldkey = str(raw_coldkey).strip()
                 response_coldkey = response_coldkey or f"__coldkey_unknown__:{uid}"
-
                 if coldkey_counts.get(response_coldkey, 0) >= max_by_coldkey:
-                    bt.logging.warning(f"[handshake] Skipping uid={uid} due MAX_MINERS_PER_COLDKEY={max_by_coldkey} (post-handshake)")
+                    bt.logging.warning(f"[commitments] Skipping uid={uid} due MAX_MINERS_PER_COLDKEY={max_by_coldkey}")
                     existing = self.agents_dict.get(uid)
                     if isinstance(existing, AgentInfo):
-                        try:
+                        with contextlib.suppress(Exception):
                             existing.score = 0.0
                             existing.evaluated = True
-                        except Exception:
-                            pass
                         self.agents_dict[uid] = existing
                     else:
                         self.agents_dict[uid] = AgentInfo(
@@ -796,26 +712,28 @@ class ValidatorRoundStartMixin:
                     self.handshake_results[int(uid)] = "coldkey_cap"
                     self.eligibility_status_by_uid[int(uid)] = "coldkey_cap"
                     continue
-
                 coldkey_counts[response_coldkey] = coldkey_counts.get(response_coldkey, 0) + 1
 
-            # Store handshake payload for IWAP registration
+            active_commitment_uids.append(int(uid))
             if not isinstance(getattr(self, "round_handshake_payloads", None), dict):
                 self.round_handshake_payloads = {}
-            self.round_handshake_payloads[int(uid)] = resp
+            payload = SimpleNamespace(
+                agent_name=agent_name,
+                github_url=raw_github_url,
+                agent_image=agent_image,
+                note="commitment-discovery",
+            )
+            self.round_handshake_payloads[int(uid)] = payload
 
             normalized_repo, ref = normalize_and_validate_github_url(
                 raw_github_url,
                 miner_uid=uid,
                 require_ref=True,
             )
-
-            # Strict submission policy: if miner didn't provide a valid repo + ref/commit URL,
-            # mark as evaluated with zero and do not enqueue expensive evaluation work.
             if normalized_repo is None:
                 existing = self.agents_dict.get(uid)
                 if isinstance(existing, AgentInfo):
-                    try:
+                    with contextlib.suppress(Exception):
                         existing.agent_name = agent_name
                         existing.agent_image = agent_image
                         existing.github_url = raw_github_url or ""
@@ -823,8 +741,6 @@ class ValidatorRoundStartMixin:
                         existing.git_commit = None
                         existing.score = 0.0
                         existing.evaluated = True
-                    except Exception:
-                        pass
                     self.agents_dict[uid] = existing
                 else:
                     self.agents_dict[uid] = AgentInfo(
@@ -851,21 +767,18 @@ class ValidatorRoundStartMixin:
                     raw_owner = coldkeys[uid]
                     if raw_owner:
                         owner_key = str(raw_owner).strip()
-
                 repo_owner_history = repo_owner_by_season.get(normalized_repo_key, set())
                 if not isinstance(repo_owner_history, set):
                     repo_owner_history = set()
                 repo_count = int(repo_to_count.get(normalized_repo_key, 0))
                 history_count = len(repo_owner_history)
                 if owner_key not in repo_owner_history and history_count >= max_by_repo:
-                    bt.logging.warning(f"[handshake] Skipping uid={uid} repo={normalized_repo_key} due MAX_MINERS_PER_REPO={max_by_repo} (round={repo_count}, unique_history={history_count})")
+                    bt.logging.warning(f"[commitments] Skipping uid={uid} repo={normalized_repo_key} due MAX_MINERS_PER_REPO={max_by_repo} (round={repo_count}, unique_history={history_count})")
                     existing = self.agents_dict.get(uid)
                     if isinstance(existing, AgentInfo):
-                        try:
+                        with contextlib.suppress(Exception):
                             existing.score = 0.0
                             existing.evaluated = True
-                        except Exception:
-                            pass
                         self.agents_dict[uid] = existing
                     else:
                         self.agents_dict[uid] = AgentInfo(
@@ -884,18 +797,14 @@ class ValidatorRoundStartMixin:
                     self.handshake_results[int(uid)] = "repo_cap"
                     self.eligibility_status_by_uid[int(uid)] = "repo_cap"
                     continue
-
                 if owner_key not in repo_owner_history:
                     repo_owner_history.add(owner_key)
                     repo_owner_by_season[normalized_repo_key] = repo_owner_history
-
                 repo_to_count[normalized_repo_key] = repo_count + 1
 
             self.handshake_results[int(uid)] = "ok"
             self.eligibility_status_by_uid[int(uid)] = "handshake_valid"
-            active_handshake_uids.append(int(uid))
 
-            # Resolve commit for all (needed for unchanged check, already-evaluated check, and display).
             commit_sha: str | None = None
             if normalized_repo and ref:
                 try:
@@ -906,15 +815,15 @@ class ValidatorRoundStartMixin:
 
             agent_info = AgentInfo(
                 uid=uid,
-                agent_name=getattr(resp, "agent_name", None),
-                agent_image=getattr(resp, "agent_image", None),
+                agent_name=agent_name,
+                agent_image=agent_image,
                 github_url=commit_url,
                 normalized_repo=normalized_repo,
                 git_commit=commit_sha,
             )
             ColoredLogger.info(agent_info.__repr__(), ColoredLogger.GREEN)
             with contextlib.suppress(Exception):
-                resp.github_url = commit_url
+                payload.github_url = commit_url
 
             existing = self.agents_dict.get(uid)
             reusable_stats = None
@@ -930,7 +839,7 @@ class ValidatorRoundStartMixin:
                     self.miners_reused_this_round.add(uid)
                     self.eligibility_status_by_uid[int(uid)] = "reused"
                     bt.logging.info(f"[reuse] Miner {uid}: same github_url and evaluation context as a previous evaluated run; keeping best historical result (no re-eval).")
-                    try:
+                    with contextlib.suppress(Exception):
                         existing.agent_name = agent_info.agent_name
                         existing.agent_image = agent_info.agent_image
                         existing.github_url = agent_info.github_url
@@ -942,15 +851,9 @@ class ValidatorRoundStartMixin:
                         existing.pending_normalized_repo = None
                         existing.pending_ref = None
                         existing.pending_received_round = None
-                    except Exception:
-                        pass
                     self.agents_dict[uid] = existing
                     unchanged_commit_skip_count += 1
                     continue
-
-                # Submission changed (or unknown): enqueue for evaluation, but do
-                # not clobber the previously evaluated score/commit until new
-                # evaluation completes.
                 if _is_cooldown_active(
                     current_round=current_round,
                     last_evaluated_round=getattr(existing, "last_evaluated_round", None),
@@ -958,30 +861,23 @@ class ValidatorRoundStartMixin:
                     best_score_ever=getattr(self, "_best_score_ever", None),
                     handshake_responded=True,
                 ):
-                    # Store pending submission and skip enqueuing for now.
-                    try:
+                    with contextlib.suppress(Exception):
                         existing.pending_github_url = agent_info.github_url
                         existing.pending_agent_name = agent_info.agent_name
                         existing.pending_agent_image = agent_info.agent_image
                         existing.pending_normalized_repo = agent_info.normalized_repo
                         existing.pending_ref = ref
                         existing.pending_received_round = current_round
-                    except Exception:
-                        pass
                     self.agents_dict[uid] = existing
                     cooldown_skip_count += 1
                     self.eligibility_status_by_uid[int(uid)] = "handshake_valid"
                     continue
-
                 self.agents_queue.put(agent_info)
                 new_agents_count += 1
                 queued_for_eval_count += 1
                 self.eligibility_status_by_uid[int(uid)] = "handshake_valid"
                 continue
 
-            # New uid (e.g. after validator restart): still check if this
-            # New uid (e.g. after validator restart): reuse only when the prior
-            # evaluation matches the same full commit URL and evaluation context.
             if isinstance(reusable_stats, dict):
                 self.miners_reused_this_round.add(uid)
                 self.eligibility_status_by_uid[int(uid)] = "reused"
@@ -990,7 +886,6 @@ class ValidatorRoundStartMixin:
                 unchanged_commit_skip_count += 1
                 continue
 
-            # New uid: track it immediately and enqueue for evaluation.
             self.agents_dict[uid] = agent_info
             self.agents_queue.put(agent_info)
             if self.round_manager.round_number == 1:
@@ -998,14 +893,16 @@ class ValidatorRoundStartMixin:
             new_agents_count += 1
             queued_for_eval_count += 1
             self.eligibility_status_by_uid[int(uid)] = "handshake_valid"
+
+        bt.logging.success(f"[commitments] Miner discovery complete: {len(active_commitment_uids)}/{len(candidate_uids)} miners with valid commitments")
         bt.logging.info(
-            "[handshake] complete "
+            "[commitments] summary "
             f"min_stake={min_stake:.4f} "
-            f"responded={responded_count}/{len(responses)} "
-            f"missing_response={response_missing_count} "
+            f"with_commitment={len(active_commitment_uids)}/{len(candidate_uids)} "
+            f"no_commitment={no_commitment_count} "
             f"queued_for_eval={queued_for_eval_count} "
             f"restored_from_pending={restored_from_pending_count} "
-            f"missing_fields={missing_handshake_field_count} "
+            f"missing_fields={missing_commitment_field_count} "
             f"coldkey_cap_skip={coldkey_cap_skip_count} "
             f"invalid_repo={invalid_repo_count} "
             f"repo_cap_skip={repo_cap_skip_count} "
@@ -1013,23 +910,7 @@ class ValidatorRoundStartMixin:
             f"unchanged_commit={unchanged_commit_skip_count} "
             f"new_agents={new_agents_count}"
         )
-        bt.logging.info(
-            "[handshake] transport/payload summary "
-            f"valid_payloads={valid_handshake_payload_count}/{len(candidate_uids)} "
-            f"status_408_timeout={transport_status_counts.get('408', 0)} "
-            f"status_503={transport_status_counts.get('503', 0)} "
-            f"status_504={transport_status_counts.get('504', 0)} "
-            f"missing_name={missing_name_count} "
-            f"missing_github={missing_github_count} "
-            f"missing_both={missing_both_count} "
-            f"missing_due_transport={missing_fields_due_transport_count} "
-            f"missing_on_200={missing_fields_on_200_count}"
-        )
-
-        # Only miners that responded this round should be treated as "active"
-        # for IWAP registration and per-round reporting. Keeping this bounded
-        # avoids expensive IWAP loops when we handshake a wide UID window.
-        self.active_miner_uids = active_handshake_uids
+        self.active_miner_uids = active_commitment_uids
 
     async def _wait_for_minimum_start_block(self) -> bool:
         """

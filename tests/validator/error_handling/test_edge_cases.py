@@ -14,29 +14,6 @@ class TestStakeEdgeCases:
     """Test edge cases related to stake filtering."""
 
     @pytest.mark.asyncio
-    async def test_handshake_when_no_miners_meet_minimum_stake(self, dummy_validator, mock_metagraph):
-        """Test handshake when no miners meet minimum stake requirement."""
-        # Setup metagraph with all low-stake miners
-        mock_metagraph.S = [50.0] * 10  # All below MIN_MINER_STAKE_ALPHA (100)
-        mock_metagraph.n = 10
-
-        dummy_validator.metagraph = mock_metagraph
-        dummy_validator.uid = 0
-
-        # Mock dendrite
-        async def mock_query(*args, **kwargs):
-            return []
-
-        dummy_validator.dendrite.query = mock_query
-
-        # Should not crash
-        await dummy_validator._perform_handshake()
-
-        # No agents should be added
-        assert len(dummy_validator.agents_dict) == 0
-        assert dummy_validator.agents_queue.empty()
-
-    @pytest.mark.asyncio
     async def test_consensus_when_all_validators_have_zero_stake(self, mock_ipfs_client, mock_async_subtensor, dummy_validator):
         """Test consensus aggregation when all validators have zero stake."""
         from autoppia_web_agents_subnet.validator.settlement.consensus import aggregate_scores_from_commitments

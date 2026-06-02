@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+IWA_DIR="${ROOT_DIR}/../autoppia_iwa"
+
+export PYTHONPATH="${ROOT_DIR}:${IWA_DIR}${PYTHONPATH:+:${PYTHONPATH}}"
+
+exec python "${ROOT_DIR}/scripts/miner_cli_local.py" "$@"

@@ -13,7 +13,7 @@ Usage:
   tests/test_locally.sh [github_url] [options]
 
 Runs a local smoke test with:
-1. one miner PM2 process advertising the provided GitHub URL
+1. one miner on-chain commitment submitted via autoppia-miner-cli
 2. one validator PM2 process with IWAP/Platform HTTP writes mocked
 3. a unique consensus version to avoid mixing with production validator payloads
 4. artifact checks for pre-consensus and post-consensus round outputs
@@ -25,7 +25,6 @@ Options:
   --validator-hotkey NAME     Validator hotkey name (default: default)
   --miner-wallet NAME         Miner wallet name (default: miner)
   --miner-hotkey NAME         Miner hotkey name (default: default)
-  --miner-axon-port N         Miner axon port (default: current on-chain port for the miner hotkey)
   --netuid N                  Netuid (default: 36)
   --subtensor-network NAME    Subtensor network (default: finney)
   --timeout-minutes N         How long to wait for artifacts (default: 45)
@@ -71,7 +70,6 @@ VALIDATOR_WALLET="validator"
 VALIDATOR_HOTKEY="default"
 MINER_WALLET="miner"
 MINER_HOTKEY="default"
-MINER_AXON_PORT=""
 NETUID="36"
 SUBTENSOR_NETWORK="finney"
 TIMEOUT_MINUTES="20"
@@ -103,10 +101,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --miner-hotkey)
       MINER_HOTKEY="$2"
-      shift 2
-      ;;
-    --miner-axon-port)
-      MINER_AXON_PORT="$2"
       shift 2
       ;;
     --netuid)
@@ -181,8 +175,8 @@ mkdir -p "$RUN_DIR/data"
 CONSENSUS_VERSION="$(date +%s)"
 PORT_OFFSET="$(( (CONSENSUS_VERSION % 3000) + 100 ))"
 VALIDATOR_PROCESS="local-validator-${RUN_ID}"
-MINER_PROCESS="local-miner-${RUN_ID}"
 VALIDATOR_ENV_FILE="$RUN_DIR/validator.env"
+MINER_CLI_CONFIG_FILE="$RUN_DIR/miner-cli.json"
 CURRENT_BLOCK="$("$VALIDATOR_PY" - <<'PY'
 import bittensor as bt
 print(bt.subtensor(network='finney').get_current_block())
@@ -191,26 +185,40 @@ PY
 
 cleanup() {
   local exit_code=$?
+  cleanup_localtest_containers
   if [[ "$KEEP_PM2" != "true" ]]; then
     pm2 delete "$VALIDATOR_PROCESS" >/dev/null 2>&1 || true
-    pm2 delete "$MINER_PROCESS" >/dev/null 2>&1 || true
   fi
   if [[ $exit_code -ne 0 ]]; then
     echo
     echo "Smoke test failed. PM2 status:"
-    pm2 status "$VALIDATOR_PROCESS" "$MINER_PROCESS" || true
+    pm2 status "$VALIDATOR_PROCESS" || true
     echo
     echo "Validator logs:"
     pm2 logs "$VALIDATOR_PROCESS" --lines 80 --nostream || true
-    echo
-    echo "Miner logs:"
-    pm2 logs "$MINER_PROCESS" --lines 80 --nostream || true
     echo
     echo "Run directory: $RUN_DIR"
   fi
   exit $exit_code
 }
 trap cleanup EXIT
+
+cleanup_localtest_containers() {
+  local ids=""
+  ids="$(
+    {
+      docker ps -aq --filter "name=sandbox-gateway-localtest-" 2>/dev/null || true
+      docker ps -aq --filter "name=sandbox-agent-localtest-" 2>/dev/null || true
+    } | awk 'NF && !seen[$0]++'
+  )"
+  [[ -n "$ids" ]] || return 0
+  while IFS= read -r container_id; do
+    [[ -n "$container_id" ]] || continue
+    docker rm -f "$container_id" >/dev/null 2>&1 || true
+  done <<< "$ids"
+}
+
+cleanup_localtest_containers
 
 python - <<'PY' "$VALIDATOR_ENV_FILE" "$RUN_DIR" "$CONSENSUS_VERSION" "$PORT_OFFSET" "$CURRENT_BLOCK"
 from pathlib import Path
@@ -229,6 +237,7 @@ with target.open("w", encoding="utf-8") as fh:
         "VALIDATOR_NAME": "local-smoke-validator",
         "VALIDATOR_IMAGE": "local-smoke-validator",
         "GATEWAY_ALLOWED_PROVIDERS": "openai",
+        "MINER_DISCOVERY_MODE": "commitments",
         "CONSENSUS_VERSION": consensus_version,
         "IWAP_BACKUP_DIR": str(run_dir / "data"),
         "IWAP_API_BASE_URL": "http://127.0.0.1:8080",
@@ -361,7 +370,6 @@ if failed:
 PY
 
 pm2 delete "$VALIDATOR_PROCESS" >/dev/null 2>&1 || true
-pm2 delete "$MINER_PROCESS" >/dev/null 2>&1 || true
 
 python - <<'PY' | while IFS= read -r proc_name; do
 import json
@@ -370,11 +378,11 @@ import subprocess
 data = json.loads(subprocess.check_output(["pm2", "jlist"], text=True))
 for proc in data:
     name = proc.get("name") or ""
-    if name.startswith("local-miner-") or name.startswith("local-validator-"):
+    if name.startswith("local-validator-"):
         print(name)
 PY
   [[ -n "$proc_name" ]] || continue
-  [[ "$proc_name" == "$VALIDATOR_PROCESS" || "$proc_name" == "$MINER_PROCESS" ]] || pm2 delete "$proc_name" >/dev/null 2>&1 || true
+  [[ "$proc_name" == "$VALIDATOR_PROCESS" ]] || pm2 delete "$proc_name" >/dev/null 2>&1 || true
 done
 
 MINER_HOTKEY_SS58="$("$VALIDATOR_PY" - <<'PY' "$MINER_WALLET" "$MINER_HOTKEY"
@@ -385,52 +393,18 @@ print(w.hotkey.ss58_address)
 PY
 )"
 
-if [[ -z "$MINER_AXON_PORT" ]]; then
-  MINER_AXON_PORT="$("$VALIDATOR_PY" - <<'PY' "$NETUID" "$SUBTENSOR_NETWORK" "$MINER_HOTKEY_SS58"
-import sys
-import bittensor as bt
-
-netuid = int(sys.argv[1])
-network = sys.argv[2]
-hotkey = sys.argv[3]
-subtensor = bt.subtensor(network=network)
-metagraph = subtensor.metagraph(netuid)
-port = 0
-if hotkey in metagraph.hotkeys:
-    uid = metagraph.hotkeys.index(hotkey)
-    port = int(getattr(metagraph.axons[uid], "port", 0) or 0)
-print(port)
-PY
-)"
-fi
-
-if [[ -z "$MINER_AXON_PORT" || "$MINER_AXON_PORT" == "0" ]]; then
-  MINER_AXON_PORT="$((18091 + (CONSENSUS_VERSION % 2000)))"
-fi
-
 echo "Miner hotkey allowlist: $MINER_HOTKEY_SS58"
-echo "Miner axon port: $MINER_AXON_PORT"
-
-echo "Starting miner PM2 process: $MINER_PROCESS"
-env \
-  AGENT_NAME="$AGENT_NAME" \
-  AGENT_IMAGE="$AGENT_IMAGE" \
-  GITHUB_URL="$GITHUB_URL" \
-  PYTHONPATH="$PYTHONPATH_VALUE" \
-  pm2 start "$MINER_PY" \
-    --name "$MINER_PROCESS" \
-    --cwd "$REPO_ROOT" \
-    -- \
-    "$REPO_ROOT/neurons/miner.py" \
-    --netuid "$NETUID" \
-    --subtensor.network "$SUBTENSOR_NETWORK" \
-    --wallet.name "$MINER_WALLET" \
-    --wallet.hotkey "$MINER_HOTKEY" \
-    --axon.port "$MINER_AXON_PORT" \
-    --no-blacklist.force_validator_permit \
-    --blacklist.minimum_stake_requirement 0 \
-    --logging.logging_dir "$RUN_DIR/bittensor_logs" \
-    --logging.debug
+echo "Configuring autoppia-miner-cli defaults"
+AUTOPPIA_MINER_CLI_CONFIG="$MINER_CLI_CONFIG_FILE" PYTHONPATH="$PYTHONPATH_VALUE" "$MINER_PY" -m autoppia_web_agents_subnet.miner.cli config set \
+  --wallet.name "$MINER_WALLET" \
+  --wallet.hotkey "$MINER_HOTKEY" \
+  --netuid "$NETUID" \
+  --subtensor.network "$SUBTENSOR_NETWORK" \
+  --github "$GITHUB_URL" \
+  --agent.name "$AGENT_NAME" \
+  --agent.image "$AGENT_IMAGE"
+echo "Submitting miner commitment with autoppia-miner-cli"
+AUTOPPIA_MINER_CLI_CONFIG="$MINER_CLI_CONFIG_FILE" PYTHONPATH="$PYTHONPATH_VALUE" "$MINER_PY" -m autoppia_web_agents_subnet.miner.cli trigger-eval
 
 VALIDATOR_EXTRA_ARGS=()
 if [[ "$ALLOW_SET_WEIGHTS" != "true" ]]; then
@@ -473,10 +447,9 @@ wait_for_pm2_online() {
   return 1
 }
 
-wait_for_pm2_online "$MINER_PROCESS"
 wait_for_pm2_online "$VALIDATOR_PROCESS"
 
-echo "PM2 processes are online. Waiting for consensus artifacts..."
+echo "Validator process is online. Waiting for consensus artifacts..."
 
 DEADLINE="$(( $(date +%s) + TIMEOUT_MINUTES * 60 ))"
 ROUND_DIR=""
@@ -602,6 +575,17 @@ print(checkpoint["round_log_file"])
 PY
 )"
 
+EXPECTED_ROUND="$(python - <<'PY' "$ROUND_DIR"
+from pathlib import Path
+import json
+import sys
+
+round_dir = Path(sys.argv[1])
+checkpoint = json.loads((round_dir / "round_checkpoint.json").read_text(encoding="utf-8"))
+print(checkpoint["round_number_in_season"])
+PY
+)"
+
 EXPECTED_MINER_UID="$(python - <<'PY' "$ROUND_DIR" "$MINER_HOTKEY_SS58"
 from pathlib import Path
 import json
@@ -631,7 +615,7 @@ check_log_marker() {
   fi
 }
 
-check_log_marker "Handshake complete: 1/1 miners responded with valid agent_name" "round.log missing successful handshake marker"
+check_log_marker "\\[commitments\\] Miner discovery complete: 1/1 miners with valid commitments" "round.log missing successful commitment discovery marker"
 check_log_marker "IWAP mock-client mode active" "round.log missing IWAP mock-client activation marker"
 check_log_marker "OFFLINE MODE: Skipping miner registration" "round.log missing offline miner registration skip marker"
 check_log_marker "Starting evaluation phase" "round.log missing evaluation phase start marker"
@@ -639,12 +623,12 @@ check_log_marker "Evaluation phase completed" "round.log missing evaluation phas
 check_log_marker "\\[MINER_ACTIONS\\].*uid=${EXPECTED_MINER_UID}" "round.log missing MINER_ACTIONS marker for expected miner"
 check_log_marker "\\[EXEC_ACTIONS\\].*uid=${EXPECTED_MINER_UID}" "round.log missing EXEC_ACTIONS marker for expected miner"
 check_log_marker "IWAP submission skipped for agent ${EXPECTED_MINER_UID}" "round.log missing offline IWAP submission skip marker"
-check_log_marker "\\[IPFS\\] \\[UPLOAD\\].*Round 2 \\| 1 miners" "round.log missing IPFS upload summary for expected round"
+check_log_marker "\\[IPFS\\] \\[UPLOAD\\].*Round ${EXPECTED_ROUND} \\| 1 miners" "round.log missing IPFS upload summary for expected round"
 check_log_marker "\\[IPFS\\] \\[UPLOAD\\].*SUCCESS - CID:" "round.log missing successful IPFS upload marker"
-check_log_marker "CONSENSUS COMMIT START \\| v=${CONSENSUS_VERSION} s=1 r=2 \\| cid=" "round.log missing consensus commit start marker with expected identifiers"
+check_log_marker "CONSENSUS COMMIT START \\| v=${CONSENSUS_VERSION} s=1 r=${EXPECTED_ROUND} \\| cid=" "round.log missing consensus commit start marker with expected identifiers"
 
-if rg -q "transport_status_503|Service unavailable at .*StartRoundSynapse|Timed out waiting for ipfs_uploaded.json and post_consensus.json" "$ROUND_LOG_FILE"; then
-  echo "round.log contains transport-level handshake failure markers" >&2
+if rg -q "Service unavailable at .*StartRoundSynapse|Timed out waiting for ipfs_uploaded.json and post_consensus.json|Failed to read on-chain commitments" "$ROUND_LOG_FILE"; then
+  echo "round.log contains miner discovery failure markers" >&2
   exit 1
 fi
 
@@ -777,7 +761,26 @@ print(f"post_consensus_penalty={penalty_value}")
 PY
 fi
 
+MINER_STATUS_OUT="$RUN_DIR/miner_status.txt"
+echo "Checking autoppia-miner-cli status output..."
+set -a
+# shellcheck disable=SC1090
+source "$VALIDATOR_ENV_FILE"
+set +a
+AUTOPPIA_MINER_CLI_CONFIG="$MINER_CLI_CONFIG_FILE" PYTHONPATH="$PYTHONPATH_VALUE" "$MINER_PY" -m autoppia_web_agents_subnet.miner.cli status >"$MINER_STATUS_OUT"
+for expected_section in "Current Commitment" "Latest Consensus Snapshot" "Latest Consensus" "Top Consensus Ranking"; do
+  if ! rg -q "$expected_section" "$MINER_STATUS_OUT"; then
+    echo "miner status output is missing expected section: $expected_section" >&2
+    exit 1
+  fi
+done
+if rg -q "No compatible validator consensus snapshot found on-chain" "$MINER_STATUS_OUT"; then
+  echo "miner status output did not resolve a latest consensus snapshot" >&2
+  exit 1
+fi
+
 echo "Smoke test completed successfully."
 echo "Validator process: $VALIDATOR_PROCESS"
-echo "Miner process: $MINER_PROCESS"
+echo "Miner commitment submitted for hotkey: $MINER_HOTKEY_SS58"
+echo "Miner status output: $MINER_STATUS_OUT"
 echo "Run directory: $RUN_DIR"

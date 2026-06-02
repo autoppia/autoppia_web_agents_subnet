@@ -15,6 +15,7 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY main.py /app/
 COPY models.py /app/
 COPY config.py /app/
+COPY util.py /app/
 
 RUN adduser --disabled-password --gecos '' --uid 10001 app && \
     mkdir -p /app/logs && \

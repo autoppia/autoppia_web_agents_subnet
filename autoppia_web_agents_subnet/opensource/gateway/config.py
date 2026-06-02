@@ -8,6 +8,7 @@ COST_LIMIT_PER_TASK = float(os.getenv("COST_LIMIT_PER_TASK", "10.0"))
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 CHUTES_API_KEY = os.getenv("CHUTES_API_KEY")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
 # Protect privileged endpoints (/set-allowed-task-ids, /usage/*) from untrusted
 # containers on the same Docker network.
@@ -27,6 +28,7 @@ DEFAULT_GATEWAY_ALLOWED_PROVIDERS = {"openai", "chutes"}
 GATEWAY_ALLOWED_PROVIDERS = _csv_env("GATEWAY_ALLOWED_PROVIDERS") or set(DEFAULT_GATEWAY_ALLOWED_PROVIDERS)
 OPENAI_ALLOWED_MODELS = _csv_env("OPENAI_ALLOWED_MODELS")
 CHUTES_ALLOWED_MODELS = _csv_env("CHUTES_ALLOWED_MODELS")
+ANTHROPIC_ALLOWED_MODELS = _csv_env("ANTHROPIC_ALLOWED_MODELS")
 
 # Only allow OpenAI-compatible JSON endpoints that return a usage object.
 # If empty, all paths are allowed (not recommended).
@@ -35,6 +37,10 @@ OPENAI_ALLOWED_PATHS = _csv_env("OPENAI_ALLOWED_PATHS") or {
     "/v1/responses",
 }
 CHUTES_ALLOWED_PATHS = _csv_env("CHUTES_ALLOWED_PATHS") or {
+    "/v1/chat/completions",
+    "/v1/responses",
+}
+ANTHROPIC_ALLOWED_PATHS = _csv_env("ANTHROPIC_ALLOWED_PATHS") or {
     "/v1/chat/completions",
     "/v1/responses",
 }
@@ -56,6 +62,7 @@ GATEWAY_FORCE_JSON_RESPONSE_FORMAT = os.getenv("GATEWAY_FORCE_JSON_RESPONSE_FORM
 # Limit concurrent upstream requests per provider to reduce 429s (especially OpenAI).
 GATEWAY_OPENAI_MAX_CONCURRENCY = int(os.getenv("GATEWAY_OPENAI_MAX_CONCURRENCY", "2"))
 GATEWAY_CHUTES_MAX_CONCURRENCY = int(os.getenv("GATEWAY_CHUTES_MAX_CONCURRENCY", "8"))
+GATEWAY_ANTHROPIC_MAX_CONCURRENCY = int(os.getenv("GATEWAY_ANTHROPIC_MAX_CONCURRENCY", "4"))
 
 # Upstream retry policy (best-effort) for transient errors.
 GATEWAY_UPSTREAM_MAX_RETRIES = int(os.getenv("GATEWAY_UPSTREAM_MAX_RETRIES", "2"))

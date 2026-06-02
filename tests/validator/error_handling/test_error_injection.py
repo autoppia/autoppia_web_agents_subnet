@@ -10,98 +10,6 @@ import pytest
 
 
 @pytest.mark.unit
-class TestMinerResponseErrors:
-    """Test handling of invalid miner responses."""
-
-    @pytest.mark.asyncio
-    async def test_handshake_handles_missing_agent_name(self, dummy_validator, mock_metagraph):
-        """Test handshake handles miners with missing agent_name."""
-        dummy_validator.metagraph = mock_metagraph
-        dummy_validator.uid = 0
-
-        # Mock dendrite to return response with missing agent_name
-        async def mock_query(*args, **kwargs):
-            response = MagicMock()
-            response.agent_name = None  # Missing
-            response.github_url = "https://github.com/test/agent"
-            response.axon = MagicMock()
-            response.axon.hotkey = "hotkey1"
-            return [response]
-
-        dummy_validator.dendrite.query = mock_query
-
-        # Should not crash
-        await dummy_validator._perform_handshake()
-
-        # Agent should not be added
-        assert len(dummy_validator.agents_dict) == 0
-
-    @pytest.mark.asyncio
-    async def test_handshake_handles_missing_github_url(self, dummy_validator, mock_metagraph):
-        """Test handshake handles miners with missing github_url."""
-        dummy_validator.metagraph = mock_metagraph
-        dummy_validator.uid = 0
-
-        # Mock dendrite to return response with missing github_url
-        async def mock_query(*args, **kwargs):
-            response = MagicMock()
-            response.agent_name = "TestAgent"
-            response.github_url = None  # Missing
-            response.axon = MagicMock()
-            response.axon.hotkey = "hotkey1"
-            return [response]
-
-        dummy_validator.dendrite.query = mock_query
-
-        # Should not crash
-        await dummy_validator._perform_handshake()
-
-        # Agent should not be added
-        assert len(dummy_validator.agents_dict) == 0
-
-    @pytest.mark.asyncio
-    async def test_handshake_handles_invalid_github_url(self, dummy_validator, mock_metagraph):
-        """Test handshake handles miners with invalid github_url."""
-        dummy_validator.metagraph = mock_metagraph
-        dummy_validator.uid = 0
-
-        # Mock dendrite to return response with invalid github_url
-        async def mock_query(*args, **kwargs):
-            response = MagicMock()
-            response.agent_name = "TestAgent"
-            response.github_url = "not-a-url"  # Invalid
-            response.axon = MagicMock()
-            response.axon.hotkey = "hotkey1"
-            return [response]
-
-        dummy_validator.dendrite.query = mock_query
-
-        # Should not crash
-        await dummy_validator._perform_handshake()
-
-        # Agent might be added but evaluation should handle it
-        # This is acceptable behavior
-
-    @pytest.mark.asyncio
-    async def test_handshake_handles_dendrite_timeout(self, dummy_validator, mock_metagraph):
-        """Test handshake handles dendrite timeout."""
-        dummy_validator.metagraph = mock_metagraph
-        dummy_validator.uid = 0
-
-        # Mock dendrite to timeout
-        async def mock_query(*args, **kwargs):
-            raise TimeoutError("Dendrite timeout")
-
-        dummy_validator.dendrite.query = mock_query
-
-        # Should not crash
-        await dummy_validator._perform_handshake()
-
-        # No agents should be added
-        assert len(dummy_validator.agents_dict) == 0
-
-
-@pytest.mark.unit
 class TestIPFSErrors:
     """Test handling of IPFS failures."""
 
@@ -337,22 +245,6 @@ class TestSandboxErrors:
 @pytest.mark.unit
 class TestNetworkErrors:
     """Test handling of network-related errors."""
-
-    @pytest.mark.asyncio
-    async def test_handshake_handles_network_error(self, validator_with_agents, mock_metagraph):
-        """Test handshake handles network errors."""
-        from tests.conftest import _bind_round_start_mixin
-
-        validator_with_agents = _bind_round_start_mixin(validator_with_agents)
-
-        validator_with_agents.metagraph = mock_metagraph
-        validator_with_agents.uid = 0
-
-        # Mock dendrite_with_retries to raise network error
-        with patch("autoppia_web_agents_subnet.validator.round_start.synapse_handler.dendrite_with_retries", new=AsyncMock(side_effect=ConnectionError("Network unreachable"))):
-            # Should raise exception (handshake doesn't catch network errors)
-            with pytest.raises(ConnectionError):
-                await validator_with_agents._perform_handshake()
 
     @pytest.mark.asyncio
     async def test_evaluation_handles_agent_timeout(self, validator_with_agents, season_tasks):

@@ -87,7 +87,7 @@ DEFAULT_PROVIDER_CONFIGS = {
         default_output_price=14.0,
     ),
     # Chutes provides an OpenAI-compatible LLM endpoint at https://llm.chutes.ai/v1
-    # We set base_url to the host and expect incoming gateway paths to include /v1/...
+    # This is the default; agents may override per-request via X-Chutes-Base-URL header.
     "chutes": ProviderConfig(
         name="chutes",
         base_url="https://llm.chutes.ai",
@@ -95,5 +95,27 @@ DEFAULT_PROVIDER_CONFIGS = {
         # Conservative fallback; override by populating pricing as needed.
         default_input_price=1.0,
         default_output_price=4.0,
+    ),
+    # Anthropic OpenAI-compatible API at https://api.anthropic.com/v1 (chat completions).
+    "anthropic": ProviderConfig(
+        name="anthropic",
+        base_url="https://api.anthropic.com",
+        pricing={
+            "claude-opus-4": {"input": 15.0, "input_cache_read": 1.5, "output": 75.0},
+            "claude-opus-4.1": {"input": 15.0, "input_cache_read": 1.5, "output": 75.0},
+            "claude-opus-4.5": {"input": 5.0, "input_cache_read": 0.5, "output": 25.0},
+            "claude-opus-4.6": {"input": 5.0, "input_cache_read": 0.5, "output": 25.0},
+            "claude-sonnet-4": {"input": 3.0, "input_cache_read": 0.3, "output": 15.0},
+            "claude-sonnet-4.5": {"input": 3.0, "input_cache_read": 0.3, "output": 15.0},
+            "claude-sonnet-4.6": {"input": 3.0, "input_cache_read": 0.3, "output": 15.0},
+            "claude-sonnet-3.7": {"input": 3.0, "input_cache_read": 0.3, "output": 15.0},
+            "claude-haiku-4.5": {"input": 1.0, "input_cache_read": 0.1, "output": 5.0},
+            "claude-3-5-haiku": {"input": 0.80, "input_cache_read": 0.08, "output": 4.0},
+            "claude-3-5-sonnet": {"input": 3.0, "input_cache_read": 0.3, "output": 15.0},
+            "claude-haiku-3": {"input": 0.25, "input_cache_read": 0.03, "output": 1.25},
+            "claude-opus-3": {"input": 15.0, "input_cache_read": 1.5, "output": 75.0},
+        },
+        default_input_price=3.0,
+        default_output_price=15.0,
     ),
 }

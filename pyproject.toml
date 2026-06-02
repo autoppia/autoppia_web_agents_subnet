@@ -32,6 +32,7 @@ classifiers = [
 
 [project.scripts]
 autoppia-miner-cli = "autoppia_web_agents_subnet.miner.cli:main"
+miner-cli = "autoppia_web_agents_subnet.miner.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
