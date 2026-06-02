@@ -16,13 +16,16 @@
 # DEALINGS IN THE SOFTWARE.
 
 import copy
+import os
 import re
 import threading
 import time
 import traceback
 from abc import ABC, abstractmethod
+from types import SimpleNamespace
 
 import bittensor as bt
+import numpy as np
 
 from autoppia_web_agents_subnet import SUBNET_IWA_VERSION, __least_acceptable_version__, __spec_version__
 
@@ -30,6 +33,62 @@ from autoppia_web_agents_subnet import SUBNET_IWA_VERSION, __least_acceptable_ve
 from autoppia_web_agents_subnet.base.utils.config import _bt_component, add_args, check_config, config
 from autoppia_web_agents_subnet.base.utils.misc import _get_current_block_serialized, ttl_get_block
 from autoppia_web_agents_subnet.utils.logging_filter import apply_subnet_module_logging_filters
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _split_env_list(name: str) -> list[str]:
+    raw = os.getenv(name, "")
+    return [part.strip() for part in raw.split(",") if part.strip()]
+
+
+def _build_testing_metagraph(*, validator_hotkey: str, netuid: int):
+    hotkeys = _split_env_list("TEST_METAGRAPH_HOTKEYS")
+    if not hotkeys:
+        hotkeys = [validator_hotkey]
+    if validator_hotkey not in hotkeys:
+        hotkeys.append(validator_hotkey)
+
+    coldkeys = _split_env_list("TEST_METAGRAPH_COLDKEYS")
+    if len(coldkeys) < len(hotkeys):
+        coldkeys.extend([""] * (len(hotkeys) - len(coldkeys)))
+
+    stake_values = []
+    for raw_stake in _split_env_list("TEST_METAGRAPH_STAKES"):
+        try:
+            stake_values.append(float(raw_stake))
+        except ValueError:
+            stake_values.append(0.0)
+    if len(stake_values) < len(hotkeys):
+        stake_values.extend([0.0] * (len(hotkeys) - len(stake_values)))
+
+    n = len(hotkeys)
+    uids = np.arange(n, dtype=np.int64)
+    stakes = np.array(stake_values[:n], dtype=np.float32)
+    last_update = np.zeros(n, dtype=np.int64)
+    validator_permit = np.ones(n, dtype=bool)
+
+    def _sync(*args, **kwargs):
+        return None
+
+    return SimpleNamespace(
+        netuid=netuid,
+        n=np.int64(n),
+        uids=uids,
+        hotkeys=hotkeys,
+        coldkeys=coldkeys[:n],
+        S=stakes,
+        stake=stakes,
+        last_update=last_update,
+        validator_permit=validator_permit,
+        axons=[],
+        sync=_sync,
+    )
 
 
 class BaseNeuron(ABC):
@@ -148,7 +207,14 @@ class BaseNeuron(ABC):
             try:
                 bt.logging.info("Initializing subtensor and metagraph")
                 self.subtensor = _bt_component("subtensor", "Subtensor")(config=self.config)
-                self.metagraph = self.subtensor.metagraph(self.config.netuid)
+                if _env_bool("TESTING") and _env_bool("TEST_SKIP_CHAIN_METAGRAPH"):
+                    bt.logging.warning("TEST_SKIP_CHAIN_METAGRAPH enabled; using local testing metagraph")
+                    self.metagraph = _build_testing_metagraph(
+                        validator_hotkey=self.wallet.hotkey.ss58_address,
+                        netuid=int(self.config.netuid),
+                    )
+                else:
+                    self.metagraph = self.subtensor.metagraph(self.config.netuid)
                 break
             except Exception as e:
                 bt.logging.error(f"Couldn't init subtensor and metagraph with error: {e}")
@@ -213,6 +279,9 @@ class BaseNeuron(ABC):
 
     def check_registered(self):
         # --- Check for registration.
+        if _env_bool("TESTING") and _env_bool("TEST_SKIP_CHAIN_METAGRAPH"):
+            if self.wallet.hotkey.ss58_address in getattr(self.metagraph, "hotkeys", []):
+                return
         if not self.subtensor.is_hotkey_registered(
             netuid=self.config.netuid,
             hotkey_ss58=self.wallet.hotkey.ss58_address,
