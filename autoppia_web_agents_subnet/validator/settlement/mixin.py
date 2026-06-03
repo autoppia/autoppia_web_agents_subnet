@@ -15,6 +15,9 @@ from autoppia_web_agents_subnet.validator.settlement.consensus import (
     aggregate_scores_from_commitments,
     publish_round_snapshot,
 )
+from autoppia_web_agents_subnet.validator.settlement.king_overfit_judge import (
+    run_king_overfit_llm_judge,
+)
 from autoppia_web_agents_subnet.validator.settlement.rewards import wta_rewards
 from autoppia_web_agents_subnet.validator.visualization.round_table import (
     render_round_summary_table,
@@ -420,6 +423,10 @@ class ValidatorSettlementMixin:
         else:
             ColoredLogger.info("🏁 Finishing current round", ColoredLogger.GOLD)
 
+        agents_dict = getattr(self, "agents_dict", None)
+        if not isinstance(agents_dict, dict):
+            agents_dict = {}
+
         # Resolve season/round identifiers for per-season tracking.
         current_block = int(getattr(self, "block", 0) or 0)
         round_start_block = int(getattr(self, "_settlement_round_start_block", 0) or getattr(getattr(self, "round_manager", None), "start_block", 0) or current_block)
@@ -580,21 +587,6 @@ class ValidatorSettlementMixin:
                 elif uid_i not in best_snapshot_by_miner:
                     best_snapshot_by_miner[uid_i] = _snapshot_for_uid(uid_i, reward_f)
 
-        # Resolve current contender by best season reward.
-        best_uid: int | None = None
-        best_reward = 0.0
-        for uid, best in best_by_miner.items():
-            try:
-                uid_i = int(uid)
-                best_f = float(best or 0.0)
-            except Exception:
-                continue
-            if eligible_uids and uid_i not in eligible_uids:
-                continue
-            if best_f > best_reward:
-                best_reward = best_f
-                best_uid = uid_i
-
         leader_before_snapshot = None
         reigning_uid: int | None = None
         reigning_reward = 0.0
@@ -646,11 +638,31 @@ class ValidatorSettlementMixin:
                             fallback=existing_snapshot if isinstance(existing_snapshot, dict) else None,
                         )
 
-        challenger_uid: int | None = None
-        challenger_reward = 0.0
-        if eligible_uids and reigning_uid is not None:
+        reigning_is_eligible = bool(reigning_uid is not None and reigning_uid in eligible_uids)
+
+        def _best_uid(excluded: set[int]) -> tuple[int | None, float]:
+            selected_uid: int | None = None
+            selected_reward = 0.0
+            for uid, best in best_by_miner.items():
+                try:
+                    uid_i = int(uid)
+                    best_f = float(best or 0.0)
+                except Exception:
+                    continue
+                if uid_i in excluded:
+                    continue
+                if eligible_uids and uid_i not in eligible_uids:
+                    continue
+                if best_f > selected_reward:
+                    selected_reward = best_f
+                    selected_uid = uid_i
+            return selected_uid, selected_reward
+
+        def _top_challenger(excluded: set[int]) -> tuple[int | None, float]:
+            if not eligible_uids or reigning_uid is None:
+                return None, 0.0
             ranked_uids = sorted(
-                (int(uid) for uid in eligible_uids),
+                (int(uid) for uid in eligible_uids if int(uid) not in excluded),
                 key=lambda uid: (
                     float(best_by_miner.get(uid, 0.0) or 0.0),
                     -int(uid),
@@ -660,32 +672,80 @@ class ValidatorSettlementMixin:
             for uid_i in ranked_uids:
                 if int(uid_i) == int(reigning_uid):
                     continue
-                challenger_uid = int(uid_i)
-                challenger_reward = float(best_by_miner.get(uid_i, 0.0) or 0.0)
-                break
+                return int(uid_i), float(best_by_miner.get(uid_i, 0.0) or 0.0)
+            return None, 0.0
 
+        def _select_winner(excluded: set[int]) -> tuple[int | None, float, int | None, float, bool, float | None]:
+            challenger_uid_local, challenger_reward_local = _top_challenger(excluded)
+            required_reward_local: float | None = None
+            if (
+                reigning_uid is not None
+                and int(reigning_uid) not in excluded
+                and reigning_reward > 0.0
+            ):
+                selected_uid = reigning_uid
+                selected_reward = reigning_reward
+                dethroned_local = False
+                if challenger_uid_local is not None:
+                    required_reward_local = float(reigning_reward * (1.0 + required_improvement_pct))
+                    if challenger_reward_local > required_reward_local:
+                        selected_uid = challenger_uid_local
+                        selected_reward = challenger_reward_local
+                        dethroned_local = True
+                return selected_uid, selected_reward, challenger_uid_local, challenger_reward_local, dethroned_local, required_reward_local
+
+            best_uid_local, best_reward_local = _best_uid(excluded)
+            if eligible_uids and best_uid_local is not None and best_reward_local > 0.0:
+                return best_uid_local, best_reward_local, challenger_uid_local, challenger_reward_local, False, required_reward_local
+            return None, 0.0, challenger_uid_local, challenger_reward_local, False, required_reward_local
+
+        king_overfit_judgements: list[dict] = []
+        king_overfit_rejected_uids: set[int] = set()
         winner_uid: int | None = None
         winner_reward = 0.0
+        challenger_uid: int | None = None
+        challenger_reward = 0.0
         dethroned = False
         required_reward_to_dethrone: float | None = None
 
-        reigning_is_eligible = bool(reigning_uid is not None and reigning_uid in eligible_uids)
+        while True:
+            winner_uid, winner_reward, challenger_uid, challenger_reward, dethroned, required_reward_to_dethrone = _select_winner(king_overfit_rejected_uids)
+            if winner_uid is None:
+                break
+            is_new_king = bool(reigning_uid is None or int(winner_uid) != int(reigning_uid))
+            if not is_new_king:
+                break
 
-        if reigning_uid is not None and reigning_reward > 0.0:
-            winner_uid = reigning_uid
-            winner_reward = reigning_reward
-            if challenger_uid is not None:
-                required_reward_to_dethrone = float(reigning_reward * (1.0 + required_improvement_pct))
-                if challenger_reward > required_reward_to_dethrone:
-                    dethroned = True
-                    winner_uid = challenger_uid
-                    winner_reward = challenger_reward
-        elif eligible_uids and best_uid is not None and best_reward > 0.0:
-            winner_uid = best_uid
-            winner_reward = best_reward
-        elif not eligible_uids:
-            winner_uid = None
-            winner_reward = 0.0
+            agent_info = agents_dict.get(int(winner_uid)) if isinstance(agents_dict, dict) else None
+            github_url = str(getattr(agent_info, "github_url", "") or "")
+            git_commit = getattr(agent_info, "git_commit", None)
+            if not github_url:
+                ColoredLogger.warning(
+                    f"[KingOverfitLLMJudge] uid={winner_uid} has no github_url; fail-open",
+                    ColoredLogger.YELLOW,
+                )
+                break
+
+            verdict = await run_king_overfit_llm_judge(
+                miner_uid=int(winner_uid),
+                github_url=github_url,
+                git_commit=str(git_commit) if git_commit else None,
+                reward=float(winner_reward),
+            )
+            verdict_payload = verdict.to_dict()
+            verdict_payload["uid"] = int(winner_uid)
+            verdict_payload["github_url"] = github_url
+            king_overfit_judgements.append(verdict_payload)
+            if not verdict.rejects:
+                break
+
+            king_overfit_rejected_uids.add(int(winner_uid))
+            best_by_miner.pop(int(winner_uid), None)
+            best_by_miner.pop(str(winner_uid), None)
+            ColoredLogger.warning(
+                f"[KingOverfitLLMJudge] rejected new king uid={winner_uid}; recalculating winner",
+                ColoredLogger.RED,
+            )
 
         # Keep backward-compatible field used in tests and logs.
         self._last_round_winner_uid = winner_uid
@@ -713,6 +773,8 @@ class ValidatorSettlementMixin:
                 "required_reward_to_dethrone": float(required_reward_to_dethrone) if required_reward_to_dethrone is not None else None,
                 "dethroned": bool(dethroned),
                 "eligible_uids": sorted(int(uid) for uid in eligible_uids),
+                "king_overfit_judgements": king_overfit_judgements,
+                "king_overfit_rejected_uids": sorted(int(uid) for uid in king_overfit_rejected_uids),
             },
         }
         rounds_state[int(round_key)] = round_entry
@@ -724,6 +786,10 @@ class ValidatorSettlementMixin:
         summary_state["best_round_by_miner"] = {int(uid): int(rnd) for uid, rnd in best_round_by_miner.items()}
         summary_state["best_snapshot_by_miner"] = {int(uid): snap for uid, snap in best_snapshot_by_miner.items()}
         summary_state["last_eligible_uids"] = sorted(int(uid) for uid in eligible_uids)
+        if king_overfit_judgements:
+            summary_state["king_overfit_judgements"] = king_overfit_judgements
+        if king_overfit_rejected_uids:
+            summary_state["king_overfit_rejected_uids"] = sorted(int(uid) for uid in king_overfit_rejected_uids)
 
         if (not valid_rewards) or burn_reason:
             season_state["rounds"] = rounds_state
@@ -810,6 +876,8 @@ class ValidatorSettlementMixin:
                 "leader_before_round": leader_before_snapshot,
                 "candidate_this_round": candidate_snapshot,
                 "leader_after_round": leader_after_snapshot,
+                "king_overfit_judgements": king_overfit_judgements,
+                "king_overfit_rejected_uids": sorted(int(uid) for uid in king_overfit_rejected_uids),
             },
         }
         season_state["rounds"] = rounds_state

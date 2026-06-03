@@ -19,6 +19,8 @@ from autoppia_web_agents_subnet.validator.config import (
     FIND_TRAJECTORY_TIMEOUT_SECONDS,
     SHOULD_RECORD_GIF,
     TASK_TIMEOUT_SECONDS,
+    TRAJECTORY_ACTION_TIMEOUT_SECONDS,
+    TRAJECTORY_REPLAY_TIMEOUT_SECONDS,
 )
 
 
@@ -88,19 +90,36 @@ def _normalize_navigation_seeds(solution: TaskSolution, task: Task) -> None:
         )
 
 
-async def _await_with_task_timeout(coro: Any, *, start_ts: float) -> Any:
-    remaining = _remaining_task_timeout(start_ts)
-    if remaining <= 0.0:
-        raise TimeoutError
-    return await asyncio.wait_for(coro, timeout=remaining)
-
-
 async def _await_find_trajectory(coro: Any, *, start_ts: float) -> Any:
     remaining_task_timeout = _remaining_task_timeout(start_ts)
     timeout = min(float(FIND_TRAJECTORY_TIMEOUT_SECONDS), remaining_task_timeout)
     if timeout <= 0.0:
         raise TimeoutError
     return await asyncio.wait_for(coro, timeout=timeout)
+
+
+async def _await_replay(coro: Any, *, start_ts: float) -> Any:
+    remaining_task_timeout = _remaining_task_timeout(start_ts)
+    timeout = min(float(TRAJECTORY_REPLAY_TIMEOUT_SECONDS), remaining_task_timeout)
+    if timeout <= 0.0:
+        raise TimeoutError
+    return await asyncio.wait_for(coro, timeout=timeout)
+
+
+def _exception_detail(exc: Exception) -> str:
+    parts = [f"{type(exc).__name__}: {exc}"]
+    for attr in ("status", "message", "url", "path", "reason"):
+        value = getattr(exc, attr, None)
+        if value:
+            parts.append(f"{attr}={value}")
+    cause = getattr(exc, "__cause__", None)
+    if cause is not None:
+        parts.append(f"cause={type(cause).__name__}: {cause}")
+        for attr in ("status", "message", "url", "path", "reason"):
+            value = getattr(cause, attr, None)
+            if value:
+                parts.append(f"cause_{attr}={value}")
+    return " | ".join(parts)
 
 
 async def evaluate_trajectory(
@@ -152,10 +171,10 @@ async def evaluate_trajectory(
             enable_grouping_tasks=False,
             verbose_logging=False,
             debug_mode=False,
-            browser_timeout=max(float(TASK_TIMEOUT_SECONDS) * 1000.0, 1000.0),
+            browser_timeout=max(float(TRAJECTORY_ACTION_TIMEOUT_SECONDS) * 1000.0, 1000.0),
         )
         evaluator = ConcurrentEvaluator(web_project=project, config=evaluator_config)
-        result = await _await_with_task_timeout(evaluator.evaluate_single_task_solution(task_for_eval, solution), start_ts=start_ts)
+        result = await _await_replay(evaluator.evaluate_single_task_solution(task_for_eval, solution), start_ts=start_ts)
 
         recording_payload: dict[str, Any] = {}
         execution_history = getattr(result, "execution_history", None)
@@ -176,10 +195,12 @@ async def evaluate_trajectory(
 
     except asyncio.TimeoutError:
         bt.logging.warning(
-            f"[trajectory_eval] miner {uid} timeout for task {getattr(task, 'id', '?')}: elapsed={time.monotonic() - start_ts:.2f}s find_trayectory_timeout={FIND_TRAJECTORY_TIMEOUT_SECONDS:.2f}s task_timeout={TASK_TIMEOUT_SECONDS:.2f}s"
+            f"[trajectory_eval] miner {uid} timeout for task {getattr(task, 'id', '?')}: elapsed={time.monotonic() - start_ts:.2f}s find_trayectory_timeout={FIND_TRAJECTORY_TIMEOUT_SECONDS:.2f}s replay_timeout={TRAJECTORY_REPLAY_TIMEOUT_SECONDS:.2f}s action_timeout={TRAJECTORY_ACTION_TIMEOUT_SECONDS:.2f}s task_timeout={TASK_TIMEOUT_SECONDS:.2f}s"
         )
     except Exception as exc:
-        bt.logging.error(f"[trajectory_eval] miner {uid} evaluation error for task {getattr(task, 'id', '?')}: {exc}")
+        bt.logging.error(
+            f"[trajectory_eval] miner {uid} evaluation error for task {getattr(task, 'id', '?')} base_url={base_url}: {_exception_detail(exc)}"
+        )
 
     elapsed = min(max(time.monotonic() - start_ts, 0.0), float(TASK_TIMEOUT_SECONDS))
     return 0.0, elapsed, solution

@@ -55,6 +55,18 @@ FIND_TRAJECTORY_TIMEOUT_SECONDS = min(
     float(TASK_TIMEOUT_SECONDS),
     FIND_TRAJECTORY_TIMEOUT_SECONDS_CAP,
 )
+TRAJECTORY_REPLAY_TIMEOUT_SECONDS = min(
+    _env_float(
+        "TRAJECTORY_REPLAY_TIMEOUT_SECONDS",
+        max(float(TASK_TIMEOUT_SECONDS) - float(FIND_TRAJECTORY_TIMEOUT_SECONDS), 1.0),
+        test_default=max(float(TASK_TIMEOUT_SECONDS) - float(FIND_TRAJECTORY_TIMEOUT_SECONDS), 1.0),
+    ),
+    float(TASK_TIMEOUT_SECONDS),
+)
+TRAJECTORY_ACTION_TIMEOUT_SECONDS = min(
+    _env_float("TRAJECTORY_ACTION_TIMEOUT_SECONDS", 15.0, test_default=15.0),
+    float(TRAJECTORY_REPLAY_TIMEOUT_SECONDS),
+)
 SHOULD_RECORD_GIF = _env_bool("SHOULD_RECORD_GIF", True)
 # Upload the per-round validator log to IWAP/S3 periodically during evaluation.
 # This reduces observability gaps when round settlement is skipped/late.
@@ -99,12 +111,16 @@ EVALUATION_COOLDOWN_NO_RESPONSE_BADNESS = _env_float("EVALUATION_COOLDOWN_NO_RES
 EVALUATION_COOLDOWN_ZERO_SCORE_BADNESS = _env_float("EVALUATION_COOLDOWN_ZERO_SCORE_BADNESS", 0.5)
 MINER_DISCOVERY_MODE = (_env_str("MINER_DISCOVERY_MODE", "commitments") or "commitments").strip().lower()
 
-# Overfitting detector:
-# Re-evaluate seeded tasks with a validator-private random seed variation.
-# If the reward drop is too large, apply a fixed reward penalty to the original task.
-OVERFIT_PENALIZATION_ENABLED = _env_bool("OVERFIT_PENALIZATION_ENABLED", False)
-OVERFIT_DIFF_REWARD_THRESHOLD = _env_float("OVERFIT_DIFF_REWARD_THRESHOLD", 0.25)
-OVERFIT_REWARD_PENALTY = _env_float("OVERFIT_REWARD_PENALTY", 0.25)
+# Anti-overfit guard for new season kings. This inspects the winning repo once,
+# after scoring, instead of re-evaluating every task with alternate seeds.
+KING_OVERFIT_LLM_JUDGE_ENABLED = _env_bool("KING_OVERFIT_LLM_JUDGE_ENABLED", True)
+KING_OVERFIT_LLM_MODEL = _env_str("KING_OVERFIT_LLM_MODEL", "gpt-5-mini")
+KING_OVERFIT_LLM_BASE_URL = _env_str("KING_OVERFIT_LLM_BASE_URL", "")
+KING_OVERFIT_LLM_TIMEOUT_SECONDS = _env_float("KING_OVERFIT_LLM_TIMEOUT_SECONDS", 90.0, test_default=5.0)
+KING_OVERFIT_LLM_MAX_FILES = _env_int("KING_OVERFIT_LLM_MAX_FILES", 80, test_default=20)
+KING_OVERFIT_LLM_MAX_BUNDLE_CHARS = _env_int("KING_OVERFIT_LLM_MAX_BUNDLE_CHARS", 180_000, test_default=30_000)
+KING_OVERFIT_LLM_MAX_FILE_CHARS = _env_int("KING_OVERFIT_LLM_MAX_FILE_CHARS", 20_000, test_default=8_000)
+KING_OVERFIT_LLM_REJECT_CONFIDENCE = _env_float("KING_OVERFIT_LLM_REJECT_CONFIDENCE", 0.80, test_default=0.80)
 
 VALIDATOR_NAME = _env_str("VALIDATOR_NAME")
 VALIDATOR_IMAGE = _env_str("VALIDATOR_IMAGE")

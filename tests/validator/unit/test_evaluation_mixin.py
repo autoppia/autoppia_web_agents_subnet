@@ -316,8 +316,8 @@ class TestScoreCalculation:
                 expected_avg = 3.0 / 5.0
                 assert abs(agent.score - expected_avg) < 0.01
 
-    async def test_evaluation_applies_overfit_penalty_when_alt_seed_reward_drops(self, dummy_validator):
-        """Overfit penalty should reduce the stored reward for the original task."""
+    async def test_evaluation_runs_each_task_once_without_alt_seed_overfit_checks(self, dummy_validator):
+        """Task evaluation should not duplicate work for seed-based overfit checks."""
         import queue
 
         from autoppia_web_agents_subnet.validator.models import AgentInfo, TaskWithProject
@@ -362,22 +362,16 @@ class TestScoreCalculation:
             patch("autoppia_web_agents_subnet.validator.evaluation.mixin.normalize_and_validate_github_url", return_value=("https://github.com/test/agent1", "main")),
             patch("autoppia_web_agents_subnet.validator.evaluation.mixin.resolve_remote_ref_commit", return_value="deadbeef"),
             patch("autoppia_web_agents_subnet.validator.config.CONCURRENT_EVALUATION_NUM", 1),
-            patch("autoppia_web_agents_subnet.validator.config.OVERFIT_PENALIZATION_ENABLED", True),
-            patch("autoppia_web_agents_subnet.validator.config.OVERFIT_DIFF_REWARD_THRESHOLD", 0.25),
-            patch("autoppia_web_agents_subnet.validator.config.OVERFIT_REWARD_PENALTY", 0.25),
             patch("autoppia_web_agents_subnet.validator.evaluation.mixin.evaluate_trajectory", new_callable=AsyncMock) as mock_eval,
         ):
-            mock_eval.side_effect = [
-                (1.0, 0.0, None),  # base task
-                (0.0, 0.0, None),  # alt-seed task
-            ]
+            mock_eval.return_value = (1.0, 0.0, None)
 
             agents_evaluated = await validator._run_evaluation_phase()
 
         assert agents_evaluated == 1
-        assert validator.round_manager.round_rewards[1] == pytest.approx([0.75])
-        assert validator.current_agent_runs[1].average_reward == pytest.approx(0.75)
-        assert mock_eval.await_count == 2
+        assert validator.round_manager.round_rewards[1] == pytest.approx([1.0])
+        assert validator.current_agent_runs[1].average_reward == pytest.approx(1.0)
+        assert mock_eval.await_count == 1
 
     async def test_evaluation_updates_agent_score_in_agents_dict(self, validator_with_agents, season_tasks):
         """Test that evaluation updates agent.score in agents_dict."""

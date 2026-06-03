@@ -338,6 +338,70 @@ class TestWeightCalculation:
                 assert float(rewards[2]) == pytest.approx(1.0)
                 assert float(rewards[1]) == pytest.approx(0.0)
 
+    async def test_king_overfit_judge_rejects_new_winner_and_tries_next_candidate(self, dummy_validator):
+        from autoppia_web_agents_subnet.validator.models import AgentInfo
+        from autoppia_web_agents_subnet.validator.settlement.king_overfit_judge import KingOverfitLLMJudgeVerdict
+        from tests.conftest import _bind_settlement_mixin
+
+        dummy_validator = _bind_settlement_mixin(dummy_validator)
+        dummy_validator.season_manager.season_number = 42
+        dummy_validator.round_manager.round_number = 2
+        dummy_validator.agents_dict = {
+            2: AgentInfo(uid=2, agent_name="overfit", github_url="https://github.com/example/overfit/commit/" + "a" * 40),
+            3: AgentInfo(uid=3, agent_name="generic", github_url="https://github.com/example/generic/commit/" + "b" * 40),
+        }
+        dummy_validator._season_competition_history = {
+            42: {
+                "rounds": {
+                    1: {
+                        "post_consensus_json": {
+                            "summary": {
+                                "leader_after_round": {"uid": 1, "reward": 0.9, "score": 0.9, "time": 1.0, "cost": 0.0}
+                            }
+                        }
+                    }
+                },
+                "summary": {
+                    "current_winner_uid": 1,
+                    "current_winner_reward": 0.9,
+                    "current_winner_snapshot": {"uid": 1, "reward": 0.9, "score": 0.9, "time": 1.0, "cost": 0.0},
+                    "best_by_miner": {1: 0.9},
+                },
+            }
+        }
+
+        async def fake_judge(*, miner_uid, github_url, git_commit, reward):
+            if miner_uid == 2:
+                return KingOverfitLLMJudgeVerdict(
+                    decision="reject",
+                    is_overfitted=True,
+                    confidence=0.95,
+                    summary="hardcoded benchmark trajectories",
+                    evidence=[{"file": "harvester.py", "reason": "autocalendar trajectory map"}],
+                )
+            return KingOverfitLLMJudgeVerdict(
+                decision="pass",
+                is_overfitted=False,
+                confidence=0.2,
+                summary="generic runtime solver",
+                evidence=[],
+            )
+
+        with (
+            patch("autoppia_web_agents_subnet.validator.config.LAST_WINNER_BONUS_PCT", 0.05),
+            patch("autoppia_web_agents_subnet.validator.settlement.mixin.render_round_summary_table"),
+            patch("autoppia_web_agents_subnet.validator.settlement.mixin.run_king_overfit_llm_judge", side_effect=fake_judge) as judge_mock,
+        ):
+            await dummy_validator._calculate_final_weights(consensus_rewards={1: 0.7, 2: 0.98, 3: 0.97})
+
+        assert dummy_validator._last_round_winner_uid == 3
+        rewards = dummy_validator.update_scores.call_args[1]["rewards"]
+        assert float(rewards[3]) == pytest.approx(1.0)
+        assert judge_mock.await_count == 2
+        summary = dummy_validator._season_competition_history[42]["summary"]
+        assert summary["current_winner_uid"] == 3
+        assert summary["king_overfit_rejected_uids"] == [2]
+
     async def test_weight_calculation_keeps_active_leader_when_it_is_temporarily_ineligible(self, dummy_validator):
         from tests.conftest import _bind_settlement_mixin
 

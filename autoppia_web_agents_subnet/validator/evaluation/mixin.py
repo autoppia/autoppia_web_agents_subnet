@@ -5,8 +5,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import inspect
-import random
-import secrets
 from urllib.parse import parse_qsl, urlsplit
 
 from autoppia_web_agents_subnet.opensource.utils_git import (
@@ -15,10 +13,6 @@ from autoppia_web_agents_subnet.opensource.utils_git import (
 )
 from autoppia_web_agents_subnet.utils.logging import ColoredLogger
 from autoppia_web_agents_subnet.validator import config as validator_config
-from autoppia_web_agents_subnet.validator.evaluation.overfitting import (
-    apply_overfit_penalty,
-    build_overfit_checks,
-)
 from autoppia_web_agents_subnet.validator.evaluation.trajectory_eval import evaluate_trajectory
 from autoppia_web_agents_subnet.validator.evaluation.rewards import calculate_reward_for_task
 from autoppia_web_agents_subnet.validator.round_manager import RoundPhase
@@ -101,18 +95,6 @@ class ValidatorEvaluationMixin:
             season_number = int(getattr(getattr(self, "season_manager", None), "season_number", 0) or 0)
         except Exception:
             season_number = None
-        overfit_checks = {}
-        if bool(getattr(validator_config, "OVERFIT_PENALIZATION_ENABLED", False)):
-            round_seed = secrets.randbits(64)
-            overfit_checks = build_overfit_checks(
-                season_tasks,
-                round_rng=random.Random(round_seed),
-            )
-            ColoredLogger.info(
-                f"[OVERFIT] enabled for round {round_number or '?'}: re-evaluating {len(overfit_checks)}/{total_tasks} tasks with alternate random seeds",
-                ColoredLogger.YELLOW,
-            )
-
         def _finalize_agent(
             agent: object,
             *,
@@ -510,10 +492,6 @@ class ValidatorEvaluationMixin:
                         tid = getattr(getattr(task_item, "task", None), "id", None)
                         if tid is not None:
                             task_ids.append(str(tid))
-                    for overfit_check in overfit_checks.values():
-                        alt_task_id = getattr(getattr(overfit_check, "alt_task", None), "id", None)
-                        if alt_task_id is not None:
-                            task_ids.append(str(alt_task_id))
                     ok = setter(task_ids=task_ids)
                     if ok is False:
                         ColoredLogger.warning(
@@ -767,71 +745,6 @@ class ValidatorEvaluationMixin:
                             token_cost=cost,
                         )
                         task_penalty_value = 0.0
-                        overfit_metadata = None
-                        overfit_check = overfit_checks.get(str(getattr(task_item.task, "id", "")))
-                        if overfit_check is not None:
-                            alt_score, alt_exec_time, _ = await evaluate_trajectory(
-                                task=overfit_check.alt_task,
-                                project=task_item.project,
-                                uid=agent.uid,
-                                base_url=agent_instance.base_url,
-                                max_tools=max_tools,
-                            )
-                            try:
-                                alt_exec_time_s = float(alt_exec_time) if alt_exec_time is not None else 0.0
-                            except Exception:
-                                alt_exec_time_s = 0.0
-                            alt_usage_for_task = None
-                            try:
-                                getter = getattr(self.sandbox_manager, "get_usage_for_task", None)
-                                if callable(getter):
-                                    alt_usage_for_task = getter(task_id=getattr(overfit_check.alt_task, "id", ""))
-                            except Exception:
-                                alt_usage_for_task = None
-                            if not isinstance(alt_usage_for_task, dict):
-                                alt_usage_for_task = None
-                            try:
-                                alt_cost = float((alt_usage_for_task or {}).get("total_cost", 0.0))
-                            except Exception:
-                                alt_cost = 0.0
-                            try:
-                                alt_score_f = float(alt_score)
-                            except Exception:
-                                alt_score_f = 0.0
-                            alt_reward = calculate_reward_for_task(
-                                eval_score=alt_score_f,
-                                execution_time=alt_exec_time_s,
-                                token_cost=alt_cost,
-                            )
-                            penalized_reward, reward_diff, penalty_applied = apply_overfit_penalty(
-                                base_reward=float(reward),
-                                alt_reward=float(alt_reward),
-                                diff_threshold=float(getattr(validator_config, "OVERFIT_DIFF_REWARD_THRESHOLD", 0.0) or 0.0),
-                                penalty=float(getattr(validator_config, "OVERFIT_REWARD_PENALTY", 0.0) or 0.0),
-                            )
-                            task_penalty_value = max(float(reward) - float(penalized_reward), 0.0)
-                            overfit_metadata = {
-                                "base_reward": float(reward),
-                                "alt_reward": float(alt_reward),
-                                "reward_diff": float(reward_diff),
-                                "base_seed": self._extract_seed_from_url(getattr(task_item.task, "url", None)),
-                                "alt_seed": int(overfit_check.alt_seed),
-                                "penalty_applied": bool(penalty_applied),
-                                "penalty_value": float(task_penalty_value),
-                                "alt_eval_score": float(alt_score_f),
-                                "alt_execution_time": float(alt_exec_time_s),
-                                "alt_cost": float(alt_cost),
-                                "alt_task_id": str(getattr(overfit_check.alt_task, "id", "")),
-                            }
-                            reward = float(penalized_reward)
-                            log_color = ColoredLogger.YELLOW if penalty_applied else ColoredLogger.BLUE
-                            ColoredLogger.info(
-                                f"[OVERFIT] task_id={task_item.task.id} uid={agent.uid} base_reward={overfit_metadata['base_reward']:.4f} "
-                                f"alt_reward={overfit_metadata['alt_reward']:.4f} diff={overfit_metadata['reward_diff']:.4f} "
-                                f"base_seed={overfit_metadata['base_seed']} alt_seed={overfit_metadata['alt_seed']} "
-                                f"penalty={overfit_metadata['penalty_value']:.4f} penalized={overfit_metadata['penalty_applied']}",
-                                log_color,
-                            )
                         rewards.append(reward)
                         eval_details.append((score_f, exec_time_s))
 
@@ -854,8 +767,6 @@ class ValidatorEvaluationMixin:
                         if score_f <= 0.0 or reward <= 0.0:
                             if max_cost_per_task > 0.0 and cost >= max_cost_per_task - 1e-12:
                                 zero_reason_task = "over_cost_limit"
-                            elif overfit_metadata and overfit_metadata.get("penalty_applied") and reward <= 0.0:
-                                zero_reason_task = "overfitting_penalty"
                             else:
                                 zero_reason_task = "task_timeout" if exec_time_s >= task_timeout_sec else "task_failed"
                         _record_local_task_result(
@@ -879,7 +790,6 @@ class ValidatorEvaluationMixin:
                                 "llm_usage": llm_usage,
                                 "llm_calls": llm_calls,
                                 "zero_reason": zero_reason_task,
-                                "overfit_check": overfit_metadata,
                                 "penalty": float(task_penalty_value),
                             }
                         )

@@ -255,9 +255,7 @@ with target.open("w", encoding="utf-8") as fh:
         "TEST_ROUND_SIZE_EPOCHS": "0.01",
         "TEST_SEASON_SIZE_EPOCHS": "0.04",
         "TEST_TASKS_PER_SEASON": "1",
-        "OVERFIT_PENALIZATION_ENABLED": os.getenv("OVERFIT_PENALIZATION_ENABLED", "false"),
-        "OVERFIT_DIFF_REWARD_THRESHOLD": os.getenv("OVERFIT_DIFF_REWARD_THRESHOLD", "0.25"),
-        "OVERFIT_REWARD_PENALTY": os.getenv("OVERFIT_REWARD_PENALTY", "0.25"),
+        "KING_OVERFIT_LLM_JUDGE_ENABLED": os.getenv("KING_OVERFIT_LLM_JUDGE_ENABLED", "false"),
     }
     for key, value in overrides.items():
         fh.write(f"{key}={value}\n")
@@ -634,131 +632,6 @@ fi
 
 if rg -q "\\[trajectory_eval\\].*/find_trayectory|Failed to find trayectory" "$ROUND_LOG_FILE"; then
   echo "round.log warning: trajectory validation failure observed during smoke test" >&2
-fi
-
-if [[ "${OVERFIT_PENALIZATION_ENABLED:-false}" == "true" ]]; then
-  check_log_marker "\\[OVERFIT\\] enabled for round" "round.log missing OVERFIT enabled marker"
-  python - <<'PY' "$RUN_DIR/data/season_1/tasks.json" "$ROUND_LOG_FILE" "$ROUND_DIR/post_consensus.json" "$EXPECTED_MINER_UID" "${OVERFIT_DIFF_REWARD_THRESHOLD:-0.25}" "${OVERFIT_REWARD_PENALTY:-0.25}"
-from pathlib import Path
-import json
-import re
-import sys
-from urllib.parse import parse_qsl, urlsplit
-
-tasks_path = Path(sys.argv[1])
-round_log_path = Path(sys.argv[2])
-post_consensus_path = Path(sys.argv[3])
-expected_miner_uid = int(sys.argv[4])
-diff_threshold = float(sys.argv[5])
-configured_penalty = float(sys.argv[6])
-
-tasks_payload = json.loads(tasks_path.read_text(encoding="utf-8"))
-task_entries = tasks_payload.get("tasks") if isinstance(tasks_payload.get("tasks"), list) else []
-seeded_tasks = {}
-for entry in task_entries:
-    if not isinstance(entry, dict):
-        continue
-    task = entry.get("task")
-    if not isinstance(task, dict):
-        continue
-    task_id = task.get("id")
-    task_url = task.get("url")
-    if not isinstance(task_id, str) or not isinstance(task_url, str):
-        continue
-    query = dict(parse_qsl(urlsplit(task_url).query, keep_blank_values=True))
-    seed = query.get("seed")
-    if seed is None:
-        continue
-    seeded_tasks[task_id] = str(seed)
-
-if not seeded_tasks:
-    raise SystemExit("expected at least one seeded task when OVERFIT_PENALIZATION_ENABLED=true")
-
-pattern = re.compile(
-    r"\[OVERFIT\]\s+task_id=(?P<task_id>\S+)\s+uid=(?P<uid>\d+)\s+base_reward=(?P<base_reward>[0-9.]+)\s+"
-    r"alt_reward=(?P<alt_reward>[0-9.]+)\s+diff=(?P<diff>[0-9.]+)\s+base_seed=(?P<base_seed>\S+)\s+"
-    r"alt_seed=(?P<alt_seed>\d+)\s+penalty=(?P<penalty>[0-9.]+)\s+penalized=(?P<penalized>True|False)"
-)
-nav_pattern = re.compile(r"navigate\s+(?P<url>https?://\S+)")
-matches_by_task = {}
-all_seen_seeds = set()
-round_log_lines = round_log_path.read_text(encoding="utf-8", errors="ignore").splitlines()
-for line in round_log_lines:
-    nav_match = nav_pattern.search(line)
-    if not nav_match:
-        continue
-    url = nav_match.group("url")
-    query = dict(parse_qsl(urlsplit(url).query, keep_blank_values=True))
-    seed = str(query.get("seed", "")).strip()
-    if seed:
-        all_seen_seeds.add(seed)
-
-for line in round_log_lines:
-    match = pattern.search(line)
-    if not match:
-        continue
-    uid = int(match.group("uid"))
-    if uid == expected_miner_uid:
-        task_id = match.group("task_id")
-        matches_by_task[task_id] = {
-            "base_seed": match.group("base_seed"),
-            "alt_seed": match.group("alt_seed"),
-            "base_reward": float(match.group("base_reward")),
-            "alt_reward": float(match.group("alt_reward")),
-            "diff": float(match.group("diff")),
-            "penalty": float(match.group("penalty")),
-            "penalized": match.group("penalized") == "True",
-        }
-
-missing = sorted(set(seeded_tasks) - set(matches_by_task))
-if missing:
-        raise SystemExit(f"missing OVERFIT task log entries for seeded tasks: {missing}")
-
-for task_id, original_seed in seeded_tasks.items():
-    record = matches_by_task[task_id]
-    if record["base_seed"] != original_seed:
-        raise SystemExit(f"OVERFIT base_seed mismatch for task {task_id}: {record['base_seed']!r} != {original_seed!r}")
-    if record["alt_seed"] == original_seed:
-        raise SystemExit(f"OVERFIT alt_seed reused original seed for task {task_id}: {original_seed}")
-    if original_seed not in all_seen_seeds:
-        raise SystemExit(f"round.log is missing base evaluation navigation for task {task_id} seed={original_seed}")
-    if record["alt_seed"] not in all_seen_seeds:
-        raise SystemExit(f"round.log is missing alternate-seed evaluation navigation for task {task_id} alt_seed={record['alt_seed']}")
-    if record["diff"] < 0.0:
-        raise SystemExit(f"OVERFIT diff should not be negative for task {task_id}: {record['diff']}")
-    if record["penalty"] < 0.0:
-        raise SystemExit(f"OVERFIT penalty should not be negative for task {task_id}: {record['penalty']}")
-    expected_penalized = record["diff"] > diff_threshold
-    if record["penalized"] != expected_penalized:
-        raise SystemExit(
-            f"OVERFIT penalized flag mismatch for task {task_id}: penalized={record['penalized']} diff={record['diff']} threshold={diff_threshold}"
-        )
-    expected_penalty = configured_penalty if expected_penalized else 0.0
-    if abs(record["penalty"] - expected_penalty) > 1e-9:
-        raise SystemExit(
-            f"OVERFIT penalty mismatch for task {task_id}: observed={record['penalty']} expected={expected_penalty}"
-        )
-
-post = json.loads(post_consensus_path.read_text(encoding="utf-8"))
-miners = post.get("miners") if isinstance(post.get("miners"), list) else []
-target = next((m for m in miners if isinstance(m, dict) and int(m.get("uid", -1)) == expected_miner_uid), None)
-if target is None:
-    raise SystemExit(f"expected miner uid {expected_miner_uid} missing from post_consensus.json")
-best_run_consensus = target.get("best_run_consensus")
-if not isinstance(best_run_consensus, dict):
-    raise SystemExit("post_consensus.json expected miner missing best_run_consensus")
-if "penalty" not in best_run_consensus:
-    raise SystemExit("post_consensus.json expected miner missing best_run_consensus.penalty")
-try:
-    penalty_value = float(best_run_consensus.get("penalty", 0.0) or 0.0)
-except Exception as exc:
-    raise SystemExit(f"post_consensus.json penalty is not numeric: {exc}")
-if penalty_value < 0.0:
-    raise SystemExit(f"post_consensus.json penalty should not be negative: {penalty_value}")
-
-print(f"overfit_tasks_checked={len(seeded_tasks)}")
-print(f"post_consensus_penalty={penalty_value}")
-PY
 fi
 
 MINER_STATUS_OUT="$RUN_DIR/miner_status.txt"
