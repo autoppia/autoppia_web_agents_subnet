@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import re
 import time
@@ -16,6 +17,7 @@ from autoppia_web_agents_subnet.utils.commitments import (
 from autoppia_web_agents_subnet.utils.ipfs_client import add_json_async, get_json_async
 from autoppia_web_agents_subnet.utils.log_colors import consensus_tag, ipfs_tag
 from autoppia_web_agents_subnet.validator.config import (
+    CONSENSUS_COMMIT_TIMEOUT_SECONDS,
     CONSENSUS_VERSION,
     IPFS_API_URL,
     LAST_WINNER_BONUS_PCT,
@@ -577,11 +579,14 @@ async def publish_round_snapshot(
 
     try:
         bt.logging.info(f"📮 CONSENSUS COMMIT START | v={commit_payload['v']} s={commit_payload['s']} r={commit_payload['r']} | cid={commit_payload['c']}")
-        ok = await write_plain_commitment_json(
-            st,
-            wallet=self.wallet,
-            data=commit_payload,
-            netuid=self.config.netuid,
+        ok = await asyncio.wait_for(
+            write_plain_commitment_json(
+                st,
+                wallet=self.wallet,
+                data=commit_payload,
+                netuid=self.config.netuid,
+            ),
+            timeout=float(CONSENSUS_COMMIT_TIMEOUT_SECONDS),
         )
         if ok:
             try:
@@ -597,6 +602,14 @@ async def publish_round_snapshot(
             bt.logging.success(ipfs_tag("BLOCKCHAIN", f"✅ Commitment successful | CID: {cid}"))
             return str(cid)
         bt.logging.warning(ipfs_tag("BLOCKCHAIN", "⚠️ Commitment failed - write returned false"))
+        return None
+    except asyncio.TimeoutError:
+        bt.logging.error(
+            ipfs_tag(
+                "BLOCKCHAIN",
+                f"❌ Commitment timed out after {float(CONSENSUS_COMMIT_TIMEOUT_SECONDS):.1f}s | CID: {cid}",
+            )
+        )
         return None
     except Exception as exc:
         bt.logging.error("=" * 80)

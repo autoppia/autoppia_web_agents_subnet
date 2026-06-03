@@ -255,6 +255,12 @@ class ValidatorEvaluationMixin:
                 agent_uid,
                 {"reward": 0.0, "eval_score": 0.0, "execution_time": 0.0, "cost": 0.0, "penalty": 0.0, "tasks": 0},
             )
+            acc.setdefault("reward", 0.0)
+            acc.setdefault("eval_score", 0.0)
+            acc.setdefault("execution_time", 0.0)
+            acc.setdefault("cost", 0.0)
+            acc.setdefault("penalty", 0.0)
+            acc.setdefault("tasks", 0)
             acc["reward"] += float(reward)
             acc["eval_score"] += float(eval_score)
             acc["execution_time"] += float(exec_time)
@@ -294,15 +300,15 @@ class ValidatorEvaluationMixin:
                 run.completed_tasks = success_tasks
                 run.failed_tasks = failed_tasks
                 run.total_reward = float(acc.get("reward", 0.0) or 0.0)
-                run.average_reward = (float(acc["reward"]) / float(total_tasks_for_run)) if total_tasks_for_run > 0 else 0.0
-                run.average_score = (float(acc["eval_score"]) / float(total_tasks_for_run)) if total_tasks_for_run > 0 else 0.0
-                run.average_execution_time = (float(acc["execution_time"]) / float(attempted_tasks)) if attempted_tasks > 0 else 0.0
+                run.average_reward = (float(acc.get("reward", 0.0) or 0.0) / float(total_tasks_for_run)) if total_tasks_for_run > 0 else 0.0
+                run.average_score = (float(acc.get("eval_score", 0.0) or 0.0) / float(total_tasks_for_run)) if total_tasks_for_run > 0 else 0.0
+                run.average_execution_time = (float(acc.get("execution_time", 0.0) or 0.0) / float(attempted_tasks)) if attempted_tasks > 0 else 0.0
                 try:
                     meta = dict(getattr(run, "metadata", {}) or {})
                     meta["total_cost"] = float(acc.get("cost", 0.0) or 0.0)
-                    meta["average_cost"] = (float(acc["cost"]) / float(attempted_tasks)) if attempted_tasks > 0 else 0.0
+                    meta["average_cost"] = (float(acc.get("cost", 0.0) or 0.0) / float(attempted_tasks)) if attempted_tasks > 0 else 0.0
                     meta["total_penalty"] = float(acc.get("penalty", 0.0) or 0.0)
-                    meta["average_penalty"] = (float(acc["penalty"]) / float(total_tasks_for_run)) if total_tasks_for_run > 0 else 0.0
+                    meta["average_penalty"] = (float(acc.get("penalty", 0.0) or 0.0) / float(total_tasks_for_run)) if total_tasks_for_run > 0 else 0.0
                     run.metadata = meta
                 except Exception:
                     pass

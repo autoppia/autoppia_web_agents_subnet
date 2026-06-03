@@ -42,6 +42,33 @@ def _remaining_task_timeout(start_ts: float) -> float:
     return max(float(TASK_TIMEOUT_SECONDS) - float(time.monotonic() - start_ts), 0.0)
 
 
+class TrajectoryPhaseTimeout(asyncio.TimeoutError):
+    def __init__(self, phase: str, timeout: float):
+        super().__init__(f"{phase} timed out after {timeout:.2f}s")
+        self.phase = phase
+        self.timeout = timeout
+
+
+def _consume_cancelled_task(task: asyncio.Task[Any]) -> None:
+    try:
+        task.result()
+    except BaseException:
+        pass
+
+
+async def _await_with_hard_timeout(coro: Any, *, timeout: float, phase: str) -> Any:
+    if timeout <= 0.0:
+        raise TrajectoryPhaseTimeout(phase, timeout)
+    task = asyncio.create_task(coro)
+    done, pending = await asyncio.wait({task}, timeout=timeout)
+    if task in done:
+        return task.result()
+    for pending_task in pending:
+        pending_task.cancel()
+        pending_task.add_done_callback(_consume_cancelled_task)
+    raise TrajectoryPhaseTimeout(phase, timeout)
+
+
 def _extract_seed(url: str | None) -> str | None:
     if not url:
         return None
@@ -93,17 +120,13 @@ def _normalize_navigation_seeds(solution: TaskSolution, task: Task) -> None:
 async def _await_find_trajectory(coro: Any, *, start_ts: float) -> Any:
     remaining_task_timeout = _remaining_task_timeout(start_ts)
     timeout = min(float(FIND_TRAJECTORY_TIMEOUT_SECONDS), remaining_task_timeout)
-    if timeout <= 0.0:
-        raise TimeoutError
-    return await asyncio.wait_for(coro, timeout=timeout)
+    return await _await_with_hard_timeout(coro, timeout=timeout, phase="find_trayectory")
 
 
 async def _await_replay(coro: Any, *, start_ts: float) -> Any:
     remaining_task_timeout = _remaining_task_timeout(start_ts)
     timeout = min(float(TRAJECTORY_REPLAY_TIMEOUT_SECONDS), remaining_task_timeout)
-    if timeout <= 0.0:
-        raise TimeoutError
-    return await asyncio.wait_for(coro, timeout=timeout)
+    return await _await_with_hard_timeout(coro, timeout=timeout, phase="trajectory_replay")
 
 
 def _exception_detail(exc: Exception) -> str:
@@ -193,9 +216,14 @@ async def evaluate_trajectory(
         elapsed = min(max(time.monotonic() - start_ts, 0.0), float(TASK_TIMEOUT_SECONDS))
         return score, elapsed, solution
 
-    except asyncio.TimeoutError:
+    except asyncio.TimeoutError as exc:
+        phase = getattr(exc, "phase", "task")
+        phase_timeout = getattr(exc, "timeout", None)
+        phase_msg = f" phase={phase}"
+        if phase_timeout is not None:
+            phase_msg += f" phase_timeout={float(phase_timeout):.2f}s"
         bt.logging.warning(
-            f"[trajectory_eval] miner {uid} timeout for task {getattr(task, 'id', '?')}: elapsed={time.monotonic() - start_ts:.2f}s find_trayectory_timeout={FIND_TRAJECTORY_TIMEOUT_SECONDS:.2f}s replay_timeout={TRAJECTORY_REPLAY_TIMEOUT_SECONDS:.2f}s action_timeout={TRAJECTORY_ACTION_TIMEOUT_SECONDS:.2f}s task_timeout={TASK_TIMEOUT_SECONDS:.2f}s"
+            f"[trajectory_eval] miner {uid} timeout for task {getattr(task, 'id', '?')}:{phase_msg} elapsed={time.monotonic() - start_ts:.2f}s find_trayectory_timeout={FIND_TRAJECTORY_TIMEOUT_SECONDS:.2f}s replay_timeout={TRAJECTORY_REPLAY_TIMEOUT_SECONDS:.2f}s action_timeout={TRAJECTORY_ACTION_TIMEOUT_SECONDS:.2f}s task_timeout={TASK_TIMEOUT_SECONDS:.2f}s"
         )
     except Exception as exc:
         bt.logging.error(

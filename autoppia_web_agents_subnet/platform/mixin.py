@@ -67,7 +67,8 @@ class ValidatorPlatformMixin:
         backup_dir = Path(os.environ.get("IWAP_BACKUP_DIR", str(default_backup_dir)))
         self._IWAP_VALIDATOR_AUTH_MESSAGE = IWAP_VALIDATOR_AUTH_MESSAGE or "I am a honest validator"
         self._auth_warning_emitted = False
-        self._iwap_force_mock_client = self._read_config_flag(getattr(self, "config", None), "iwap", "mock_client")
+        force_real_platform = (os.getenv("IWAP_FORCE_REAL_PLATFORM") or "").strip().lower() in {"1", "true", "yes", "on"}
+        self._iwap_force_mock_client = self._read_config_flag(getattr(self, "config", None), "iwap", "mock_client") and not force_real_platform
         self.iwap_client = iwa_main.IWAPClient(
             base_url=IWAP_API_BASE_URL,
             backup_dir=backup_dir,
@@ -101,6 +102,8 @@ class ValidatorPlatformMixin:
             bt.logging.warning(
                 "IWAP mock-client mode enabled: validator will execute the full local/on-chain flow without sending Platform HTTP requests."
             )
+        elif force_real_platform:
+            bt.logging.info("IWAP_FORCE_REAL_PLATFORM enabled: Platform HTTP requests are active.")
 
     def _evaluation_context_payload(self) -> dict[str, Any]:
         season_number, _round_number = self._current_round_numbers()
