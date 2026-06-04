@@ -1,5 +1,7 @@
 pydantic
 rich
+bittensor==10.4.0
+bittensor-wallet==4.1.0
 docker
 httpx
 pytest>=7.2.0

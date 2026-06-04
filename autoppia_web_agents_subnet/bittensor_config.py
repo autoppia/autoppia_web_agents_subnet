@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 import bittensor as bt
+
+# Bittensor 10 defaults to not parsing CLI args unless this env var is disabled.
+# The subnet relies on argparse-driven config for wallet, netuid, axon, and
+# neuron settings, so preserve the v9 behavior unless the operator overrides it.
+os.environ.setdefault("BT_NO_PARSE_CLI_ARGS", "false")
 
 # ───────────────────────── utilities ───────────────────────── #
 
