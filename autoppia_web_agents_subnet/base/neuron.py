@@ -47,6 +47,52 @@ def _split_env_list(name: str) -> list[str]:
     return [part.strip() for part in raw.split(",") if part.strip()]
 
 
+def _float_env_list(name: str, *, size: int, default: float = 0.0) -> list[float]:
+    values: list[float] = []
+    for raw_value in _split_env_list(name):
+        try:
+            values.append(float(raw_value))
+        except ValueError:
+            values.append(default)
+    if len(values) < size:
+        values.extend([default] * (size - len(values)))
+    return values[:size]
+
+
+def _bool_env_list(name: str, *, size: int, default: bool = False) -> list[bool]:
+    values = [raw.strip().lower() in {"1", "true", "yes", "on"} for raw in _split_env_list(name)]
+    if len(values) < size:
+        values.extend([default] * (size - len(values)))
+    return values[:size]
+
+
+def _build_axon_infos(*, hotkeys: list[str], coldkeys: list[str]) -> list[bt.AxonInfo]:
+    axon_specs = _split_env_list("STATIC_METAGRAPH_AXONS")
+    axons: list[bt.AxonInfo] = []
+    for idx, hotkey in enumerate(hotkeys):
+        spec = axon_specs[idx] if idx < len(axon_specs) else ""
+        host = "0.0.0.0"
+        port = 0
+        if spec:
+            try:
+                host_part, port_part = spec.rsplit(":", 1)
+                host = host_part.strip() or host
+                port = int(port_part)
+            except Exception:
+                bt.logging.warning(f"Invalid STATIC_METAGRAPH_AXONS entry at index {idx}: {spec!r}")
+        axons.append(
+            bt.AxonInfo(
+                version=0,
+                ip=host,
+                port=port,
+                ip_type=4,
+                hotkey=hotkey,
+                coldkey=coldkeys[idx] if idx < len(coldkeys) else "",
+            )
+        )
+    return axons
+
+
 def _build_testing_metagraph(*, validator_hotkey: str, netuid: int):
     hotkeys = _split_env_list("TEST_METAGRAPH_HOTKEYS")
     if not hotkeys:
@@ -87,6 +133,42 @@ def _build_testing_metagraph(*, validator_hotkey: str, netuid: int):
         last_update=last_update,
         validator_permit=validator_permit,
         axons=[],
+        sync=_sync,
+    )
+
+
+def _build_static_metagraph(*, local_hotkey: str, netuid: int):
+    hotkeys = _split_env_list("STATIC_METAGRAPH_HOTKEYS")
+    if not hotkeys:
+        hotkeys = [local_hotkey]
+    if local_hotkey not in hotkeys:
+        hotkeys.append(local_hotkey)
+
+    coldkeys = _split_env_list("STATIC_METAGRAPH_COLDKEYS")
+    if len(coldkeys) < len(hotkeys):
+        coldkeys.extend([""] * (len(hotkeys) - len(coldkeys)))
+
+    n = len(hotkeys)
+    stakes = np.array(_float_env_list("STATIC_METAGRAPH_STAKES", size=n, default=0.0), dtype=np.float32)
+    permits = np.array(_bool_env_list("STATIC_METAGRAPH_VALIDATOR_PERMITS", size=n, default=False), dtype=bool)
+    uids = np.arange(n, dtype=np.int64)
+    last_update = np.zeros(n, dtype=np.int64)
+    axons = _build_axon_infos(hotkeys=hotkeys, coldkeys=coldkeys[:n])
+
+    def _sync(*args, **kwargs):
+        return None
+
+    return SimpleNamespace(
+        netuid=netuid,
+        n=np.int64(n),
+        uids=uids,
+        hotkeys=hotkeys,
+        coldkeys=coldkeys[:n],
+        S=stakes,
+        stake=stakes,
+        last_update=last_update,
+        validator_permit=permits,
+        axons=axons,
         sync=_sync,
     )
 
@@ -207,14 +289,23 @@ class BaseNeuron(ABC):
             try:
                 bt.logging.info("Initializing subtensor and metagraph")
                 self.subtensor = _bt_component("subtensor", "Subtensor")(config=self.config)
-                if _env_bool("TESTING") and _env_bool("TEST_SKIP_CHAIN_METAGRAPH"):
+                if _env_bool("STATIC_METAGRAPH"):
+                    bt.logging.warning("STATIC_METAGRAPH enabled; using env-provided metagraph")
+                    self.metagraph = _build_static_metagraph(
+                        local_hotkey=self.wallet.hotkey.ss58_address,
+                        netuid=int(self.config.netuid),
+                    )
+                elif _env_bool("TESTING") and _env_bool("TEST_SKIP_CHAIN_METAGRAPH"):
                     bt.logging.warning("TEST_SKIP_CHAIN_METAGRAPH enabled; using local testing metagraph")
                     self.metagraph = _build_testing_metagraph(
                         validator_hotkey=self.wallet.hotkey.ss58_address,
                         netuid=int(self.config.netuid),
                     )
                 else:
-                    self.metagraph = self.subtensor.metagraph(self.config.netuid)
+                    self.metagraph = self.subtensor.metagraph(
+                        self.config.netuid,
+                        lite=_env_bool("METAGRAPH_LITE"),
+                    )
                 break
             except Exception as e:
                 bt.logging.error(f"Couldn't init subtensor and metagraph with error: {e}")
@@ -279,6 +370,9 @@ class BaseNeuron(ABC):
 
     def check_registered(self):
         # --- Check for registration.
+        if _env_bool("STATIC_METAGRAPH") and _env_bool("STATIC_METAGRAPH_SKIP_REGISTRATION_CHECK", default=True):
+            if self.wallet.hotkey.ss58_address in getattr(self.metagraph, "hotkeys", []):
+                return
         if _env_bool("TESTING") and _env_bool("TEST_SKIP_CHAIN_METAGRAPH"):
             if self.wallet.hotkey.ss58_address in getattr(self.metagraph, "hotkeys", []):
                 return
@@ -294,11 +388,16 @@ class BaseNeuron(ABC):
         Check if enough epoch blocks have elapsed since the last checkpoint to sync.
 
         """
+        if _env_bool("STATIC_METAGRAPH"):
+            return False
         last_update = self.metagraph.last_update[self.uid] if self.neuron_type != "MinerNeuron" else self.last_update
 
         return (self.block - last_update) > self.config.neuron.epoch_length
 
     def should_set_weights(self) -> bool:
+        if _env_bool("STATIC_METAGRAPH"):
+            return False
+
         # Don't set weights on initialization.
         if self.step == 0:
             return False

@@ -37,8 +37,6 @@ def _init_validator_entrypoint_env() -> None:
 
 _init_validator_entrypoint_env()
 
-from autoppia_iwa.src.bootstrap import AppBootstrap
-
 from autoppia_web_agents_subnet import SUBNET_IWA_VERSION
 from autoppia_web_agents_subnet.base.validator import BaseValidatorNeuron
 from autoppia_web_agents_subnet.bittensor_config import config
@@ -978,8 +976,15 @@ class Validator(
 
 
 if __name__ == "__main__":
-    # Initialize IWA with default logging (best-effort)
-    AppBootstrap()
+    # Initialize IWA with default logging (best-effort). In production-like
+    # validator runs this must not leave PM2 "online" before the validator
+    # actually reaches Bittensor/platform startup.
+    if os.getenv("SKIP_IWA_BOOTSTRAP", "").strip().lower() not in {"1", "true", "yes"}:
+        from autoppia_iwa.src.bootstrap import AppBootstrap
+
+        AppBootstrap()
+    else:
+        bt.logging.info("SKIP_IWA_BOOTSTRAP enabled; relying on external IWA/platform services")
 
     with Validator(config=config(role="validator")) as validator:
         heartbeat_seconds = 120
