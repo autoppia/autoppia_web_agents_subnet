@@ -15,7 +15,7 @@ from rich.console import Console  # type: ignore
 from rich.table import Table  # type: ignore
 
 from autoppia_web_agents_subnet.utils.commitments import read_all_plain_commitments
-from autoppia_web_agents_subnet.utils.ipfs_client import IPFSError, aget_json
+from autoppia_web_agents_subnet.utils.ipfs_client import IPFSError, get_json_async
 from autoppia_web_agents_subnet.validator.config import (
     IPFS_API_URL,
     IPFS_GATEWAYS,
@@ -119,7 +119,7 @@ async def _fetch_payload(
     gateways: Sequence[str] | None,
 ) -> tuple[dict[str, Any] | None, str | None, str | None]:
     try:
-        payload, _, sha_hex = await aget_json(cid, api_url=api_url, gateways=gateways)
+        payload, _, sha_hex = await get_json_async(cid, api_url=api_url, gateways=gateways)
         if isinstance(payload, dict):
             return payload, sha_hex, None
         return None, None, "payload is not a dict"
