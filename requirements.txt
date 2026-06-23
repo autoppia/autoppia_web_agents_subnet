@@ -2,7 +2,7 @@ pydantic
 rich
 docker
 httpx
-pytest>=7.2.0
+pytest>=9.1.1
 pytest-cov
 pytest-asyncio
 pytest-mock
