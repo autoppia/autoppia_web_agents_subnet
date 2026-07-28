@@ -49,3 +49,4 @@ async def dendrite_with_retries(
 
     except Exception as e:
         bt.logging.error(f"Error while sending synapse with dendrite with retries {e}")
+        return res
